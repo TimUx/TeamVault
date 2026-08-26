@@ -201,7 +201,9 @@ Append-only: `actor_id`, `tenant_id`, `action`, `resource_type`, `resource_id`, 
 
 ### 5.8 API-Keys
 
-Maschinen-Zugang: gehashte Keys, Scope/Tenant, Expiry; nie Klartext nach Erstellung erneut anzeigbar.
+Maschinen-Zugang: gehashte Keys, gebunden an User+Tenant, Expiry; Klartext nur einmal bei Erstellung.
+
+Scopes (mind. einer): `read` (GET-Allowlist), `vault` (Vault-/Secret-Mutationen), `admin` (`/api/admin/*`). User-Rollen gelten zusätzlich. Cookie-Sessions sind nicht scope-beschränkt.
 
 ---
 

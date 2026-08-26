@@ -754,6 +754,50 @@ WHERE tenant_id = ? AND secret_id = ? AND revoked = 0`, tenant, secret)
 	return out, rows.Err()
 }
 
+func (s *Store) ListKeyEnvelopesByTenant(ctx context.Context, tenant store.TenantID) ([]store.KeyEnvelope, error) {
+	if err := requireTenant(tenant); err != nil {
+		return nil, err
+	}
+	rows, err := s.db.QueryContext(ctx, `
+SELECT secret_id, tenant_id, user_id, key_version, wrapped_dk FROM key_envelopes
+WHERE tenant_id = ? AND revoked = 0`, tenant)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []store.KeyEnvelope
+	for rows.Next() {
+		var e store.KeyEnvelope
+		if err := rows.Scan(&e.SecretID, &e.TenantID, &e.UserID, &e.KeyVersion, &e.WrappedDK); err != nil {
+			return nil, err
+		}
+		out = append(out, e)
+	}
+	return out, rows.Err()
+}
+
+func (s *Store) ListSecretKeyVersions(ctx context.Context, tenant store.TenantID) (map[store.SecretID]uint32, error) {
+	if err := requireTenant(tenant); err != nil {
+		return nil, err
+	}
+	rows, err := s.db.QueryContext(ctx, `
+SELECT secret_id, key_version FROM secret_ciphertext WHERE tenant_id = ?`, tenant)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make(map[store.SecretID]uint32)
+	for rows.Next() {
+		var id store.SecretID
+		var kv uint32
+		if err := rows.Scan(&id, &kv); err != nil {
+			return nil, err
+		}
+		out[id] = kv
+	}
+	return out, rows.Err()
+}
+
 func (s *Store) InvalidateKeyVersion(ctx context.Context, tenant store.TenantID, secret store.SecretID, version uint32) error {
 	if err := requireTenant(tenant); err != nil {
 		return err
@@ -762,6 +806,82 @@ func (s *Store) InvalidateKeyVersion(ctx context.Context, tenant store.TenantID,
 UPDATE key_envelopes SET revoked = 1
 WHERE tenant_id = ? AND secret_id = ? AND key_version = ?`, tenant, secret, version)
 	return err
+}
+
+func (s *Store) RotateSecret(ctx context.Context, tenant store.TenantID, id store.SecretID, oldKeyVersion uint32, meta store.SecretMeta, blob store.CiphertextBlob, envelopes []store.KeyEnvelope) error {
+	if err := requireTenant(tenant); err != nil {
+		return err
+	}
+	if meta.TenantID != tenant || meta.ID != id {
+		return store.ErrConflict
+	}
+	if len(envelopes) == 0 {
+		return errors.New("envelopes required")
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	if _, err := tx.ExecContext(ctx, `
+UPDATE key_envelopes SET revoked = 1
+WHERE tenant_id = ? AND secret_id = ? AND key_version = ?`, tenant, id, oldKeyVersion); err != nil {
+		return err
+	}
+
+	now := time.Now().UTC()
+	if meta.CreatedAt.IsZero() {
+		meta.CreatedAt = now
+	}
+	meta.UpdatedAt = now
+	if _, err := tx.ExecContext(ctx, `
+INSERT INTO secrets(id, tenant_id, collection_id, title_ciphertext, title_nonce, created_by, created_at, updated_at)
+VALUES(?,?,?,?,?,?,?,?)
+ON CONFLICT(tenant_id, id) DO UPDATE SET
+  collection_id=excluded.collection_id, title_ciphertext=excluded.title_ciphertext,
+  title_nonce=excluded.title_nonce, updated_at=excluded.updated_at
+`, meta.ID, meta.TenantID, meta.CollectionID, meta.TitleCiphertext, meta.TitleNonce, meta.CreatedBy,
+		meta.CreatedAt.Format(time.RFC3339Nano), meta.UpdatedAt.Format(time.RFC3339Nano)); err != nil {
+		return err
+	}
+
+	if _, err := tx.ExecContext(ctx, `
+INSERT INTO secret_ciphertext(secret_id, tenant_id, ciphertext, nonce, key_version, content_type)
+VALUES(?,?,?,?,?,?)
+ON CONFLICT(tenant_id, secret_id) DO UPDATE SET
+  ciphertext=excluded.ciphertext, nonce=excluded.nonce, key_version=excluded.key_version,
+  content_type=excluded.content_type
+`, id, tenant, blob.Ciphertext, blob.Nonce, blob.KeyVersion, blob.ContentType); err != nil {
+		return err
+	}
+
+	for _, env := range envelopes {
+		if env.TenantID != tenant || env.SecretID != id {
+			return store.ErrConflict
+		}
+		var revoked int
+		err := tx.QueryRowContext(ctx, `
+SELECT revoked FROM key_envelopes
+WHERE tenant_id = ? AND secret_id = ? AND user_id = ? AND key_version = ?`,
+			env.TenantID, env.SecretID, env.UserID, env.KeyVersion).Scan(&revoked)
+		if err == nil && revoked != 0 {
+			return store.ErrRevokedEnvelope
+		}
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `
+INSERT INTO key_envelopes(secret_id, tenant_id, user_id, key_version, wrapped_dk, revoked)
+VALUES(?,?,?,?,?,0)
+ON CONFLICT(tenant_id, secret_id, user_id, key_version) DO UPDATE SET
+  wrapped_dk=excluded.wrapped_dk
+WHERE key_envelopes.revoked = 0
+`, env.SecretID, env.TenantID, env.UserID, env.KeyVersion, env.WrappedDK); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
 }
 
 func (s *Store) AppendAudit(ctx context.Context, e store.AuditEvent) error {

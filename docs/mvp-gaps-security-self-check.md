@@ -9,6 +9,6 @@
 | Idle-Lock 15min (OQ-17) | `/api/policy/client` + WebUI timer | OK |
 | Gruppen-Member-UI | Admin-Form + bestehende APIs | OK |
 | Login-Rate-Limit | 20/min pro IP | OK |
-| Extension Autofill | content.js Fill-Button | OK |
+| Extension Autofill | content.js Fill/Copy mit Host-Gate | OK |
 
 **Hinweis:** Secret-Rotation nach LDAP-Disable bleibt bewusst clientseitig (Prinzip 7) — Admin muss betroffene Shares rotieren.

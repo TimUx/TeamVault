@@ -135,10 +135,19 @@ Der private Escrow-Key darf nie in Logs oder dauerhaft auf dem Server landen.
 
 ![API-Keys](images/admin-apikeys.png)
 
-- Audit-Liste (Tenant-Ereignisse) — Fehlerhinweise erscheinen oben im Admin-Bereich
+- Audit-Liste (Tenant-Ereignisse) — Fehlerhinweise erscheinen oben im Admin-Bereich; kritische Vault-Mutationen (Share/Rotate/Delete) scheitern, wenn der Audit-Schreibvorgang fehlschlägt
 - API-Keys für Automation/CLI (`Authorization: Bearer …` / `TEAMVAULT_API_KEY`) — Token nur einmal anzeigen
-- Scope `read`: nur sichere GETs (me, Vault-Status/Keys, Secrets Liste/Detail); Admin-/Schreibaktionen → 403
-- Nach User-Disable: Secrets mit Envelope dieses Users rotieren (Hinweis in Admin-UI; kein Auto-Rotate wegen ZK)
+- Scopes (**Pflicht**, mind. einer; UI-Checkboxen):
+
+  | Scope | Wirkung |
+  |-------|---------|
+  | `read` | GET-Allowlist: me, Vault-Status/Keys, Secrets Liste/Detail, `GET /api/groups`, Presets/Policy |
+  | `vault` | Secret-/Vault-Schreibaktionen (Create/Share/Rotate/Delete, …) |
+  | `admin` | `/api/admin/*` — zusätzlich müssen die **User-Rollen** Admin erlauben |
+
+- Cookie-Sessions ohne Scope-Einschränkung. Legacy-Keys ohne Scopes gelten als uneingeschränkt (nicht neu anlegen).
+- Nach User-Disable: Secrets mit Envelope dieses Users rotieren (Hinweis + Liste `accessible-secrets` in Admin-UI; kein Auto-Rotate wegen ZK)
+- Tenant-Admins sehen in der Secret-Liste **Metadaten** (IDs, Title-Ciphertext) auch ohne eigenen Envelope — Klartext bleibt ZK-geschützt
 
 ### 3.8 Tenants & Storage-Migration (`platform_admin`)
 
@@ -152,7 +161,7 @@ Siehe Root-[README](../README.md#docker). Compose mountet:
 - Volume `/data` — Vault/Config
 - Unlock-Datei → `/run/secrets/teamvault_unlock` (read-only)
 
-CI baut Images auf dem Ubuntu-Runner und pusht ins Gitea-Package-Registry (`.gitea/workflows/ci.yml`).
+CI baut Images auf dem Ubuntu-Runner, scanned sie mit **Trivy** (Severity HIGH/CRITICAL, unfixed ignored) und pusht bei Erfolg ins Gitea-Package-Registry (`.gitea/workflows/ci.yml`).
 
 ## 5. Backup
 

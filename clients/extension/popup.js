@@ -284,6 +284,14 @@ function paintList() {
     copy.textContent = "Copy";
     copy.onclick = async () => {
       try {
+        const hosts = it.urlHosts || [];
+        const legacy = it.urlHost ? [it.urlHost] : [];
+        const all = hosts.length ? hosts : legacy;
+        const match = state.tabHost && all.some((h) => hostsMatch(h, state.tabHost));
+        if (!match) {
+          showErr("Copy blockiert: Secret-URL passt nicht zum Tab-Host (" + (state.tabHost || "?") + ").");
+          return;
+        }
         const payload = await decryptPayloadFor(it.id);
         await navigator.clipboard.writeText(payload.password || "");
       } catch (e) {

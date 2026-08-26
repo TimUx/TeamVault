@@ -597,6 +597,22 @@ function touchIdle() {
       if (mpw) mpw.value = "";
       const err = overlay.querySelector("#lockErr");
       if (err) { err.hidden = true; err.textContent = ""; }
+      const trap = (ev) => {
+        if (ev.key !== "Tab" || overlay.hidden) return;
+        const focusable = overlay.querySelectorAll("input, button");
+        if (!focusable.length) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (ev.shiftKey && document.activeElement === first) {
+          ev.preventDefault();
+          last.focus();
+        } else if (!ev.shiftKey && document.activeElement === last) {
+          ev.preventDefault();
+          first.focus();
+        }
+      };
+      overlay._focusTrap = trap;
+      document.addEventListener("keydown", trap);
       mpw?.focus();
     }
   }, vault.idleMin * 60 * 1000);
@@ -759,13 +775,13 @@ function renderApp(app) {
       </header>
 
       <div class="app-content">
-        <div id="lockOverlay" class="lock-overlay" hidden>
+        <div id="lockOverlay" class="lock-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="lockTitle">
           <div class="lock-card">
-            <h1>Vault gesperrt</h1>
+            <h1 id="lockTitle">Vault gesperrt</h1>
             <p class="lead">Idle-Timeout. Master-Passwort erneut eingeben (bleibt nur im Speicher).</p>
-            <label>Master-Passwort</label>
+            <label for="lockMpw">Master-Passwort</label>
             <input id="lockMpw" type="password" autocomplete="current-password" />
-            <div class="error" id="lockErr" hidden></div>
+            <div class="error" id="lockErr" hidden role="alert"></div>
             <div class="row"><button class="btn-accent" type="button" id="lockUnlock">Entsperren</button></div>
           </div>
         </div>
@@ -994,10 +1010,13 @@ function renderApp(app) {
                   <div class="row"><button class="btn-accent" type="button" id="escrow_gen">Escrow-Keypair + Shares</button></div>
                 </div>
                 <div class="admin-section" data-admin-section="apikeys">
-                  <p class="hint">Scope <code>read</code>: nur GET für me, Vault-Status/Keys und Secrets (Liste/Detail). Admin- und Schreibaktionen liefern 403.</p>
+                  <p class="hint">Scopes: <code>read</code> (GET allowlist), <code>vault</code> (Secret-Schreibaktionen), <code>admin</code> (/api/admin/*). User-Rollen gelten zusätzlich.</p>
                   <div id="klist" class="list"></div>
                   <label>Name</label><input id="kname" />
-                  <div class="row"><button class="btn-accent" type="button" id="kcreate">API-Key erzeugen (read)</button></div>
+                  <label class="inline"><input id="kscope_read" type="checkbox" checked /> read</label>
+                  <label class="inline"><input id="kscope_vault" type="checkbox" /> vault</label>
+                  <label class="inline"><input id="kscope_admin" type="checkbox" /> admin</label>
+                  <div class="row"><button class="btn-accent" type="button" id="kcreate">API-Key erzeugen</button></div>
                   <div class="ok" id="ktoken" hidden></div>
                 </div>
                 <div class="admin-section" data-admin-section="platform" id="plat" hidden>
@@ -1307,6 +1326,7 @@ function renderApp(app) {
   }
 
   n.querySelector("#sExportJson").onclick = async () => {
+    if (!confirm("Klartext-Export als JSON speichern? Die Datei enthält Passwörter im Klartext — sicher ablegen und danach löschen.")) return;
     try {
       const items = await collectDecryptedExportItems();
       const bw = {
@@ -1328,6 +1348,7 @@ function renderApp(app) {
     } catch (e) { alert(e.message); }
   };
   n.querySelector("#sExportCsv").onclick = async () => {
+    if (!confirm("Klartext-Export als CSV speichern? Die Datei enthält Passwörter im Klartext — sicher ablegen und danach löschen.")) return;
     try {
       const items = await collectDecryptedExportItems();
       const esc = (s) => `"${String(s ?? "").replace(/"/g, '""')}"`;
@@ -1355,6 +1376,11 @@ function renderApp(app) {
     touchIdle();
     n.querySelector("#unlock").hidden = true;
     n.querySelector("#lockOverlay").hidden = true;
+    const lockOv = n.querySelector("#lockOverlay");
+    if (lockOv && lockOv._focusTrap) {
+      document.removeEventListener("keydown", lockOv._focusTrap);
+      lockOv._focusTrap = null;
+    }
     n.querySelector("#vaultui").hidden = false;
     n.querySelector("#appSidebar").hidden = false;
     n.querySelector("#mpw").value = "";
@@ -1382,6 +1408,17 @@ function renderApp(app) {
         const sel = n.querySelector("#sharegroup");
         sel.innerHTML = `<option value="">— Gruppe wählen —</option>` +
           vault.groups.map((g) => `<option value="${g.id}">${g.name}</option>`).join("");
+      } catch (_) { vault.groups = []; }
+    } else {
+      try {
+        vault.groups = await api("/api/groups");
+        if (vault.groups.length) {
+          n.querySelector("#gshareWrap").hidden = false;
+          n.querySelector("#shareGroup").hidden = false;
+          const sel = n.querySelector("#sharegroup");
+          sel.innerHTML = `<option value="">— Gruppe wählen —</option>` +
+            vault.groups.map((g) => `<option value="${g.id}">${g.name}</option>`).join("");
+        }
       } catch (_) { vault.groups = []; }
     }
     vault.secretsCache = [];
@@ -2346,9 +2383,14 @@ function renderApp(app) {
     const err = n.querySelector("#aerr"); err.hidden = true;
     const box = n.querySelector("#ktoken");
     try {
+      const scopes = [];
+      if (n.querySelector("#kscope_read").checked) scopes.push("read");
+      if (n.querySelector("#kscope_vault").checked) scopes.push("vault");
+      if (n.querySelector("#kscope_admin").checked) scopes.push("admin");
+      if (!scopes.length) throw new Error("Mindestens einen Scope wählen");
       const res = await api("/api/admin/api-keys", {
         method: "POST",
-        body: JSON.stringify({ name: n.querySelector("#kname").value.trim(), scopes: ["read"] }),
+        body: JSON.stringify({ name: n.querySelector("#kname").value.trim(), scopes }),
       });
       box.hidden = false;
       box.textContent = "Token (einmalig): " + res.token;

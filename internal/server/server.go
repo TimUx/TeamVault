@@ -132,12 +132,25 @@ func (a *API) requireAuth(next http.HandlerFunc) http.HandlerFunc {
 			writeErr(w, http.StatusUnauthorized, "not authenticated")
 			return
 		}
-		if isReadOnlyAPIKey(sess.Scopes) && !apiKeyReadAllowed(r) {
-			writeErr(w, http.StatusForbidden, "api key scope read-only")
+		if !apiKeyScopesOK(sess, r) {
+			writeErr(w, http.StatusForbidden, "api key scope denied")
 			return
 		}
 		next(w, r)
 	}
+}
+
+func isAPIKeySession(sess session.Session) bool {
+	return strings.HasPrefix(sess.ID, "apk:")
+}
+
+func hasAPIKeyScope(scopes []string, want string) bool {
+	for _, s := range scopes {
+		if s == want {
+			return true
+		}
+	}
+	return false
 }
 
 // isReadOnlyAPIKey is true when scopes are non-empty and only contain "read".
@@ -160,7 +173,8 @@ func apiKeyReadAllowed(r *http.Request) bool {
 	p := r.URL.Path
 	switch {
 	case p == "/api/me", p == "/api/vault/status", p == "/api/vault/crypto-params", p == "/api/vault/keys",
-		p == "/api/secrets", p == "/api/users/public-keys", p == "/api/crypto/presets":
+		p == "/api/secrets", p == "/api/users/public-keys", p == "/api/crypto/presets", p == "/api/groups",
+		p == "/api/policy/client":
 		return true
 	case strings.HasPrefix(p, "/api/secrets/") && !strings.Contains(p[len("/api/secrets/"):], "/"):
 		return true // GET /api/secrets/{id}
@@ -169,6 +183,53 @@ func apiKeyReadAllowed(r *http.Request) bool {
 	default:
 		return false
 	}
+}
+
+// apiKeyScopesOK enforces API-key scopes. Cookie sessions (non-apk) are unrestricted by scopes.
+// Model: read = GET allowlist; vault = vault/secret mutations (+ read GETs); admin = /api/admin/* (+ vault).
+func apiKeyScopesOK(sess session.Session, r *http.Request) bool {
+	if !isAPIKeySession(sess) {
+		return true
+	}
+	scopes := sess.Scopes
+	if len(scopes) == 0 {
+		// Legacy unrestricted key — treat as vault+admin for the owning user roles.
+		return true
+	}
+	if isReadOnlyAPIKey(scopes) {
+		return apiKeyReadAllowed(r)
+	}
+	p := r.URL.Path
+	if strings.HasPrefix(p, "/api/admin/") {
+		return hasAPIKeyScope(scopes, "admin")
+	}
+	mutating := r.Method != http.MethodGet && r.Method != http.MethodHead && r.Method != http.MethodOptions
+	if mutating {
+		return hasAPIKeyScope(scopes, "vault") || hasAPIKeyScope(scopes, "admin")
+	}
+	// Non-admin GETs: read, vault, or admin
+	return hasAPIKeyScope(scopes, "read") || hasAPIKeyScope(scopes, "vault") || hasAPIKeyScope(scopes, "admin")
+}
+
+func normalizeAPIKeyScopes(in []string) ([]string, error) {
+	if len(in) == 0 {
+		return nil, errors.New("scopes required: read, vault, and/or admin")
+	}
+	seen := map[string]bool{}
+	var out []string
+	for _, s := range in {
+		s = strings.TrimSpace(strings.ToLower(s))
+		switch s {
+		case "read", "vault", "admin":
+			if !seen[s] {
+				seen[s] = true
+				out = append(out, s)
+			}
+		default:
+			return nil, errors.New("invalid scope: " + s + " (allowed: read, vault, admin)")
+		}
+	}
+	return out, nil
 }
 
 func (a *API) handleHealth(w http.ResponseWriter, r *http.Request) {

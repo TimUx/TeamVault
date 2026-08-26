@@ -584,6 +584,38 @@ func (s *Store) ListKeyEnvelopes(_ context.Context, tenant store.TenantID, secre
 	return out, nil
 }
 
+func (s *Store) ListKeyEnvelopesByTenant(_ context.Context, tenant store.TenantID) ([]store.KeyEnvelope, error) {
+	if err := requireTenant(tenant); err != nil {
+		return nil, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var out []store.KeyEnvelope
+	for _, e := range s.data.Envelopes {
+		if e.TenantID == tenant && !e.Revoked {
+			out = append(out, e.KeyEnvelope)
+		}
+	}
+	return out, nil
+}
+
+func (s *Store) ListSecretKeyVersions(_ context.Context, tenant store.TenantID) (map[store.SecretID]uint32, error) {
+	if err := requireTenant(tenant); err != nil {
+		return nil, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	prefix := string(tenant) + "/"
+	out := make(map[store.SecretID]uint32)
+	for key, b := range s.data.Blobs {
+		if !strings.HasPrefix(key, prefix) {
+			continue
+		}
+		out[store.SecretID(strings.TrimPrefix(key, prefix))] = b.KeyVersion
+	}
+	return out, nil
+}
+
 func (s *Store) InvalidateKeyVersion(_ context.Context, tenant store.TenantID, secret store.SecretID, version uint32) error {
 	if err := requireTenant(tenant); err != nil {
 		return err
@@ -593,6 +625,59 @@ func (s *Store) InvalidateKeyVersion(_ context.Context, tenant store.TenantID, s
 	for i, e := range s.data.Envelopes {
 		if e.TenantID == tenant && e.SecretID == secret && e.KeyVersion == version {
 			s.data.Envelopes[i].Revoked = true
+		}
+	}
+	return s.flush()
+}
+
+func (s *Store) RotateSecret(_ context.Context, tenant store.TenantID, id store.SecretID, oldKeyVersion uint32, meta store.SecretMeta, blob store.CiphertextBlob, envelopes []store.KeyEnvelope) error {
+	if err := requireTenant(tenant); err != nil {
+		return err
+	}
+	if meta.TenantID != tenant || meta.ID != id {
+		return store.ErrConflict
+	}
+	if len(envelopes) == 0 {
+		return errors.New("envelopes required")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for i, e := range s.data.Envelopes {
+		if e.TenantID == tenant && e.SecretID == id && e.KeyVersion == oldKeyVersion {
+			s.data.Envelopes[i].Revoked = true
+		}
+	}
+
+	now := time.Now().UTC()
+	if meta.CreatedAt.IsZero() {
+		if old, ok := s.data.Secrets[secretKey(meta.TenantID, meta.ID)]; ok {
+			meta.CreatedAt = old.CreatedAt
+		} else {
+			meta.CreatedAt = now
+		}
+	}
+	meta.UpdatedAt = now
+	s.data.Secrets[secretKey(meta.TenantID, meta.ID)] = meta
+	s.data.Blobs[secretKey(tenant, id)] = blob
+
+	for _, env := range envelopes {
+		if env.TenantID != tenant || env.SecretID != id {
+			return store.ErrConflict
+		}
+		replaced := false
+		for i, e := range s.data.Envelopes {
+			if e.TenantID == env.TenantID && e.SecretID == env.SecretID && e.UserID == env.UserID && e.KeyVersion == env.KeyVersion {
+				if e.Revoked {
+					return store.ErrRevokedEnvelope
+				}
+				s.data.Envelopes[i] = envelopeRec{KeyEnvelope: env, Revoked: false}
+				replaced = true
+				break
+			}
+		}
+		if !replaced {
+			s.data.Envelopes = append(s.data.Envelopes, envelopeRec{KeyEnvelope: env})
 		}
 	}
 	return s.flush()

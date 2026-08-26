@@ -173,10 +173,13 @@ func (a *API) handleShareGroup(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	meta, _ := json.Marshal(map[string]string{"group_id": body.GroupID})
-	_ = a.App.Vault.AppendAudit(r.Context(), store.AuditEvent{
+	if err := a.App.Vault.AppendAudit(r.Context(), store.AuditEvent{
 		ID: newID("aud"), TenantID: sess.TenantID, ActorID: string(sess.UserID),
 		Action: "secret.share_group", ResourceType: "secret", ResourceID: string(id),
 		Metadata: meta, CreatedAt: time.Now().UTC(),
-	})
+	}); err != nil {
+		writeErr(w, http.StatusInternalServerError, "audit: "+err.Error())
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "shared": len(body.Envelopes)})
 }

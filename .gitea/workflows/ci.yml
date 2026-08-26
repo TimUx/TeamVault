@@ -156,6 +156,19 @@ jobs:
             docker tag "${PRIMARY}" "${tag}"
           done <<< '${{ steps.meta.outputs.tags }}'
 
+      - name: Container image scan (Trivy)
+        shell: bash
+        run: |
+          set -euo pipefail
+          PRIMARY="$(echo '${{ steps.meta.outputs.tags }}' | head -n1)"
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            aquasec/trivy:latest image \
+            --exit-code 1 \
+            --severity CRITICAL,HIGH \
+            --ignore-unfixed \
+            "${PRIMARY}"
+
       - name: Push package
         shell: bash
         run: |

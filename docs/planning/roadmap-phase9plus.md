@@ -3,10 +3,13 @@
 **Status:** Phasen 9–13 weitgehend umgesetzt (2026-08-26).  
 **Weiter deferred (bewusst):** Bitwarden-Send / Einmal-Links, PWA/native Mobile, SCIM/IdP-Provisioning, Postgres-Driver.  
 React-Frontend: **abgesagt** (Vanilla bleibt) — siehe OQ-01 / `docs/phase9-13-security-self-check.md`.  
-Client-Export (JSON/CSV) und Self-Service Passwort-Wechsel: umgesetzt (Findings-Stufenplan Stufe 5).
+Client-Export (JSON/CSV) und Self-Service Passwort-Wechsel: umgesetzt (Findings-Stufenplan Stufe 5).  
+**Post-Stufenplan (2026-08):** atomare `RotateSecret`, API-Key-Scopes `read`/`vault`/`admin`, `GET /api/groups`, Secret-List-Batching, Trivy in CI, Extension Copy Host-Gate, Audit fail-hard auf kritischen Mutationen.
 
 **Canvas:** interaktive Scorecard/Findings neben dem Chat (Cursor Canvas)  
 **Ziel:** Notwendige vs. optionale Anpassungen in umsetzbare Phasen gliedern.
+
+> Historische Scorecard/Findings unten beschreiben den Stand *vor* Phase 9–13 / Findings-/Post-Stufenplan und dienen der Nachvollziehbarkeit — aktuelle Ops-Checklist: `SECURITY-REVIEW-CHECKLIST.md`.
 
 ---
 

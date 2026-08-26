@@ -13,8 +13,8 @@ Secrets und Titel werden nur im Browser entschlüsselt — Server und Storage se
 | **Sharing** | Pro berechtigtem User eigener Datenschlüssel (asymmetrisch); Entzug mit Pflicht-Rotation |
 | **Auth** | Lokales Login immer; optional LDAP/AD nur für Bind; TOTP; Passkeys (nur Login); Self-Service Passwort-Wechsel |
 | **Onboarding** | Erzwungenes Master-Passwort + Schlüsselpaar; Recovery-Kit oder Admin-Escrow (Shamir) |
-| **Admin** | User/Gruppen, LDAP, SMTP, Krypto/Policy, Audit, API-Keys (read-Scope), Tenants, Storage-Migration |
-| **Clients** | Web-UI, CLI (`tvcli`), Browser-Extension (Chrome/Edge/Firefox, Autofill mit Host-Gate) |
+| **Admin** | User/Gruppen, LDAP, SMTP, Krypto/Policy, Audit, API-Keys (`read`/`vault`/`admin`), Tenants, Storage-Migration |
+| **Clients** | Web-UI, CLI (`tvcli`), Browser-Extension (Chrome/Edge/Firefox; Fill/Copy mit Host-Gate) |
 
 ![Vault mit Sidebar und Secrets](docs/images/vault-secrets.png)
 
@@ -92,7 +92,7 @@ Extension: Ordner `clients/extension` in Chrome/Edge (Entwicklermodus) laden —
 
 ## CI (Gitea Actions)
 
-Ubuntu-Runner: Tests + Docker-Image als Package.
+Ubuntu-Runner: Tests, `govulncheck`, Docker-Build, **Trivy-Image-Scan** (HIGH/CRITICAL), dann Package-Push.
 
 - Workflow: [`.gitea/workflows/ci.yml`](.gitea/workflows/ci.yml)  
 - Image z. B. `git.example.internal/cc-3.3/teamvault:latest`  
@@ -112,6 +112,7 @@ Der Key entsperrt nur die **verschlüsselte Config** — keine Vault-Klartexte.
 - Phases 1–8: MVP (Setup, Vault, Sharing, Admin, Passkeys, OpenAPI, CLI, Extension, Docker/CI)
 - Phases 9–13: Hardening, UX-Kern, Performance, Features, Dark/Mobile (Postgres/IdP deferred; React abgesagt → Vanilla)
 - Findings-Stufenplan: Authz/Scopes/CSRF, Ops-Docs, A11y/Host-Gate, Export & Self-Service-Passwörter
+- Post-Stufenplan: atomare Rotation, API-Key-Scopes `read`/`vault`/`admin`, `GET /api/groups`, List-Batching, Trivy-CI, Extension Copy Host-Gate
 
 Self-Check: [`docs/phase9-13-security-self-check.md`](docs/phase9-13-security-self-check.md) · Checklist: [`SECURITY-REVIEW-CHECKLIST.md`](SECURITY-REVIEW-CHECKLIST.md)
 

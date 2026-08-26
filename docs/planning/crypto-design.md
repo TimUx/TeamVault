@@ -106,7 +106,7 @@ sequenceDiagram
 2. Payload mit `DK'` neu verschlüsseln.
 3. Envelopes nur für **verbleibende** Berechtigte erzeugen (`key_version++`).
 4. Alte Envelopes/Version ungültig markieren; Server darf alte Ciphertexts löschen oder als revoked führen.
-5. Audit-Event `secret.key_rotated` / `permission.revoked`.
+5. Audit-Event `secret.key_rotated` / `permission.revoked` (Audit-Write fail → Mutation gilt serverseitig als fehlgeschlagen für den Client).
 
 ### 3.6 Master-Passwort wechseln
 

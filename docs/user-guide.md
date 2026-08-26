@@ -89,7 +89,7 @@ In der Liste **Öffnen** — Klartext erscheint nur bei Ihnen im Browser. Felder
 Im Secret-Detail einen anderen User wählen → **Teilen**.  
 Jeder Empfänger erhält einen eigenen Umschlag um den Datenschlüssel (kein gemeinsames Gruppenpasswort). Empfänger müssen im gleichen Tenant **onboarded** sein.
 
-Admins können zusätzlich eine **Gruppe** wählen → **Gruppe teilen** (pro Mitglied eigener Envelope; Public Keys über die Secret-Route, nicht über Admin-Only).
+Admins und Gruppenmitglieder können eine **Gruppe** wählen → **Gruppe teilen** (Mitglieder sehen nur eigene Gruppen; pro Mitglied eigener Envelope).
 
 ![Geteiltes Secret](images/vault-shared.png)
 
@@ -115,13 +115,13 @@ Sidebar **Import**: Bitwarden-JSON, CSV oder KeePass-XML wählen. Parsing und Ve
 
 ### Export
 
-Unter der Secrets-Liste: **Export JSON** (Bitwarden-Login-Subset, unverschlüsselt lokal) oder **Export CSV**. Es werden nur Einträge exportiert, die Sie entschlüsseln können — der Server sieht den Klartext nicht.
+Unter der Secrets-Liste: **Export JSON** (Bitwarden-Login-Subset, unverschlüsselt lokal) oder **Export CSV** — mit Bestätigung, weil Klartext auf Disk landet. Es werden nur Einträge exportiert, die Sie entschlüsseln können — der Server sieht den Klartext nicht.
 
 ![Export-Buttons](images/vault-export.png)
 
 ### Zugriff entziehen
 
-**Zugriff entziehen + rotieren** — Datenschlüssel wird neu erzeugt; alte Versionen sind ungültig.
+**Zugriff entziehen + rotieren** — Datenschlüssel wird neu erzeugt; alte Versionen sind ungültig. Die Rotation schreibt Ciphertext und neue Envelopes atomar (kein Zwischenzustand ohne gültige Umschläge).
 
 ### Löschen
 
@@ -165,7 +165,7 @@ Typischer Ablauf:
 1. Server-URL setzen, Login, Master-Passwort  
 2. Secret wählen → **Copy** oder **Fill**  
 
-**Fill** ist nur erlaubt, wenn eine hinterlegte Website-URL zum Host des aktiven Tabs passt — sonst Warnung/Block (Phishing-Schutz). Optional Domain-Filter in der Liste.
+**Fill** und **Copy** sind nur erlaubt, wenn eine hinterlegte Website-URL zum Host des aktiven Tabs passt — sonst Warnung/Block (Phishing-Schutz). Optional Domain-Filter in der Liste.
 
 Schlüssel bleiben in der Popup-Sitzung, nicht im Content-Script.
 
@@ -184,7 +184,15 @@ tvcli secrets create -title "Git" -url https://git.example.local -ssh-private-fi
 Oder nach `tvcli login …` mit Session-Cookie.  
 Master-Passwort wird bei Bedarf lokal abgefragt und nie an den Server gesendet.
 
-API-Keys mit Scope **`read`** dürfen nur lesen (me, Vault-Status/Keys, Secrets Liste/Detail) — keine Admin- oder Schreibaktionen.
+API-Keys brauchen mindestens einen Scope:
+
+| Scope | Erlaubt |
+|-------|---------|
+| `read` | GET-Allowlist (me, Vault-Status/Keys, Secrets Liste/Detail, eigene Gruppen) |
+| `vault` | Secret-/Vault-Schreibaktionen (zusätzlich zu lesenden GETs) |
+| `admin` | `/api/admin/*` (zusätzlich User-Rollen nötig) |
+
+Nur `read` → keine Admin- oder Schreibaktionen. Cookie-Login ohne API-Key ist nicht scope-beschränkt.
 
 ## 9. Gute Praxis
 
@@ -192,7 +200,8 @@ API-Keys mit Scope **`read`** dürfen nur lesen (me, Vault-Status/Keys, Secrets 
 - Login-Passwort ≠ Master-Passwort  
 - Nach Teilen nur notwendige Personen; bei Austritt Admin um Entzug/Rotation bitten  
 - Öffentliche/geteilte Rechner: nach Nutzung **Logout** und Browser schließen  
-- Phishing: nur die bekannte Firmen-URL verwenden; Extension-Fill nur bei Host-Match  
+- Phishing: nur die bekannte Firmen-URL verwenden; Extension Fill/Copy nur bei Host-Match  
+- Export-Dateien enthalten Klartext — sicher ablegen und zeitnah löschen  
 
 ## 10. Hilfe
 
@@ -202,6 +211,6 @@ API-Keys mit Scope **`read`** dürfen nur lesen (me, Vault-Status/Keys, Secrets 
 | Recovery nötig | Kit + Anleitung des Admins (Escrow vs. User-Kit) |
 | Passkey fehlt | Neu registrieren; Gerät/OS-Support prüfen |
 | Secret „kein Zugriff“ | Noch nicht geteilt oder Rechte entzogen |
-| Fill blockiert | Secret-URL passt nicht zum Tab-Host |
+| Fill/Copy blockiert | Secret-URL passt nicht zum Tab-Host |
 
 Technische API: [openapi.yaml](openapi.yaml) · Admin: [admin-guide.md](admin-guide.md)

@@ -11,7 +11,7 @@
 | 9.5 | Sessions persisted to `data/sessions.json` | OK |
 | 9.6 | Rate-limit by host (not host:port); multi-node note in docs | OK |
 | 9.7 | Extension optional_host_permissions + Firefox gecko id | OK |
-| 9.8 | CI `govulncheck` | OK |
+| 9.8 | CI `govulncheck` + Trivy image scan (HIGH/CRITICAL) | OK |
 
 ## Phase 10 – UX
 
@@ -29,7 +29,7 @@
 
 | # | Check | Status |
 |---|--------|--------|
-| 11.1 | List secrets includes own envelope | OK |
+| 11.1 | List secrets includes own envelope (batch envelopes + key versions) | OK |
 | 11.2 | Pagination limit/offset | OK |
 | 11.3 | Parallel title decrypt with cap | OK (UI) |
 | 11.4 | Argon2 presets API | OK |
@@ -40,7 +40,7 @@
 |---|--------|--------|
 | 12.1 | Payload url/totp_seed/tags/favorite | OK (client) |
 | 12.2 | collection_id folders | OK |
-| 12.3 | Group share envelopes | OK |
+| 12.3 | Group share envelopes + `GET /api/groups` for members | OK |
 | 12.4 | Recovery mode + REONBOARD confirm | OK |
 | 12.5 | auditor role on audit API | OK |
 | 12.6 | Mail templates (existing MVP) | Partial |
@@ -54,3 +54,13 @@
 | 13.3 | Dark theme | OK |
 | 13.4 | Mobile CSS | OK |
 | 13.5 | External IdP/SCIM | Deferred |
+
+## Post-Stufenplan (nach Findings 1–5)
+
+| # | Check | Status |
+|---|--------|--------|
+| P1 | `RotateSecret` atomic; empty/invalid envelopes rejected before mutate | OK |
+| P2 | API-Key scopes `read` / `vault` / `admin` enforced | OK |
+| P3 | Extension Fill **and** Copy host-gated | OK |
+| P4 | Export Klartext-Confirm; critical audit fail-hard | OK |
+| P5 | Live-Pentest / externes Audit | Offen (Prozess) |

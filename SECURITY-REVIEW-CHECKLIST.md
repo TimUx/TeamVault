@@ -38,7 +38,7 @@ Vor dem Betrieb mit echten Zugangsdaten: externes Audit + internes Walkthrough g
 - [x] Backup: sealed Config + Vault-Store; Restore-Test ohne Klartext-Exposition
 - [x] Audit-Log-Review-Prozess; kritische Actions (migrate, recovery-mode, share/rotate) sichtbar
 - [x] Rate-Limits / Lockout für Login (falls nicht vorhanden: nachziehen)
-- [ ] Dependency- und Container-Image-Scan
+- [x] Dependency- und Container-Image-Scan
 - [x] Server `ReadHeaderTimeout` / Read/Write/Idle-Timeouts gesetzt
 - [x] Reverse-Proxy: Origin durchreichen; `TEAMVAULT_TRUST_FORWARDED` Default aus
 
@@ -48,7 +48,7 @@ Vor dem Betrieb mit echten Zugangsdaten: externes Audit + internes Walkthrough g
 - [x] Keine Secrets in `localStorage` / URL / Analytics
 - [x] CSP und Trusted Types soweit praktikabel
 - [x] Escrow-Gen: kein voller SK im DOM; Shares + Download
-- [x] Extension Fill nur bei Host-Match
+- [x] Extension Fill/Copy nur bei Host-Match
 
 ## Dokumentation
 

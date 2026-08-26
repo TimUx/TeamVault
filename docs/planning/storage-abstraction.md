@@ -52,7 +52,12 @@ type VaultStore interface {
     PutSecretMeta(ctx context.Context, meta SecretMeta) error
     PutSecretCiphertext(ctx context.Context, id SecretID, blob CiphertextBlob) error
     PutKeyEnvelope(ctx context.Context, env KeyEnvelope) error
-    InvalidateKeyVersion(ctx context.Context, secret SecretID, version uint32) error
+    ListKeyEnvelopes(ctx context.Context, tenant TenantID, secret SecretID) ([]KeyEnvelope, error)
+    ListKeyEnvelopesByTenant(ctx context.Context, tenant TenantID) ([]KeyEnvelope, error) // list-path batch
+    ListSecretKeyVersions(ctx context.Context, tenant TenantID) (map[SecretID]uint32, error)
+    InvalidateKeyVersion(ctx context.Context, tenant TenantID, secret SecretID, version uint32) error
+    // RotateSecret: invalidate old version + meta + ciphertext + envelopes atomically
+    RotateSecret(ctx context.Context, tenant TenantID, id SecretID, oldKeyVersion uint32, meta SecretMeta, blob CiphertextBlob, envelopes []KeyEnvelope) error
 
     // Audit (append-only)
     AppendAudit(ctx context.Context, e AuditEvent) error
@@ -70,6 +75,7 @@ type VaultStore interface {
 |-----|-----------|
 | `CiphertextBlob` | `{ ciphertext, nonce, key_version, content_type }` – opaque bytes |
 | `KeyEnvelope` | `{ secret_id, user_id, key_version, wrapped_dk }` – opaque |
+| `RotateSecret` | Atomare Rotation (SQLite-Tx / JSON-Lock+flush); Envelopes Pflicht |
 | `StoreSnapshot` | Portables, backend-neutrales Interchange-Format (z. B. length-prefixed records oder CBOR/JSON mit base64-Blobs) |
 | Tenant-Filter | Jede lesende/schreibende Methode tenant-scoped außer expliziter Super-Admin-Export |
 

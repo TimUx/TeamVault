@@ -110,7 +110,8 @@ Autorisierung = lokal. LDAP-Gruppenmitgliedschaften werden im MVP **komplett ign
 ### 2.12 API-Key-Verwaltung
 
 - Erzeugen (Klartext **einmal** zeigen), widerrufen, Scopes, Expiry
-- Gehashte Speicherung
+- Scopes: `read` | `vault` | `admin` (Pflicht, mind. einer; UI-Checkboxen)
+- Gehashte Speicherung; Enforcement in `requireAuth`
 
 ### 2.13 2FA Policy
 

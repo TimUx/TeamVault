@@ -397,7 +397,12 @@ func (a *API) handleCreateAPIKey(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "name required")
 		return
 	}
-	plain, rec, err := instcfg.NewAPIKey(body.Name, body.Scopes, string(sess.UserID), string(sess.TenantID))
+	scopes, err := normalizeAPIKeyScopes(body.Scopes)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	plain, rec, err := instcfg.NewAPIKey(body.Name, scopes, string(sess.UserID), string(sess.TenantID))
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
