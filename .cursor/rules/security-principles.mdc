@@ -1,0 +1,37 @@
+---
+description: teamVault non-negotiable security principles and project context
+alwaysApply: true
+---
+
+# teamVault – Sicherheitsprinzipien & Projektkontext
+
+Interner Multi-Tenant-Passwortmanager (self-hosted, Firmennetz, optional ohne Internet).
+**Stack:** Backend Go; Frontend TypeScript/React; Client-Crypto libsodium.js/WebCrypto.
+Authentifizierung lokal (User+Passwort) und optional LDAP/AD nur für Login-Bind.
+Vollständige Administration über Web-UI; Branding-Farben siehe `docs/planning/ui-brand.md`.
+
+## Nicht verhandelbar (jeder Codeabschnitt)
+
+1. **Zero-Knowledge:** Server/DB sieht nie Klartext-Secrets oder unverschlüsselte private Schlüssel.
+2. **Clientseitige Crypto:** Ver-/Entschlüsselung nur im Browser (WebCrypto / libsodium.js).
+3. **Nur auditierte Libs:** libsodium/NaCl, WebCrypto – keine eigenen Primitives.
+4. **KDF:** Argon2id für Master-Passwort-Ableitung – nie PBKDF2/bcrypt/MD5/SHA1 allein.
+5. **Sharing:** Pro berechtigtem User eigener Datenschlüssel, asymmetrisch mit dessen Public Key – kein Gruppenpasswort.
+6. **Hybrid-Auth:** Lokal immer verfügbar; LDAP/AD optional nur Login-Bind, nie Autorisierung. Auth-Backend pro User vermerkt; Rechte immer lokal.
+7. **Rechteentzug:** Pflicht-Rotation/Neuverschlüsselung des Datenschlüssels; alte Version ungültig.
+8. **Storage sieht nur Ciphertext** (+ Metadaten), unabhängig vom Backend (SQLite/PG/JSON).
+9. **Erstanmeldung:** Nach Login erzwungenes Master-Passwort + Schlüsselpaar (Argon2id); ohne Onboarding kein Vault-Zugriff.
+10. **Key-Recovery Pflicht:** Pro Tenant umschaltbar – (a) User-Recovery-Kit oder (b) Admin-Escrow (hochkritisches Asset, z. B. Shamir).
+
+## Konfiguration
+
+- Genau **ein** Bootstrap-Geheimnis von außen: `MASTER_UNLOCK_KEY` (Prod: Keyfile/Secret-Mount bevorzugt; Env nur Dev/Test).
+- Alles andere über Setup-Wizard / Admin-UI, verschlüsselt in der Config-DB.
+- Ausnahme: Bind-Adresse/Port (infrastrukturell, keine Secrets).
+- Secret-Titel und Vault-Payloads: clientseitig verschlüsselt; Suche clientseitig.
+
+## Verbote
+
+- Keine Klartext-Secrets in Logs, Traces, Error-Messages oder Tests mit Produktionsdaten.
+- Keine Bitwarden-Protokoll-Kompatibilität; eigene REST-API + Extension/CLI mit geteiltem Crypto-Modul.
+- Bei Konflikt Anforderung vs. Prinzip: in `docs/planning/open-questions.md` sichtbar machen, nicht still auflösen.

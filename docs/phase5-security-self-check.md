@@ -1,0 +1,12 @@
+# Phase 5 – Secrets / Sharing / Admin Security Self-Check
+
+| # | Check | Status |
+|---|--------|--------|
+| 1 ZK | Secret-APIs akzeptieren nur Ciphertext + Envelopes; keine Klartextfelder | OK |
+| 7 Rotate | `InvalidateKeyVersion` vor neuer Version; alte Envelopes nicht mehr listbar | OK |
+| Share | Nur Caller mit Envelope darf share/rotate; pro User eigene Envelope (kein Gruppen-Passwort) | OK |
+| Titles | Title bleibt Ciphertext (OQ-12); Client-AES-GCM mit KeyVersion-AAD | OK |
+| Admin | Users/Groups nur `tenant_admin`/`platform_admin`; Public-Keys nur für Onboarded | OK |
+| UI | Master-Passwort nur im Browser (`unlockPrivateKey`); SK nur in Memory | OK |
+
+**Hinweis:** Revoke = Pflicht-Rotation (`POST /api/secrets/{id}/rotate`) ohne Envelope für entfernte User.

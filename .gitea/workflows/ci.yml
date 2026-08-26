@@ -1,0 +1,169 @@
+# teamVault CI — Gitea Actions (ubuntu runner)
+#
+# Prerequisites on the instance:
+#   - Act-Runner with label "ubuntu-latest" (or change runs-on below)
+#   - Container registry / Packages enabled
+# Optional repo secrets/vars:
+#   - secrets.REGISTRY_TOKEN  — PAT with write:package (fallback: gitea.token)
+#   - vars.REGISTRY           — registry host (default: hostname of gitea.server_url)
+#   - vars.GOPROXY / vars.GOSUMDB — corp module proxy if needed
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ gitea.ref }}
+  cancel-in-progress: true
+
+env:
+  GOPROXY: ${{ vars.GOPROXY || 'https://proxy.golang.org,direct' }}
+  GOSUMDB: ${{ vars.GOSUMDB || 'sum.golang.org' }}
+  CGO_ENABLED: "0"
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Go test
+        run: go test ./...
+
+      - name: Go vet
+        run: go vet ./...
+
+      - name: govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...
+
+      - name: Build server + CLI (smoke)
+        run: |
+          go build -trimpath -o /tmp/teamvault ./cmd/teamvault
+          go build -trimpath -o /tmp/tvcli ./cmd/tvcli
+          /tmp/tvcli version
+
+  docker:
+    name: Docker package
+    needs: test
+    # Publish only from main / version tags (not PRs)
+    if: >-
+      gitea.event_name == 'workflow_dispatch' ||
+      (gitea.event_name == 'push' &&
+        (gitea.ref == 'refs/heads/main' || startsWith(gitea.ref, 'refs/tags/v')))
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve registry and image names
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Prefer explicit var; else host from Gitea server URL (strip path like /git)
+          if [ -n "${{ vars.REGISTRY }}" ]; then
+            REGISTRY="${{ vars.REGISTRY }}"
+          else
+            REGISTRY="$(echo '${{ gitea.server_url }}' | sed -E 's#^https?://##' | cut -d/ -f1)"
+          fi
+          # Container packages require lowercase owner/name
+          REPO_LC="$(echo '${{ gitea.repository }}' | tr '[:upper:]' '[:lower:]')"
+          IMAGE="${REGISTRY}/${REPO_LC}"
+
+          SHA_SHORT="$(echo '${{ gitea.sha }}' | cut -c1-7)"
+          TAGS=("${IMAGE}:sha-${SHA_SHORT}")
+
+          if [ '${{ gitea.ref }}' = 'refs/heads/main' ]; then
+            TAGS+=("${IMAGE}:latest" "${IMAGE}:main")
+          fi
+          if [[ '${{ gitea.ref }}' == refs/tags/v* ]]; then
+            VER='${{ gitea.ref_name }}'
+            TAGS+=("${IMAGE}:${VER}" "${IMAGE}:${VER#v}")
+          fi
+
+          {
+            echo "registry=${REGISTRY}"
+            echo "image=${IMAGE}"
+            echo "tags<<EOF"
+            printf '%s\n' "${TAGS[@]}"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "Registry: ${REGISTRY}"
+          echo "Image:    ${IMAGE}"
+          echo "Tags:"
+          printf '  - %s\n' "${TAGS[@]}"
+
+      - name: Login to Gitea container registry
+        shell: bash
+        env:
+          REGISTRY: ${{ steps.meta.outputs.registry }}
+          # Prefer PAT with package write; job token as fallback
+          REGISTRY_USER: ${{ gitea.actor }}
+          REGISTRY_TOKEN: ${{ secrets.REGISTRY_TOKEN || gitea.token }}
+        run: |
+          set -euo pipefail
+          if [ -z "${REGISTRY_TOKEN}" ]; then
+            echo "Missing registry token (set secrets.REGISTRY_TOKEN or ensure gitea.token is available)" >&2
+            exit 1
+          fi
+          echo "${REGISTRY_TOKEN}" | docker login "${REGISTRY}" -u "${REGISTRY_USER}" --password-stdin
+
+      - name: Build image
+        shell: bash
+        env:
+          GOPROXY: ${{ env.GOPROXY }}
+          GOSUMDB: ${{ env.GOSUMDB }}
+        run: |
+          set -euo pipefail
+          PRIMARY="$(echo '${{ steps.meta.outputs.tags }}' | head -n1)"
+          docker build \
+            --build-arg "GOPROXY=${GOPROXY}" \
+            --build-arg "GOSUMDB=${GOSUMDB}" \
+            -t "${PRIMARY}" \
+            -f Dockerfile \
+            .
+          while IFS= read -r tag; do
+            [ -n "${tag}" ] || continue
+            docker tag "${PRIMARY}" "${tag}"
+          done <<< '${{ steps.meta.outputs.tags }}'
+
+      - name: Push package
+        shell: bash
+        run: |
+          set -euo pipefail
+          while IFS= read -r tag; do
+            [ -n "${tag}" ] || continue
+            echo "Pushing ${tag}"
+            docker push "${tag}"
+          done <<< '${{ steps.meta.outputs.tags }}'
+
+      - name: Summary
+        if: always()
+        shell: bash
+        run: |
+          echo "### teamVault container package" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          echo '${{ steps.meta.outputs.tags }}' >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Pull example:" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "\`docker pull ${{ steps.meta.outputs.image }}:latest\`" >> "$GITHUB_STEP_SUMMARY"
