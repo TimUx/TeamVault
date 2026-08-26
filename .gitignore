@@ -1,12 +1,16 @@
 # Binaries / local data
 /data/
 /data-docs/
+/data-docs-setup/
+/data-docs-shot/
 *.db
 *.sealed
 *.exe
 *.test
 unlock.key
 unlock-docs.key
+unlock-docs-setup.key
+unlock-docs-shot.key
 
 # Go
 /vendor/

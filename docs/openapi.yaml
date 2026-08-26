@@ -1,6 +1,6 @@
 openapi: 3.0.3
 info:
-  title: teamVault API
+  title: TeamVault API
   version: 0.8.0
   description: |
     Zero-Knowledge Passwortmanager REST-API.

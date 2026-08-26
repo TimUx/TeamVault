@@ -1,11 +1,11 @@
 {
   "manifest_version": 3,
-  "name": "teamVault",
+  "name": "TeamVault",
   "version": "0.10.0",
   "description": "Zero-Knowledge vault client — decrypts only in the browser extension.",
   "action": {
     "default_popup": "popup.html",
-    "default_title": "teamVault"
+    "default_title": "TeamVault"
   },
   "permissions": ["storage", "clipboardWrite", "activeTab", "scripting"],
   "host_permissions": ["http://127.0.0.1/*", "http://localhost/*"],

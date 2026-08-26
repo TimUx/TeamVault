@@ -1,4 +1,4 @@
-# teamVault – Crypto-Design
+# TeamVault – Crypto-Design
 
 **Status:** Planungsdokument (Teil B)  
 **Bezug:** Sicherheitsprinzipien 1–5, 7, 9, 10

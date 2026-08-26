@@ -1,7 +1,9 @@
-# teamVault – Roadmap Phase 9+
+# TeamVault – Roadmap Phase 9+
 
 **Status:** Phasen 9–13 weitgehend umgesetzt (2026-08-26).  
-Deferred: vollständiges React-Frontend, Postgres-Driver, SCIM/IdP — siehe `docs/phase9-13-security-self-check.md`.
+**Weiter deferred (bewusst):** Bitwarden-Send / Einmal-Links, PWA/native Mobile, SCIM/IdP-Provisioning, Postgres-Driver.  
+React-Frontend: **abgesagt** (Vanilla bleibt) — siehe OQ-01 / `docs/phase9-13-security-self-check.md`.  
+Client-Export (JSON/CSV) und Self-Service Passwort-Wechsel: umgesetzt (Findings-Stufenplan Stufe 5).
 
 **Canvas:** interaktive Scorecard/Findings neben dem Chat (Cursor Canvas)  
 **Ziel:** Notwendige vs. optionale Anpassungen in umsetzbare Phasen gliedern.
@@ -118,7 +120,7 @@ Vanilla-JS refactor in Module ok; **kein** Pflicht-React in Phase 10.
 
 | # | Arbeitspaket | Hinweis |
 |---|--------------|---------|
-| 13.1 | Frontend React/TS (OQ-01 nachholen) | Nach stabiler API aus 10–12 |
+| 13.1 | Frontend React/TS | **Abgesagt** — Vanilla JS bleibt (OQ-01 Nachtrag) |
 | 13.2 | PostgreSQL Storage-Backend | Storage-Interface schon abstrahiert |
 | 13.3 | Dark Theme (OQ-18) | Brand-Tokens vorhanden |
 | 13.4 | Mobile-Layout / PWA-light | Nur HTTPS |

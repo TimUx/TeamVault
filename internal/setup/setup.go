@@ -166,6 +166,8 @@ func validate(req CommitRequest) error {
 	}
 	switch req.Storage.Backend {
 	case "", "sqlite", "json", "jsonfile":
+	case "postgres", "postgresql":
+		return errors.New("postgres storage is not implemented yet; use sqlite or json")
 	default:
 		return fmt.Errorf("unsupported storage backend %q", req.Storage.Backend)
 	}

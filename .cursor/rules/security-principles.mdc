@@ -1,12 +1,12 @@
 ---
-description: teamVault non-negotiable security principles and project context
+description: TeamVault non-negotiable security principles and project context
 alwaysApply: true
 ---
 
-# teamVault – Sicherheitsprinzipien & Projektkontext
+# TeamVault – Sicherheitsprinzipien & Projektkontext
 
 Interner Multi-Tenant-Passwortmanager (self-hosted, Firmennetz, optional ohne Internet).
-**Stack:** Backend Go; Frontend TypeScript/React; Client-Crypto libsodium.js/WebCrypto.
+**Stack:** Backend Go; Frontend Vanilla JS (`web/static`); Client-Crypto libsodium.js/WebCrypto.
 Authentifizierung lokal (User+Passwort) und optional LDAP/AD nur für Login-Bind.
 Vollständige Administration über Web-UI; Branding-Farben siehe `docs/planning/ui-brand.md`.
 

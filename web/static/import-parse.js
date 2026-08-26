@@ -8,6 +8,18 @@
     }
   }
 
+  function splitUrls(raw) {
+    if (Array.isArray(raw)) {
+      return raw.map((u) => String(u || "").trim()).filter(Boolean);
+    }
+    const s = String(raw || "").trim();
+    if (!s) return [];
+    return s
+      .split(/[;\n]+/)
+      .map((u) => u.trim())
+      .filter(Boolean);
+  }
+
   function normalizeItem(raw) {
     const tags = Array.isArray(raw.tags)
       ? raw.tags
@@ -15,16 +27,20 @@
           .split(",")
           .map((t) => t.trim())
           .filter(Boolean);
+    let urls = splitUrls(raw.urls);
+    if (!urls.length) urls = splitUrls(raw.url);
     return {
       title: String(raw.title || raw.name || "Import").trim() || "Import",
       username: String(raw.username || ""),
       password: String(raw.password || ""),
-      url: String(raw.url || ""),
+      url: urls[0] || "",
+      urls,
       notes: String(raw.notes || ""),
       totp_seed: String(raw.totp_seed || raw.totp || "").trim(),
       tags,
       favorite: !!raw.favorite,
       collection_id: String(raw.collection_id || raw.folder || "").trim(),
+      extra: Array.isArray(raw.extra) ? raw.extra : [],
     };
   }
 
@@ -38,13 +54,13 @@
     for (const it of data.items || []) {
       if (it.type !== 1 && it.type !== undefined && it.login == null) continue; // 1 = login
       const login = it.login || {};
-      const uri = (login.uris && login.uris[0] && login.uris[0].uri) || "";
+      const urls = (login.uris || []).map((x) => x && x.uri).filter(Boolean);
       out.push(
         normalizeItem({
           title: it.name,
           username: login.username,
           password: login.password,
-          url: uri,
+          urls,
           notes: it.notes,
           totp: login.totp,
           folder: it.folderId ? folders[it.folderId] || "" : "",
@@ -89,7 +105,7 @@
     const iTitle = idx(["title", "name", "account"]);
     const iUser = idx(["username", "user", "login"]);
     const iPass = idx(["password", "pass"]);
-    const iUrl = idx(["url", "uri", "website", "login_uri"]);
+    const iUrl = idx(["url", "uri", "website", "login_uri", "urls"]);
     const iNotes = idx(["notes", "note", "comments"]);
     const iTotp = idx(["totp", "otp", "otpauth", "totp_seed"]);
     const iFolder = idx(["folder", "group", "collection", "collection_id"]);
@@ -102,7 +118,7 @@
           title: iTitle >= 0 ? cells[iTitle] : cells[0],
           username: iUser >= 0 ? cells[iUser] : "",
           password: iPass >= 0 ? cells[iPass] : "",
-          url: iUrl >= 0 ? cells[iUrl] : "",
+          urls: iUrl >= 0 ? cells[iUrl] : "",
           notes: iNotes >= 0 ? cells[iNotes] : "",
           totp: iTotp >= 0 ? cells[iTotp] : "",
           folder: iFolder >= 0 ? cells[iFolder] : "",
@@ -123,10 +139,7 @@
   }
 
   function walkKeePassGroup(group, folderPath, out) {
-    const nameEl = group.getElementsByTagName("Name")[0];
-    const gname = nameEl ? nameEl.textContent : "";
-    // Only direct Name of this group: first Name child among element's children
-    let directName = gname;
+    let directName = "";
     for (const child of group.children || []) {
       if (child.tagName === "Name") {
         directName = child.textContent || "";
@@ -143,8 +156,8 @@
             password: kpString(child, "Password"),
             url: kpString(child, "URL"),
             notes: kpString(child, "Notes"),
-            totp: kpString(child, "otp") || kpString(child, "TOTP") || kpString(child, "OTPAuth"),
-            folder: path === "Root" ? "" : path.replace(/^Root\/?/, ""),
+            totp: kpString(child, "otp") || kpString(child, "TOTP"),
+            folder: path,
           })
         );
       } else if (child.tagName === "Group") {
@@ -153,33 +166,28 @@
     }
   }
 
-  function parseKeePassXML(xmlText) {
+  function parseKeePass(xmlText) {
     const doc = new DOMParser().parseFromString(xmlText, "application/xml");
-    if (doc.querySelector("parsererror")) throw new Error("Ungültiges KeePass-XML");
+    if (doc.querySelector("parsererror")) throw new Error("KeePass-XML ungültig");
     const out = [];
-    const root = doc.querySelector("KeePassFile > Root > Group") || doc.querySelector("Root > Group") || doc.querySelector("Group");
-    if (!root) throw new Error("Kein KeePass-Group-Knoten gefunden");
-    walkKeePassGroup(root, "", out);
+    const root = doc.getElementsByTagName("Root")[0];
+    if (!root) return out;
+    for (const child of root.children || []) {
+      if (child.tagName === "Group") walkKeePassGroup(child, "", out);
+    }
     return out.filter((x) => x.title || x.username || x.password);
   }
 
   function detectAndParse(filename, text) {
-    const lower = (filename || "").toLowerCase();
-    if (lower.endsWith(".json") || text.trim().startsWith("{")) {
+    const name = (filename || "").toLowerCase();
+    if (name.endsWith(".json") || text.trim().startsWith("{")) {
       return { format: "bitwarden-json", items: parseBitwarden(text) };
     }
-    if (lower.endsWith(".xml") || text.includes("<KeePassFile") || text.includes("<Group>")) {
-      return { format: "keepass-xml", items: parseKeePassXML(text) };
+    if (name.endsWith(".xml") || text.includes("<KeePassFile") || text.includes("<Group>")) {
+      return { format: "keepass-xml", items: parseKeePass(text) };
     }
     return { format: "csv", items: parseCSV(text) };
   }
 
-  global.TVImport = {
-    detectAndParse,
-    parseBitwarden,
-    parseCSV,
-    parseKeePassXML,
-    normalizeItem,
-    hostFromUrl,
-  };
+  global.TVImport = { detectAndParse, hostFromUrl, normalizeItem };
 })(typeof window !== "undefined" ? window : globalThis);

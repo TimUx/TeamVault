@@ -1,4 +1,4 @@
-# teamVault – Admin Guide
+# TeamVault – Admin Guide
 
 Betrieb und Verwaltung der Instanz. Für den Alltag der Endanwender: [User Guide](user-guide.md).
 
@@ -75,19 +75,22 @@ Nach dem Commit: Login → **Vault-Onboarding** (Master-Passwort) → App.
 
 ## 3. Admin-UI (nach Vault-Entsperren)
 
-Tab **Admin** (sichtbar für `tenant_admin` / `platform_admin`; Auditoren nur Audit).
-
-![Admin-Übersicht](images/admin.png)
+In der **Sidebar** unter **Administration** (sichtbar für `tenant_admin` / `platform_admin`; Auditoren nur **Audit**). Jeder Unterpunkt öffnet den jeweiligen Abschnitt.
 
 ### 3.1 Benutzer
+
+![Benutzer](images/admin-users.png)
 
 - Lokale User anlegen (Username + Login-Passwort ≥12)
 - Status: active / disabled, Onboarding-Status, Auth-Backend (`local` / `ldap`)
 - Disable statt Löschen (LDAP-Sync deaktiviert fehlende Accounts)
+- Nach **Disable**: Hinweis, Secrets mit Envelope dieses Users zu **rotieren** (Zero-Knowledge — kein Auto-Rotate). Optional Liste der Secret-IDs (Meta only).
 
 Kein Zugriff auf Master-Passwort, Private Keys oder Recovery-Kit-Klartext.
 
 ### 3.2 Gruppen
+
+![Gruppen](images/admin-groups.png)
 
 - Gruppen anlegen, Members über Group-ID (`grp_…`) + User-ID (`usr_…`)
 - Rechte/Sharing bleiben über lokale Zuordnung — **keine** LDAP-Gruppen-Autorisierung
@@ -95,7 +98,7 @@ Kein Zugriff auf Master-Passwort, Private Keys oder Recovery-Kit-Klartext.
 
 ### 3.3 LDAP / AD
 
-Im Admin-Panel unter **LDAP** (unterhalb Benutzer/Gruppen im Screenshot):
+Sidebar **Administration → LDAP**:
 
 - Optional, **nur Login-Bind** (nie Autorisierung)
 - Felder: Host, Port, Base DN, Bind DN/Passwort, User-Filter
@@ -120,13 +123,22 @@ Wenn Recovery-Modus Escrow erlaubt (Wizard-Schritt Recovery bzw. später umschal
 1. In der Admin-UI **Escrow-Keypair + Shares** erzeugen (clientseitig)
 2. Server speichert **nur** den Public Key
 3. Private Shares offline verteilen (`k` von `n`); alternativ `tvcli escrow-split` / `escrow-combine`
+4. Der vollständige Escrow-Private-Key wird **nicht** im DOM belassen — nur Shares (Anzeige + Download)
+
+![Escrow / Recovery](images/admin-recovery.png)
+
+**Hinweis:** Mode-Wechsel (`user_kit` ↔ `admin_escrow`) ist **blockiert**, solange der Tenant Secrets hat (kein Key-Wipe mit Datenverlust). Escrow-Flag ohne Mode-Wechsel bleibt möglich.
 
 Der private Escrow-Key darf nie in Logs oder dauerhaft auf dem Server landen.
 
 ### 3.7 Audit & API-Keys
 
-- Audit-Liste (Tenant-Ereignisse)
+![API-Keys](images/admin-apikeys.png)
+
+- Audit-Liste (Tenant-Ereignisse) — Fehlerhinweise erscheinen oben im Admin-Bereich
 - API-Keys für Automation/CLI (`Authorization: Bearer …` / `TEAMVAULT_API_KEY`) — Token nur einmal anzeigen
+- Scope `read`: nur sichere GETs (me, Vault-Status/Keys, Secrets Liste/Detail); Admin-/Schreibaktionen → 403
+- Nach User-Disable: Secrets mit Envelope dieses Users rotieren (Hinweis in Admin-UI; kein Auto-Rotate wegen ZK)
 
 ### 3.8 Tenants & Storage-Migration (`platform_admin`)
 
@@ -150,11 +162,31 @@ CI baut Images auf dem Ubuntu-Runner und pusht ins Gitea-Package-Registry (`.git
 | Unlock-Keyfile | Separat, streng schützen — ohne Key keine Config |
 | Escrow-Shares / User-Recovery-Kits | Offline, nie zusammen mit Unlock-Key lagern |
 
+### 5.1 Backup-/Restore-Drill (kurz)
+
+1. Instanz stoppen; Volume/`TEAMVAULT_DATA_DIR` und Unlock-Keyfile sichern.
+2. Auf Testsystem wiederherstellen; gleichen Unlock-Key mounten; starten.
+3. Login + Vault-Unlock prüfen — Klartext nur clientseitig.
+4. Erfolg dokumentieren; Prod-Backup-Rhythmus festlegen.
+
 ## 6. Netzwerk & TLS
 
 - App lauscht typischerweise hinter Reverse-Proxy mit TLS
 - Bind: `TEAMVAULT_ADDR` / `-addr` (Default `:8080`)
 - Passkeys brauchen HTTPS (bzw. `localhost`) und korrekte Relying-Party-URL
+- Server-Timeouts: `ReadHeaderTimeout` 10s, `ReadTimeout` 60s, `WriteTimeout`/`IdleTimeout` 120s
+
+### 6.1 Reverse-Proxy-Checkliste
+
+- [ ] TLS am Proxy; App nur intern erreichbar
+- [ ] `Origin` / `Referer` an die App durchreichen (Cookie-Mutationen prüfen Origin; leerer Origin bei Cookie → 403)
+- [ ] `X-Forwarded-Proto` / `X-Forwarded-Host` nur setzen, wenn `TEAMVAULT_TRUST_FORWARDED=1` (Default: aus — nicht blind vertrauen)
+- [ ] HSTS am Proxy oder App (bei HTTPS)
+- [ ] WebAuthn RP-ID/Origin passen zur öffentlichen URL
+
+### 6.2 Single-Node / Sessions
+
+Sessions, Login-Rate-Limits und Passkey-Challenges liegen **im Prozessspeicher** (Sessions zusätzlich optional in `sessions.json` unter Data-Dir). Mehrere Replicas ohne Sticky Sessions / gemeinsames Challenge-Store: Login und Passkeys können fehlschlagen. Empfehlung: **eine Replica** oder Sticky Sessions am Load-Balancer.
 
 ## 7. Troubleshooting
 
@@ -165,6 +197,7 @@ CI baut Images auf dem Ubuntu-Runner und pusht ins Gitea-Package-Registry (`.git
 | LDAP-Login fehl | Test-Bind; Filter; User lokal nicht disabled |
 | Passkey funktioniert nicht | HTTPS, RP-ID, Browser-Support |
 | Vault „Idle gesperrt“ | Erneut Master-Passwort; Idle-Minuten in Policy |
+| Cookie-POST „origin check failed“ | Proxy leitet Origin durch? |
 
 ## 8. Weiterführend
 

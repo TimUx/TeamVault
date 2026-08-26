@@ -105,7 +105,7 @@ func (m *Manager) webauthn(rpID string, origins []string) (*webauthn.WebAuthn, e
 		return nil, fmt.Errorf("origins required")
 	}
 	return webauthn.New(&webauthn.Config{
-		RPDisplayName: "teamVault",
+		RPDisplayName: "TeamVault",
 		RPID:          rpID,
 		RPOrigins:     origins,
 	})

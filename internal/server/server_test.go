@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"path/filepath"
 	"testing"
 
@@ -91,10 +92,16 @@ func getJSONCookie(t *testing.T, url string, jar *cookieJar) map[string]any {
 	return m
 }
 
-func postJSON(t *testing.T, url string, body any, jar *cookieJar) map[string]any {
+func postJSON(t *testing.T, rawURL string, body any, jar *cookieJar) map[string]any {
 	t.Helper()
 	b, _ := json.Marshal(body)
-	res, err := http.Post(url, "application/json", bytes.NewReader(b))
+	req, err := http.NewRequest(http.MethodPost, rawURL, bytes.NewReader(b))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	setTestOrigin(req)
+	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,6 +117,18 @@ func postJSON(t *testing.T, url string, body any, jar *cookieJar) map[string]any
 		t.Fatalf("%d %v", res.StatusCode, m)
 	}
 	return m
+}
+
+func setTestOrigin(req *http.Request) {
+	u, err := url.Parse(req.URL.String())
+	if err != nil || u.Host == "" {
+		return
+	}
+	scheme := u.Scheme
+	if scheme == "" {
+		scheme = "http"
+	}
+	req.Header.Set("Origin", scheme+"://"+u.Host)
 }
 
 type cookieJar struct{ m map[string]string }

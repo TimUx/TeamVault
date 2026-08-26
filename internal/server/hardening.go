@@ -3,6 +3,7 @@ package server
 import (
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 
 	"github.com/teamvault/teamvault/internal/auth/session"
@@ -15,8 +16,16 @@ func requestSecure(r *http.Request) bool {
 	if r.TLS != nil {
 		return true
 	}
+	if !trustForwarded() {
+		return false
+	}
 	proto := strings.ToLower(strings.TrimSpace(r.Header.Get("X-Forwarded-Proto")))
 	return proto == "https"
+}
+
+func trustForwarded() bool {
+	v := strings.ToLower(strings.TrimSpace(os.Getenv("TEAMVAULT_TRUST_FORWARDED")))
+	return v == "1" || v == "true" || v == "yes"
 }
 
 func (a *API) setSessionCookie(w http.ResponseWriter, r *http.Request, sess session.Session) {
@@ -84,11 +93,11 @@ func (a *API) originOK(r *http.Request) bool {
 	origin := r.Header.Get("Origin")
 	if origin == "" {
 		if _, err := r.Cookie("tv_session"); err != nil {
-			return true
+			return true // no cookie session (e.g. unauthenticated) — other checks apply
 		}
 		ref := r.Header.Get("Referer")
 		if ref == "" {
-			return true
+			return false // cookie + mutating without Origin/Referer
 		}
 		return sameHost(r, ref)
 	}
@@ -101,9 +110,11 @@ func sameHost(r *http.Request, raw string) bool {
 		return false
 	}
 	host := r.Host
-	if fh := r.Header.Get("X-Forwarded-Host"); fh != "" {
-		host = strings.Split(fh, ",")[0]
-		host = strings.TrimSpace(host)
+	if trustForwarded() {
+		if fh := r.Header.Get("X-Forwarded-Host"); fh != "" {
+			host = strings.Split(fh, ",")[0]
+			host = strings.TrimSpace(host)
+		}
 	}
 	return strings.EqualFold(u.Host, host)
 }

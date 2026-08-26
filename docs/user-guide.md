@@ -1,4 +1,4 @@
-# teamVault – User Guide
+# TeamVault – User Guide
 
 Anleitung für den Alltag: Anmelden, Vault nutzen, teilen, Absichern.  
 Installation und Admin-Themen: [Admin Guide](admin-guide.md).
@@ -41,24 +41,36 @@ Ohne Master-Passwort **und** ohne Recovery-Kit (bzw. ohne Admin-Escrow-Prozess) 
 
 ## 4. Vault entsperren
 
-Nach dem Login erscheint **Vault entsperren**. Master-Passwort eingeben → **Entsperren**.
+Nach dem Login erscheint **Vault entsperren**. Master-Passwort eingeben → **Entsperren** (auch mit **Enter**).
 
-- Bei Inaktivität (Default ca. 15 Minuten) sperrt die App den Vault erneut (Overlay).
+- Bei Inaktivität (Default ca. 15 Minuten) sperrt die App den Vault erneut (opakes Overlay).
 - Logout beendet die Server-Session; der Schlüssel im Speicher wird gelöscht.
 
-Oben rechts: Theme **Dunkel** / **Hell** (wird lokal gespeichert).
+Oben rechts: Theme **Dunkel** / **Hell** (wird lokal gespeichert). Auf schmalen Viewports: Menü-Taste öffnet die Sidebar (Schließen mit Backdrop oder **Escape**).
 
 ![Dark Theme](images/theme-dark.png)
 
 ## 5. Secrets
 
-Nach dem Entsperren: Liste mit clientseitiger **Suche** und **Ordner**-Filter.
+Nach dem Entsperren: linke **Sidebar** (Vault / Konto / ggf. Administration) und Liste mit clientseitiger **Suche** und **Ordner**-Filter.
 
-![Secrets-Liste](images/vault-secrets.png)
+![Secrets-Liste mit Sidebar](images/vault-secrets.png)
+
+![Navigation](images/nav-sidebar.png)
 
 ### Anlegen
 
-Felder: Titel, Ordner, Benutzername, Passwort, URL, TOTP-Seed, Tags, Favorit, Notizen → **Speichern (clientseitig verschlüsselt)**.
+Sidebar **Neu anlegen**: Titel, Ordner, Benutzername und Passwort sind immer sichtbar. Weitere Felder über **Feld hinzufügen**:
+
+| Typ | Inhalt |
+|-----|--------|
+| Website (URL) | Mehrfach möglich |
+| TOTP-Seed | base32 oder `otpauth://` |
+| Notizen / Tags / Favorit | wie bisher |
+| SSH Private/Public Key | Paste oder **Datei laden** |
+| S3 Access / Secret Key | Zugangsdaten |
+| Zertifikat (PEM) | Paste oder Datei |
+| Freitext / Geheimnis | Custom-Felder |
 
 Titel und Payload werden vor dem Upload verschlüsselt; der Server speichert nur Ciphertext.
 
@@ -68,30 +80,44 @@ Titel und Payload werden vor dem Upload verschlüsselt; der Server speichert nur
 
 ### Öffnen
 
-In der Liste **Öffnen** — Klartext erscheint nur bei Ihnen im Browser. Felder mit **Kopieren** / Passwort **Anzeigen**.
+In der Liste **Öffnen** — Klartext erscheint nur bei Ihnen im Browser. Felder mit **Kopieren** / **Anzeigen**; Key/Zertifikat zusätzlich **Download**. Live-**TOTP** erscheint, wenn ein Seed hinterlegt ist. Mehrere Websites werden einzeln angezeigt.
 
 ![Secret-Detail](images/vault-secret-detail.png)
 
 ### Teilen
 
 Im Secret-Detail einen anderen User wählen → **Teilen**.  
-Jeder Empfänger erhält einen eigenen Umschlag um den Datenschlüssel (kein gemeinsames Gruppenpasswort).
+Jeder Empfänger erhält einen eigenen Umschlag um den Datenschlüssel (kein gemeinsames Gruppenpasswort). Empfänger müssen im gleichen Tenant **onboarded** sein.
 
-Admins können zusätzlich eine **Gruppe** wählen → **Gruppe teilen** (pro Mitglied eigener Envelope).
+Admins können zusätzlich eine **Gruppe** wählen → **Gruppe teilen** (pro Mitglied eigener Envelope; Public Keys über die Secret-Route, nicht über Admin-Only).
+
+![Geteiltes Secret](images/vault-shared.png)
 
 ### Ordner
 
 Beim Anlegen einen **Ordner**-Namen setzen. Die Liste filtert nach Ordner; die Suche trifft Titel und Ordnernamen (clientseitig).
 
+![Ordner-Filter](images/vault-folder-filter.png)
+
 ### TOTP im Eintrag
 
-Im Secret-Feld **TOTP-Seed** (base32 oder `otpauth://`) speichern. In der Detailansicht erscheint der aktuelle 6-stellige Code mit Countdown und **Kopieren** (siehe Screenshot oben).
+Über **Feld hinzufügen → TOTP-Seed** (base32 oder `otpauth://`). In der Detailansicht erscheint der aktuelle 6-stellige Code mit Countdown und **Kopieren**.
+
+### Mehrere Websites
+
+Mehrfach **Website (URL)** hinzufügen. Import aus Bitwarden übernimmt alle `uris`. Die Extension matcht den aktiven Tab gegen jede hinterlegte URL.
 
 ### Import
 
-Unter **Import** Bitwarden-JSON, CSV oder KeePass-XML wählen. Parsing und Verschlüsselung laufen nur im Browser; der Server sieht nur Ciphertext.
+Sidebar **Import**: Bitwarden-JSON, CSV oder KeePass-XML wählen. Parsing und Verschlüsselung laufen nur im Browser; der Server sieht nur Ciphertext.
 
 ![Import](images/vault-import.png)
+
+### Export
+
+Unter der Secrets-Liste: **Export JSON** (Bitwarden-Login-Subset, unverschlüsselt lokal) oder **Export CSV**. Es werden nur Einträge exportiert, die Sie entschlüsseln können — der Server sieht den Klartext nicht.
+
+![Export-Buttons](images/vault-export.png)
 
 ### Zugriff entziehen
 
@@ -99,39 +125,51 @@ Unter **Import** Bitwarden-JSON, CSV oder KeePass-XML wählen. Parsing und Versc
 
 ### Löschen
 
-**Löschen** entfernt den Eintrag (nicht rückgängig über den Server).
+**Löschen** entfernt den Eintrag (nicht rückgängig über den Server). Nur wer einen gültigen Envelope hat, darf löschen.
 
-## 6. TOTP (2FA für Login)
+## 6. Konto: TOTP, Passkeys, Passwörter
 
-Tab **Konto** → **TOTP einrichten**:
+Sidebar **Konto**:
 
-1. otpauth-URL in Ihrer Authenticator-App hinterlegen (**otpauth kopieren**)  
+![Konto](images/account.png)
+
+### Login-2FA (TOTP)
+
+1. **TOTP einrichten** → otpauth-URL in der Authenticator-App (**otpauth kopieren**)  
 2. Code bestätigen → **Aktivieren**  
 3. Beim nächsten Login Feld **TOTP** ausfüllen  
 
-![TOTP einrichten](images/account-totp.png)
-
 TOTP schützt das Login, **nicht** die Vault-Entschlüsselung.
 
-## 7. Passkeys
+### Passkeys
 
-1. **Konto** → **Passkeys** → Namen vergeben → **Registrieren** (Browser/OS-Dialog)  
+1. **Passkeys** → Namen vergeben → **Registrieren** (Browser/OS-Dialog)  
 2. Beim Login: Tenant + Username → **Passkey**  
 
 Passkeys ersetzen nur das Login — das Master-Passwort bleibt für den Vault nötig.
 
-## 8. Browser-Extension
+### Login-Passwort ändern
+
+Nur bei **lokalem** Auth-Backend: aktuelles + neues Login-Passwort (≥12) → **Login-Passwort speichern**. LDAP-User ändern das Passwort in AD.
+
+### Master-Passwort ändern
+
+Aktuelles und neues Master-Passwort eingeben → **Master-Passwort speichern**. Der Private Key wird **nur im Browser** neu versiegelt; der Server speichert neue Ciphertexte. Bei Recovery-Modus `user_kit` erscheint ein neues Recovery-Kit (einmalig sichern).
+
+## 7. Browser-Extension
 
 Ordner `clients/extension` in Chrome, Edge oder Firefox laden (siehe [clients/README.md](../clients/README.md)).
 
 Typischer Ablauf:
 
 1. Server-URL setzen, Login, Master-Passwort  
-2. Secret wählen → **Copy** oder **Fill** (Autofill im aktiven Tab; Domain-Match priorisiert passende URLs; optional TOTP-Feld)
+2. Secret wählen → **Copy** oder **Fill**  
+
+**Fill** ist nur erlaubt, wenn eine hinterlegte Website-URL zum Host des aktiven Tabs passt — sonst Warnung/Block (Phishing-Schutz). Optional Domain-Filter in der Liste.
 
 Schlüssel bleiben in der Popup-Sitzung, nicht im Content-Script.
 
-## 9. CLI (`tvcli`)
+## 8. CLI (`tvcli`)
 
 Standalone-Binaries (Windows/Linux): `scripts/build-tvcli.ps1` → `dist/`.
 
@@ -140,20 +178,23 @@ tvcli -base https://vault.example -api-key tvk_… whoami
 tvcli secrets list
 tvcli secrets get -id sec_…
 tvcli secrets create -title "VPN" -username alice
+tvcli secrets create -title "Git" -url https://git.example.local -ssh-private-file ./id_ed25519
 ```
 
 Oder nach `tvcli login …` mit Session-Cookie.  
 Master-Passwort wird bei Bedarf lokal abgefragt und nie an den Server gesendet.
 
-## 10. Gute Praxis
+API-Keys mit Scope **`read`** dürfen nur lesen (me, Vault-Status/Keys, Secrets Liste/Detail) — keine Admin- oder Schreibaktionen.
+
+## 9. Gute Praxis
 
 - Master-Passwort lang und einzigartig; Recovery-Kit offline sichern  
 - Login-Passwort ≠ Master-Passwort  
 - Nach Teilen nur notwendige Personen; bei Austritt Admin um Entzug/Rotation bitten  
 - Öffentliche/geteilte Rechner: nach Nutzung **Logout** und Browser schließen  
-- Phishing: nur die bekannte Firmen-URL verwenden  
+- Phishing: nur die bekannte Firmen-URL verwenden; Extension-Fill nur bei Host-Match  
 
-## 11. Hilfe
+## 10. Hilfe
 
 | Problem | Tipp |
 |---------|------|
@@ -161,5 +202,6 @@ Master-Passwort wird bei Bedarf lokal abgefragt und nie an den Server gesendet.
 | Recovery nötig | Kit + Anleitung des Admins (Escrow vs. User-Kit) |
 | Passkey fehlt | Neu registrieren; Gerät/OS-Support prüfen |
 | Secret „kein Zugriff“ | Noch nicht geteilt oder Rechte entzogen |
+| Fill blockiert | Secret-URL passt nicht zum Tab-Host |
 
 Technische API: [openapi.yaml](openapi.yaml) · Admin: [admin-guide.md](admin-guide.md)

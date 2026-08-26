@@ -711,11 +711,23 @@ func (s *Store) PutKeyEnvelope(ctx context.Context, env store.KeyEnvelope) error
 	if err := requireTenant(env.TenantID); err != nil {
 		return err
 	}
-	_, err := s.db.ExecContext(ctx, `
+	var revoked int
+	err := s.db.QueryRowContext(ctx, `
+SELECT revoked FROM key_envelopes
+WHERE tenant_id = ? AND secret_id = ? AND user_id = ? AND key_version = ?`,
+		env.TenantID, env.SecretID, env.UserID, env.KeyVersion).Scan(&revoked)
+	if err == nil && revoked != 0 {
+		return store.ErrRevokedEnvelope
+	}
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return err
+	}
+	_, err = s.db.ExecContext(ctx, `
 INSERT INTO key_envelopes(secret_id, tenant_id, user_id, key_version, wrapped_dk, revoked)
 VALUES(?,?,?,?,?,0)
 ON CONFLICT(tenant_id, secret_id, user_id, key_version) DO UPDATE SET
-  wrapped_dk=excluded.wrapped_dk, revoked=0
+  wrapped_dk=excluded.wrapped_dk
+WHERE key_envelopes.revoked = 0
 `, env.SecretID, env.TenantID, env.UserID, env.KeyVersion, env.WrappedDK)
 	return err
 }

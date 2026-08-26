@@ -1,4 +1,4 @@
-# teamVault – Vergleich mit bekannten Password Managern
+# TeamVault – Vergleich mit bekannten Password Managern
 
 **Status:** Produkt-/Marktvergleich (orientierend)  
 **Canvas:** Cursor Canvas `competitive-comparison`  
@@ -8,7 +8,7 @@
 
 ## Kernaussage
 
-teamVault löst dasselbe Kernproblem wie **Bitwarden**, **Vaultwarden** und **Passbolt** (zentrale, geteilte Firmensecrets), ist aber **kein Klon**:
+TeamVault löst dasselbe Kernproblem wie **Bitwarden**, **Vaultwarden** und **Passbolt** (zentrale, geteilte Firmensecrets), ist aber **kein Klon**:
 
 | Abgrenzung | Bedeutung |
 |------------|-----------|
@@ -31,17 +31,17 @@ teamVault löst dasselbe Kernproblem wie **Bitwarden**, **Vaultwarden** und **Pa
 | **Passbolt** | Open-Source Team-Password-Manager, OpenPGP, stark bei Kollaboration/Sharing, Self-Host |
 | **KeePassXC** | Lokale Datei-DB, kein Server-Multi-User-Modell |
 | **1Password / Proton Pass** | Polierte SaaS; UX-Benchmark, andere Betriebsform |
-| **teamVault** | Interner Multi-Tenant-ZK-Manager, eigene API, Go, Web + CLI + Extension-MVP |
+| **TeamVault** | Interner Multi-Tenant-ZK-Manager, eigene API, Go, Web + CLI + Extension-MVP |
 
 ---
 
-## Ähnlichkeit zu teamVault
+## Ähnlichkeit zu TeamVault
 
 | Vergleich | Ähnlichkeit | Kommentar |
 |-----------|-------------|-----------|
 | Passbolt | **Mittel** | Team-Sharing, Self-Host, Admin — Crypto und API anders |
 | Bitwarden | **Gering–mittel** | Gleiches Problem, anderes Protokoll & Ökosystem |
-| Vaultwarden | **Gering** (als Drop-in) | Erwartet BW-Clients; teamVault ist kein Ersatz |
+| Vaultwarden | **Gering** (als Drop-in) | Erwartet BW-Clients; TeamVault ist kein Ersatz |
 | KeePassXC | **Gering** | Lokal vs. Server-Team |
 | 1Password Biz | **Gering** (Architektur) / **hoch** als UX-Vorbild | Autofill, Org-Navigation |
 
@@ -49,7 +49,7 @@ teamVault löst dasselbe Kernproblem wie **Bitwarden**, **Vaultwarden** und **Pa
 
 ## Feature-Matrix (vereinfacht)
 
-| Feature | teamVault | Bitwarden | Vaultwarden | Passbolt | KeePassXC |
+| Feature | TeamVault | Bitwarden | Vaultwarden | Passbolt | KeePassXC |
 |---------|:---------:|:---------:|:-----------:|:--------:|:---------:|
 | Zero-Knowledge Vault | ✓ | ✓ | ✓ | ✓ (OpenPGP) | ✓ lokal |
 | Self-hosted | ✓ | ✓ | ✓ Fokus | ✓ | — |
@@ -71,7 +71,7 @@ teamVault löst dasselbe Kernproblem wie **Bitwarden**, **Vaultwarden** und **Pa
 
 ---
 
-## Was teamVault bereits „ähnlich gut“ hat
+## Was TeamVault bereits „ähnlich gut“ hat
 
 - Clientseitige Ver-/Entschlüsselung (ZK-Anspruch)
 - Teilen mit Rotation bei Entzug (vergleichbar mit „Zugriff weg = re-encrypt“)
@@ -105,14 +105,15 @@ teamVault löst dasselbe Kernproblem wie **Bitwarden**, **Vaultwarden** und **Pa
 | Gruppen → Envelopes für Member | Passbolt / BW | Passt zu Prinzip 5 | Phase 12 |
 | TOTP im Vault-Eintrag (ciphertext) | Bitwarden | Sehr häufig genutzt | Phase 12 |
 
-### Optional / später
+### Optional / später (weiter deferred)
 
 | Feature | Vorbild | Hinweis |
 |---------|---------|---------|
-| Bitwarden Send-ähnlich | Bitwarden | Eigenes Threat Model; nicht trivial |
-| Native Mobile Apps | BW / Passbolt | Nach Web/Extension; ggf. zuerst PWA |
+| Bitwarden Send-ähnlich | Bitwarden | Eigenes Threat Model; nicht trivial — **deferred** |
+| Native Mobile Apps / PWA | BW / Passbolt | Nach Web/Extension — **deferred** |
+| SCIM / IdP-Provisioning | BW Enterprise | Nur wenn Org es fordert — **deferred** |
 | Emergency Access / Family | Bitwarden | Teilweise durch Escrow/Kit abgedeckt |
-| Dark Theme, React-UI | 1Password UX | Phase 13 |
+| Dark Theme (Vanilla-UI) | 1Password UX | Phase 13 (React abgesagt) |
 
 ### Nicht übernehmen
 
@@ -131,7 +132,7 @@ teamVault löst dasselbe Kernproblem wie **Bitwarden**, **Vaultwarden** und **Pa
                  Team-Kollaboration
                         ▲
               Passbolt  │
-                        │    ★ teamVault (Zielbild)
+                        │    ★ TeamVault (Zielbild)
                         │
    Lokal ◄──────────────┼──────────────► Cloud-Ökosystem
             KeePassXC   │         Bitwarden / 1Password
@@ -143,7 +144,7 @@ teamVault löst dasselbe Kernproblem wie **Bitwarden**, **Vaultwarden** und **Pa
 ```
 
 - **Vaultwarden wählen**, wenn: bestehende BW-Apps, schnelle Einführung, Community-Server reicht.  
-- **teamVault wählen**, wenn: eigene API, striktes ZK inkl. Titel, Multi-Tenant, LDAP-Bind-Trennung, Shamir-Escrow, Air-Gap ohne BW-Protokoll.
+- **TeamVault wählen**, wenn: eigene API, striktes ZK inkl. Titel, Multi-Tenant, LDAP-Bind-Trennung, Shamir-Escrow, Air-Gap ohne BW-Protokoll.
 
 ---
 

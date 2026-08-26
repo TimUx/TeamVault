@@ -1,4 +1,4 @@
-// Command tvcli is the teamVault command-line client.
+// Command tvcli is the TeamVault command-line client.
 //
 // Security: all vault decrypt/encrypt uses internal/cryptocore (Phase 2).
 // The server never sees master passwords or plaintext secrets.
@@ -110,9 +110,29 @@ func main() {
 			}
 		case "create":
 			fs := flag.NewFlagSet("create", flag.ExitOnError)
-			title := fs.String("title", "", "title")
+			title := fs.String("title", "", "title (required)")
 			user := fs.String("username", "", "username field")
-			pass := fs.String("password", "", "password field (prefer prompt)")
+			pass := fs.String("password", "", "password field (prefer prompt if empty)")
+			urlsFlag := fs.String("urls", "", "URLs separated by ;")
+			urlFlags := stringSlice{}
+			fs.Var(&urlFlags, "url", "single URL (repeatable)")
+			notes := fs.String("notes", "", "notes")
+			totp := fs.String("totp", "", "TOTP seed or otpauth URL")
+			tags := fs.String("tags", "", "comma-separated tags")
+			favorite := fs.Bool("favorite", false, "mark favorite")
+			folder := fs.String("folder", "", "collection / folder id")
+			sshPriv := fs.String("ssh-private", "", "SSH private key (PEM text)")
+			sshPrivFile := fs.String("ssh-private-file", "", "SSH private key file")
+			sshPub := fs.String("ssh-public", "", "SSH public key")
+			sshPubFile := fs.String("ssh-public-file", "", "SSH public key file")
+			s3Access := fs.String("s3-access", "", "S3 access key")
+			s3Secret := fs.String("s3-secret", "", "S3 secret key")
+			cert := fs.String("cert", "", "certificate PEM text")
+			certFile := fs.String("cert-file", "", "certificate PEM file")
+			extraFlags := stringSlice{}
+			extraFileFlags := stringSlice{}
+			fs.Var(&extraFlags, "extra", "custom field type=label:value (repeatable; type=text|secret)")
+			fs.Var(&extraFileFlags, "extra-file", "custom field type=label:path (repeatable)")
 			_ = fs.Parse(args[2:])
 			if *title == "" {
 				fatal(fmt.Errorf("create requires -title"))
@@ -125,7 +145,39 @@ func main() {
 					fatal(err)
 				}
 			}
-			if err := c.secretsCreate(*title, *user, string(pw)); err != nil {
+			urlList := append(splitSemi(*urlsFlag), []string(urlFlags)...)
+			opts := secretCreateOpts{
+				Title: *title, Username: *user, Password: string(pw),
+				URLs: urlList, Notes: *notes, TOTP: *totp, Tags: splitComma(*tags),
+				Favorite: *favorite, Folder: *folder,
+			}
+			var err error
+			if opts.SSHPrivate, err = valueOrFile(*sshPriv, *sshPrivFile); err != nil {
+				fatal(err)
+			}
+			if opts.SSHPublic, err = valueOrFile(*sshPub, *sshPubFile); err != nil {
+				fatal(err)
+			}
+			opts.S3Access = *s3Access
+			opts.S3Secret = *s3Secret
+			if opts.Cert, err = valueOrFile(*cert, *certFile); err != nil {
+				fatal(err)
+			}
+			for _, e := range extraFlags {
+				ex, err := parseExtraFlag(e, false)
+				if err != nil {
+					fatal(err)
+				}
+				opts.Extra = append(opts.Extra, ex)
+			}
+			for _, e := range extraFileFlags {
+				ex, err := parseExtraFlag(e, true)
+				if err != nil {
+					fatal(err)
+				}
+				opts.Extra = append(opts.Extra, ex)
+			}
+			if err := c.secretsCreate(opts); err != nil {
 				fatal(err)
 			}
 			zero(pw)
@@ -148,7 +200,7 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintf(os.Stderr, `tvcli — teamVault CLI (standalone; client-side crypto via cryptocore)
+	fmt.Fprintf(os.Stderr, `tvcli — TeamVault CLI (standalone; client-side crypto via cryptocore)
 
 Usage:
   tvcli -base URL [-api-key KEY] login -tenant SLUG -user NAME
@@ -156,6 +208,12 @@ Usage:
   tvcli secrets list
   tvcli secrets get -id ID
   tvcli secrets create -title TITLE [-username U] [-password P]
+      [-url URL]… [-urls "a;b"] [-notes N] [-totp SEED] [-tags t1,t2] [-favorite]
+      [-folder NAME]
+      [-ssh-private TEXT|-ssh-private-file PATH] [-ssh-public …]
+      [-s3-access KEY] [-s3-secret KEY]
+      [-cert PEM|-cert-file PATH]
+      [-extra type=label:value]… [-extra-file type=label:path]…
 
   tvcli escrow-split -k 3 -n 5 -in escrow.sk
   tvcli escrow-combine share1.hex share2.hex share3.hex
@@ -292,11 +350,111 @@ func (c *client) secretsGet(id string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("title: %s\n%s\n", string(titlePT), string(bodyPT))
+	fmt.Printf("title: %s\n", string(titlePT))
+	var pretty any
+	if err := json.Unmarshal(bodyPT, &pretty); err == nil {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		_ = enc.Encode(pretty)
+	} else {
+		fmt.Printf("%s\n", string(bodyPT))
+	}
 	return nil
 }
 
-func (c *client) secretsCreate(title, username, password string) error {
+type secretCreateOpts struct {
+	Title, Username, Password string
+	URLs                      []string
+	Notes, TOTP               string
+	Tags                      []string
+	Favorite                  bool
+	Folder                    string
+	SSHPrivate, SSHPublic     string
+	S3Access, S3Secret        string
+	Cert                      string
+	Extra                     []map[string]string
+}
+
+type stringSlice []string
+
+func (s *stringSlice) String() string { return strings.Join(*s, ",") }
+func (s *stringSlice) Set(v string) error {
+	*s = append(*s, v)
+	return nil
+}
+
+func splitSemi(s string) []string {
+	if strings.TrimSpace(s) == "" {
+		return nil
+	}
+	parts := strings.Split(s, ";")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+func splitComma(s string) []string {
+	if strings.TrimSpace(s) == "" {
+		return nil
+	}
+	parts := strings.Split(s, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+func valueOrFile(text, path string) (string, error) {
+	if path != "" {
+		b, err := os.ReadFile(path)
+		if err != nil {
+			return "", err
+		}
+		return string(b), nil
+	}
+	return text, nil
+}
+
+func parseExtraFlag(spec string, fromFile bool) (map[string]string, error) {
+	// type=label:value  or type=label:path
+	eq := strings.IndexByte(spec, '=')
+	if eq <= 0 {
+		return nil, fmt.Errorf("extra flag must be type=label:value, got %q", spec)
+	}
+	typ := strings.TrimSpace(spec[:eq])
+	rest := spec[eq+1:]
+	colon := strings.IndexByte(rest, ':')
+	if colon < 0 {
+		return nil, fmt.Errorf("extra flag must be type=label:value, got %q", spec)
+	}
+	label := strings.TrimSpace(rest[:colon])
+	val := rest[colon+1:]
+	if fromFile {
+		b, err := os.ReadFile(val)
+		if err != nil {
+			return nil, err
+		}
+		val = string(b)
+	}
+	if typ == "" {
+		typ = "text"
+	}
+	if label == "" {
+		label = typ
+	}
+	return map[string]string{"id": fmt.Sprintf("x_%d", len(val)+len(label)), "type": typ, "label": label, "value": val}, nil
+}
+
+func (c *client) secretsCreate(opts secretCreateOpts) error {
 	sk, _, err := c.unlockSK()
 	if err != nil {
 		return err
@@ -316,11 +474,44 @@ func (c *client) secretsCreate(title, username, password string) error {
 	}
 	defer zero(dk)
 	const kv uint32 = 1
-	titleCT, err := cryptocore.EncryptPayload([]byte(title), dk, kv)
+	titleCT, err := cryptocore.EncryptPayload([]byte(opts.Title), dk, kv)
 	if err != nil {
 		return err
 	}
-	payload, _ := json.Marshal(map[string]string{"username": username, "password": password})
+	extra := append([]map[string]string{}, opts.Extra...)
+	push := func(typ, label, value string) {
+		if value == "" {
+			return
+		}
+		extra = append(extra, map[string]string{
+			"id": fmt.Sprintf("x_%s_%d", typ, len(extra)), "type": typ, "label": label, "value": value,
+		})
+	}
+	push("ssh_private_key", "SSH Private Key", opts.SSHPrivate)
+	push("ssh_public_key", "SSH Public Key", opts.SSHPublic)
+	push("s3_access_key", "S3 Access Key", opts.S3Access)
+	push("s3_secret_key", "S3 Secret Key", opts.S3Secret)
+	push("certificate", "Zertifikat", opts.Cert)
+	payloadObj := map[string]any{
+		"username":  opts.Username,
+		"password":  opts.Password,
+		"urls":      opts.URLs,
+		"notes":     opts.Notes,
+		"totp_seed": opts.TOTP,
+		"tags":      opts.Tags,
+		"favorite":  opts.Favorite,
+		"extra":     extra,
+	}
+	if len(opts.URLs) == 0 {
+		payloadObj["urls"] = []string{}
+	}
+	if opts.Tags == nil {
+		payloadObj["tags"] = []string{}
+	}
+	payload, err := json.Marshal(payloadObj)
+	if err != nil {
+		return err
+	}
 	bodyCT, err := cryptocore.EncryptPayload(payload, dk, kv)
 	if err != nil {
 		return err
@@ -330,8 +521,8 @@ func (c *client) secretsCreate(title, username, password string) error {
 	if err != nil {
 		return err
 	}
-	_ = sk // SK only needed for unlock path consistency
-	_, err = c.postJSON("/api/secrets", map[string]any{
+	_ = sk
+	body := map[string]any{
 		"title_ciphertext_b64": b64(titleCT.Ciphertext),
 		"title_nonce_b64":      b64(titleCT.Nonce),
 		"ciphertext_b64":       b64(bodyCT.Ciphertext),
@@ -341,7 +532,11 @@ func (c *client) secretsCreate(title, username, password string) error {
 			"user_id": str(me["user_id"]), "key_version": kv,
 			"wrapped_dk_b64": b64(env.Ciphertext), "ephemeral_pub_b64": b64(env.EphemeralPub), "nonce_b64": b64(env.Nonce),
 		}},
-	})
+	}
+	if opts.Folder != "" {
+		body["collection_id"] = opts.Folder
+	}
+	_, err = c.postJSON("/api/secrets", body)
 	return err
 }
 

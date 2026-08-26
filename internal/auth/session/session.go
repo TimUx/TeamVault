@@ -18,6 +18,7 @@ type Session struct {
 	TenantID  store.TenantID
 	Username  string
 	Roles     []string
+	Scopes    []string // API-key scopes; empty = unrestricted (cookie sessions)
 	ExpiresAt time.Time
 }
 

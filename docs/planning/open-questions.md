@@ -1,4 +1,4 @@
-# teamVault – Offene Fragen (Product Owner)
+# TeamVault – Offene Fragen (Product Owner)
 
 **Status:** BEANTWORTET / freigegeben (2026-08-26)  
 Alle OQ-01–OQ-20 sind entschieden. Entscheidungen sind in die übrigen Planungsdocs übernommen. Nächster Schritt: Teil C Phase 1.
@@ -7,7 +7,7 @@ Alle OQ-01–OQ-20 sind entschieden. Entscheidungen sind in die übrigen Planung
 
 | ID | Entscheidung |
 |----|--------------|
-| OQ-01 | Stack: **Go** + React/TS + libsodium/WebCrypto (von Rust/Axum umgestellt, Proxy/Toolchain) |
+| OQ-01 | Stack: **Go** + **Vanilla JS** Web-UI (`web/static`) + libsodium/WebCrypto; React/TS bewusst nicht (2026-08-26) |
 | OQ-02 | Multi-Tenancy: Row-Level `tenant_id` + harte Tests |
 | OQ-03 | Recovery pro Tenant, kein User-Opt-out; Moduswechsel → Pflicht-Re-Onboarding |
 | OQ-04 | Passkey nur Login; kein Unlock via Platform-Authenticator |
@@ -47,7 +47,9 @@ Alle OQ-01–OQ-20 sind entschieden. Entscheidungen sind in die übrigen Planung
 
 **Antwort (initial):** so freigeben (Rust/Axum)
 
-**Nachtrag (2026-08-26):** Umstellung auf **Go** (Backend) + React/TS. Begründung: einfachere Toolchain/Wartung; Rust-Download im Firmennetz blockiert. Frontend/Client-Crypto unverändert.
+**Nachtrag (2026-08-26):** Umstellung auf **Go** (Backend). Begründung: einfachere Toolchain/Wartung; Rust-Download im Firmennetz blockiert.
+
+**Nachtrag Frontend (2026-08-26):** **Vanilla JS** bleibt die produktive Web-UI (`web/static`, eingebettet). React/TS-Rewrite wird **nicht** nachgezogen — weniger Build/CI-Komplexität (Air-Gap), Feature-Parität bereits erreicht; modularisieren bei Bedarf ohne Framework.
 
 ---
 

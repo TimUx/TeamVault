@@ -1,4 +1,4 @@
-# teamVault server — multi-stage, static Go binary (CGO_ENABLED=0, modernc sqlite).
+# TeamVault server — multi-stage, static Go binary (CGO_ENABLED=0, modernc sqlite).
 # Unlock key is never baked into the image; mount via TEAMVAULT_MASTER_UNLOCK_KEY_FILE.
 
 ARG GO_VERSION=1.23.3

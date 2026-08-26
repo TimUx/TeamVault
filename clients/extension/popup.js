@@ -1,4 +1,4 @@
-/* teamVault extension popup — mature autofill + domain match (ZK: keys only here). */
+/* TeamVault extension popup — mature autofill + domain match (ZK: keys only here). */
 const api = typeof browser !== "undefined" ? browser : chrome;
 const state = { base: "", sk: null, me: null, cache: [], tabHost: "" };
 
@@ -231,13 +231,14 @@ function paintList() {
   list.innerHTML = "";
   let rows = state.cache.slice();
   if (onlyHost && state.tabHost) {
-    rows = rows.filter((r) => r.urlHost && hostsMatch(r.urlHost, state.tabHost));
+    rows = rows.filter((r) => (r.urlHosts || []).some((h) => hostsMatch(h, state.tabHost)) || (r.urlHost && hostsMatch(r.urlHost, state.tabHost)));
   }
   if (q) {
     rows = rows.filter(
       (r) =>
         (r.title || "").toLowerCase().includes(q) ||
         (r.urlHost || "").includes(q) ||
+        (r.urlHosts || []).some((h) => h.includes(q)) ||
         (r.collection_id || "").toLowerCase().includes(q)
     );
   }
@@ -263,6 +264,14 @@ function paintList() {
     fill.textContent = "Fill";
     fill.onclick = async () => {
       try {
+        const hosts = it.urlHosts || [];
+        const legacy = it.urlHost ? [it.urlHost] : [];
+        const all = hosts.length ? hosts : legacy;
+        const match = state.tabHost && all.some((h) => hostsMatch(h, state.tabHost));
+        if (!match) {
+          showErr("Fill blockiert: Secret-URL passt nicht zum Tab-Host (" + (state.tabHost || "?") + ").");
+          return;
+        }
         const payload = await decryptPayloadFor(it.id);
         await fillTab(payload);
       } catch (e) {
@@ -295,7 +304,7 @@ async function refresh() {
   const cache = [];
   for (const it of page.items) {
     if (!it.has_access || !it.envelope) continue;
-    const entry = { id: it.id, title: it.id, urlHost: "", collection_id: it.collection_id || "" };
+    const entry = { id: it.id, title: it.id, urlHost: "", urlHosts: [], collection_id: it.collection_id || "" };
     try {
       const dk = openDK(it.envelope);
       const kv = it.envelope.key_version || it.key_version || 1;
@@ -310,10 +319,19 @@ async function refresh() {
     // Lazy URL host: decrypt payload once for matching (kept only in popup memory)
     try {
       const payload = await decryptPayloadFor(it.id);
-      entry.urlHost = hostFromUrl(payload.url || "");
+      const urls = Array.isArray(payload.urls) && payload.urls.length
+        ? payload.urls
+        : payload.url
+          ? [payload.url]
+          : [];
+      entry.urlHosts = urls.map((u) => hostFromUrl(u)).filter(Boolean);
+      entry.urlHost = entry.urlHosts[0] || "";
       if (!entry.urlHost && entry.title) {
         const m = entry.title.match(/([a-z0-9-]+\.[a-z]{2,})/i);
-        if (m) entry.urlHost = m[1].toLowerCase();
+        if (m) {
+          entry.urlHost = m[1].toLowerCase();
+          entry.urlHosts = [entry.urlHost];
+        }
       }
     } catch (_) {}
     cache.push(entry);
@@ -322,12 +340,12 @@ async function refresh() {
   // Prefer domain matches at top
   if (state.tabHost) {
     state.cache.sort((a, b) => {
-      const am = a.urlHost && hostsMatch(a.urlHost, state.tabHost) ? 0 : 1;
-      const bm = b.urlHost && hostsMatch(b.urlHost, state.tabHost) ? 0 : 1;
+      const am = (a.urlHosts || []).some((h) => hostsMatch(h, state.tabHost)) || (a.urlHost && hostsMatch(a.urlHost, state.tabHost)) ? 0 : 1;
+      const bm = (b.urlHosts || []).some((h) => hostsMatch(h, state.tabHost)) || (b.urlHost && hostsMatch(b.urlHost, state.tabHost)) ? 0 : 1;
       return am - bm || (a.title || "").localeCompare(b.title || "");
     });
     document.getElementById("matchHost").checked = state.cache.some(
-      (r) => r.urlHost && hostsMatch(r.urlHost, state.tabHost)
+      (r) => (r.urlHosts || []).some((h) => hostsMatch(h, state.tabHost)) || (r.urlHost && hostsMatch(r.urlHost, state.tabHost))
     );
   }
   paintList();

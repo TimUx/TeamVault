@@ -73,6 +73,7 @@ func TestPhase7PasskeyRegisterBeginAndStore(t *testing.T) {
 	}
 
 	req, _ := http.NewRequest(http.MethodDelete, ts.URL+"/api/webauthn/credentials/wak_test", nil)
+	setTestOrigin(req)
 	if c := jar.m["tv_session"]; c != "" {
 		req.AddCookie(&http.Cookie{Name: "tv_session", Value: c})
 	}

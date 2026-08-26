@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 	"time"
@@ -17,6 +18,7 @@ func (a *API) registerPhase5(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/admin/users", a.requireAuth(a.requireAdmin(a.handleListUsers)))
 	mux.HandleFunc("POST /api/admin/users", a.requireAuth(a.requireAdmin(a.handleCreateUser)))
 	mux.HandleFunc("POST /api/admin/users/{id}/disable", a.requireAuth(a.requireAdmin(a.handleDisableUser)))
+	mux.HandleFunc("GET /api/admin/users/{id}/accessible-secrets", a.requireAuth(a.requireAdmin(a.handleUserAccessibleSecrets)))
 	mux.HandleFunc("GET /api/admin/groups", a.requireAuth(a.requireAdmin(a.handleListGroups)))
 	mux.HandleFunc("POST /api/admin/groups", a.requireAuth(a.requireAdmin(a.handleCreateGroup)))
 	mux.HandleFunc("POST /api/admin/groups/{id}/members", a.requireAuth(a.requireAdmin(a.handleAddMember)))
@@ -158,6 +160,44 @@ func (a *API) handleDisableUser(w http.ResponseWriter, r *http.Request) {
 	}
 	a.maybeMailDisabled(*u, sess.TenantID)
 	writeJSON(w, http.StatusOK, map[string]string{"status": "disabled"})
+}
+
+// handleUserAccessibleSecrets lists secret IDs where the user still has a key envelope (meta only).
+// After disable, admins must rotate those secrets client-side (Zero-Knowledge — no auto-rotate).
+func (a *API) handleUserAccessibleSecrets(w http.ResponseWriter, r *http.Request) {
+	sess, _ := a.sessionFrom(r)
+	uid := store.UserID(r.PathValue("id"))
+	if _, err := a.App.Vault.GetUser(r.Context(), sess.TenantID, uid); err != nil {
+		writeErr(w, http.StatusNotFound, "user not found")
+		return
+	}
+	metas, err := a.App.Vault.ListSecretMetas(r.Context(), sess.TenantID)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	type row struct {
+		ID         string `json:"id"`
+		KeyVersion uint32 `json:"key_version"`
+	}
+	out := make([]row, 0)
+	for _, m := range metas {
+		envs, err := a.App.Vault.ListKeyEnvelopes(r.Context(), sess.TenantID, m.ID)
+		if err != nil {
+			continue
+		}
+		for _, e := range envs {
+			if e.UserID == uid {
+				kv := e.KeyVersion
+				if blob, err := a.App.Vault.GetSecretCiphertext(r.Context(), sess.TenantID, m.ID); err == nil {
+					kv = blob.KeyVersion
+				}
+				out = append(out, row{ID: string(m.ID), KeyVersion: kv})
+				break
+			}
+		}
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 func (a *API) handleListGroups(w http.ResponseWriter, r *http.Request) {
@@ -492,16 +532,37 @@ func (a *API) handleShareSecret(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	blob, err := a.App.Vault.GetSecretCiphertext(r.Context(), sess.TenantID, id)
+	if err != nil {
+		writeErr(w, http.StatusNotFound, "secret not found")
+		return
+	}
 	for _, e := range body.Envelopes {
+		if !a.recipientShareable(r, sess.TenantID, store.UserID(e.UserID)) {
+			writeErr(w, http.StatusBadRequest, "recipient must be onboarded user in tenant")
+			return
+		}
 		packed, err := packEnvelope(e)
 		if err != nil {
 			writeErr(w, http.StatusBadRequest, "invalid envelope")
 			return
 		}
+		kv := e.KeyVersion
+		if kv == 0 {
+			kv = 1
+		}
+		if kv != blob.KeyVersion {
+			writeErr(w, http.StatusBadRequest, "key_version must match current secret version")
+			return
+		}
 		if err := a.App.Vault.PutKeyEnvelope(r.Context(), store.KeyEnvelope{
 			SecretID: id, TenantID: sess.TenantID, UserID: store.UserID(e.UserID),
-			KeyVersion: e.KeyVersion, WrappedDK: packed,
+			KeyVersion: kv, WrappedDK: packed,
 		}); err != nil {
+			if errors.Is(err, store.ErrRevokedEnvelope) {
+				writeErr(w, http.StatusConflict, "cannot revive revoked envelope")
+				return
+			}
 			writeErr(w, http.StatusInternalServerError, err.Error())
 			return
 		}
@@ -511,6 +572,14 @@ func (a *API) handleShareSecret(w http.ResponseWriter, r *http.Request) {
 		Action: "secret.share", ResourceType: "secret", ResourceID: string(id), CreatedAt: time.Now().UTC(),
 	})
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func (a *API) recipientShareable(r *http.Request, tenant store.TenantID, uid store.UserID) bool {
+	u, err := a.App.Vault.GetUser(r.Context(), tenant, uid)
+	if err != nil || u.OnboardedAt == nil || len(u.PublicKey) == 0 || u.Status == "disabled" {
+		return false
+	}
+	return true
 }
 
 func (a *API) handleRotateSecret(w http.ResponseWriter, r *http.Request) {
@@ -535,7 +604,10 @@ func (a *API) handleRotateSecret(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Invalidate previous version envelopes (Prinzip 7 — revoke ⇒ rotate).
-	_ = a.App.Vault.InvalidateKeyVersion(r.Context(), sess.TenantID, id, oldBlob.KeyVersion)
+	if err := a.App.Vault.InvalidateKeyVersion(r.Context(), sess.TenantID, id, oldBlob.KeyVersion); err != nil {
+		writeErr(w, http.StatusInternalServerError, "invalidate key version: "+err.Error())
+		return
+	}
 
 	titleCT, _ := base64.StdEncoding.DecodeString(req.TitleCiphertextB64)
 	titleN, _ := base64.StdEncoding.DecodeString(req.TitleNonceB64)
@@ -578,10 +650,18 @@ func (a *API) handleRotateSecret(w http.ResponseWriter, r *http.Request) {
 func (a *API) handleDeleteSecret(w http.ResponseWriter, r *http.Request) {
 	sess, _ := a.sessionFrom(r)
 	id := store.SecretID(r.PathValue("id"))
+	if !a.callerHasEnvelope(r, sess.TenantID, id, sess.UserID) {
+		writeErr(w, http.StatusForbidden, "no access envelope")
+		return
+	}
 	if err := a.App.Vault.DeleteSecret(r.Context(), sess.TenantID, id); err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	_ = a.App.Vault.AppendAudit(r.Context(), store.AuditEvent{
+		ID: newID("aud"), TenantID: sess.TenantID, ActorID: string(sess.UserID),
+		Action: "secret.delete", ResourceType: "secret", ResourceID: string(id), CreatedAt: time.Now().UTC(),
+	})
 	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
 

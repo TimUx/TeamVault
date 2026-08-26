@@ -558,6 +558,9 @@ func (s *Store) PutKeyEnvelope(_ context.Context, env store.KeyEnvelope) error {
 	defer s.mu.Unlock()
 	for i, e := range s.data.Envelopes {
 		if e.TenantID == env.TenantID && e.SecretID == env.SecretID && e.UserID == env.UserID && e.KeyVersion == env.KeyVersion {
+			if e.Revoked {
+				return store.ErrRevokedEnvelope
+			}
 			s.data.Envelopes[i] = envelopeRec{KeyEnvelope: env, Revoked: false}
 			return s.flush()
 		}

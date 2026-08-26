@@ -1,4 +1,4 @@
-# teamVault – Admin-UI Scope
+# TeamVault – Admin-UI Scope
 
 **Status:** Planungsdokument (Teil B)  
 **UI-Farben:** [`ui-brand.md`](ui-brand.md) (flach/modern; Palette storage-dashboard)

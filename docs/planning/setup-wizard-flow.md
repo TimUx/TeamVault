@@ -1,4 +1,4 @@
-# teamVault – Setup-Wizard Flow
+# TeamVault – Setup-Wizard Flow
 
 **Status:** Planungsdokument (Teil B)  
 **Ziel nach Abschluss:** System nutzbar mit einem Tenant, lokalem Admin, SQLite, ohne LDAP.

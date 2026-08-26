@@ -1,4 +1,4 @@
-# teamVault Clients
+# TeamVault Clients
 
 ## Crypto (geteilt)
 
@@ -10,7 +10,7 @@
 
 Keine eigene Kryptologik in Extension/CLI — nur die Phase-2-Primitive.
 
-Bei Änderungen an der JS-Crypto: `clients/js/cryptocore.js` aktualisieren und nach `web/static/` sowie `clients/extension/` kopieren.
+Bei Änderungen an der JS-Crypto: `web/static/cryptocore.js` ist die Quelle; nach `clients/js/` und `clients/extension/` kopieren. CI prüft die SHA-256-Gleichheit der drei Dateien.
 
 ## CLI (`tvcli`)
 
@@ -38,11 +38,17 @@ go run ./cmd/tvcli whoami
 go run ./cmd/tvcli secrets list
 go run ./cmd/tvcli secrets get -id sec_…
 go run ./cmd/tvcli secrets create -title "VPN" -username alice
+go run ./cmd/tvcli secrets create -title "Git" -username git `
+  -url https://git.example.local -ssh-private-file .\id_ed25519 -tags infra,git
+go run ./cmd/tvcli secrets create -title "S3" -s3-access AKIA… -s3-secret … `
+  -cert-file .\tls.crt -extra secret=AppToken:s3cr3t
 go run ./cmd/tvcli version
 # oder API-Key:
 $env:TEAMVAULT_API_KEY = "tvk_…"
 go run ./cmd/tvcli whoami
 ```
+
+`secrets create` Flags (Auswahl): `-urls`, `-url` (wiederholbar), `-notes`, `-totp`, `-tags`, `-favorite`, `-folder`, `-ssh-private[-file]`, `-ssh-public[-file]`, `-s3-access`, `-s3-secret`, `-cert[-file]`, `-extra` / `-extra-file` (`type=label:value`). `secrets get` gibt den Payload als JSON aus.
 
 ## Extension (MV3)
 
@@ -50,7 +56,8 @@ go run ./cmd/tvcli whoami
 
 1. Extensions → Entwicklermodus → „Entpackt laden“
 2. Ordner `clients/extension` wählen
-3. Server-URL setzen, Login, Master-Passwort → Secrets listen / Passwort kopieren
+3. Server-URL setzen, Login, Master-Passwort → Secrets listen / Passwort kopieren / **Fill**
+4. **Fill** nur, wenn eine Secret-URL zum Tab-Host passt (sonst Block/Warnung)
 
 `host_permissions` decken localhost ab. Für HTTPS-Server: optional_host_permissions (`https://*/*`) über die Extension-Details freigeben (oder beim ersten Zugriff erlauben).
 

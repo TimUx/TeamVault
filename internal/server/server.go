@@ -100,6 +100,8 @@ func (a *API) Handler() http.Handler {
 	mux.HandleFunc("GET /api/vault/crypto-params", a.requireAuth(a.handleCryptoParams))
 	mux.HandleFunc("POST /api/vault/onboard", a.requireAuth(a.handleVaultOnboard))
 	mux.HandleFunc("GET /api/vault/keys", a.requireAuth(a.handleVaultKeys))
+	mux.HandleFunc("POST /api/vault/change-master", a.requireAuth(a.requireOnboarded(a.handleChangeMaster)))
+	mux.HandleFunc("POST /api/me/password", a.requireAuth(a.handleChangeLoginPassword))
 	mux.HandleFunc("POST /api/totp/setup", a.requireAuth(a.handleTOTPSetup))
 	mux.HandleFunc("POST /api/totp/enable", a.requireAuth(a.handleTOTPEnable))
 	mux.HandleFunc("POST /api/admin/tenant/recovery", a.requireAuth(a.handleAdminRecovery))
@@ -125,11 +127,47 @@ func (a *API) Handler() http.Handler {
 
 func (a *API) requireAuth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if _, ok := a.sessionFrom(r); !ok {
+		sess, ok := a.sessionFrom(r)
+		if !ok {
 			writeErr(w, http.StatusUnauthorized, "not authenticated")
 			return
 		}
+		if isReadOnlyAPIKey(sess.Scopes) && !apiKeyReadAllowed(r) {
+			writeErr(w, http.StatusForbidden, "api key scope read-only")
+			return
+		}
 		next(w, r)
+	}
+}
+
+// isReadOnlyAPIKey is true when scopes are non-empty and only contain "read".
+func isReadOnlyAPIKey(scopes []string) bool {
+	if len(scopes) == 0 {
+		return false
+	}
+	for _, s := range scopes {
+		if s != "read" {
+			return false
+		}
+	}
+	return true
+}
+
+func apiKeyReadAllowed(r *http.Request) bool {
+	if r.Method != http.MethodGet {
+		return false
+	}
+	p := r.URL.Path
+	switch {
+	case p == "/api/me", p == "/api/vault/status", p == "/api/vault/crypto-params", p == "/api/vault/keys",
+		p == "/api/secrets", p == "/api/users/public-keys", p == "/api/crypto/presets":
+		return true
+	case strings.HasPrefix(p, "/api/secrets/") && !strings.Contains(p[len("/api/secrets/"):], "/"):
+		return true // GET /api/secrets/{id}
+	case strings.HasPrefix(p, "/api/secrets/") && strings.HasSuffix(p, "/group-member-keys"):
+		return true
+	default:
+		return false
 	}
 }
 
@@ -290,6 +328,7 @@ func (a *API) handleMe(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"user_id": sess.UserID, "tenant_id": sess.TenantID, "username": sess.Username, "roles": sess.Roles,
 		"needs_vault_onboard": u.OnboardedAt == nil, "totp_enabled": u.TotpEnabled,
+		"auth_backend": u.AuthBackend,
 		"passkey_count": func() int {
 			creds, _ := a.App.Vault.ListWebAuthnCredentials(r.Context(), sess.TenantID, sess.UserID)
 			return len(creds)
@@ -311,10 +350,17 @@ func (a *API) handleVaultStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ten, _ := a.App.Vault.GetTenant(r.Context(), sess.TenantID)
-	writeJSON(w, http.StatusOK, map[string]any{
-		"onboarded": u.OnboardedAt != nil, "recovery_mode": ten.RecoveryMode,
-		"escrow_allowed": ten.EscrowAllowed, "has_escrow_pubkey": len(ten.EscrowPublicKey) > 0,
-	})
+	out := map[string]any{
+		"onboarded": u.OnboardedAt != nil, "recovery_mode": "",
+		"escrow_allowed": false, "has_escrow_pubkey": false, "escrow_public_key_b64": "",
+	}
+	if ten != nil {
+		out["recovery_mode"] = ten.RecoveryMode
+		out["escrow_allowed"] = ten.EscrowAllowed
+		out["has_escrow_pubkey"] = len(ten.EscrowPublicKey) > 0
+		out["escrow_public_key_b64"] = base64.StdEncoding.EncodeToString(ten.EscrowPublicKey)
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 func (a *API) handleCryptoParams(w http.ResponseWriter, r *http.Request) {
@@ -427,6 +473,109 @@ func (a *API) handleVaultKeys(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// handleChangeMaster stores newly sealed private-key material after a client-side master-password change.
+// Public key stays the same; server never sees the master password or plaintext SK.
+func (a *API) handleChangeMaster(w http.ResponseWriter, r *http.Request) {
+	sess, _ := a.sessionFrom(r)
+	u, err := a.App.Vault.GetUser(r.Context(), sess.TenantID, sess.UserID)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	ten, err := a.App.Vault.GetTenant(r.Context(), sess.TenantID)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	var req onboardReq
+	if err := readJSON(r, &req); err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	ct, err := b64(req.EncryptedPrivateKey)
+	nonce, err2 := b64(req.EncryptedPrivateKeyNonce)
+	salt, err3 := b64(req.Salt)
+	if err != nil || err2 != nil || err3 != nil || len(nonce) != 24 || len(salt) != 16 {
+		writeErr(w, http.StatusBadRequest, "invalid sealed private key")
+		return
+	}
+	u.EncryptedPrivateKey = append(append(append([]byte{}, salt...), nonce...), ct...)
+
+	switch ten.RecoveryMode {
+	case "user_kit", "":
+		rct, e1 := b64(req.EncryptedPrivateKeyRecovery)
+		rn, e2 := b64(req.RecoveryNonce)
+		rs, e3 := b64(req.RecoverySalt)
+		if e1 != nil || e2 != nil || e3 != nil {
+			writeErr(w, http.StatusBadRequest, "recovery kit material required")
+			return
+		}
+		u.EncryptedPrivateKeyRecovery = append(append(append([]byte{}, rs...), rn...), rct...)
+	case "admin_escrow":
+		if len(ten.EscrowPublicKey) == 0 {
+			writeErr(w, http.StatusConflict, "tenant escrow public key not configured")
+			return
+		}
+		env, e := b64(req.EscrowEnvelope)
+		if e != nil || len(env) == 0 {
+			writeErr(w, http.StatusBadRequest, "escrow envelope required")
+			return
+		}
+		u.EscrowEnvelope = env
+	}
+	if err := a.App.Vault.UpsertUser(r.Context(), *u); err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	_ = a.App.Vault.AppendAudit(r.Context(), store.AuditEvent{
+		ID: newID("aud"), TenantID: sess.TenantID, ActorID: string(sess.UserID),
+		Action: "vault.change_master", ResourceType: "user", ResourceID: string(sess.UserID),
+		CreatedAt: time.Now().UTC(),
+	})
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func (a *API) handleChangeLoginPassword(w http.ResponseWriter, r *http.Request) {
+	sess, _ := a.sessionFrom(r)
+	var body struct {
+		CurrentPassword string `json:"current_password"`
+		NewPassword     string `json:"new_password"`
+	}
+	if err := readJSON(r, &body); err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if len(body.NewPassword) < 12 {
+		writeErr(w, http.StatusBadRequest, "password min 12 chars")
+		return
+	}
+	u, err := a.App.Vault.GetUser(r.Context(), sess.TenantID, sess.UserID)
+	if err != nil {
+		writeErr(w, http.StatusNotFound, "user not found")
+		return
+	}
+	if u.AuthBackend != "local" && u.AuthBackend != "" {
+		writeErr(w, http.StatusBadRequest, "only local login password can be changed here")
+		return
+	}
+	ok, verr := password.Verify(body.CurrentPassword, u.LocalPasswordHash)
+	if verr != nil || !ok {
+		writeErr(w, http.StatusUnauthorized, "current password incorrect")
+		return
+	}
+	hash, err := password.Hash(body.NewPassword, password.Default)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	u.LocalPasswordHash = hash
+	if err := a.App.Vault.UpsertUser(r.Context(), *u); err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
 func (a *API) handleTOTPSetup(w http.ResponseWriter, r *http.Request) {
 	sess, _ := a.sessionFrom(r)
 	u, err := a.App.Vault.GetUser(r.Context(), sess.TenantID, sess.UserID)
@@ -434,7 +583,7 @@ func (a *API) handleTOTPSetup(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	key, err := totp.GenerateSecret("teamVault", u.Username)
+	key, err := totp.GenerateSecret("TeamVault", u.Username)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
@@ -511,6 +660,17 @@ func (a *API) handleAdminRecovery(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "confirm must be REONBOARD when changing recovery mode")
 		return
 	}
+	if modeChanged {
+		metas, err := a.App.Vault.ListSecretMetas(r.Context(), ten.ID)
+		if err != nil {
+			writeErr(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		if len(metas) > 0 {
+			writeErr(w, http.StatusConflict, "cannot change recovery mode while tenant has secrets")
+			return
+		}
+	}
 	ten.RecoveryMode = body.RecoveryMode
 	ten.EscrowAllowed = body.EscrowAllowed
 	if body.RecoveryMode == "admin_escrow" {
@@ -536,6 +696,12 @@ func (a *API) handleAdminRecovery(w http.ResponseWriter, r *http.Request) {
 		_ = a.App.Vault.AppendAudit(r.Context(), store.AuditEvent{
 			ID: newID("aud"), TenantID: ten.ID, ActorID: string(sess.UserID),
 			Action: "tenant.recovery_mode_change", ResourceType: "tenant", ResourceID: string(ten.ID),
+			CreatedAt: time.Now().UTC(),
+		})
+	} else {
+		_ = a.App.Vault.AppendAudit(r.Context(), store.AuditEvent{
+			ID: newID("aud"), TenantID: ten.ID, ActorID: string(sess.UserID),
+			Action: "tenant.recovery_settings", ResourceType: "tenant", ResourceID: string(ten.ID),
 			CreatedAt: time.Now().UTC(),
 		})
 	}
@@ -623,6 +789,7 @@ func (a *API) sessionFromAPIKey(r *http.Request, token string) (session.Session,
 	_ = json.Unmarshal([]byte(u.RolesJSON), &roles)
 	return session.Session{
 		ID: "apk:" + rec.ID, UserID: u.ID, TenantID: u.TenantID, Username: u.Username, Roles: roles,
+		Scopes: append([]string{}, rec.Scopes...),
 		ExpiresAt: time.Now().UTC().Add(24 * time.Hour),
 	}, true
 }

@@ -1,4 +1,4 @@
-# teamVault — self-hosted Zero-Knowledge password manager
+# TeamVault — self-hosted Zero-Knowledge password manager
 #
 # 1) Create unlock key (≥32 random bytes), never commit it:
 #      openssl rand -out secrets/teamvault_unlock 48

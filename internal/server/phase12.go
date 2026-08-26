@@ -3,8 +3,10 @@ package server
 import (
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/teamvault/teamvault/internal/store"
@@ -13,6 +15,7 @@ import (
 func (a *API) registerPhase12(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/crypto/presets", a.requireAuth(a.handleCryptoPresets))
 	mux.HandleFunc("GET /api/admin/groups/{id}/members/public-keys", a.requireAuth(a.requireTenantAdminOrAuditor(a.handleGroupMemberPublicKeys)))
+	mux.HandleFunc("GET /api/secrets/{id}/group-member-keys", a.requireAuth(a.requireOnboarded(a.handleSecretGroupMemberKeys)))
 	mux.HandleFunc("POST /api/secrets/{id}/share-group", a.requireAuth(a.requireOnboarded(a.handleShareGroup)))
 }
 
@@ -61,8 +64,28 @@ func (a *API) handleCryptoPresets(w http.ResponseWriter, r *http.Request) {
 
 func (a *API) handleGroupMemberPublicKeys(w http.ResponseWriter, r *http.Request) {
 	sess, _ := a.sessionFrom(r)
-	gid := store.GroupID(r.PathValue("id"))
-	members, err := a.App.Vault.ListGroupMembers(r.Context(), sess.TenantID, gid)
+	a.writeGroupMemberPublicKeys(w, r, sess.TenantID, store.GroupID(r.PathValue("id")))
+}
+
+// handleSecretGroupMemberKeys returns onboarded group member public keys for sharing.
+// Requires an access envelope on the secret (not an admin role).
+func (a *API) handleSecretGroupMemberKeys(w http.ResponseWriter, r *http.Request) {
+	sess, _ := a.sessionFrom(r)
+	id := store.SecretID(r.PathValue("id"))
+	if !a.callerHasEnvelope(r, sess.TenantID, id, sess.UserID) {
+		writeErr(w, http.StatusForbidden, "no access envelope")
+		return
+	}
+	gid := strings.TrimSpace(r.URL.Query().Get("group_id"))
+	if gid == "" {
+		writeErr(w, http.StatusBadRequest, "group_id required")
+		return
+	}
+	a.writeGroupMemberPublicKeys(w, r, sess.TenantID, store.GroupID(gid))
+}
+
+func (a *API) writeGroupMemberPublicKeys(w http.ResponseWriter, r *http.Request, tenant store.TenantID, gid store.GroupID) {
+	members, err := a.App.Vault.ListGroupMembers(r.Context(), tenant, gid)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
@@ -74,7 +97,7 @@ func (a *API) handleGroupMemberPublicKeys(w http.ResponseWriter, r *http.Request
 	}
 	var out []pk
 	for _, uid := range members {
-		u, err := a.App.Vault.GetUser(r.Context(), sess.TenantID, uid)
+		u, err := a.App.Vault.GetUser(r.Context(), tenant, uid)
 		if err != nil || u.OnboardedAt == nil || len(u.PublicKey) == 0 || u.Status == "disabled" {
 			continue
 		}
@@ -110,9 +133,18 @@ func (a *API) handleShareGroup(w http.ResponseWriter, r *http.Request) {
 	for _, m := range members {
 		allowed[string(m)] = true
 	}
+	blob, err := a.App.Vault.GetSecretCiphertext(r.Context(), sess.TenantID, id)
+	if err != nil {
+		writeErr(w, http.StatusNotFound, "secret not found")
+		return
+	}
 	for _, e := range body.Envelopes {
 		if !allowed[e.UserID] {
 			writeErr(w, http.StatusBadRequest, "envelope user not in group")
+			return
+		}
+		if !a.recipientShareable(r, sess.TenantID, store.UserID(e.UserID)) {
+			writeErr(w, http.StatusBadRequest, "recipient must be onboarded user in tenant")
 			return
 		}
 		packed, err := packEnvelope(e)
@@ -124,10 +156,18 @@ func (a *API) handleShareGroup(w http.ResponseWriter, r *http.Request) {
 		if kv == 0 {
 			kv = 1
 		}
+		if kv != blob.KeyVersion {
+			writeErr(w, http.StatusBadRequest, "key_version must match current secret version")
+			return
+		}
 		if err := a.App.Vault.PutKeyEnvelope(r.Context(), store.KeyEnvelope{
 			SecretID: id, TenantID: sess.TenantID, UserID: store.UserID(e.UserID),
 			KeyVersion: kv, WrappedDK: packed,
 		}); err != nil {
+			if errors.Is(err, store.ErrRevokedEnvelope) {
+				writeErr(w, http.StatusConflict, "cannot revive revoked envelope")
+				return
+			}
 			writeErr(w, http.StatusInternalServerError, err.Error())
 			return
 		}

@@ -73,9 +73,9 @@ type Bundle struct {
 
 func DefaultMailTemplates() MailTemplates {
 	return MailTemplates{
-		InviteSubject:   "teamVault Einladung",
+		InviteSubject:   "TeamVault Einladung",
 		InviteBody:      "Hallo {{username}},\n\ndu wurdest zu Tenant {{tenant}} eingeladen. Bitte melde dich an und schließe das Vault-Onboarding ab.\n",
-		DisabledSubject: "teamVault Konto deaktiviert",
+		DisabledSubject: "TeamVault Konto deaktiviert",
 		DisabledBody:    "Hallo {{username}},\n\ndein Konto in Tenant {{tenant}} wurde deaktiviert.\n",
 	}
 }

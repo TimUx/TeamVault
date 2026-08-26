@@ -135,6 +135,7 @@ func putJSONCookie(t *testing.T, url string, body any, jar *cookieJar) map[strin
 	}
 	req, _ := http.NewRequest(http.MethodPut, url, bytes.NewReader(b))
 	req.Header.Set("Content-Type", "application/json")
+	setTestOrigin(req)
 	if c := jar.m["tv_session"]; c != "" {
 		req.AddCookie(&http.Cookie{Name: "tv_session", Value: c})
 	}

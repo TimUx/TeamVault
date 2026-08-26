@@ -1,4 +1,4 @@
-# teamVault CI — Gitea Actions (ubuntu runner)
+# TeamVault CI — Gitea Actions (ubuntu runner)
 #
 # Prerequisites on the instance:
 #   - Act-Runner with label "ubuntu-latest" (or change runs-on below)
@@ -43,6 +43,18 @@ jobs:
 
       - name: Go test
         run: go test ./...
+
+      - name: cryptocore.js checksum sync
+        run: |
+          set -euo pipefail
+          h1=$(sha256sum web/static/cryptocore.js | awk '{print $1}')
+          h2=$(sha256sum clients/js/cryptocore.js | awk '{print $1}')
+          h3=$(sha256sum clients/extension/cryptocore.js | awk '{print $1}')
+          if [ "$h1" != "$h2" ] || [ "$h1" != "$h3" ]; then
+            echo "cryptocore.js mismatch — keep web/static, clients/js, clients/extension in sync"
+            exit 1
+          fi
+          echo "cryptocore.js ok ($h1)"
 
       - name: Go vet
         run: go vet ./...
@@ -158,7 +170,7 @@ jobs:
         if: always()
         shell: bash
         run: |
-          echo "### teamVault container package" >> "$GITHUB_STEP_SUMMARY"
+          echo "### TeamVault container package" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
           echo '${{ steps.meta.outputs.tags }}' >> "$GITHUB_STEP_SUMMARY"

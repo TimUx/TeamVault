@@ -29,8 +29,9 @@ function applyTheme(theme) {
   const t = theme === "dark" ? "dark" : "light";
   document.documentElement.setAttribute("data-theme", t);
   try { localStorage.setItem("tv-theme", t); } catch (_) {}
-  const btn = document.getElementById("themeToggle");
-  if (btn) btn.textContent = t === "dark" ? "Hell" : "Dunkel";
+  document.querySelectorAll("[data-theme-toggle]").forEach((btn) => {
+    btn.textContent = t === "dark" ? "Hell" : "Dunkel";
+  });
 }
 
 function initTheme() {
@@ -41,13 +42,14 @@ function initTheme() {
 
 function ensureHeaderControls() {
   const top = document.querySelector(".top");
-  if (!top || top.querySelector("#themeToggle")) return;
+  if (!top || top.querySelector("[data-theme-toggle]")) return;
   const actions = document.createElement("div");
   actions.className = "top-actions";
   const btn = document.createElement("button");
   btn.type = "button";
   btn.className = "btn-ghost btn-sm";
   btn.id = "themeToggle";
+  btn.setAttribute("data-theme-toggle", "1");
   btn.textContent = document.documentElement.getAttribute("data-theme") === "dark" ? "Hell" : "Dunkel";
   btn.onclick = () => {
     const cur = document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light";
@@ -179,7 +181,7 @@ function stepView(repaint) {
   const d = state.draft;
   if (state.step === 0) {
     const n = el(`<div>
-      <h1>Willkommen bei teamVault</h1>
+      <h1>Willkommen bei TeamVault</h1>
       <p class="lead">Zero-Knowledge Passwortmanager. Secrets werden nur clientseitig entschlüsselt. Genau ein Bootstrap-Secret entsperrt die Config.</p>
       <p class="hint">Der erste Admin ist immer lokal authentifiziert (Schutz vor LDAP-Aussperrung).</p>
       <div class="row"><button class="btn-accent" type="button">Weiter</button></div>
@@ -366,6 +368,11 @@ function renderLogin(app) {
       err.hidden = false; err.textContent = e.message;
     }
   };
+  ["#pw", "#totp", "#user", "#slug"].forEach((sel) => {
+    n.querySelector(sel).addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter") n.querySelector("#doLogin").click();
+    });
+  });
   n.querySelector("#doPasskey").onclick = async () => {
     const err = n.querySelector("#err");
     err.hidden = true;
@@ -499,7 +506,7 @@ function renderOnboard(app) {
         const kitB64 = TVCrypto.b64enc(kit);
         kit.fill(0);
         const kitText =
-          "teamVault Recovery-Kit\n" +
+          "TeamVault Recovery-Kit\n" +
           "Bewahren Sie diese Datei sicher auf.\n" +
           "Ohne Kit und ohne Master-Passwort sind Secrets verloren.\n\n" +
           kitB64 + "\n";
@@ -517,7 +524,7 @@ function renderOnboard(app) {
           await copyText(kitB64);
           flashCopy(ev.currentTarget);
         };
-        kitBox.querySelector("#kitDl").onclick = () => downloadText("teamvault-recovery-kit.txt", kitText);
+        kitBox.querySelector("#kitDl").onclick = () => downloadText("TeamVault-recovery-kit.txt", kitText);
       }
       id.secretKey.fill(0);
       await api("/api/vault/onboard", { method: "POST", body: JSON.stringify(body) });
@@ -627,249 +634,392 @@ function openDKFromEnvelope(env) {
 }
 
 function fieldRow(label, value, opts = {}) {
-  const { copy = true, mask = false, multiline = false } = opts;
+  const { copy = true, mask = false, multiline = false, download = false } = opts;
   const display = value == null || value === "" ? "—" : String(value);
   const safe = display.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   const copyAttr = copy && display !== "—" ? `data-copy="${encodeURIComponent(String(value))}"` : "";
-  return `<div class="secret-field">
+  const dlAttr = download && display !== "—" ? `data-download="${encodeURIComponent(String(value))}" data-dlname="${encodeURIComponent(opts.filename || label || "download.txt")}"` : "";
+  const actions = [];
+  if (copy && display !== "—") actions.push(`<button type="button" class="copy-btn" ${copyAttr}>Kopieren</button>`);
+  if (download && display !== "—") actions.push(`<button type="button" class="copy-btn" ${dlAttr}>Download</button>`);
+  return `<div class="secret-field${multiline ? " secret-field-block" : ""}">
     <div class="sf-label">${label}</div>
-    <div class="sf-value${mask ? " masked" : ""}${multiline ? " mono" : ""}">${mask && display !== "—" ? "••••••••" : safe}</div>
-    ${copy && display !== "—" ? `<button type="button" class="copy-btn" ${copyAttr}>Kopieren</button>` : "<span></span>"}
+    <div class="sf-value${mask ? " masked" : ""}${multiline ? " mono prewrap" : ""}">${mask && display !== "—" ? "••••••••" : safe}</div>
+    ${actions.length ? `<div class="sf-actions">${actions.join("")}</div>` : "<span></span>"}
   </div>`;
+}
+
+/** Normalize decrypted secret payload (legacy url → urls[], ensure extra[]). */
+function normalizeSecretPayload(raw) {
+  const p = raw && typeof raw === "object" ? raw : {};
+  let urls = Array.isArray(p.urls) ? p.urls.map((u) => String(u || "").trim()).filter(Boolean) : [];
+  if (!urls.length && p.url) urls = [String(p.url).trim()].filter(Boolean);
+  const tags = Array.isArray(p.tags)
+    ? p.tags.map((t) => String(t).trim()).filter(Boolean)
+    : String(p.tags || "")
+        .split(",")
+        .map((t) => t.trim())
+        .filter(Boolean);
+  const extra = Array.isArray(p.extra)
+    ? p.extra
+        .filter((e) => e && typeof e === "object")
+        .map((e) => ({
+          id: String(e.id || ""),
+          type: String(e.type || "text"),
+          label: String(e.label || e.type || "Feld"),
+          value: String(e.value == null ? "" : e.value),
+        }))
+    : [];
+  return {
+    username: String(p.username || ""),
+    password: String(p.password || ""),
+    urls,
+    notes: String(p.notes || ""),
+    totp_seed: String(p.totp_seed || "").trim(),
+    tags,
+    favorite: !!p.favorite,
+    extra,
+  };
+}
+
+function newExtraId() {
+  return "x_" + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+}
+
+const EXTRA_ADD_OPTIONS = [
+  { type: "url", label: "Website (URL)", singleton: false },
+  { type: "totp", label: "TOTP-Seed", singleton: true },
+  { type: "notes", label: "Notizen", singleton: true },
+  { type: "tags", label: "Tags", singleton: true },
+  { type: "favorite", label: "Favorit", singleton: true },
+  { type: "ssh_private_key", label: "SSH Private Key", singleton: false, file: true },
+  { type: "ssh_public_key", label: "SSH Public Key", singleton: false, file: true },
+  { type: "s3_access_key", label: "S3 Access Key", singleton: false },
+  { type: "s3_secret_key", label: "S3 Secret Key", singleton: false, secret: true },
+  { type: "certificate", label: "Zertifikat (PEM)", singleton: false, file: true },
+  { type: "text", label: "Freitext", singleton: false },
+  { type: "secret", label: "Geheimnis (Custom)", singleton: false, secret: true },
+];
+
+function isMultilineExtraType(type) {
+  return type === "ssh_private_key" || type === "ssh_public_key" || type === "certificate" || type === "notes";
+}
+
+function isSecretExtraType(type) {
+  return type === "s3_secret_key" || type === "secret" || type === "ssh_private_key";
+}
+
+function extraSupportsFile(type) {
+  return type === "ssh_private_key" || type === "ssh_public_key" || type === "certificate";
 }
 
 function renderApp(app) {
   document.body.classList.add("app-wide");
-  const n = el(`<div class="app-shell">
-    <div class="panel">
-      <div class="app-header-meta">
-        <div>
-          <h1>teamVault</h1>
-          <p class="lead" id="info">Lade…</p>
+  const n = el(`<div class="app-frame">
+    <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+    <aside class="app-sidebar" id="appSidebar" hidden>
+      <div class="app-sidebar-brand">TeamVault</div>
+      <nav class="app-sidebar-nav" id="appSidebarNav">
+        <div class="sidebar-section">
+          <div class="sidebar-section-title">Vault</div>
+          <button type="button" class="sidebar-link active" data-nav="vault:secrets">Secrets</button>
+          <button type="button" class="sidebar-link" data-nav="vault:create">Neu anlegen</button>
+          <button type="button" class="sidebar-link" data-nav="vault:import">Import</button>
         </div>
-        <div class="row" style="margin-top:0">
-          <button class="btn-ghost" type="button" id="out">Logout</button>
+        <div class="sidebar-section">
+          <div class="sidebar-section-title">Konto</div>
+          <button type="button" class="sidebar-link" data-nav="account">Konto</button>
         </div>
-      </div>
-      <nav class="app-nav" id="appNav" hidden>
-        <button type="button" data-tab="vault" class="active">Vault</button>
-        <button type="button" data-tab="account">Konto</button>
-        <button type="button" data-tab="admin" id="navAdmin" hidden>Admin</button>
+        <div class="sidebar-section" id="navAdminSection" hidden>
+          <div class="sidebar-section-title">Administration</div>
+          <button type="button" class="sidebar-link admin-link" data-nav="admin:users" data-admin-only>Benutzer</button>
+          <button type="button" class="sidebar-link admin-link" data-nav="admin:groups" data-admin-only>Gruppen</button>
+          <button type="button" class="sidebar-link admin-link" data-nav="admin:ldap" data-admin-only>LDAP</button>
+          <button type="button" class="sidebar-link admin-link" data-nav="admin:smtp" data-admin-only>SMTP</button>
+          <button type="button" class="sidebar-link admin-link" data-nav="admin:crypto" data-admin-only>Krypto &amp; Policy</button>
+          <button type="button" class="sidebar-link admin-link" data-nav="admin:recovery" data-admin-only>Recovery &amp; Escrow</button>
+          <button type="button" class="sidebar-link admin-link" data-nav="admin:apikeys" data-admin-only>API-Keys</button>
+          <button type="button" class="sidebar-link admin-link platform-link" data-nav="admin:platform" data-admin-only hidden>Tenants &amp; Migration</button>
+          <button type="button" class="sidebar-link admin-link" data-nav="admin:audit">Audit</button>
+        </div>
       </nav>
-    </div>
-
-    <div id="lockOverlay" class="lock-overlay" hidden>
-      <div class="lock-card">
-        <h1>Vault gesperrt</h1>
-        <p class="lead">Idle-Timeout. Master-Passwort erneut eingeben (bleibt nur im Speicher).</p>
-        <label>Master-Passwort</label>
-        <input id="lockMpw" type="password" autocomplete="current-password" />
-        <div class="error" id="lockErr" hidden></div>
-        <div class="row"><button class="btn-accent" type="button" id="lockUnlock">Entsperren</button></div>
+      <div class="app-sidebar-foot">
+        <p class="hint" id="info">Lade…</p>
+        <button class="btn-ghost" type="button" id="out">Logout</button>
       </div>
-    </div>
+    </aside>
 
-    <div class="panel" id="unlock">
-      <h1>Vault entsperren</h1>
-      <p class="lead">Master-Passwort bleibt im Browser (Zero-Knowledge).</p>
-      <label>Master-Passwort</label><input id="mpw" type="password" autocomplete="current-password" />
-      <div class="error" id="uerr" hidden></div>
-      <div class="row"><button class="btn-accent" type="button" id="ulock">Entsperren</button></div>
-    </div>
-
-    <div id="vaultui" hidden>
-      <div class="app-tab active" data-pane="vault">
-        <div class="panel">
-          <h1>Secrets</h1>
-          <div class="toolbar">
-            <div>
-              <label>Suche</label>
-              <input id="ssearch" type="search" placeholder="Titel, Ordner…" />
-            </div>
-            <div>
-              <label>Ordner</label>
-              <select id="sfolder"><option value="">Alle</option></select>
-            </div>
-          </div>
-          <div id="slist" class="list"></div>
-          <div class="row">
-            <button class="btn-ghost" type="button" id="sMore" hidden>Mehr laden</button>
-            <span class="hint" id="sCount"></span>
-          </div>
-          <h2>Neu anlegen</h2>
-          <label>Titel</label><input id="stitle" />
-          <label>Ordner</label>
-          <input id="sfolderIn" list="folderList" placeholder="z. B. Infrastruktur" autocomplete="off" />
-          <datalist id="folderList"></datalist>
-          <label>Benutzername</label><input id="suser" autocomplete="off" />
-          <label>Passwort</label>
-          <div class="row gen-row" style="margin-top:0.35rem">
-            <input id="spw" type="password" autocomplete="new-password" style="flex:1" />
-            <button class="btn-ghost" type="button" id="spwShow">Anzeigen</button>
-            <button class="btn-ghost" type="button" id="spwGen">Generator</button>
-          </div>
-          <div class="gen-opts hint">
-            Länge <input id="spwLen" type="number" min="12" max="64" value="20" style="width:4rem" />
-            <label class="inline"><input id="spwSym" type="checkbox" checked /> Symbole</label>
-          </div>
-          <label>URL</label><input id="surl" type="url" placeholder="https://…" />
-          <label>TOTP-Seed (base32 oder otpauth://)</label><input id="stotp" autocomplete="off" />
-          <label>Tags (Komma)</label><input id="stags" placeholder="vpn, prod" />
-          <label class="inline"><input id="sfav" type="checkbox" /> Favorit</label>
-          <label>Notizen</label><textarea id="snotes" rows="2"></textarea>
-          <div class="error" id="serr" hidden></div>
-          <div class="row"><button class="btn-accent" type="button" id="screate">Speichern (clientseitig verschlüsselt)</button></div>
-
-          <h2>Import</h2>
-          <p class="hint">Bitwarden-JSON, CSV oder KeePass-XML — Parsing und Verschlüsselung nur im Browser (Zero-Knowledge).</p>
-          <input id="simport" type="file" accept=".json,.csv,.xml,text/csv,application/json,text/xml" />
-          <div class="row">
-            <button class="btn-ghost" type="button" id="simportRun" disabled>Import starten</button>
-            <span class="hint" id="simportHint"></span>
-          </div>
-          <div class="error" id="ierr" hidden></div>
-          <div class="ok" id="iok" hidden></div>
+    <div class="app-main">
+      <header class="app-topbar">
+        <button type="button" class="menu-toggle" id="menuToggle" aria-label="Menü">☰</button>
+        <h1 id="pageTitle">Vault</h1>
+        <div class="app-topbar-actions">
+          <button type="button" class="btn-ghost btn-sm" data-theme-toggle>Dunkel</button>
         </div>
-        <div class="panel" id="sdetail" hidden>
-          <h1 id="dtitle">Secret</h1>
-          <div id="dfields" class="secret-fields"></div>
-          <p class="hint" id="drec"></p>
-          <label>Teilen mit User</label>
-          <select id="shareto"></select>
-          <div id="gshareWrap" hidden>
-            <label>Gruppe teilen</label>
-            <select id="sharegroup"><option value="">— Gruppe wählen —</option></select>
-          </div>
-          <div class="row">
-            <button class="btn-accent" type="button" id="share">Teilen</button>
-            <button class="btn-ghost" type="button" id="shareGroup" hidden>Gruppe teilen</button>
-            <button class="btn-ghost" type="button" id="revoke">Zugriff entziehen + rotieren</button>
-            <button class="btn-danger" type="button" id="sdel">Löschen</button>
-          </div>
-          <div class="error" id="derr" hidden></div>
-        </div>
-      </div>
+      </header>
 
-      <div class="app-tab" data-pane="account">
-        <div class="panel">
-          <h1>Konto</h1>
-          <p class="hint">TOTP und Passkey betreffen nur den Login — Vault bleibt Master-Passwort-pflichtig (OQ-04).</p>
-          <div class="row">
-            <button class="btn-accent" type="button" id="totp">TOTP einrichten</button>
-            <button class="btn-ghost" type="button" id="passkey">Passkeys</button>
-          </div>
-          <div id="totpbox" hidden>
-            <p class="hint">otpauth-URL (kein externes QR/CDN):</p>
-            <pre class="mono" id="otpurl"></pre>
-            <div class="row">
-              <button class="btn-ghost" type="button" id="otpCopy">otpauth kopieren</button>
-              <button class="btn-ghost" type="button" id="otpReveal">Secret kurz anzeigen</button>
-            </div>
-            <p class="hint secret-reveal" id="otpSecret" hidden></p>
-            <label>Code bestätigen</label><input id="code" inputmode="numeric" autocomplete="one-time-code" />
-            <div class="row"><button class="btn-accent" type="button" id="en">Aktivieren</button></div>
-            <div class="error" id="terr" hidden></div>
-          </div>
-          <div id="pkbox" hidden>
-            <label>Name</label><input id="pkname" value="Mein Passkey" />
-            <div id="pklist" class="list"></div>
-            <div class="row"><button class="btn-accent" type="button" id="pkreg">Registrieren</button></div>
-            <div class="error" id="pkerr" hidden></div>
+      <div class="app-content">
+        <div id="lockOverlay" class="lock-overlay" hidden>
+          <div class="lock-card">
+            <h1>Vault gesperrt</h1>
+            <p class="lead">Idle-Timeout. Master-Passwort erneut eingeben (bleibt nur im Speicher).</p>
+            <label>Master-Passwort</label>
+            <input id="lockMpw" type="password" autocomplete="current-password" />
+            <div class="error" id="lockErr" hidden></div>
+            <div class="row"><button class="btn-accent" type="button" id="lockUnlock">Entsperren</button></div>
           </div>
         </div>
-      </div>
 
-      <div class="app-tab" data-pane="admin" id="adminPane" hidden>
-        <div class="panel" id="admin">
-          <h1>Admin</h1>
-          <p class="hint" id="overview"></p>
-          <div id="adminFull">
-            <h2>Benutzer</h2>
-            <div id="ulist" class="list"></div>
-            <label>Username</label><input id="nuser" />
-            <label>Passwort (≥12)</label><input id="npw" type="password" />
-            <div class="row"><button class="btn-accent" type="button" id="ucreate">User anlegen</button></div>
-            <h2>Gruppen</h2>
-            <div id="glist" class="list"></div>
-            <label>Gruppenname</label><input id="gname" />
-            <div class="row"><button class="btn-accent" type="button" id="gcreate">Gruppe anlegen</button></div>
-            <label>Member hinzufügen (Group-ID)</label><input id="gmid" placeholder="grp_…" />
-            <label>User-ID</label><input id="gmuid" placeholder="usr_…" />
-            <div class="row"><button class="btn-ghost" type="button" id="gmadd">Member speichern</button></div>
-            <div class="row"><button class="btn-ghost" type="button" id="ldap_sync">LDAP-Sync (Disable fehlende)</button></div>
-            <h2>LDAP</h2>
-            <label class="inline"><input id="ldap_en" type="checkbox" /> Aktiv</label>
-            <label>Host</label><input id="ldap_host" />
-            <label>Port</label><input id="ldap_port" type="number" />
-            <label>Base DN</label><input id="ldap_base" />
-            <label>Bind DN</label><input id="ldap_bind" />
-            <label>Bind-Passwort</label><input id="ldap_pw" type="password" placeholder="unverändert lassen = behalten" />
-            <label>User-Filter</label><input id="ldap_filter" placeholder="(uid=%s)" />
-            <div class="row">
-              <button class="btn-accent" type="button" id="ldap_save">LDAP speichern</button>
-              <button class="btn-ghost" type="button" id="ldap_test">Test-Bind</button>
+        <div class="panel app-unlock-panel" id="unlock">
+          <h1>Vault entsperren</h1>
+          <p class="lead">Master-Passwort bleibt im Browser (Zero-Knowledge).</p>
+          <label>Master-Passwort</label><input id="mpw" type="password" autocomplete="current-password" />
+          <div class="error" id="uerr" hidden></div>
+          <div class="row"><button class="btn-accent" type="button" id="ulock">Entsperren</button></div>
+        </div>
+
+        <div id="vaultui" hidden>
+          <div class="app-tab active" data-pane="vault">
+            <div class="vault-section active" data-vault="secrets">
+              <div class="panel">
+                <div class="toolbar">
+                  <div>
+                    <label>Suche</label>
+                    <input id="ssearch" type="search" placeholder="Titel, Ordner…" />
+                  </div>
+                  <div>
+                    <label>Ordner</label>
+                    <select id="sfolder"><option value="">Alle</option></select>
+                  </div>
+                </div>
+                <div id="slist" class="list"></div>
+                <div class="row">
+                  <button class="btn-ghost" type="button" id="sMore" hidden>Mehr laden</button>
+                  <button class="btn-ghost" type="button" id="sExportJson">Export JSON</button>
+                  <button class="btn-ghost" type="button" id="sExportCsv">Export CSV</button>
+                  <span class="hint" id="sCount"></span>
+                </div>
+              </div>
+              <div class="panel" id="sdetail" hidden>
+                <h1 id="dtitle">Secret</h1>
+                <div id="dfields" class="secret-fields"></div>
+                <p class="hint" id="drec"></p>
+                <label>Teilen mit User</label>
+                <select id="shareto"></select>
+                <div id="gshareWrap" hidden>
+                  <label>Gruppe teilen</label>
+                  <select id="sharegroup"><option value="">— Gruppe wählen —</option></select>
+                </div>
+                <div class="row">
+                  <button class="btn-accent" type="button" id="share">Teilen</button>
+                  <button class="btn-ghost" type="button" id="shareGroup" hidden>Gruppe teilen</button>
+                  <button class="btn-ghost" type="button" id="revoke">Zugriff entziehen + rotieren</button>
+                  <button class="btn-danger" type="button" id="sdel">Löschen</button>
+                </div>
+                <div class="error" id="derr" hidden></div>
+              </div>
             </div>
-            <h2>SMTP</h2>
-            <label class="inline"><input id="mail_en" type="checkbox" /> Aktiv</label>
-            <label>Host</label><input id="mail_host" />
-            <label>Port</label><input id="mail_port" type="number" />
-            <label>From</label><input id="mail_from" />
-            <label>Username</label><input id="mail_user" />
-            <label>Passwort</label><input id="mail_pw" type="password" placeholder="unverändert lassen = behalten" />
-            <div class="row">
-              <button class="btn-accent" type="button" id="mail_save">Mail speichern</button>
-              <button class="btn-ghost" type="button" id="mail_test">SMTP testen</button>
+
+            <div class="vault-section" data-vault="create">
+              <div class="panel">
+                <label>Titel</label><input id="stitle" />
+                <label>Ordner</label>
+                <input id="sfolderIn" list="folderList" placeholder="z. B. Infrastruktur" autocomplete="off" />
+                <datalist id="folderList"></datalist>
+                <label>Benutzername</label><input id="suser" autocomplete="off" />
+                <label>Passwort</label>
+                <div class="row gen-row" style="margin-top:0.35rem">
+                  <input id="spw" type="password" autocomplete="new-password" style="flex:1" />
+                  <button class="btn-ghost" type="button" id="spwShow">Anzeigen</button>
+                  <button class="btn-ghost" type="button" id="spwGen">Generator</button>
+                </div>
+                <div class="gen-opts hint">
+                  Länge <input id="spwLen" type="number" min="12" max="64" value="20" style="width:4rem" />
+                  <label class="inline"><input id="spwSym" type="checkbox" checked /> Symbole</label>
+                </div>
+                <div id="sextraSlots" class="extra-slots"></div>
+                <div class="row extra-add-row">
+                  <label class="inline">Feld hinzufügen
+                    <select id="sextraAdd">
+                      <option value="">— wählen —</option>
+                      <option value="url">Website (URL)</option>
+                      <option value="totp">TOTP-Seed</option>
+                      <option value="notes">Notizen</option>
+                      <option value="tags">Tags</option>
+                      <option value="favorite">Favorit</option>
+                      <option value="ssh_private_key">SSH Private Key</option>
+                      <option value="ssh_public_key">SSH Public Key</option>
+                      <option value="s3_access_key">S3 Access Key</option>
+                      <option value="s3_secret_key">S3 Secret Key</option>
+                      <option value="certificate">Zertifikat (PEM)</option>
+                      <option value="text">Freitext</option>
+                      <option value="secret">Geheimnis (Custom)</option>
+                    </select>
+                  </label>
+                  <button class="btn-ghost" type="button" id="sextraAddBtn">Hinzufügen</button>
+                </div>
+                <div class="error" id="serr" hidden></div>
+                <div class="row"><button class="btn-accent" type="button" id="screate">Speichern (clientseitig verschlüsselt)</button></div>
+              </div>
             </div>
-            <h2>Krypto &amp; Policy</h2>
-            <p class="hint">Argon2id-Presets (Vault-KDF):</p>
-            <div class="preset-row" id="presetRow"></div>
-            <label>Argon2 Memory (KiB)</label><input id="arg_mem" type="number" />
-            <label>Argon2 Time</label><input id="arg_time" type="number" />
-            <label>Argon2 Threads</label><input id="arg_threads" type="number" value="1" />
-            <label class="inline"><input id="totp_req" type="checkbox" /> TOTP Pflicht (Hinweis nach Login)</label>
-            <div class="row">
-              <button class="btn-accent" type="button" id="crypto_save">Krypto speichern</button>
-              <button class="btn-ghost" type="button" id="policy_save">Policy speichern</button>
-            </div>
-            <h2>Recovery-Modus</h2>
-            <p class="hint">Wechsel erzwingt Re-Onboarding aller User (OQ-03). Bestätigung: <code>REONBOARD</code></p>
-            <label>Modus</label>
-            <select id="rec_mode">
-              <option value="user_kit">User Recovery-Kit</option>
-              <option value="admin_escrow">Admin-Escrow</option>
-            </select>
-            <label class="inline"><input id="rec_escrow" type="checkbox" /> Escrow erlauben</label>
-            <label>Bestätigung</label><input id="rec_confirm" placeholder="REONBOARD" autocomplete="off" />
-            <div class="row"><button class="btn-danger" type="button" id="rec_save">Recovery-Modus ändern</button></div>
-            <h2>Escrow-Pubkey + Shamir (clientseitig)</h2>
-            <p class="hint">Privater Escrow-Key wird nur im Browser gesplittet (secrets.js). Server speichert nur den Public Key. Alternativ: <code>tvcli escrow-split</code>.</p>
-            <label>Shamir k</label><input id="shamir_k" type="number" value="3" />
-            <label>Shamir n</label><input id="shamir_n" type="number" value="5" />
-            <div class="ok" id="escrow_out" hidden></div>
-            <div class="row"><button class="btn-accent" type="button" id="escrow_gen">Escrow-Keypair + Shares</button></div>
-            <h2>API-Keys</h2>
-            <div id="klist" class="list"></div>
-            <label>Name</label><input id="kname" />
-            <div class="row"><button class="btn-accent" type="button" id="kcreate">API-Key erzeugen</button></div>
-            <div class="ok" id="ktoken" hidden></div>
-            <div id="plat" hidden>
-              <h2>Tenants (platform_admin)</h2>
-              <div id="tlist" class="list"></div>
-              <label>Name</label><input id="tname" />
-              <label>Slug</label><input id="tslug" />
-              <div class="row"><button class="btn-accent" type="button" id="tcreate">Tenant anlegen</button></div>
-              <h2>Storage-Migration</h2>
-              <p class="hint">Exportiert nur Ciphertext. Bestätigung: MIGRATE</p>
-              <label>Ziel-Backend</label>
-              <select id="mig_backend"><option value="json">json</option><option value="sqlite">sqlite</option></select>
-              <label>DSN / Pfad</label><input id="mig_dsn" placeholder="leer = data/vault-migrated.*" />
-              <label>Bestätigung</label><input id="mig_confirm" placeholder="MIGRATE" />
-              <div class="row"><button class="btn-danger" type="button" id="mig_go">Migrieren</button></div>
+
+            <div class="vault-section" data-vault="import">
+              <div class="panel">
+                <p class="hint">Bitwarden-JSON, CSV oder KeePass-XML — Parsing und Verschlüsselung nur im Browser (Zero-Knowledge).</p>
+                <input id="simport" type="file" accept=".json,.csv,.xml,text/csv,application/json,text/xml" />
+                <div class="row">
+                  <button class="btn-ghost" type="button" id="simportRun" disabled>Import starten</button>
+                  <span class="hint" id="simportHint"></span>
+                </div>
+                <div class="error" id="ierr" hidden></div>
+                <div class="ok" id="iok" hidden></div>
+              </div>
             </div>
           </div>
-          <h2>Audit</h2>
-          <div id="alist" class="list hint"></div>
-          <div class="error" id="aerr" hidden></div>
+
+          <div class="app-tab" data-pane="account">
+            <div class="panel">
+              <p class="hint">TOTP und Passkey betreffen nur den Login — Vault bleibt Master-Passwort-pflichtig (OQ-04).</p>
+              <div class="row">
+                <button class="btn-accent" type="button" id="totp">TOTP einrichten</button>
+                <button class="btn-ghost" type="button" id="passkey">Passkeys</button>
+              </div>
+              <div id="totpbox" hidden>
+                <p class="hint">otpauth-URL (kein externes QR/CDN):</p>
+                <pre class="mono" id="otpurl"></pre>
+                <div class="row">
+                  <button class="btn-ghost" type="button" id="otpCopy">otpauth kopieren</button>
+                  <button class="btn-ghost" type="button" id="otpReveal">Secret kurz anzeigen</button>
+                </div>
+                <p class="hint secret-reveal" id="otpSecret" hidden></p>
+                <label>Code bestätigen</label><input id="code" inputmode="numeric" autocomplete="one-time-code" />
+                <div class="row"><button class="btn-accent" type="button" id="en">Aktivieren</button></div>
+                <div class="error" id="terr" hidden></div>
+              </div>
+              <div id="pkbox" hidden>
+                <label>Name</label><input id="pkname" value="Mein Passkey" />
+                <div id="pklist" class="list"></div>
+                <div class="row"><button class="btn-accent" type="button" id="pkreg">Registrieren</button></div>
+                <div class="error" id="pkerr" hidden></div>
+              </div>
+              <h2>Login-Passwort ändern</h2>
+              <p class="hint">Nur bei lokalem Auth-Backend. LDAP-User ändern das Passwort in AD.</p>
+              <label>Aktuelles Login-Passwort</label><input id="lpw_cur" type="password" autocomplete="current-password" />
+              <label>Neues Login-Passwort (≥12)</label><input id="lpw_new" type="password" autocomplete="new-password" />
+              <div class="row"><button class="btn-accent" type="button" id="lpw_save">Login-Passwort speichern</button></div>
+              <h2>Master-Passwort ändern</h2>
+              <p class="hint">Clientseitig: Private Key wird neu versiegelt; Server speichert nur Ciphertexte. Recovery-Kit / Escrow wird mit erneuert.</p>
+              <label>Aktuelles Master-Passwort</label><input id="mpw_cur" type="password" autocomplete="current-password" />
+              <label>Neues Master-Passwort</label><input id="mpw_new" type="password" autocomplete="new-password" />
+              <label>Recovery-Kit speichern (bei user_kit)</label><input id="mpw_kit" type="text" readonly placeholder="wird erzeugt…" />
+              <div class="row"><button class="btn-accent" type="button" id="mpw_save">Master-Passwort speichern</button></div>
+              <div class="error" id="acc_err" hidden></div>
+              <div class="ok" id="acc_ok" hidden></div>
+            </div>
+          </div>
+
+          <div class="app-tab" data-pane="admin" id="adminPane" hidden>
+            <div class="panel" id="admin">
+              <div class="error" id="aerr" hidden></div>
+              <p class="hint" id="overview"></p>
+              <div id="adminFull">
+                <div class="admin-section" data-admin-section="users">
+                  <div id="ulist" class="list"></div>
+                  <div class="hint" id="udisable_hint" hidden></div>
+                  <label>Username</label><input id="nuser" />
+                  <label>Passwort (≥12)</label><input id="npw" type="password" />
+                  <div class="row"><button class="btn-accent" type="button" id="ucreate">User anlegen</button></div>
+                </div>
+                <div class="admin-section" data-admin-section="groups">
+                  <div id="glist" class="list"></div>
+                  <label>Gruppenname</label><input id="gname" />
+                  <div class="row"><button class="btn-accent" type="button" id="gcreate">Gruppe anlegen</button></div>
+                  <label>Member hinzufügen (Group-ID)</label><input id="gmid" placeholder="grp_…" />
+                  <label>User-ID</label><input id="gmuid" placeholder="usr_…" />
+                  <div class="row"><button class="btn-ghost" type="button" id="gmadd">Member speichern</button></div>
+                  <div class="row"><button class="btn-ghost" type="button" id="ldap_sync">LDAP-Sync (Disable fehlende)</button></div>
+                </div>
+                <div class="admin-section" data-admin-section="ldap">
+                  <label class="inline"><input id="ldap_en" type="checkbox" /> Aktiv</label>
+                  <label>Host</label><input id="ldap_host" />
+                  <label>Port</label><input id="ldap_port" type="number" />
+                  <label>Base DN</label><input id="ldap_base" />
+                  <label>Bind DN</label><input id="ldap_bind" />
+                  <label>Bind-Passwort</label><input id="ldap_pw" type="password" placeholder="unverändert lassen = behalten" />
+                  <label>User-Filter</label><input id="ldap_filter" placeholder="(uid=%s)" />
+                  <div class="row">
+                    <button class="btn-accent" type="button" id="ldap_save">LDAP speichern</button>
+                    <button class="btn-ghost" type="button" id="ldap_test">Test-Bind</button>
+                  </div>
+                </div>
+                <div class="admin-section" data-admin-section="smtp">
+                  <label class="inline"><input id="mail_en" type="checkbox" /> Aktiv</label>
+                  <label>Host</label><input id="mail_host" />
+                  <label>Port</label><input id="mail_port" type="number" />
+                  <label>From</label><input id="mail_from" />
+                  <label>Username</label><input id="mail_user" />
+                  <label>Passwort</label><input id="mail_pw" type="password" placeholder="unverändert lassen = behalten" />
+                  <div class="row">
+                    <button class="btn-accent" type="button" id="mail_save">Mail speichern</button>
+                    <button class="btn-ghost" type="button" id="mail_test">SMTP testen</button>
+                  </div>
+                </div>
+                <div class="admin-section" data-admin-section="crypto">
+                  <p class="hint">Argon2id-Presets (Vault-KDF):</p>
+                  <div class="preset-row" id="presetRow"></div>
+                  <label>Argon2 Memory (KiB)</label><input id="arg_mem" type="number" />
+                  <label>Argon2 Time</label><input id="arg_time" type="number" />
+                  <label>Argon2 Threads</label><input id="arg_threads" type="number" value="1" />
+                  <label class="inline"><input id="totp_req" type="checkbox" /> TOTP Pflicht (Hinweis nach Login)</label>
+                  <div class="row">
+                    <button class="btn-accent" type="button" id="crypto_save">Krypto speichern</button>
+                    <button class="btn-ghost" type="button" id="policy_save">Policy speichern</button>
+                  </div>
+                </div>
+                <div class="admin-section" data-admin-section="recovery">
+                  <p class="hint">Wechsel erzwingt Re-Onboarding aller User (OQ-03). Bestätigung: <code>REONBOARD</code></p>
+                  <label>Modus</label>
+                  <select id="rec_mode">
+                    <option value="user_kit">User Recovery-Kit</option>
+                    <option value="admin_escrow">Admin-Escrow</option>
+                  </select>
+                  <label class="inline"><input id="rec_escrow" type="checkbox" /> Escrow erlauben</label>
+                  <label>Bestätigung</label><input id="rec_confirm" placeholder="REONBOARD" autocomplete="off" />
+                  <div class="row"><button class="btn-danger" type="button" id="rec_save">Recovery-Modus ändern</button></div>
+                  <h2>Escrow-Pubkey + Shamir (clientseitig)</h2>
+                  <p class="hint">Privater Escrow-Key wird nur im Browser gesplittet (secrets.js). Server speichert nur den Public Key. Alternativ: <code>tvcli escrow-split</code>.</p>
+                  <label>Shamir k</label><input id="shamir_k" type="number" value="3" />
+                  <label>Shamir n</label><input id="shamir_n" type="number" value="5" />
+                  <div class="ok" id="escrow_out" hidden></div>
+                  <div class="row"><button class="btn-accent" type="button" id="escrow_gen">Escrow-Keypair + Shares</button></div>
+                </div>
+                <div class="admin-section" data-admin-section="apikeys">
+                  <p class="hint">Scope <code>read</code>: nur GET für me, Vault-Status/Keys und Secrets (Liste/Detail). Admin- und Schreibaktionen liefern 403.</p>
+                  <div id="klist" class="list"></div>
+                  <label>Name</label><input id="kname" />
+                  <div class="row"><button class="btn-accent" type="button" id="kcreate">API-Key erzeugen (read)</button></div>
+                  <div class="ok" id="ktoken" hidden></div>
+                </div>
+                <div class="admin-section" data-admin-section="platform" id="plat" hidden>
+                  <h2>Tenants (platform_admin)</h2>
+                  <div id="tlist" class="list"></div>
+                  <label>Name</label><input id="tname" />
+                  <label>Slug</label><input id="tslug" />
+                  <div class="row"><button class="btn-accent" type="button" id="tcreate">Tenant anlegen</button></div>
+                  <h2>Storage-Migration</h2>
+                  <p class="hint">Exportiert nur Ciphertext. Bestätigung: MIGRATE</p>
+                  <label>Ziel-Backend</label>
+                  <select id="mig_backend"><option value="json">json</option><option value="sqlite">sqlite</option></select>
+                  <label>DSN / Pfad</label><input id="mig_dsn" placeholder="leer = data/vault-migrated.*" />
+                  <label>Bestätigung</label><input id="mig_confirm" placeholder="MIGRATE" />
+                  <div class="row"><button class="btn-danger" type="button" id="mig_go">Migrieren</button></div>
+                </div>
+              </div>
+              <div class="admin-section" data-admin-section="audit">
+                <div id="alist" class="list hint"></div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -878,9 +1028,66 @@ function renderApp(app) {
   let currentSecret = null;
   let totpSecretPlain = "";
 
-  function setTab(name) {
-    n.querySelectorAll(".app-nav [data-tab]").forEach((b) => b.classList.toggle("active", b.dataset.tab === name));
-    n.querySelectorAll(".app-tab").forEach((p) => p.classList.toggle("active", p.dataset.pane === name));
+  const NAV_TITLES = {
+    "vault:secrets": "Secrets",
+    "vault:create": "Neu anlegen",
+    "vault:import": "Import",
+    account: "Konto",
+    "admin:users": "Benutzer",
+    "admin:groups": "Gruppen",
+    "admin:ldap": "LDAP",
+    "admin:smtp": "SMTP",
+    "admin:crypto": "Krypto & Policy",
+    "admin:recovery": "Recovery & Escrow",
+    "admin:apikeys": "API-Keys",
+    "admin:platform": "Tenants & Migration",
+    "admin:audit": "Audit",
+  };
+
+  function closeMobileNav() {
+    n.querySelector("#appSidebar").classList.remove("open");
+    n.querySelector("#sidebarBackdrop").classList.remove("open");
+    const mt = n.querySelector("#menuToggle");
+    if (mt) mt.setAttribute("aria-expanded", "false");
+  }
+
+  function navigateTo(nav) {
+    if (!vault.sk) return;
+    n.querySelectorAll(".sidebar-link").forEach((b) => {
+      const on = b.dataset.nav === nav;
+      b.classList.toggle("active", on);
+      if (on) b.setAttribute("aria-current", "page");
+      else b.removeAttribute("aria-current");
+    });
+    n.querySelector("#pageTitle").textContent = NAV_TITLES[nav] || "TeamVault";
+
+    let pane = "vault";
+    let vaultSec = null;
+    let adminSec = null;
+    if (nav === "account") {
+      pane = "account";
+    } else if (nav.startsWith("admin:")) {
+      pane = "admin";
+      adminSec = nav.slice("admin:".length);
+    } else if (nav.startsWith("vault:")) {
+      pane = "vault";
+      vaultSec = nav.slice("vault:".length);
+    }
+
+    n.querySelectorAll(".app-tab").forEach((p) => {
+      p.classList.toggle("active", p.dataset.pane === pane);
+    });
+    if (pane === "vault") {
+      n.querySelectorAll(".vault-section").forEach((s) => {
+        s.classList.toggle("active", s.dataset.vault === vaultSec);
+      });
+    }
+    if (pane === "admin") {
+      n.querySelectorAll(".admin-section").forEach((s) => {
+        s.classList.toggle("active", s.dataset.adminSection === adminSec);
+      });
+    }
+    closeMobileNav();
   }
 
   api("/api/me").then((me) => {
@@ -896,9 +1103,27 @@ function renderApp(app) {
     location.href = "/login";
   };
 
-  n.querySelector("#appNav").querySelectorAll("[data-tab]").forEach((btn) => {
-    btn.onclick = () => setTab(btn.dataset.tab);
+  n.querySelectorAll(".sidebar-link[data-nav]").forEach((btn) => {
+    btn.onclick = () => navigateTo(btn.dataset.nav);
   });
+  n.querySelector("#menuToggle").onclick = () => {
+    n.querySelector("#appSidebar").classList.add("open");
+    n.querySelector("#sidebarBackdrop").classList.add("open");
+    n.querySelector("#menuToggle").setAttribute("aria-expanded", "true");
+  };
+  n.querySelector("#sidebarBackdrop").onclick = () => closeMobileNav();
+  document.addEventListener("keydown", (ev) => {
+    if (ev.key === "Escape") closeMobileNav();
+  });
+  n.querySelector("#menuToggle").setAttribute("aria-expanded", "false");
+  n.querySelector("[data-theme-toggle]").onclick = () => {
+    const cur = document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light";
+    applyTheme(cur === "dark" ? "light" : "dark");
+  };
+  {
+    const t = document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light";
+    n.querySelector("[data-theme-toggle]").textContent = t === "dark" ? "Hell" : "Dunkel";
+  }
 
   n.querySelector("#totp").onclick = async () => {
     const box = n.querySelector("#totpbox"); box.hidden = false;
@@ -979,7 +1204,149 @@ function renderApp(app) {
     }
   };
 
+  n.querySelector("#lpw_save").onclick = async () => {
+    const err = n.querySelector("#acc_err"); const ok = n.querySelector("#acc_ok");
+    err.hidden = true; ok.hidden = true;
+    try {
+      await api("/api/me/password", {
+        method: "POST",
+        body: JSON.stringify({
+          current_password: n.querySelector("#lpw_cur").value,
+          new_password: n.querySelector("#lpw_new").value,
+        }),
+      });
+      n.querySelector("#lpw_cur").value = "";
+      n.querySelector("#lpw_new").value = "";
+      ok.hidden = false; ok.textContent = "Login-Passwort geändert.";
+    } catch (e) { err.hidden = false; err.textContent = e.message; }
+  };
+
+  n.querySelector("#mpw_save").onclick = async () => {
+    const err = n.querySelector("#acc_err"); const ok = n.querySelector("#acc_ok");
+    err.hidden = true; ok.hidden = true;
+    try {
+      const cur = n.querySelector("#mpw_cur").value;
+      const neu = n.querySelector("#mpw_new").value;
+      if (!neu || neu.length < 8) throw new Error("Neues Master-Passwort zu kurz");
+      const params = vault.params || await api("/api/vault/crypto-params");
+      const keys = await api("/api/vault/keys");
+      const sk = await TVCrypto.unlockPrivateKey(
+        cur,
+        TVCrypto.b64dec(keys.salt_b64),
+        TVCrypto.b64dec(keys.encrypted_private_key_nonce_b64),
+        TVCrypto.b64dec(keys.encrypted_private_key_b64),
+        params
+      );
+      const sealed = await TVCrypto.sealPrivateKey(sk, neu, params);
+      const body = {
+        encrypted_private_key_b64: TVCrypto.b64enc(sealed.sealedPrivateKey),
+        encrypted_private_key_nonce_b64: TVCrypto.b64enc(sealed.nonce),
+        salt_b64: TVCrypto.b64enc(sealed.salt),
+        argon2: params,
+      };
+      const mode = vault.me?.recovery_mode || "user_kit";
+      if (mode === "admin_escrow") {
+        const vs = await api("/api/vault/status");
+        if (!vs.escrow_public_key_b64) throw new Error("Escrow-Pubkey nicht verfügbar — Admin muss Escrow konfigurieren");
+        body.escrow_envelope_b64 = TVCrypto.b64enc(TVCrypto.sealForEscrow(sk, TVCrypto.b64dec(vs.escrow_public_key_b64)));
+      } else {
+        const kit = TVCrypto.randomKitSecret();
+        const rec = await TVCrypto.sealWithRecoveryKit(sk, kit, params);
+        body.encrypted_private_key_recovery_b64 = TVCrypto.b64enc(rec.sealed);
+        body.recovery_nonce_b64 = TVCrypto.b64enc(rec.nonce);
+        body.recovery_salt_b64 = TVCrypto.b64enc(rec.salt);
+        n.querySelector("#mpw_kit").value = TVCrypto.b64enc(kit);
+        kit.fill(0);
+      }
+      await api("/api/vault/change-master", { method: "POST", body: JSON.stringify(body) });
+      sk.fill(0);
+      if (vault.sk) vault.sk.fill(0);
+      vault.sk = await TVCrypto.unlockPrivateKey(neu, sealed.salt, sealed.nonce, sealed.sealedPrivateKey, params);
+      n.querySelector("#mpw_cur").value = "";
+      n.querySelector("#mpw_new").value = "";
+      ok.hidden = false;
+      ok.textContent = mode === "user_kit"
+        ? "Master-Passwort geändert. Recovery-Kit oben speichern (einmalig)."
+        : "Master-Passwort geändert.";
+    } catch (e) { err.hidden = false; err.textContent = e.message; }
+  };
+
+  async function collectDecryptedExportItems() {
+    const items = [];
+    for (const it of vault.secretsCache) {
+      if (!it.has_access || !it.envelope) continue;
+      try {
+        const dk = openDKFromEnvelope(it.envelope);
+        const kv = it.envelope.key_version || it.key_version || 1;
+        const title = it._title || await TVCrypto.decryptTitle(
+          TVCrypto.b64dec(it.title_ciphertext_b64),
+          TVCrypto.b64dec(it.title_nonce_b64),
+          dk, kv
+        );
+        const det = await api("/api/secrets/" + it.id);
+        const ddk = openDKFromEnvelope(det.envelope);
+        const payload = JSON.parse(await TVCrypto.decryptPayload(
+          TVCrypto.b64dec(det.ciphertext_b64),
+          TVCrypto.b64dec(det.nonce_b64),
+          ddk, det.key_version || kv
+        ));
+        ddk.fill(0); dk.fill(0);
+        items.push({ title, payload, collection_id: it.collection_id || "" });
+      } catch (_) { /* skip undecryptable */ }
+    }
+    return items;
+  }
+
+  function downloadBlob(filename, text, mime) {
+    const blob = new Blob([text], { type: mime || "text/plain" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  n.querySelector("#sExportJson").onclick = async () => {
+    try {
+      const items = await collectDecryptedExportItems();
+      const bw = {
+        encrypted: false,
+        items: items.map((it) => ({
+          type: 1,
+          name: it.title,
+          folderId: it.collection_id || null,
+          login: {
+            username: it.payload.username || "",
+            password: it.payload.password || "",
+            totp: it.payload.totp || null,
+            uris: (it.payload.urls || (it.payload.url ? [it.payload.url] : [])).map((u) => ({ uri: u })),
+          },
+          notes: (it.payload.extra || []).filter((e) => e.type === "notes").map((e) => e.value).join("\n") || "",
+        })),
+      };
+      downloadBlob("teamvault-export.json", JSON.stringify(bw, null, 2), "application/json");
+    } catch (e) { alert(e.message); }
+  };
+  n.querySelector("#sExportCsv").onclick = async () => {
+    try {
+      const items = await collectDecryptedExportItems();
+      const esc = (s) => `"${String(s ?? "").replace(/"/g, '""')}"`;
+      const lines = ["title,username,password,url,folder,notes"];
+      for (const it of items) {
+        const url = (it.payload.urls && it.payload.urls[0]) || it.payload.url || "";
+        const notes = (it.payload.extra || []).filter((e) => e.type === "notes").map((e) => e.value).join(" ");
+        lines.push([it.title, it.payload.username, it.payload.password, url, it.collection_id, notes].map(esc).join(","));
+      }
+      downloadBlob("teamvault-export.csv", lines.join("\n"), "text/csv");
+    } catch (e) { alert(e.message); }
+  };
+
   async function afterUnlock() {
+    try {
+      vault.me = await api("/api/me");
+      n.querySelector("#info").textContent = `Angemeldet als ${vault.me.username} · Tenant ${vault.me.tenant_id}` +
+        (vault.me.totp_enabled ? " · TOTP aktiv" : "");
+    } catch (_) {}
     try {
       const pol = await api("/api/policy/client");
       vault.idleMin = pol.unlock_idle_minutes || 15;
@@ -989,18 +1356,23 @@ function renderApp(app) {
     n.querySelector("#unlock").hidden = true;
     n.querySelector("#lockOverlay").hidden = true;
     n.querySelector("#vaultui").hidden = false;
-    n.querySelector("#appNav").hidden = false;
+    n.querySelector("#appSidebar").hidden = false;
     n.querySelector("#mpw").value = "";
     n.querySelector("#lockMpw").value = "";
     if (canSeeAdminNav()) {
-      n.querySelector("#navAdmin").hidden = false;
+      n.querySelector("#navAdminSection").hidden = false;
       n.querySelector("#adminPane").hidden = false;
       if (isAuditorOnly()) {
         n.querySelector("#adminFull").hidden = true;
+        n.querySelectorAll("[data-admin-only]").forEach((el) => { el.hidden = true; });
       } else {
         n.querySelector("#adminFull").hidden = false;
+        n.querySelectorAll("[data-admin-only]").forEach((el) => {
+          if (el.classList.contains("platform-link")) return;
+          el.hidden = false;
+        });
       }
-      await refreshAdmin();
+      try { await refreshAdmin(); } catch (e) { console.warn('refreshAdmin', e); }
     }
     if (isAdmin()) {
       n.querySelector("#gshareWrap").hidden = false;
@@ -1015,6 +1387,7 @@ function renderApp(app) {
     vault.secretsCache = [];
     vault.secretsOffset = 0;
     await refreshSecrets(true);
+    navigateTo("vault:secrets");
   }
 
   n.querySelector("#ulock").onclick = async () => {
@@ -1026,6 +1399,9 @@ function renderApp(app) {
       err.hidden = false; err.textContent = e.message;
     }
   };
+  n.querySelector("#mpw").addEventListener("keydown", (ev) => {
+    if (ev.key === "Enter") n.querySelector("#ulock").click();
+  });
 
   n.querySelector("#lockUnlock").onclick = async () => {
     const err = n.querySelector("#lockErr"); err.hidden = true;
@@ -1036,6 +1412,9 @@ function renderApp(app) {
       err.hidden = false; err.textContent = e.message;
     }
   };
+  n.querySelector("#lockMpw").addEventListener("keydown", (ev) => {
+    if (ev.key === "Enter") n.querySelector("#lockUnlock").click();
+  });
 
   n.querySelector("#ssearch").oninput = () => {
     vault.searchQuery = n.querySelector("#ssearch").value.trim().toLowerCase();
@@ -1056,6 +1435,139 @@ function renderApp(app) {
     const show = inp.type === "password";
     inp.type = show ? "text" : "password";
     n.querySelector("#spwShow").textContent = show ? "Verbergen" : "Anzeigen";
+  };
+
+  function createSlotHasType(type) {
+    return !!n.querySelector(`#sextraSlots [data-slot-type="${type}"]`);
+  }
+
+  function addCreateSlot(type) {
+    const def = EXTRA_ADD_OPTIONS.find((o) => o.type === type);
+    if (!def) return;
+    if (def.singleton && createSlotHasType(type)) {
+      throw new Error(def.label + " ist bereits hinzugefügt");
+    }
+    const slots = n.querySelector("#sextraSlots");
+    const id = newExtraId();
+    const row = document.createElement("div");
+    row.className = "extra-slot";
+    row.dataset.slotType = type;
+    row.dataset.slotId = id;
+    const label = def.label;
+    let body = "";
+    if (type === "url") {
+      body = `<label>Website (URL)</label><input type="url" class="slot-val" placeholder="https://…" />`;
+    } else if (type === "totp") {
+      body = `<label>TOTP-Seed (base32 oder otpauth://)</label><input class="slot-val" autocomplete="off" />`;
+    } else if (type === "notes") {
+      body = `<label>Notizen</label><textarea class="slot-val" rows="3"></textarea>`;
+    } else if (type === "tags") {
+      body = `<label>Tags (Komma)</label><input class="slot-val" placeholder="vpn, prod" />`;
+    } else if (type === "favorite") {
+      body = `<label class="inline"><input type="checkbox" class="slot-fav" /> Favorit</label>`;
+    } else if (type === "text" || type === "secret") {
+      const inpType = type === "secret" ? "password" : "text";
+      body = `<label>Bezeichnung</label><input class="slot-label" value="${label.replace(/"/g, "&quot;")}" />
+        <label>Wert</label><input type="${inpType}" class="slot-val" autocomplete="off" />`;
+    } else {
+      const multiline = isMultilineExtraType(type);
+      const secret = isSecretExtraType(type);
+      body = `<label>${label}</label>`;
+      if (multiline) {
+        body += `<textarea class="slot-val mono" rows="4" autocomplete="off"></textarea>`;
+      } else {
+        body += `<input type="${secret ? "password" : "text"}" class="slot-val" autocomplete="off" />`;
+      }
+      if (extraSupportsFile(type)) {
+        body += `<div class="row gen-row"><input type="file" class="slot-file" accept=".pem,.crt,.cer,.key,.pub,.txt,text/plain" />
+          <span class="hint slot-file-hint"></span></div>`;
+      }
+    }
+    row.innerHTML = body + `<div class="row"><button type="button" class="btn-ghost slot-remove">Entfernen</button></div>`;
+    row.querySelector(".slot-remove").onclick = () => row.remove();
+    const fileInp = row.querySelector(".slot-file");
+    if (fileInp) {
+      fileInp.onchange = async () => {
+        const f = fileInp.files && fileInp.files[0];
+        if (!f) return;
+        const text = await f.text();
+        row.querySelector(".slot-val").value = text;
+        const hint = row.querySelector(".slot-file-hint");
+        if (hint) hint.textContent = f.name + " geladen";
+      };
+    }
+    slots.appendChild(row);
+  }
+
+  function collectCreatePayload() {
+    const payload = {
+      username: n.querySelector("#suser").value,
+      password: n.querySelector("#spw").value,
+      urls: [],
+      notes: "",
+      totp_seed: "",
+      tags: [],
+      favorite: false,
+      extra: [],
+    };
+    n.querySelectorAll("#sextraSlots .extra-slot").forEach((row) => {
+      const type = row.dataset.slotType;
+      if (type === "url") {
+        const u = (row.querySelector(".slot-val")?.value || "").trim();
+        if (u) payload.urls.push(u);
+        return;
+      }
+      if (type === "totp") {
+        payload.totp_seed = (row.querySelector(".slot-val")?.value || "").trim();
+        return;
+      }
+      if (type === "notes") {
+        payload.notes = row.querySelector(".slot-val")?.value || "";
+        return;
+      }
+      if (type === "tags") {
+        payload.tags = (row.querySelector(".slot-val")?.value || "")
+          .split(",")
+          .map((t) => t.trim())
+          .filter(Boolean);
+        return;
+      }
+      if (type === "favorite") {
+        payload.favorite = !!row.querySelector(".slot-fav")?.checked;
+        return;
+      }
+      const def = EXTRA_ADD_OPTIONS.find((o) => o.type === type);
+      const labelInp = row.querySelector(".slot-label");
+      const label = (labelInp?.value || def?.label || type).trim() || type;
+      const value = row.querySelector(".slot-val")?.value || "";
+      payload.extra.push({ id: row.dataset.slotId || newExtraId(), type, label, value });
+    });
+    return payload;
+  }
+
+  function resetCreateForm() {
+    n.querySelector("#stitle").value = "";
+    n.querySelector("#suser").value = "";
+    n.querySelector("#spw").value = "";
+    n.querySelector("#spw").type = "password";
+    n.querySelector("#sfolderIn").value = "";
+    n.querySelector("#sextraSlots").innerHTML = "";
+    n.querySelector("#sextraAdd").value = "";
+    n.querySelector("#spwShow").textContent = "Anzeigen";
+  }
+
+  n.querySelector("#sextraAddBtn").onclick = () => {
+    const err = n.querySelector("#serr");
+    err.hidden = true;
+    try {
+      const type = n.querySelector("#sextraAdd").value;
+      if (!type) throw new Error("Feldtyp wählen");
+      addCreateSlot(type);
+      n.querySelector("#sextraAdd").value = "";
+    } catch (e) {
+      err.hidden = false;
+      err.textContent = e.message;
+    }
   };
 
   let importPending = [];
@@ -1122,15 +1634,17 @@ function renderApp(app) {
         try {
           await postEncryptedSecret(
             it.title,
-            {
+            normalizeSecretPayload({
               username: it.username || "",
               password: it.password || "",
               notes: it.notes || "",
               url: it.url || "",
+              urls: it.urls || [],
               totp_seed: it.totp_seed || "",
               tags: it.tags || [],
               favorite: !!it.favorite,
-            },
+              extra: it.extra || [],
+            }),
             it.collection_id || ""
           );
           done++;
@@ -1244,6 +1758,7 @@ function renderApp(app) {
   async function openSecret(id) {
     const err = n.querySelector("#derr"); err.hidden = true;
     const panel = n.querySelector("#sdetail"); panel.hidden = false;
+    navigateTo("vault:secrets");
     if (vault.totpTimer) {
       clearInterval(vault.totpTimer);
       vault.totpTimer = null;
@@ -1263,39 +1778,64 @@ function renderApp(app) {
         TVCrypto.b64dec(det.nonce_b64),
         dk, kv
       );
-      const payload = JSON.parse(new TextDecoder().decode(pt));
+      const payload = normalizeSecretPayload(JSON.parse(new TextDecoder().decode(pt)));
       dk.fill(0);
       n.querySelector("#dtitle").textContent = (payload.favorite ? "★ " : "") + title;
-      const tags = Array.isArray(payload.tags) ? payload.tags : [];
+      const tags = payload.tags;
       const fields = n.querySelector("#dfields");
       const totpSeed = payload.totp_seed || "";
-      fields.innerHTML =
+      let html =
         fieldRow("Benutzer", payload.username || "") +
-        fieldRow("Passwort", payload.password || "", { mask: true }) +
-        fieldRow("URL", payload.url || "") +
-        (totpSeed
-          ? `<div class="secret-field totp-live" id="dtotpLive">
+        fieldRow("Passwort", payload.password || "", { mask: true });
+      payload.urls.forEach((u, i) => {
+        html += fieldRow(payload.urls.length > 1 ? `Website ${i + 1}` : "Website", u);
+      });
+      if (totpSeed) {
+        html += `<div class="secret-field totp-live" id="dtotpLive">
               <div class="sf-label">TOTP</div>
               <div class="sf-value mono"><span id="dtotpCode">······</span>
                 <span class="hint" id="dtotpLeft"></span></div>
               <button type="button" class="copy-btn" id="dtotpCopy">Kopieren</button>
-            </div>`
-          : "") +
-        fieldRow("TOTP-Seed", totpSeed, { mask: true }) +
-        fieldRow("Notizen", payload.notes || "", { multiline: true }) +
-        `<div class="secret-field"><div class="sf-label">Tags</div><div class="sf-value"><div class="tags">${
-          tags.length ? tags.map((t) => `<span class="tag">${String(t).replace(/</g, "")}</span>`).join("") : "—"
-        }</div></div><span></span></div>` +
-        fieldRow("Favorit", payload.favorite ? "ja" : "nein", { copy: false });
+            </div>`;
+        html += fieldRow("TOTP-Seed", totpSeed, { mask: true });
+      }
+      if (payload.notes) html += fieldRow("Notizen", payload.notes, { multiline: true });
+      if (tags.length) {
+        html += `<div class="secret-field"><div class="sf-label">Tags</div><div class="sf-value"><div class="tags">${
+          tags.map((t) => `<span class="tag">${String(t).replace(/</g, "")}</span>`).join("")
+        }</div></div><span></span></div>`;
+      }
+      if (payload.favorite) html += fieldRow("Favorit", "ja", { copy: false });
+      payload.extra.forEach((ex) => {
+        const multiline = isMultilineExtraType(ex.type);
+        const mask = isSecretExtraType(ex.type);
+        const dl = extraSupportsFile(ex.type);
+        html += fieldRow(ex.label || ex.type, ex.value || "", {
+          mask,
+          multiline,
+          download: dl,
+          filename: (ex.label || ex.type || "download").replace(/\s+/g, "_") + ".txt",
+        });
+      });
+      fields.innerHTML = html;
       fields.querySelectorAll(".copy-btn[data-copy]").forEach((btn) => {
         btn.onclick = async () => {
           await copyText(decodeURIComponent(btn.dataset.copy));
           flashCopy(btn);
         };
       });
+      fields.querySelectorAll(".copy-btn[data-download]").forEach((btn) => {
+        btn.onclick = () => {
+          const text = decodeURIComponent(btn.dataset.download);
+          const name = decodeURIComponent(btn.dataset.dlname || "download.txt");
+          downloadText(name, text);
+          flashCopy(btn);
+        };
+      });
       const pwField = fields.querySelectorAll(".secret-field")[1];
       if (pwField && payload.password) {
         const val = pwField.querySelector(".sf-value");
+        const actions = pwField.querySelector(".sf-actions") || pwField;
         const reveal = document.createElement("button");
         reveal.type = "button";
         reveal.className = "copy-btn";
@@ -1306,8 +1846,29 @@ function renderApp(app) {
           val.textContent = shown ? payload.password : "••••••••";
           reveal.textContent = shown ? "Verbergen" : "Anzeigen";
         };
-        pwField.appendChild(reveal);
+        actions.appendChild(reveal);
       }
+      fields.querySelectorAll(".secret-field").forEach((sf) => {
+        if (!sf.querySelector(".sf-value.masked")) return;
+        const label = sf.querySelector(".sf-label")?.textContent || "";
+        if (label === "Passwort" || label === "Benutzer") return;
+        const valEl = sf.querySelector(".sf-value");
+        const btn = sf.querySelector(".copy-btn[data-copy]");
+        if (!btn || !valEl) return;
+        const raw = decodeURIComponent(btn.dataset.copy || "");
+        if (!raw) return;
+        const reveal = document.createElement("button");
+        reveal.type = "button";
+        reveal.className = "copy-btn";
+        reveal.textContent = "Anzeigen";
+        let shown = false;
+        reveal.onclick = () => {
+          shown = !shown;
+          valEl.textContent = shown ? raw : "••••••••";
+          reveal.textContent = shown ? "Verbergen" : "Anzeigen";
+        };
+        (sf.querySelector(".sf-actions") || sf).appendChild(reveal);
+      });
       if (totpSeed) {
         const codeEl = fields.querySelector("#dtotpCode");
         const leftEl = fields.querySelector("#dtotpLeft");
@@ -1350,24 +1911,12 @@ function renderApp(app) {
     try {
       const title = n.querySelector("#stitle").value.trim();
       if (!title) throw new Error("Titel erforderlich");
-      const tags = n.querySelector("#stags").value.split(",").map((t) => t.trim()).filter(Boolean);
-      const payload = {
-        username: n.querySelector("#suser").value,
-        password: n.querySelector("#spw").value,
-        notes: n.querySelector("#snotes").value,
-        url: n.querySelector("#surl").value.trim(),
-        totp_seed: n.querySelector("#stotp").value.trim(),
-        tags,
-        favorite: n.querySelector("#sfav").checked,
-      };
+      const payload = collectCreatePayload();
       const collectionId = n.querySelector("#sfolderIn").value.trim();
       await postEncryptedSecret(title, payload, collectionId);
-      ["#stitle", "#suser", "#spw", "#snotes", "#surl", "#stotp", "#stags", "#sfolderIn"].forEach((sel) => {
-        n.querySelector(sel).value = "";
-      });
-      n.querySelector("#sfav").checked = false;
-      n.querySelector("#spw").type = "password";
+      resetCreateForm();
       await refreshSecrets(true);
+      navigateTo("vault:secrets");
     } catch (e) {
       err.hidden = false; err.textContent = e.message;
     }
@@ -1398,7 +1947,7 @@ function renderApp(app) {
     try {
       const gid = n.querySelector("#sharegroup").value;
       if (!gid) throw new Error("Keine Gruppe gewählt");
-      const pks = await api("/api/admin/groups/" + encodeURIComponent(gid) + "/members/public-keys");
+      const pks = await api("/api/secrets/" + currentSecret.id + "/group-member-keys?group_id=" + encodeURIComponent(gid));
       if (!pks.length) throw new Error("Keine onboardeten Gruppenmitglieder");
       const dk = openDKFromEnvelope(currentSecret.envelope);
       const envelopes = pks.map((p) =>
@@ -1478,8 +2027,9 @@ function renderApp(app) {
   async function refreshAdmin() {
     if (isAuditorOnly()) {
       try {
-        const audit = await api("/api/admin/audit");
-        n.querySelector("#alist").innerHTML = (audit.slice ? audit.slice(0, 50) : audit).map?.((e) =>
+        const auditRaw = await api("/api/admin/audit");
+        const audit = Array.isArray(auditRaw) ? auditRaw : (auditRaw.items || []);
+        n.querySelector("#alist").innerHTML = audit.slice(0, 50).map((e) =>
           `<div>${e.created_at} · ${e.action} · ${e.actor_id} · ${e.resource_type}/${e.resource_id}</div>`
         ).join("") || "<p>Keine Events</p>";
         n.querySelector("#overview").textContent = "Auditor — nur Audit-Ansicht";
@@ -1499,7 +2049,22 @@ function renderApp(app) {
     ).join("");
     n.querySelector("#ulist").querySelectorAll("[data-dis]").forEach((btn) => {
       btn.onclick = async () => {
-        await api("/api/admin/users/" + btn.dataset.dis + "/disable", { method: "POST", body: "{}" });
+        const uid = btn.dataset.dis;
+        await api("/api/admin/users/" + uid + "/disable", { method: "POST", body: "{}" });
+        const hint = n.querySelector("#udisable_hint");
+        try {
+          const secrets = await api("/api/admin/users/" + uid + "/accessible-secrets");
+          hint.hidden = false;
+          if (secrets.length) {
+            hint.textContent = "User deaktiviert. Secrets mit Envelope rotieren (Revoke + Rotate): " +
+              secrets.map((s) => s.id).join(", ");
+          } else {
+            hint.textContent = "User deaktiviert. Keine Secrets mit Envelope — Rotation nicht nötig.";
+          }
+        } catch (_) {
+          hint.hidden = false;
+          hint.textContent = "User deaktiviert. Bitte Secrets mit dessen Zugriff manuell rotieren (Zero-Knowledge — kein Auto-Rotate).";
+        }
         await refreshAdmin();
       };
     });
@@ -1552,7 +2117,8 @@ function renderApp(app) {
     } catch (_) {}
     const pol = await api("/api/admin/policy");
     n.querySelector("#totp_req").checked = !!pol.totp_required;
-    const audit = await api("/api/admin/audit");
+    const auditRaw = await api("/api/admin/audit");
+    const audit = Array.isArray(auditRaw) ? auditRaw : (auditRaw.items || []);
     n.querySelector("#alist").innerHTML = audit.slice(0, 30).map((e) =>
       `<div>${e.created_at} · ${e.action} · ${e.actor_id} · ${e.resource_type}/${e.resource_id}</div>`
     ).join("") || "<p>Keine Events</p>";
@@ -1570,6 +2136,8 @@ function renderApp(app) {
     const roles = vault.me?.roles || [];
     if (roles.includes("platform_admin")) {
       n.querySelector("#plat").hidden = false;
+      const platLink = n.querySelector(".platform-link");
+      if (platLink) platLink.hidden = false;
       const tenants = await api("/api/admin/tenants");
       n.querySelector("#tlist").innerHTML = tenants.map((t) =>
         `<div class="list-row"><span>${t.name} (${t.slug}) · ${t.status}</span>` +
@@ -1705,6 +2273,7 @@ function renderApp(app) {
         body: JSON.stringify({
           recovery_mode: n.querySelector("#rec_mode").value,
           escrow_allowed: n.querySelector("#rec_escrow").checked,
+          confirm: "REONBOARD",
         }),
       });
       n.querySelector("#rec_confirm").value = "";
@@ -1726,19 +2295,32 @@ function renderApp(app) {
         body: JSON.stringify({ public_key_b64: TVCrypto.b64enc(kp.publicKey) }),
       });
       const hex = Array.from(kp.secretKey).map((b) => b.toString(16).padStart(2, "0")).join("");
+      let shares = null;
       let sharesHtml = "";
       if (typeof secrets !== "undefined" && secrets.share) {
-        const shares = secrets.share(hex, nn, k);
+        shares = secrets.share(hex, nn, k);
         sharesHtml = "<br/><strong>Shamir-Shares (einzeln verwahren):</strong><ol>" +
           shares.map((s, i) => `<li><code class="mono">share_${i + 1}=${s}</code></li>`).join("") +
           "</ol>";
       } else {
         sharesHtml = "<br/>secrets.js fehlt — nutze <code>tvcli escrow-split</code>.";
       }
-      out.hidden = false;
-      out.innerHTML = "<strong>Escrow Private Key (Backup):</strong><br/><code class='mono'>" +
-        TVCrypto.b64enc(kp.secretKey) + "</code>" + sharesHtml;
       kp.secretKey.fill(0);
+      out.hidden = false;
+      out.innerHTML = "<strong>Escrow Public Key gespeichert.</strong> Privater Key wird nicht im DOM gehalten." +
+        sharesHtml +
+        (shares ? "<div class='row'><button class='btn-ghost' type='button' id='escrow_dl'>Shares als Datei speichern</button></div>" : "");
+      const dl = out.querySelector("#escrow_dl");
+      if (dl && shares) {
+        dl.onclick = () => {
+          const blob = new Blob([shares.map((s, i) => `share_${i + 1}=${s}`).join("\n") + "\n"], { type: "text/plain" });
+          const a = document.createElement("a");
+          a.href = URL.createObjectURL(blob);
+          a.download = "teamvault-escrow-shares.txt";
+          a.click();
+          URL.revokeObjectURL(a.href);
+        };
+      }
     } catch (e) { err.hidden = false; err.textContent = e.message; }
   };
   n.querySelector("#gmadd").onclick = async () => {

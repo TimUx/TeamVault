@@ -156,9 +156,10 @@ type StoreSnapshot struct {
 }
 
 var (
-	ErrNotFound      = errors.New("not found")
-	ErrTenantRequired = errors.New("tenant_id required")
-	ErrConflict      = errors.New("conflict")
+	ErrNotFound        = errors.New("not found")
+	ErrTenantRequired  = errors.New("tenant_id required")
+	ErrConflict        = errors.New("conflict")
+	ErrRevokedEnvelope = errors.New("cannot revive revoked envelope")
 )
 
 // VaultStore is implemented by SQLite (Phase 1), later Postgres and JSON.

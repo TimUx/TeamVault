@@ -49,7 +49,7 @@
 
 | # | Check | Status |
 |---|--------|--------|
-| 13.1 | React rewrite | Deferred (vanilla UX delivered) |
+| 13.1 | React rewrite | Abgesagt — Vanilla bleibt (OQ-01) |
 | 13.2 | Postgres stub package | Stub |
 | 13.3 | Dark theme | OK |
 | 13.4 | Mobile CSS | OK |

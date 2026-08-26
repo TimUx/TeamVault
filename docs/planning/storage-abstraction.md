@@ -1,4 +1,4 @@
-# teamVault – Storage-Abstraktion
+# TeamVault – Storage-Abstraktion
 
 **Status:** Planungsdokument (Teil B)  
 **Bezug:** Sicherheitsprinzip 8; Konfigurationsphilosophie

@@ -1,4 +1,4 @@
-# teamVault
+# TeamVault
 
 Self-hosted, **Zero-Knowledge** Passwortmanager für Firmennetze (Multi-Tenant).  
 Secrets und Titel werden nur im Browser entschlüsselt — Server und Storage sehen ausschließlich Ciphertext.
@@ -9,14 +9,14 @@ Secrets und Titel werden nur im Browser entschlüsselt — Server und Storage se
 
 | Bereich | Funktionen |
 |---------|------------|
-| **Vault** | Secrets anlegen/öffnen (Titel, User, Passwort, Notizen, URL, TOTP), Suche/Ordner, Import |
+| **Vault** | Secrets anlegen/öffnen (Titel, User, Passwort, Extra-Felder, TOTP), Suche/Ordner, Import/Export |
 | **Sharing** | Pro berechtigtem User eigener Datenschlüssel (asymmetrisch); Entzug mit Pflicht-Rotation |
-| **Auth** | Lokales Login immer; optional LDAP/AD nur für Bind; TOTP; Passkeys (nur Login) |
+| **Auth** | Lokales Login immer; optional LDAP/AD nur für Bind; TOTP; Passkeys (nur Login); Self-Service Passwort-Wechsel |
 | **Onboarding** | Erzwungenes Master-Passwort + Schlüsselpaar; Recovery-Kit oder Admin-Escrow (Shamir) |
-| **Admin** | User/Gruppen, LDAP, SMTP, Krypto/Policy, Audit, API-Keys, Tenants, Storage-Migration |
-| **Clients** | Web-UI, CLI (`tvcli`), Browser-Extension (Chrome/Edge/Firefox, Autofill) |
+| **Admin** | User/Gruppen, LDAP, SMTP, Krypto/Policy, Audit, API-Keys (read-Scope), Tenants, Storage-Migration |
+| **Clients** | Web-UI, CLI (`tvcli`), Browser-Extension (Chrome/Edge/Firefox, Autofill mit Host-Gate) |
 
-![Vault mit Secrets](docs/images/vault-secrets.png)
+![Vault mit Sidebar und Secrets](docs/images/vault-secrets.png)
 
 ## Sicherheitsprinzipien (kurz)
 
@@ -31,10 +31,10 @@ Details: [`.cursor/rules/security-principles.mdc`](.cursor/rules/security-princi
 
 | Guide | Zielgruppe |
 |-------|------------|
-| [**User Guide**](docs/user-guide.md) | Alltag: Login, Onboarding, Vault, Sharing, TOTP/Passkey, Extension/CLI |
-| [**Admin Guide**](docs/admin-guide.md) | Betrieb: Setup-Wizard, User/LDAP/SMTP, Escrow, Docker, Backup, CI |
+| [**User Guide**](docs/user-guide.md) | Alltag: Login, Onboarding, Vault, Sharing, Export, Passwort-Wechsel, Extension/CLI |
+| [**Admin Guide**](docs/admin-guide.md) | Betrieb: Setup-Wizard, User/LDAP/SMTP, Escrow, Proxy/TLS, Backup, CI |
 | [**Roadmap Phase 9+**](docs/planning/roadmap-phase9plus.md) | Analyse + nächste Phasen (Hardening, UX, Perf, Features) |
-| [**Vergleich Password Manager**](docs/planning/competitive-comparison.md) | teamVault vs. Bitwarden, Vaultwarden, Passbolt, … |
+| [**Vergleich Password Manager**](docs/planning/competitive-comparison.md) | TeamVault vs. Bitwarden, Vaultwarden, Passbolt, … |
 | [Clients](clients/README.md) | CLI-Binaries & Extension |
 | [OpenAPI](docs/openapi.yaml) | REST-API (`GET /openapi.yaml` am Server) |
 | [Planung](docs/planning/) | Architektur, Crypto, Open Questions |
@@ -44,7 +44,7 @@ Details: [`.cursor/rules/security-principles.mdc`](.cursor/rules/security-princi
 | Schicht | Technologie |
 |---------|-------------|
 | Backend | Go (`cmd/teamvault`) |
-| Web-UI | eingebettetes Static UI (`web/static`) |
+| Web-UI | Vanilla JS eingebettet (`web/static`; kein React-Rewrite) |
 | Client-Crypto | `web/static/cryptocore.js` / `internal/cryptocore` (Argon2id, NaCl) |
 | Storage | SQLite (Default) oder JSON-File |
 | Clients | `tvcli` (standalone Win/Linux), Browser-Extension |
@@ -110,8 +110,9 @@ Der Key entsperrt nur die **verschlüsselte Config** — keine Vault-Klartexte.
 ## Status
 
 - Phases 1–8: MVP (Setup, Vault, Sharing, Admin, Passkeys, OpenAPI, CLI, Extension, Docker/CI)
-- Phases 9–13: Hardening, UX-Kern, Performance, Features, Dark/Mobile (Postgres/React/IdP deferred)
+- Phases 9–13: Hardening, UX-Kern, Performance, Features, Dark/Mobile (Postgres/IdP deferred; React abgesagt → Vanilla)
+- Findings-Stufenplan: Authz/Scopes/CSRF, Ops-Docs, A11y/Host-Gate, Export & Self-Service-Passwörter
 
-Self-Check: [`docs/phase9-13-security-self-check.md`](docs/phase9-13-security-self-check.md)
+Self-Check: [`docs/phase9-13-security-self-check.md`](docs/phase9-13-security-self-check.md) · Checklist: [`SECURITY-REVIEW-CHECKLIST.md`](SECURITY-REVIEW-CHECKLIST.md)
 
 ![Dark Theme](docs/images/theme-dark.png)

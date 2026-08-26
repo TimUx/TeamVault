@@ -1,4 +1,4 @@
-/* teamVault browser cryptocore — client-side only (Zero-Knowledge).
+/* TeamVault browser cryptocore — client-side only (Zero-Knowledge).
  * Uses vendored tweetnacl + hash-wasm argon2 + WebCrypto AES-GCM.
  * Must never send master password to server.
  */
@@ -69,6 +69,15 @@
     mk.fill(0);
     if (!sk) throw new Error("wrong master password");
     return sk;
+  }
+
+  async function sealPrivateKey(secretKey, masterPassword, params) {
+    const salt = nacl.randomBytes(16);
+    const mk = await argon2id(masterPassword, salt, params);
+    const nonce = nacl.randomBytes(24);
+    const sealed = nacl.secretbox(secretKey, nonce, mk);
+    mk.fill(0);
+    return { salt, nonce, sealedPrivateKey: sealed };
   }
 
   async function sealWithRecoveryKit(secretKey, kitSecret, params) {
@@ -161,6 +170,7 @@
     b64dec,
     createIdentity,
     unlockPrivateKey,
+    sealPrivateKey,
     sealWithRecoveryKit,
     sealForEscrow,
     randomKitSecret,

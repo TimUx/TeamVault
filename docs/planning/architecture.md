@@ -1,14 +1,14 @@
-# teamVault – Architektur
+# TeamVault – Architektur
 
 **Status:** Planungsdokument (Teil B) – freigegeben inkl. PO-Antworten in [`open-questions.md`](open-questions.md)  
-**Produkt:** teamVault – interner Multi-Tenant-Passwortmanager  
+**Produkt:** TeamVault – interner Multi-Tenant-Passwortmanager  
 **Branding:** Farbtokens in [`ui-brand.md`](ui-brand.md) (storage-dashboard-Palette; MVP Light only)
 
 ---
 
 ## 1. Ziele und Abgrenzung
 
-teamVault ist ein self-hosted Pendant zu Passbolt/Vaultwarden für interne Netze (auch ohne Internetanbindung). Multi-Tenant-fähig, containerbasiert, Administration vollständig über Web-UI. Authentifizierung lokal und optional LDAP/AD (nur Login-Bind). Vault-Kryptografie ausschließlich clientseitig (Zero-Knowledge).
+TeamVault ist ein self-hosted Pendant zu Passbolt/Vaultwarden für interne Netze (auch ohne Internetanbindung). Multi-Tenant-fähig, containerbasiert, Administration vollständig über Web-UI. Authentifizierung lokal und optional LDAP/AD (nur Login-Bind). Vault-Kryptografie ausschließlich clientseitig (Zero-Knowledge).
 
 **Nicht im Scope dieses Dokuments:** Implementierungsdetails, Container-Images, OpenAPI – folgen in Teil C.
 
@@ -19,7 +19,7 @@ teamVault ist ein self-hosted Pendant zu Passbolt/Vaultwarden für interne Netze
 | Schicht | Wahl | Begründung |
 |---------|------|------------|
 | Backend | **Go** (`net/http` oder Chi/Echo) | Einfachere Toolchain, starke Stdlib (crypto, sql), Single Binary für Air-Gap |
-| Frontend | TypeScript + React | WebCrypto, Extension später, breites Ökosystem |
+| Frontend | Vanilla JS (`web/static`, eingebettet) | Kein Node-Build in Runtime; Air-Gap; OQ-01 Nachtrag: kein React-Rewrite |
 | Client-Crypto | `internal/cryptocore` (Go, Phase 2) + später Browser/WASM-Port | Argon2id, X25519 box, AES-256-GCM; Server darf Vault nicht entschlüsseln |
 | Storage | SQLite (`modernc.org/sqlite`) Default; JSON-File als Fallback | Austauschbar zur Laufzeit über Admin-UI |
 | Clients | Eigene WebExtension + minimales CLI | Gegen dieselbe REST-API; gemeinsames Crypto-Kernmodul |
@@ -31,7 +31,7 @@ teamVault ist ein self-hosted Pendant zu Passbolt/Vaultwarden für interne Netze
 ```mermaid
 flowchart TB
   subgraph clients [Clients]
-    WebUI[WebUI_React]
+    WebUI[WebUI_Vanilla]
     Ext[Browser_Extension]
     CLI[CLI]
   end
@@ -39,7 +39,7 @@ flowchart TB
     Sodium[libsodium_WebCrypto]
     Argon[Argon2id_KDF]
   end
-  subgraph server [teamVault_Server]
+  subgraph server [TeamVault_Server]
     API[REST_API_Go]
     Auth[Auth_Local_and_LDAP]
     Admin[Admin_and_Setup]
@@ -210,7 +210,7 @@ Maschinen-Zugang: gehashte Keys, Scope/Tenant, Expiry; nie Klartext nach Erstell
 ```mermaid
 sequenceDiagram
   participant Ops as Operator
-  participant Proc as teamVault_Process
+  participant Proc as TeamVault_Process
   participant Cfg as Encrypted_Config_DB
   participant Store as Storage_Backend
 

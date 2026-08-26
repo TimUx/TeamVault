@@ -36,7 +36,7 @@ func TestPhase8OpenAPIAndAPIKeyBearer(t *testing.T) {
 	}
 	var buf bytes.Buffer
 	_, _ = buf.ReadFrom(res.Body)
-	if !strings.Contains(buf.String(), "teamVault API") {
+	if !strings.Contains(buf.String(), "TeamVault API") {
 		t.Fatalf("openapi missing title: %s", buf.String()[:80])
 	}
 
