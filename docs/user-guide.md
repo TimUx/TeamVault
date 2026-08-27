@@ -22,6 +22,8 @@ Der Server sieht niemals Ihr Master-Passwort und niemals Klartext-Secrets (Zero-
 2. **Tenant-Slug**, Username, Login-Passwort (TOTP falls aktiv)
 3. Optional **Passkey** statt Passwort (wenn registriert)
 
+Hinweis unter dem Formular: Version und Entwickler. Passkeys betreffen nur den Login — der Vault braucht weiterhin das Master-Passwort.
+
 Nach dem Login (oder nach Onboarding) erscheint **Vault entsperren**:
 
 ![Vault entsperren](images/vault-unlock.png)
