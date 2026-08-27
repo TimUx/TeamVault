@@ -232,6 +232,14 @@ body.app-wide main {
   font-size: 1.15rem;
   font-weight: 700;
   letter-spacing: -0.02em;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.app-sidebar-brand .brand-ico {
+  width: 1.35rem;
+  height: 1.35rem;
+  color: var(--color-accent);
 }
 .app-sidebar-nav {
   flex: 1;
@@ -271,10 +279,89 @@ body.app-wide main {
   font-weight: 700;
 }
 .sidebar-link .nav-ico {
-  width: 1.1rem;
-  text-align: center;
-  opacity: 0.85;
+  width: 1.15rem;
+  height: 1.15rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.9;
   flex-shrink: 0;
+  color: var(--color-secondary);
+}
+.sidebar-link.active .nav-ico { color: var(--color-accent); opacity: 1; }
+.sidebar-link .nav-ico .ico { width: 1.15rem; height: 1.15rem; }
+
+.ico {
+  width: 1.1rem;
+  height: 1.1rem;
+  display: block;
+  flex-shrink: 0;
+}
+.btn-ico {
+  width: 1rem;
+  height: 1rem;
+}
+.btn-with-ico,
+.copy-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.35rem;
+  height: 2.35rem;
+  min-height: 2.35rem;
+  padding: 0;
+  border-radius: var(--radius);
+  background: transparent;
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+}
+.btn-icon:hover { background: var(--color-hover); }
+.btn-icon .ico { width: 1.2rem; height: 1.2rem; }
+h1 .heading-ico,
+.lock-card h1 .heading-ico {
+  display: inline-block;
+  vertical-align: -0.2em;
+  width: 1.25rem;
+  height: 1.25rem;
+  margin-right: 0.35rem;
+  color: var(--color-accent);
+}
+.label-with-ico {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.label-ico {
+  width: 0.95rem;
+  height: 0.95rem;
+  color: var(--color-secondary);
+}
+.list-row-main {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+  flex: 1;
+}
+.list-row-ico .ico {
+  width: 1rem;
+  height: 1rem;
+  color: var(--color-secondary);
+}
+.fav-mark {
+  display: inline-flex;
+  color: var(--color-accent);
+}
+.fav-ico {
+  width: 0.95rem;
+  height: 0.95rem;
+  fill: currentColor;
+  stroke: currentColor;
 }
 .app-sidebar-foot {
   border-top: 1px solid var(--color-border);
@@ -327,8 +414,12 @@ body.app-wide main {
   display: none;
   background: transparent;
   border: 1px solid var(--color-border);
-  padding: 0.4rem 0.65rem;
-  min-height: 2.25rem;
+  padding: 0;
+  width: 2.35rem;
+  height: 2.35rem;
+  min-height: 2.35rem;
+  align-items: center;
+  justify-content: center;
 }
 .sidebar-backdrop {
   display: none;
@@ -437,7 +528,6 @@ body.app-wide main {
   border-radius: var(--radius);
   background: var(--color-muted);
 }
-.fav-mark { color: var(--color-accent); margin-right: 0.35rem; }
 
 .lock-overlay {
   position: fixed;

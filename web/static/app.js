@@ -25,13 +25,70 @@ function el(html) {
   return d.firstChild;
 }
 
+/** Flat stroke icons (inline SVG, no CDN — air-gap). */
+const ICO = {
+  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>',
+  moon: '<path d="M21 14.5A8.5 8.5 0 0 1 9.5 3 7 7 0 1 0 21 14.5z"/>',
+  key: '<path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.78 7.78 5.5 5.5 0 0 1 7.78-7.78zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  upload: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>',
+  download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>',
+  user: '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+  users: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>',
+  group: '<circle cx="9" cy="8" r="3.5"/><circle cx="16.5" cy="9.5" r="2.75"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M14 20a5 5 0 0 1 8 0"/>',
+  mail: '<path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><path d="M22 6l-10 7L2 6"/>',
+  network: '<rect x="2" y="2" width="8" height="8" rx="1"/><rect x="14" y="2" width="8" height="8" rx="1"/><rect x="8" y="14" width="8" height="8" rx="1"/><path d="M6 10v2a2 2 0 0 0 2 2h2M18 10v2a2 2 0 0 1-2 2h-2M12 14v-2"/>',
+  shield: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>',
+  lock: '<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
+  unlock: '<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/>',
+  building: '<path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6M9 9h.01M15 9h.01M9 13h.01M15 13h.01"/>',
+  clipboard: '<path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/>',
+  logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',
+  share: '<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.59 13.51l6.83 3.98M15.41 6.51l-6.82 3.98"/>',
+  trash: '<path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6h14"/>',
+  copy: '<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
+  folder: '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>',
+  search: '<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>',
+  rotate: '<path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/>',
+  eye: '<path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/>',
+  spark: '<path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M18.4 5.6l-2.8 2.8M8.4 15.6l-2.8 2.8"/>',
+  save: '<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/>',
+  menu: '<path d="M4 6h16M4 12h16M4 18h16"/>',
+  open: '<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"/>',
+  star: '<path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>',
+  chevron: '<path d="M9 18l6-6-6-6"/>',
+};
+
+function icon(name, cls) {
+  const body = ICO[name] || ICO.key;
+  return `<svg class="ico${cls ? " " + cls : ""}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${body}</svg>`;
+}
+
+function navLink(nav, icoName, label, extraClass, attrs) {
+  const cls = ["sidebar-link", extraClass].filter(Boolean).join(" ");
+  const extra = attrs ? " " + attrs : "";
+  return `<button type="button" class="${cls}" data-nav="${nav}"${extra}><span class="nav-ico">${icon(icoName)}</span><span>${label}</span></button>`;
+}
+
+function btnLabel(icoName, label) {
+  return `${icon(icoName, "btn-ico")}<span>${label}</span>`;
+}
+
+function syncThemeToggles(theme) {
+  const dark = theme === "dark";
+  document.querySelectorAll("[data-theme-toggle]").forEach((btn) => {
+    btn.classList.add("btn-icon");
+    btn.setAttribute("aria-label", dark ? "Hellmodus" : "Dunkelmodus");
+    btn.title = dark ? "Hellmodus" : "Dunkelmodus";
+    btn.innerHTML = icon(dark ? "sun" : "moon");
+  });
+}
+
 function applyTheme(theme) {
   const t = theme === "dark" ? "dark" : "light";
   document.documentElement.setAttribute("data-theme", t);
   try { localStorage.setItem("tv-theme", t); } catch (_) {}
-  document.querySelectorAll("[data-theme-toggle]").forEach((btn) => {
-    btn.textContent = t === "dark" ? "Hell" : "Dunkel";
-  });
+  syncThemeToggles(t);
 }
 
 function initTheme() {
@@ -47,16 +104,16 @@ function ensureHeaderControls() {
   actions.className = "top-actions";
   const btn = document.createElement("button");
   btn.type = "button";
-  btn.className = "btn-ghost btn-sm";
+  btn.className = "btn-icon";
   btn.id = "themeToggle";
   btn.setAttribute("data-theme-toggle", "1");
-  btn.textContent = document.documentElement.getAttribute("data-theme") === "dark" ? "Hell" : "Dunkel";
   btn.onclick = () => {
     const cur = document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light";
     applyTheme(cur === "dark" ? "light" : "dark");
   };
   actions.appendChild(btn);
   top.appendChild(actions);
+  syncThemeToggles(document.documentElement.getAttribute("data-theme") || "light");
 }
 
 function copyText(text) {
@@ -132,10 +189,10 @@ function totpSecondsLeft() {
 
 function flashCopy(btn) {
   if (!btn) return;
-  const prev = btn.textContent;
-  btn.textContent = "Kopiert";
+  const prev = btn.innerHTML;
+  btn.innerHTML = btnLabel("copy", "Kopiert");
   btn.classList.add("copied");
-  setTimeout(() => { btn.textContent = prev; btn.classList.remove("copied"); }, 1200);
+  setTimeout(() => { btn.innerHTML = prev; btn.classList.remove("copied"); }, 1200);
 }
 
 async function mapPool(items, concurrency, fn) {
@@ -663,8 +720,8 @@ function fieldRow(label, value, opts = {}) {
   const copyAttr = copy && display !== "—" ? `data-copy="${encodeURIComponent(String(value))}"` : "";
   const dlAttr = download && display !== "—" ? `data-download="${encodeURIComponent(String(value))}" data-dlname="${encodeURIComponent(opts.filename || label || "download.txt")}"` : "";
   const actions = [];
-  if (copy && display !== "—") actions.push(`<button type="button" class="copy-btn" ${copyAttr}>Kopieren</button>`);
-  if (download && display !== "—") actions.push(`<button type="button" class="copy-btn" ${dlAttr}>Download</button>`);
+  if (copy && display !== "—") actions.push(`<button type="button" class="copy-btn" ${copyAttr} title="Kopieren" aria-label="Kopieren">${btnLabel("copy", "Kopieren")}</button>`);
+  if (download && display !== "—") actions.push(`<button type="button" class="copy-btn" ${dlAttr} title="Download" aria-label="Download">${btnLabel("download", "Download")}</button>`);
   return `<div class="secret-field${multiline ? " secret-field-block" : ""}">
     <div class="sf-label">${label}</div>
     <div class="sf-value${mask ? " masked" : ""}${multiline ? " mono prewrap" : ""}">${mask && display !== "—" ? "••••••••" : safe}</div>
@@ -748,64 +805,64 @@ function renderApp(app) {
   const n = el(`<div class="app-frame">
     <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
     <aside class="app-sidebar" id="appSidebar" hidden>
-      <div class="app-sidebar-brand">TeamVault</div>
+      <div class="app-sidebar-brand">${icon("shield", "brand-ico")} <span>TeamVault</span></div>
       <nav class="app-sidebar-nav" id="appSidebarNav">
         <div class="sidebar-section">
           <div class="sidebar-section-title">Vault</div>
-          <button type="button" class="sidebar-link active" data-nav="vault:secrets">Secrets</button>
-          <button type="button" class="sidebar-link" data-nav="vault:create">Neu anlegen</button>
-          <button type="button" class="sidebar-link" data-nav="vault:import">Import</button>
+          ${navLink("vault:secrets", "key", "Secrets", "active")}
+          ${navLink("vault:create", "plus", "Neu anlegen")}
+          ${navLink("vault:import", "upload", "Import")}
         </div>
         <div class="sidebar-section">
           <div class="sidebar-section-title">Konto</div>
-          <button type="button" class="sidebar-link" data-nav="account">Konto</button>
+          ${navLink("account", "user", "Konto")}
         </div>
         <div class="sidebar-section" id="navAdminSection" hidden>
           <div class="sidebar-section-title">Administration</div>
-          <button type="button" class="sidebar-link admin-link" data-nav="admin:users" data-admin-only>Benutzer</button>
-          <button type="button" class="sidebar-link admin-link" data-nav="admin:groups" data-admin-only>Gruppen</button>
-          <button type="button" class="sidebar-link admin-link" data-nav="admin:ldap" data-admin-only>LDAP</button>
-          <button type="button" class="sidebar-link admin-link" data-nav="admin:smtp" data-admin-only>SMTP</button>
-          <button type="button" class="sidebar-link admin-link" data-nav="admin:crypto" data-admin-only>Krypto &amp; Policy</button>
-          <button type="button" class="sidebar-link admin-link" data-nav="admin:recovery" data-admin-only>Recovery &amp; Escrow</button>
-          <button type="button" class="sidebar-link admin-link" data-nav="admin:apikeys" data-admin-only>API-Keys</button>
-          <button type="button" class="sidebar-link admin-link platform-link" data-nav="admin:platform" data-admin-only hidden>Tenants &amp; Migration</button>
-          <button type="button" class="sidebar-link admin-link" data-nav="admin:audit">Audit</button>
+          ${navLink("admin:users", "users", "Benutzer", "admin-link", 'data-admin-only')}
+          ${navLink("admin:groups", "group", "Gruppen", "admin-link", 'data-admin-only')}
+          ${navLink("admin:ldap", "network", "LDAP", "admin-link", 'data-admin-only')}
+          ${navLink("admin:smtp", "mail", "SMTP", "admin-link", 'data-admin-only')}
+          ${navLink("admin:crypto", "shield", "Krypto &amp; Policy", "admin-link", 'data-admin-only')}
+          ${navLink("admin:recovery", "lock", "Recovery &amp; Escrow", "admin-link", 'data-admin-only')}
+          ${navLink("admin:apikeys", "key", "API-Keys", "admin-link", 'data-admin-only')}
+          ${navLink("admin:platform", "building", "Tenants &amp; Migration", "admin-link platform-link", 'data-admin-only hidden')}
+          ${navLink("admin:audit", "clipboard", "Audit", "admin-link")}
         </div>
       </nav>
       <div class="app-sidebar-foot">
         <p class="hint" id="info">Lade…</p>
-        <button class="btn-ghost" type="button" id="out">Logout</button>
+        <button class="btn-ghost btn-with-ico" type="button" id="out">${btnLabel("logout", "Logout")}</button>
       </div>
     </aside>
 
     <div class="app-main">
       <header class="app-topbar">
-        <button type="button" class="menu-toggle" id="menuToggle" aria-label="Menü">☰</button>
+        <button type="button" class="menu-toggle btn-icon" id="menuToggle" aria-label="Menü">${icon("menu")}</button>
         <h1 id="pageTitle">Vault</h1>
         <div class="app-topbar-actions">
-          <button type="button" class="btn-ghost btn-sm" data-theme-toggle>Dunkel</button>
+          <button type="button" class="btn-icon" data-theme-toggle aria-label="Dunkelmodus" title="Dunkelmodus">${icon("moon")}</button>
         </div>
       </header>
 
       <div class="app-content">
         <div id="lockOverlay" class="lock-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="lockTitle">
           <div class="lock-card">
-            <h1 id="lockTitle">Vault gesperrt</h1>
+            <h1 id="lockTitle">${icon("lock", "heading-ico")} Vault gesperrt</h1>
             <p class="lead">Idle-Timeout. Master-Passwort erneut eingeben (bleibt nur im Speicher).</p>
             <label for="lockMpw">Master-Passwort</label>
             <input id="lockMpw" type="password" autocomplete="current-password" />
             <div class="error" id="lockErr" hidden role="alert"></div>
-            <div class="row"><button class="btn-accent" type="button" id="lockUnlock">Entsperren</button></div>
+            <div class="row"><button class="btn-accent btn-with-ico" type="button" id="lockUnlock">${btnLabel("unlock", "Entsperren")}</button></div>
           </div>
         </div>
 
         <div class="panel app-unlock-panel" id="unlock">
-          <h1>Vault entsperren</h1>
+          <h1>${icon("unlock", "heading-ico")} Vault entsperren</h1>
           <p class="lead">Master-Passwort bleibt im Browser (Zero-Knowledge).</p>
           <label>Master-Passwort</label><input id="mpw" type="password" autocomplete="current-password" />
           <div class="error" id="uerr" hidden></div>
-          <div class="row"><button class="btn-accent" type="button" id="ulock">Entsperren</button></div>
+          <div class="row"><button class="btn-accent btn-with-ico" type="button" id="ulock">${btnLabel("unlock", "Entsperren")}</button></div>
         </div>
 
         <div id="vaultui" hidden>
@@ -814,19 +871,19 @@ function renderApp(app) {
               <div class="panel">
                 <div class="toolbar">
                   <div>
-                    <label>Suche</label>
+                    <label><span class="label-with-ico">${icon("search", "label-ico")} Suche</span></label>
                     <input id="ssearch" type="search" placeholder="Titel, Ordner…" />
                   </div>
                   <div>
-                    <label>Ordner</label>
+                    <label><span class="label-with-ico">${icon("folder", "label-ico")} Ordner</span></label>
                     <select id="sfolder"><option value="">Alle</option></select>
                   </div>
                 </div>
                 <div id="slist" class="list"></div>
                 <div class="row">
-                  <button class="btn-ghost" type="button" id="sMore" hidden>Mehr laden</button>
-                  <button class="btn-ghost" type="button" id="sExportJson">Export JSON</button>
-                  <button class="btn-ghost" type="button" id="sExportCsv">Export CSV</button>
+                  <button class="btn-ghost btn-with-ico" type="button" id="sMore" hidden>${btnLabel("chevron", "Mehr laden")}</button>
+                  <button class="btn-ghost btn-with-ico" type="button" id="sExportJson">${btnLabel("download", "Export JSON")}</button>
+                  <button class="btn-ghost btn-with-ico" type="button" id="sExportCsv">${btnLabel("download", "Export CSV")}</button>
                   <span class="hint" id="sCount"></span>
                 </div>
               </div>
@@ -841,10 +898,10 @@ function renderApp(app) {
                   <select id="sharegroup"><option value="">— Gruppe wählen —</option></select>
                 </div>
                 <div class="row">
-                  <button class="btn-accent" type="button" id="share">Teilen</button>
-                  <button class="btn-ghost" type="button" id="shareGroup" hidden>Gruppe teilen</button>
-                  <button class="btn-ghost" type="button" id="revoke">Zugriff entziehen + rotieren</button>
-                  <button class="btn-danger" type="button" id="sdel">Löschen</button>
+                  <button class="btn-accent btn-with-ico" type="button" id="share">${btnLabel("share", "Teilen")}</button>
+                  <button class="btn-ghost btn-with-ico" type="button" id="shareGroup" hidden>${btnLabel("users", "Gruppe teilen")}</button>
+                  <button class="btn-ghost btn-with-ico" type="button" id="revoke">${btnLabel("rotate", "Zugriff entziehen + rotieren")}</button>
+                  <button class="btn-danger btn-with-ico" type="button" id="sdel">${btnLabel("trash", "Löschen")}</button>
                 </div>
                 <div class="error" id="derr" hidden></div>
               </div>
@@ -860,8 +917,8 @@ function renderApp(app) {
                 <label>Passwort</label>
                 <div class="row gen-row" style="margin-top:0.35rem">
                   <input id="spw" type="password" autocomplete="new-password" style="flex:1" />
-                  <button class="btn-ghost" type="button" id="spwShow">Anzeigen</button>
-                  <button class="btn-ghost" type="button" id="spwGen">Generator</button>
+                  <button class="btn-ghost btn-with-ico" type="button" id="spwShow">${btnLabel("eye", "Anzeigen")}</button>
+                  <button class="btn-ghost btn-with-ico" type="button" id="spwGen">${btnLabel("spark", "Generator")}</button>
                 </div>
                 <div class="gen-opts hint">
                   Länge <input id="spwLen" type="number" min="12" max="64" value="20" style="width:4rem" />
@@ -889,7 +946,7 @@ function renderApp(app) {
                   <button class="btn-ghost" type="button" id="sextraAddBtn">Hinzufügen</button>
                 </div>
                 <div class="error" id="serr" hidden></div>
-                <div class="row"><button class="btn-accent" type="button" id="screate">Speichern (clientseitig verschlüsselt)</button></div>
+                <div class="row"><button class="btn-accent btn-with-ico" type="button" id="screate">${btnLabel("save", "Speichern (clientseitig verschlüsselt)")}</button></div>
               </div>
             </div>
 
@@ -898,7 +955,7 @@ function renderApp(app) {
                 <p class="hint">Bitwarden-JSON, CSV oder KeePass-XML — Parsing und Verschlüsselung nur im Browser (Zero-Knowledge).</p>
                 <input id="simport" type="file" accept=".json,.csv,.xml,text/csv,application/json,text/xml" />
                 <div class="row">
-                  <button class="btn-ghost" type="button" id="simportRun" disabled>Import starten</button>
+                  <button class="btn-ghost btn-with-ico" type="button" id="simportRun" disabled>${btnLabel("upload", "Import starten")}</button>
                   <span class="hint" id="simportHint"></span>
                 </div>
                 <div class="error" id="ierr" hidden></div>
@@ -1160,6 +1217,7 @@ function renderApp(app) {
     const cur = document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light";
     applyTheme(cur === "dark" ? "light" : "dark");
   };
+  syncThemeToggles(document.documentElement.getAttribute("data-theme") || "light");
   {
     const t = document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light";
     n.querySelector("[data-theme-toggle]").textContent = t === "dark" ? "Hell" : "Dunkel";
@@ -1496,7 +1554,7 @@ function renderApp(app) {
     const inp = n.querySelector("#spw");
     const show = inp.type === "password";
     inp.type = show ? "text" : "password";
-    n.querySelector("#spwShow").textContent = show ? "Verbergen" : "Anzeigen";
+    n.querySelector("#spwShow").innerHTML = btnLabel("eye", show ? "Verbergen" : "Anzeigen");
   };
 
   function createSlotHasType(type) {
@@ -1615,7 +1673,7 @@ function renderApp(app) {
     n.querySelector("#sfolderIn").value = "";
     n.querySelector("#sextraSlots").innerHTML = "";
     n.querySelector("#sextraAdd").value = "";
-    n.querySelector("#spwShow").textContent = "Anzeigen";
+    n.querySelector("#spwShow").innerHTML = btnLabel("eye", "Anzeigen");
   }
 
   n.querySelector("#sextraAddBtn").onclick = () => {
@@ -1757,14 +1815,16 @@ function renderApp(app) {
       return title.includes(q) || folderName.includes(q) || (it.id || "").toLowerCase().includes(q);
     });
     for (const it of visible) {
-      const row = el(`<div class="list-row"><span></span><button class="btn-ghost" type="button">Öffnen</button></div>`);
+      const row = el(`<div class="list-row"><span class="list-row-main"></span><button class="btn-ghost btn-with-ico" type="button">${btnLabel("open", "Öffnen")}</button></div>`);
       const span = row.querySelector("span");
-      const mark = it._favorite ? `<span class="fav-mark">★</span>` : "";
+      const mark = it._favorite ? `<span class="fav-mark" title="Favorit">${icon("star", "fav-ico")}</span>` : "";
+      const lead = `<span class="list-row-ico" aria-hidden="true">${icon(it.has_access ? "key" : "lock")}</span>`;
       if (it._title) {
-        span.innerHTML = mark + "";
+        span.innerHTML = lead + mark;
         span.appendChild(document.createTextNode(it._title + (it.collection_id ? ` · ${it.collection_id}` : "")));
       } else {
-        span.textContent = it.id + (it.has_access ? " (Titel n.v.)" : " · kein Zugriff");
+        span.innerHTML = lead;
+        span.appendChild(document.createTextNode(it.id + (it.has_access ? " (Titel n.v.)" : " · kein Zugriff")));
       }
       row.querySelector("button").onclick = () => openSecret(it.id);
       list.appendChild(row);
@@ -1857,7 +1917,7 @@ function renderApp(app) {
               <div class="sf-label">TOTP</div>
               <div class="sf-value mono"><span id="dtotpCode">······</span>
                 <span class="hint" id="dtotpLeft"></span></div>
-              <button type="button" class="copy-btn" id="dtotpCopy">Kopieren</button>
+              <button type="button" class="copy-btn" id="dtotpCopy">${btnLabel("copy", "Kopieren")}</button>
             </div>`;
         html += fieldRow("TOTP-Seed", totpSeed, { mask: true });
       }
@@ -1901,12 +1961,12 @@ function renderApp(app) {
         const reveal = document.createElement("button");
         reveal.type = "button";
         reveal.className = "copy-btn";
-        reveal.textContent = "Anzeigen";
+        reveal.innerHTML = btnLabel("eye", "Anzeigen");
         let shown = false;
         reveal.onclick = () => {
           shown = !shown;
           val.textContent = shown ? payload.password : "••••••••";
-          reveal.textContent = shown ? "Verbergen" : "Anzeigen";
+          reveal.innerHTML = btnLabel("eye", shown ? "Verbergen" : "Anzeigen");
         };
         actions.appendChild(reveal);
       }
@@ -1922,12 +1982,12 @@ function renderApp(app) {
         const reveal = document.createElement("button");
         reveal.type = "button";
         reveal.className = "copy-btn";
-        reveal.textContent = "Anzeigen";
+        reveal.innerHTML = btnLabel("eye", "Anzeigen");
         let shown = false;
         reveal.onclick = () => {
           shown = !shown;
           valEl.textContent = shown ? raw : "••••••••";
-          reveal.textContent = shown ? "Verbergen" : "Anzeigen";
+          reveal.innerHTML = btnLabel("eye", shown ? "Verbergen" : "Anzeigen");
         };
         (sf.querySelector(".sf-actions") || sf).appendChild(reveal);
       });

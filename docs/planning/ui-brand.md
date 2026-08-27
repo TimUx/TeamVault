@@ -65,7 +65,8 @@ Unterkante der Topbar: dezenter Accent-Streifen (2px), kein Multi-Color-Gradient
 ## 5. Layout
 
 - Linke Sidebar (~240px), Sektionen Vault / Konto / Administration  
-- Sticky Topbar mit Seitentitel, Theme-Toggle  
+- Sticky Topbar mit Seitentitel, Theme-Toggle als Icon (Sonne/Mond)  
+- Flache Inline-SVG-Icons in Sidebar und Primäraktionen (kein Icon-CDN, air-gap OQ-19)  
 - Mobile: Drawer + Backdrop  
 - Radius `--radius: 6px`; Font `"IBM Plex Sans", "Segoe UI", system-ui` (kein CDN, OQ-19)  
 - Setup/Login bleiben zentrierte Panels ohne Sidebar  
