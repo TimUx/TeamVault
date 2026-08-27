@@ -46,7 +46,7 @@ Image: `{registry}/cc-3.3/teamvault` — Tags `latest`/`main`, `sha-<7>`, bei Re
 
 **Wichtig:** Keine `actions/*` von github.com. Checkout über `gitea:3000`. Build nur aus internen Base-Images + `vendor/`.
 
-**TLS:** BuildKit braucht die Firmen-Root-CA (`certs/corp-ca-bundle.crt`). CI installiert sie unter `/etc/docker/certs.d/git.example.internal/ca.crt` auf dem Runner-Host. Quelle: [GB3 Portal Stammzertifikat](https://portal.example.internal/?url=sys_cfg/corp-root-ca.cer).
+**TLS / act_runner:** Workspace-Binds (`-v $PWD/certs/...`) funktionieren mit `docker.sock` nicht (Host sieht den Pfad nicht). CI seedet die CA deshalb über ein **named Volume + stdin** nach `/etc/docker/certs.d/<registry>/ca.crt`. Zusätzlich `DOCKER_BUILDKIT=0`, damit der Build lokale Base-Images nutzt ohne BuildKit-OAuth.
 
 ```bash
 docker login git.example.internal
