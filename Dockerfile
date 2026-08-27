@@ -6,6 +6,16 @@ ARG GO_VERSION=1.23.3
 FROM golang:${GO_VERSION}-bookworm AS build
 WORKDIR /src
 
+# Corp HTTP(S) proxy (CI / docker build --build-arg), same idea as storage-dashboard
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ARG NO_PROXY
+ARG http_proxy
+ARG https_proxy
+ARG no_proxy
+ENV HTTP_PROXY=${HTTP_PROXY} HTTPS_PROXY=${HTTPS_PROXY} NO_PROXY=${NO_PROXY} \
+    http_proxy=${http_proxy} https_proxy=${https_proxy} no_proxy=${no_proxy}
+
 # Optional corp module proxy (build-arg), e.g. --build-arg GOPROXY=http://…
 ARG GOPROXY=https://proxy.golang.org,direct
 ARG GOSUMDB=sum.golang.org

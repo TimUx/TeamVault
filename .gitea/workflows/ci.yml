@@ -7,6 +7,7 @@
 #   - secrets.REGISTRY_TOKEN  — PAT with write:package (fallback: gitea.token)
 #   - vars.REGISTRY           — registry host (default: hostname of gitea.server_url)
 #   - vars.GOPROXY / vars.GOSUMDB — corp module proxy if needed
+#   - vars.HTTP_PROXY / HTTPS_PROXY / NO_PROXY — corp HTTP proxy (defaults: proxyits)
 
 name: CI
 
@@ -26,6 +27,13 @@ env:
   GOPROXY: ${{ vars.GOPROXY || 'https://proxy.golang.org,direct' }}
   GOSUMDB: ${{ vars.GOSUMDB || 'sum.golang.org' }}
   CGO_ENABLED: "0"
+  # Corp proxy for github.com Actions + outbound fetches (same pattern as storage-dashboard)
+  HTTP_PROXY: ${{ vars.HTTP_PROXY || 'http://proxy.example.internal:8080' }}
+  HTTPS_PROXY: ${{ vars.HTTPS_PROXY || 'http://proxy.example.internal:8080' }}
+  NO_PROXY: ${{ vars.NO_PROXY || 'localhost,127.0.0.1,gitea,git.example.internal,.example.internal' }}
+  http_proxy: ${{ vars.HTTP_PROXY || 'http://proxy.example.internal:8080' }}
+  https_proxy: ${{ vars.HTTPS_PROXY || 'http://proxy.example.internal:8080' }}
+  no_proxy: ${{ vars.NO_PROXY || 'localhost,127.0.0.1,gitea,git.example.internal,.example.internal' }}
 
 jobs:
   test:
@@ -146,12 +154,21 @@ jobs:
         env:
           GOPROXY: ${{ env.GOPROXY }}
           GOSUMDB: ${{ env.GOSUMDB }}
+          HTTP_PROXY: ${{ env.HTTP_PROXY }}
+          HTTPS_PROXY: ${{ env.HTTPS_PROXY }}
+          NO_PROXY: ${{ env.NO_PROXY }}
         run: |
           set -euo pipefail
           PRIMARY="$(echo '${{ steps.meta.outputs.tags }}' | head -n1)"
           VER="$(git describe --tags --always --dirty 2>/dev/null || echo '${{ gitea.sha }}' | cut -c1-7)"
           COMMIT="$(echo '${{ gitea.sha }}' | cut -c1-7)"
           docker build \
+            --build-arg "HTTP_PROXY=${HTTP_PROXY}" \
+            --build-arg "HTTPS_PROXY=${HTTPS_PROXY}" \
+            --build-arg "http_proxy=${HTTP_PROXY}" \
+            --build-arg "https_proxy=${HTTPS_PROXY}" \
+            --build-arg "NO_PROXY=${NO_PROXY}" \
+            --build-arg "no_proxy=${NO_PROXY}" \
             --build-arg "GOPROXY=${GOPROXY}" \
             --build-arg "GOSUMDB=${GOSUMDB}" \
             --build-arg "VERSION=${VER}" \
