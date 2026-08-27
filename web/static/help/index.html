@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Hilfe – TeamVault</title>
+  <link rel="stylesheet" href="/styles.css" />
+  <link rel="stylesheet" href="/help/help.css" />
+</head>
+<body>
+  <a class="skip-link" href="#main">Zum Inhalt springen</a>
+  <header class="top">
+    <div class="brand"><a href="/help" style="color:inherit;text-decoration:none">TeamVault Hilfe</a></div>
+    <div class="top-actions">
+      <a class="btn-ghost" href="/app" style="text-decoration:none;padding:.4rem .75rem">Zur App</a>
+    </div>
+  </header>
+  <main id="main" class="help-wrap">
+    <h1>Hilfe &amp; Clients</h1>
+    <p class="lead">Kurze Anleitungen für den Alltag: Web-App, Kommandozeile und Browser-Extension.</p>
+
+    <nav class="help-nav" aria-label="Themen">
+      <a class="primary" href="/help/cli">CLI (tvcli)</a>
+      <a class="primary" href="/help/extension">Browser-Extension</a>
+      <a href="/login">Login</a>
+      <a href="/app">Vault öffnen</a>
+    </nav>
+
+    <div class="help-step">
+      <h3>1 · Web-App</h3>
+      <p>Im Browser anmelden → Vault mit Master-Passwort entsperren → Secrets nutzen. Einstieg: <a href="/login">Login</a> bzw. <a href="/app">App</a>.</p>
+    </div>
+    <div class="help-step">
+      <h3>2 · CLI</h3>
+      <p>Für Skripte und Terminal: Binary installieren, einmal anmelden oder API-Key setzen, Secrets listen/lesen. <a href="/help/cli">Schritt für Schritt</a></p>
+    </div>
+    <div class="help-step">
+      <h3>3 · Extension</h3>
+      <p>Chrome, Edge oder Firefox: Extension laden, Server-URL setzen, im Popup entsperren, Fill/Copy auf passenden Seiten. <a href="/help/extension">Schritt für Schritt</a></p>
+    </div>
+
+    <p class="help-note">Diese Seiten laufen auf Ihrer TeamVault-Instanz (<span id="originHint"></span>). Markdown-Fassungen liegen im Git unter <code>docs/cli-guide.md</code> und <code>docs/extension-guide.md</code>.</p>
+    <footer class="help-foot" id="aboutFoot"></footer>
+  </main>
+  <script src="/help/index.js"></script>
+</body>
+</html>

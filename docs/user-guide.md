@@ -22,7 +22,7 @@ Der Server sieht niemals Ihr Master-Passwort und niemals Klartext-Secrets (Zero-
 2. **Tenant-Slug**, Username, Login-Passwort (TOTP falls aktiv)
 3. Optional **Passkey** statt Passwort (wenn registriert)
 
-Hinweis unter dem Formular: Version und Entwickler. Passkeys betreffen nur den Login — der Vault braucht weiterhin das Master-Passwort.
+Oben rechts: **Hilfe** (ohne Login) öffnet die Client-Anleitungen unter `/help`. Hinweis unter dem Formular: Version und Entwickler. Passkeys betreffen nur den Login — der Vault braucht weiterhin das Master-Passwort.
 
 Nach dem Login (oder nach Onboarding) erscheint **Vault entsperren**:
 
@@ -175,33 +175,19 @@ Aktuelles und neues Master-Passwort eingeben → **Master-Passwort speichern**. 
 
 ## 7. Browser-Extension
 
-Ordner `clients/extension` in Chrome, Edge oder Firefox laden (siehe [clients/README.md](../clients/README.md)).
+Kurzanleitung in der App: Sidebar **Hilfe** bzw. Login **Hilfe** → **Browser-Extension**, oder direkt `/help/extension`. Markdown: [`docs/extension-guide.md`](extension-guide.md).
 
-Typischer Ablauf:
+![Hilfe Extension](images/help-extension.png)
 
-1. Server-URL setzen, Login, Master-Passwort  
-2. Secret wählen → **Copy** oder **Fill**  
-
-**Fill** und **Copy** sind nur erlaubt, wenn eine hinterlegte Website-URL zum Host des aktiven Tabs passt — sonst Warnung/Block (Phishing-Schutz). Optional Domain-Filter in der Liste.
-
-Schlüssel bleiben in der Popup-Sitzung, nicht im Content-Script.
+Kurz: Extension laden → Server-URL → Login/Unlock → auf passender Website **Fill** / **Copy** (nur bei Domain-Match).
 
 ## 8. CLI (`tvcli`)
 
-Standalone-Binaries (Windows/Linux): `scripts/build-tvcli.ps1` → `dist/`.
+Kurzanleitung: **Hilfe → CLI** bzw. `/help/cli`. Markdown: [`docs/cli-guide.md`](cli-guide.md).
 
-```powershell
-tvcli -base https://vault.example -api-key tvk_… whoami
-tvcli secrets list
-tvcli secrets get -id sec_…
-tvcli secrets create -title "VPN" -username alice
-tvcli secrets create -title "Git" -url https://git.example.local -ssh-private-file ./id_ed25519
-```
+![Hilfe CLI](images/help-cli.png)
 
-Oder nach `tvcli login …` mit Session-Cookie.  
-Master-Passwort wird bei Bedarf lokal abgefragt und nie an den Server gesendet.
-
-API-Keys brauchen mindestens einen Scope:
+Einzeiler und Alltagsbefehle stehen dort. API-Keys brauchen mindestens einen Scope:
 
 | Scope | Erlaubt |
 |-------|---------|
@@ -224,6 +210,10 @@ Nur `read` → keine Admin- oder Schreibaktionen. Cookie-Login ohne API-Key ist 
 
 ## 10. Hilfe
 
+Übersicht Web-App / CLI / Extension auf der Instanz unter **`/help`** (auch Sidebar **Hilfe** oder Login-Header):
+
+![Hilfe Übersicht](images/help.png)
+
 | Problem | Tipp |
 |---------|------|
 | Login ok, Vault nicht | Master-Passwort / Caps-Lock; Idle-Sperre |
@@ -231,5 +221,6 @@ Nur `read` → keine Admin- oder Schreibaktionen. Cookie-Login ohne API-Key ist 
 | Passkey fehlt | Neu registrieren; Gerät/OS-Support prüfen |
 | Secret „kein Zugriff“ | Noch nicht geteilt oder Rechte entzogen |
 | Fill/Copy blockiert | Secret-URL passt nicht zum Tab-Host |
+| CLI/Extension-Install | `/help/cli` bzw. `/help/extension`; Admin muss `/downloads/` befüllen |
 
 Technische API: [openapi.yaml](openapi.yaml) · Admin: [admin-guide.md](admin-guide.md)

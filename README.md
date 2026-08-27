@@ -31,7 +31,9 @@ Details: [`.cursor/rules/security-principles.mdc`](.cursor/rules/security-princi
 
 | Guide | Zielgruppe |
 |-------|------------|
-| [**User Guide**](docs/user-guide.md) | Alltag: Login, Onboarding, Vault, Sharing, Export, Passwort-Wechsel, Extension/CLI |
+| [**User Guide**](docs/user-guide.md) | Alltag: Login, Onboarding, Vault, Sharing, Export, Passwort-Wechsel |
+| [**CLI Guide**](docs/cli-guide.md) | tvcli installieren & nutzen (auch in der App: `/help/cli`) |
+| [**Extension Guide**](docs/extension-guide.md) | Browser-Extension (auch: `/help/extension`) |
 | [**Admin Guide**](docs/admin-guide.md) | Betrieb: Setup-Wizard, User/LDAP/SMTP, Escrow, Proxy/TLS, Backup, CI |
 | [**Roadmap**](docs/planning/roadmap-phase9plus.md) | Weitere Ausbaupfade (Hardening, UX, Perf, Features) |
 | [**Vergleich Password Manager**](docs/planning/competitive-comparison.md) | TeamVault vs. Bitwarden, Vaultwarden, Passbolt, … |

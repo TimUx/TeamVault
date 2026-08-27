@@ -166,6 +166,27 @@ Siehe Root-[README](../README.md#docker). Compose mountet:
 
 CI baut Images auf dem Ubuntu-Runner, scanned sie mit **Trivy** (Severity HIGH/CRITICAL, unfixed ignored) und pusht bei Erfolg ins Gitea-Package-Registry (`.gitea/workflows/ci.yml`).
 
+### 4.1 Client-Downloads (CLI & Extension)
+
+Die Hilfe unter **`/help`** (Login-Header und Sidebar **Hilfe**) bietet Einzeiler-Installationen:
+
+![Hilfe Übersicht](images/help.png)
+
+Dafür Binaries/ZIP nach **`<data-dir>/downloads/`** legen (Server legt den Ordner beim Start an, ausgeliefert unter `/downloads/`):
+
+```powershell
+.\scripts\pack-clients.ps1
+New-Item -ItemType Directory -Force data\downloads | Out-Null
+Copy-Item dist\tvcli-* data\downloads\
+Copy-Item dist\teamvault-extension.zip data\downloads\
+```
+
+Danach funktionieren z. B.:
+
+```powershell
+$env:TEAMVAULT_URL='https://vault.example'; irm "$env:TEAMVAULT_URL/help/install/tvcli.ps1" | iex
+```
+
 ## 5. Backup
 
 | Was | Hinweis |

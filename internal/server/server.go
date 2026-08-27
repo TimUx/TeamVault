@@ -8,6 +8,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -113,11 +114,18 @@ func (a *API) Handler() http.Handler {
 	a.registerMVPGaps(mux)
 	a.registerPhase7(mux)
 	a.registerPhase12(mux)
+	dl := filepath.Join(a.App.DataDir, "downloads")
+	_ = os.MkdirAll(dl, 0o755)
+	mux.Handle("GET /downloads/", http.StripPrefix("/downloads/", http.FileServer(http.Dir(dl))))
 	mux.Handle("GET /{$}", web.Handler())
 	mux.Handle("GET /setup", web.Handler())
 	mux.Handle("GET /login", web.Handler())
 	mux.Handle("GET /onboard", web.Handler())
 	mux.Handle("GET /app", web.Handler())
+	mux.Handle("GET /help", web.Handler())
+	mux.Handle("GET /help/cli", web.Handler())
+	mux.Handle("GET /help/extension", web.Handler())
+	mux.Handle("GET /help/", web.Handler())
 	mux.Handle("GET /vendor/", web.Handler())
 	mux.Handle("GET /styles.css", web.Handler())
 	mux.Handle("GET /app.js", web.Handler())

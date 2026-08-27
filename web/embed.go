@@ -22,6 +22,15 @@ func Handler() http.Handler {
 		case "/", "/setup", "/login", "/onboard", "/app":
 			http.ServeFileFS(w, r, sub, "index.html")
 			return
+		case "/help", "/help/":
+			http.ServeFileFS(w, r, sub, "help/index.html")
+			return
+		case "/help/cli", "/help/cli/":
+			http.ServeFileFS(w, r, sub, "help/cli.html")
+			return
+		case "/help/extension", "/help/extension/":
+			http.ServeFileFS(w, r, sub, "help/extension.html")
+			return
 		}
 		if strings.HasPrefix(path, "/") {
 			r.URL.Path = path

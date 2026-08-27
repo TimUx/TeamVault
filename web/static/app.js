@@ -60,6 +60,7 @@ const ICO = {
   layoutList: '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
   layoutTable: '<path d="M3 3h18v18H3zM3 9h18M3 15h18M9 3v18"/>',
   layoutGrid: '<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>',
+  book: '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>',
 };
 
 function icon(name, cls) {
@@ -115,6 +116,15 @@ function ensureHeaderControls() {
     applyTheme(cur === "dark" ? "light" : "dark");
   };
   actions.appendChild(btn);
+  const help = document.createElement("a");
+  help.href = "/help";
+  help.className = "btn-ghost";
+  help.textContent = "Hilfe";
+  help.style.textDecoration = "none";
+  help.style.padding = "0.35rem 0.65rem";
+  help.style.display = "inline-flex";
+  help.style.alignItems = "center";
+  actions.appendChild(help);
   top.appendChild(actions);
   syncThemeToggles(document.documentElement.getAttribute("data-theme") || "light");
 }
@@ -870,6 +880,7 @@ function renderApp(app) {
         <div class="sidebar-section">
           <div class="sidebar-section-title">Konto</div>
           ${navLink("account", "user", "Konto")}
+          <a class="sidebar-link" href="/help" target="_blank" rel="noopener"><span class="nav-ico">${icon("book")}</span><span>Hilfe</span></a>
         </div>
         <div class="sidebar-section" id="navAdminSection" hidden>
           <div class="sidebar-section-title">Administration</div>
