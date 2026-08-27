@@ -78,11 +78,28 @@ jobs:
           # Always use public registry host — gitea.server_url is often http://gitea:3000
           echo "${REGISTRY_TOKEN}" | docker login "${REGISTRY}" -u "${REGISTRY_USER}" --password-stdin
 
+      - name: Trust Corporate CA for Docker/BuildKit
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f certs/corp-ca-bundle.crt
+          # OS trust store inside the job container
+          if [ -d /usr/local/share/ca-certificates ]; then
+            cp certs/corp-ca-bundle.crt /usr/local/share/ca-certificates/corp-ca-bundle.crt
+            update-ca-certificates || true
+          fi
+          # Host Docker daemon certs.d (BuildKit talks to registry via the daemon)
+          docker pull "${BASE_REGISTRY}/golang:1.23.3-bookworm"
+          docker run --rm \
+            -v /etc/docker/certs.d:/certs.d \
+            -v "${PWD}/certs/corp-ca-bundle.crt:/ca.crt:ro" \
+            "${BASE_REGISTRY}/golang:1.23.3-bookworm" \
+            bash -c "mkdir -p '/certs.d/${REGISTRY}' && cp /ca.crt '/certs.d/${REGISTRY}/ca.crt' && ls -la '/certs.d/${REGISTRY}'"
+
       - name: Go test via docker build
         shell: bash
         run: |
           set -euo pipefail
-          # Pre-pull via docker CLI (BuildKit token fetch fails on corp TLS MITM)
           docker pull "${BASE_REGISTRY}/golang:1.23.3-bookworm"
           docker build \
             --pull=false \
@@ -165,6 +182,22 @@ jobs:
           echo "docker login ${REGISTRY} as ${REGISTRY_USER}"
           echo "${REGISTRY_TOKEN}" | docker login "${REGISTRY}" -u "${REGISTRY_USER}" --password-stdin
 
+      - name: Trust Corporate CA for Docker/BuildKit
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f certs/corp-ca-bundle.crt
+          if [ -d /usr/local/share/ca-certificates ]; then
+            cp certs/corp-ca-bundle.crt /usr/local/share/ca-certificates/corp-ca-bundle.crt
+            update-ca-certificates || true
+          fi
+          docker pull "${BASE_REGISTRY}/golang:1.23.3-bookworm"
+          docker run --rm \
+            -v /etc/docker/certs.d:/certs.d \
+            -v "${PWD}/certs/corp-ca-bundle.crt:/ca.crt:ro" \
+            "${BASE_REGISTRY}/golang:1.23.3-bookworm" \
+            bash -c "mkdir -p '/certs.d/${REGISTRY}' && cp /ca.crt '/certs.d/${REGISTRY}/ca.crt' && ls -la '/certs.d/${REGISTRY}'"
+
       - name: Build image
         shell: bash
         run: |
@@ -172,7 +205,6 @@ jobs:
           PRIMARY="$(echo '${{ steps.meta.outputs.tags }}' | head -n1)"
           VER="$(git describe --tags --always --dirty 2>/dev/null || echo '${{ gitea.sha }}' | cut -c1-7)"
           COMMIT="$(echo '${{ gitea.sha }}' | cut -c1-7)"
-          # Pre-pull via docker CLI (BuildKit oauth to registry hits x509 unknown authority)
           docker pull "${BASE_REGISTRY}/golang:1.23.3-bookworm"
           docker pull "${BASE_REGISTRY}/distroless-static:nonroot"
           docker build \
