@@ -32,7 +32,7 @@ Tags: `latest`/`main` (Branch main), `sha-<7>`, bei Tag `v*` zusätzlich Version
 
 Wie bei **storage-dashboard**: Workflow-`env` setzt `HTTP_PROXY`/`HTTPS_PROXY` auf `http://proxy.example.internal:8080` und `NO_PROXY` für interne Hosts (`gitea`, `git.example.internal`, `.example.internal`).
 
-**Wichtig:** `actions/checkout` / `actions/setup-go` von github.com werden **nicht** verwendet — act klont Actions *bevor* Workflow-Env greift. Checkout läuft per internen Clone (`gitea:3000`); Go wird per `curl --proxy` von go.dev installiert. `docker build` bekommt die Proxy-Werte als Build-Args.
+**Wichtig:** Keine `actions/*` von github.com (act lädt sie ohne Workflow-Proxy). Checkout intern über `gitea:3000`. Go-Test/Build über `docker build` mit Proxy-Build-Args — der Docker-Daemon spricht mit `proxyits` (curl im Job-Container bekommt sonst 407 ohne NTLM).
 
 Optional: `secrets.ACT_RUN_TOKEN` für den internen Clone (Fallback: Job-Token).
 

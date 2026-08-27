@@ -25,6 +25,12 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
+
+# CI target: unit tests + vet (build with: docker build --target test …)
+FROM build AS test
+RUN go test ./... && go vet ./...
+
+FROM build AS bin
 ARG VERSION=dev
 ARG COMMIT=none
 RUN go build -trimpath \
@@ -34,7 +40,7 @@ RUN go build -trimpath \
 FROM gcr.io/distroless/static-debian12:nonroot
 WORKDIR /data
 
-COPY --from=build /out/teamvault /usr/local/bin/teamvault
+COPY --from=bin /out/teamvault /usr/local/bin/teamvault
 
 ENV TEAMVAULT_ADDR=:8080 \
     TEAMVAULT_DATA_DIR=/data \

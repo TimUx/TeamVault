@@ -164,7 +164,7 @@ Siehe Root-[README](../README.md#docker). Compose mountet:
 - Volume `/data` — Vault/Config
 - Unlock-Datei → `/run/secrets/teamvault_unlock` (read-only)
 
-CI baut Images auf dem Ubuntu-Runner, scanned sie mit **Trivy** (Severity HIGH/CRITICAL, unfixed ignored) und pusht bei Erfolg ins Gitea-Package-Registry (`.gitea/workflows/ci.yml`). Für GitHub-Actions und Docker-Build nutzt der Workflow denselben Firmenproxy wie storage-dashboard (`proxy.example.internal:8080`, siehe [`.gitea/README.md`](../.gitea/README.md)).
+CI baut Images auf dem Ubuntu-Runner, scanned sie mit **Trivy** (Severity HIGH/CRITICAL, unfixed ignored) und pusht bei Erfolg ins Gitea-Package-Registry (`.gitea/workflows/ci.yml`). Checkout intern über Gitea; Go-Test und Image-Build laufen über `docker build` mit dem Firmenproxy (`proxy.example.internal:8080`, siehe [`.gitea/README.md`](../.gitea/README.md)).
 
 ### 4.1 Client-Downloads (CLI & Extension)
 
