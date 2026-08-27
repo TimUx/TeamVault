@@ -30,12 +30,13 @@ type MailTemplates struct {
 }
 
 type Policy struct {
-	TOTPRequired       bool `json:"totp_required"`
-	SessionHours       int  `json:"session_hours"`        // default 8 (OQ-17)
-	UnlockIdleMinutes  int  `json:"unlock_idle_minutes"`  // default 15 (OQ-17)
-	EscrowShamirK      int  `json:"escrow_shamir_k"`      // default 3
-	EscrowShamirN      int  `json:"escrow_shamir_n"`      // default 5
-	LDAPSyncHours      int  `json:"ldap_sync_hours"`      // default 24; 0 = manual only
+	TOTPRequired            bool `json:"totp_required"`
+	SessionHours            int  `json:"session_hours"`               // default 8 (OQ-17)
+	UnlockIdleMinutes       int  `json:"unlock_idle_minutes"`         // default 15 (OQ-17)
+	EscrowShamirK           int  `json:"escrow_shamir_k"`             // default 3
+	EscrowShamirN           int  `json:"escrow_shamir_n"`             // default 5
+	LDAPSyncHours           int  `json:"ldap_sync_hours"`             // default 24; 0 = manual only
+	AdminSecretsEnvelopeOnly bool `json:"admin_secrets_envelope_only"` // false = admins see all secret metadata in list (default)
 }
 
 // LDAPConnection is a per-tenant LDAP bind config (OQ-09).

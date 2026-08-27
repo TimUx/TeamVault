@@ -102,10 +102,12 @@ func (a *API) handlePutLDAP(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	_ = a.App.Vault.AppendAudit(r.Context(), store.AuditEvent{
-		ID: newID("aud"), TenantID: sess.TenantID, ActorID: string(sess.UserID),
-		Action: "admin.ldap.update", ResourceType: "config", ResourceID: "ldap", CreatedAt: time.Now().UTC(),
-	})
+	if !a.appendAuditStrict(w, r, store.AuditEvent{
+		TenantID: sess.TenantID, ActorID: string(sess.UserID),
+		Action: "admin.ldap.update", ResourceType: "config", ResourceID: "ldap",
+	}) {
+		return
+	}
 	writeJSON(w, http.StatusOK, instcfg.RedactLDAP(cfg))
 }
 
@@ -145,10 +147,12 @@ func (a *API) handlePutMail(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	_ = a.App.Vault.AppendAudit(r.Context(), store.AuditEvent{
-		ID: newID("aud"), TenantID: sess.TenantID, ActorID: string(sess.UserID),
-		Action: "admin.mail.update", ResourceType: "config", ResourceID: "mail", CreatedAt: time.Now().UTC(),
-	})
+	if !a.appendAuditStrict(w, r, store.AuditEvent{
+		TenantID: sess.TenantID, ActorID: string(sess.UserID),
+		Action: "admin.mail.update", ResourceType: "config", ResourceID: "mail",
+	}) {
+		return
+	}
 	writeJSON(w, http.StatusOK, instcfg.RedactMail(cfg))
 }
 
@@ -207,10 +211,12 @@ func (a *API) handlePutCrypto(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	_ = a.App.Vault.AppendAudit(r.Context(), store.AuditEvent{
-		ID: newID("aud"), TenantID: sess.TenantID, ActorID: string(sess.UserID),
-		Action: "admin.crypto.update", ResourceType: "config", ResourceID: "argon2", CreatedAt: time.Now().UTC(),
-	})
+	if !a.appendAuditStrict(w, r, store.AuditEvent{
+		TenantID: sess.TenantID, ActorID: string(sess.UserID),
+		Action: "admin.crypto.update", ResourceType: "config", ResourceID: "argon2",
+	}) {
+		return
+	}
 	writeJSON(w, http.StatusOK, p)
 }
 
@@ -243,10 +249,12 @@ func (a *API) handlePutPolicy(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	_ = a.App.Vault.AppendAudit(r.Context(), store.AuditEvent{
-		ID: newID("aud"), TenantID: sess.TenantID, ActorID: string(sess.UserID),
-		Action: "admin.policy.update", ResourceType: "config", ResourceID: "policy", CreatedAt: time.Now().UTC(),
-	})
+	if !a.appendAuditStrict(w, r, store.AuditEvent{
+		TenantID: sess.TenantID, ActorID: string(sess.UserID),
+		Action: "admin.policy.update", ResourceType: "config", ResourceID: "policy",
+	}) {
+		return
+	}
 	writeJSON(w, http.StatusOK, p)
 }
 
@@ -292,10 +300,12 @@ func (a *API) handleCreateTenant(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	_ = a.App.Vault.AppendAudit(r.Context(), store.AuditEvent{
-		ID: newID("aud"), TenantID: sess.TenantID, ActorID: string(sess.UserID),
-		Action: "admin.tenant.create", ResourceType: "tenant", ResourceID: string(t.ID), CreatedAt: time.Now().UTC(),
-	})
+	if !a.appendAuditStrict(w, r, store.AuditEvent{
+		TenantID: sess.TenantID, ActorID: string(sess.UserID),
+		Action: "admin.tenant.create", ResourceType: "tenant", ResourceID: string(t.ID),
+	}) {
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]string{"id": string(t.ID), "slug": t.Slug})
 }
 
@@ -312,10 +322,12 @@ func (a *API) handleDisableTenant(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	_ = a.App.Vault.AppendAudit(r.Context(), store.AuditEvent{
-		ID: newID("aud"), TenantID: sess.TenantID, ActorID: string(sess.UserID),
-		Action: "admin.tenant.disable", ResourceType: "tenant", ResourceID: string(id), CreatedAt: time.Now().UTC(),
-	})
+	if !a.appendAuditStrict(w, r, store.AuditEvent{
+		TenantID: sess.TenantID, ActorID: string(sess.UserID),
+		Action: "admin.tenant.disable", ResourceType: "tenant", ResourceID: string(id),
+	}) {
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "disabled"})
 }
 
@@ -373,16 +385,17 @@ func (a *API) handleListAudit(w http.ResponseWriter, r *http.Request) {
 func (a *API) handleListAPIKeys(w http.ResponseWriter, r *http.Request) {
 	b := a.bundle()
 	type row struct {
-		ID        string     `json:"id"`
-		Name      string     `json:"name"`
-		Scopes    []string   `json:"scopes"`
-		CreatedAt time.Time  `json:"created_at"`
-		ExpiresAt *time.Time `json:"expires_at,omitempty"`
-		Revoked   bool       `json:"revoked"`
+		ID             string     `json:"id"`
+		Name           string     `json:"name"`
+		Scopes         []string   `json:"scopes"`
+		LegacyNoScopes bool       `json:"legacy_no_scopes"`
+		CreatedAt      time.Time  `json:"created_at"`
+		ExpiresAt      *time.Time `json:"expires_at,omitempty"`
+		Revoked        bool       `json:"revoked"`
 	}
 	out := make([]row, 0, len(b.APIKeys))
 	for _, k := range b.APIKeys {
-		out = append(out, row{k.ID, k.Name, k.Scopes, k.CreatedAt, k.ExpiresAt, k.Revoked})
+		out = append(out, row{k.ID, k.Name, k.Scopes, len(k.Scopes) == 0, k.CreatedAt, k.ExpiresAt, k.Revoked})
 	}
 	writeJSON(w, http.StatusOK, out)
 }
@@ -413,10 +426,12 @@ func (a *API) handleCreateAPIKey(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	_ = a.App.Vault.AppendAudit(r.Context(), store.AuditEvent{
-		ID: newID("aud"), TenantID: sess.TenantID, ActorID: string(sess.UserID),
-		Action: "admin.apikey.create", ResourceType: "api_key", ResourceID: rec.ID, CreatedAt: time.Now().UTC(),
-	})
+	if !a.appendAuditStrict(w, r, store.AuditEvent{
+		TenantID: sess.TenantID, ActorID: string(sess.UserID),
+		Action: "admin.apikey.create", ResourceType: "api_key", ResourceID: rec.ID,
+	}) {
+		return
+	}
 	// Klartext nur einmal — nie in Logs.
 	writeJSON(w, http.StatusOK, map[string]any{
 		"id": rec.ID, "name": rec.Name, "token": plain, "note": "store token now; not shown again",
@@ -443,10 +458,12 @@ func (a *API) handleRevokeAPIKey(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	_ = a.App.Vault.AppendAudit(r.Context(), store.AuditEvent{
-		ID: newID("aud"), TenantID: sess.TenantID, ActorID: string(sess.UserID),
-		Action: "admin.apikey.revoke", ResourceType: "api_key", ResourceID: id, CreatedAt: time.Now().UTC(),
-	})
+	if !a.appendAuditStrict(w, r, store.AuditEvent{
+		TenantID: sess.TenantID, ActorID: string(sess.UserID),
+		Action: "admin.apikey.revoke", ResourceType: "api_key", ResourceID: id,
+	}) {
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "revoked"})
 }
 
@@ -509,10 +526,12 @@ func (a *API) handleMigrateStorage(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, "reopen: "+err.Error())
 		return
 	}
-	_ = a.App.Vault.AppendAudit(r.Context(), store.AuditEvent{
-		ID: newID("aud"), TenantID: sess.TenantID, ActorID: string(sess.UserID),
-		Action: "admin.storage.migrate", ResourceType: "storage", ResourceID: body.Backend, CreatedAt: time.Now().UTC(),
-	})
+	if !a.appendAuditStrict(w, r, store.AuditEvent{
+		TenantID: sess.TenantID, ActorID: string(sess.UserID),
+		Action: "admin.storage.migrate", ResourceType: "storage", ResourceID: body.Backend,
+	}) {
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "storage": target})
 }
 

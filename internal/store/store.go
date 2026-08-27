@@ -206,6 +206,8 @@ type VaultStore interface {
 	ListSecretKeyVersions(ctx context.Context, tenant TenantID) (map[SecretID]uint32, error)
 	// RotateSecret atomically invalidates oldKeyVersion, updates meta+ciphertext, and writes envelopes.
 	RotateSecret(ctx context.Context, tenant TenantID, id SecretID, oldKeyVersion uint32, meta SecretMeta, blob CiphertextBlob, envelopes []KeyEnvelope) error
+	// CreateSecret atomically writes meta, ciphertext, and initial envelopes.
+	CreateSecret(ctx context.Context, meta SecretMeta, blob CiphertextBlob, envelopes []KeyEnvelope) error
 
 	AppendAudit(ctx context.Context, e AuditEvent) error
 	ListAudit(ctx context.Context, tenant TenantID, q AuditQuery) ([]AuditEvent, error)

@@ -19,7 +19,9 @@ Vor dem Betrieb mit echten Zugangsdaten: externes Audit + internes Walkthrough g
 - [x] TOTP-Secrets at-rest nur als undurchsichtige Blobs; Codes nicht geloggt
 - [x] Session-Cookies HttpOnly; Idle-/Session-Timeouts konfiguriert (OQ-17)
 - [x] Onboarding-Gate: ohne Vault-Keys kein Secret-Zugriff
-- [x] API-Key Scope `read` blockiert Admin/Mutationen; Cookie-Mutationen brauchen Origin
+- [x] API-Key Scope `read` blockiert Admin/Mutationen; Legacy-Keys ohne Scopes nur read-only GET
+- [x] Secret-Create atomar + `secret.create` im Audit; fail-hard bei Audit-Fehler
+- [x] Optional: Admin-List nur Secrets mit eigenem Envelope (`admin_secrets_envelope_only`)
 - [x] Delete/Share nur mit gültigem Envelope; Share-Empfänger onboarded im Tenant
 
 ## Config & Bootstrap
@@ -40,7 +42,7 @@ Vor dem Betrieb mit echten Zugangsdaten: externes Audit + internes Walkthrough g
 - [x] Rate-Limits / Lockout für Login (falls nicht vorhanden: nachziehen)
 - [x] Dependency- und Container-Image-Scan
 - [x] Server `ReadHeaderTimeout` / Read/Write/Idle-Timeouts gesetzt
-- [x] Reverse-Proxy: Origin durchreichen; `TEAMVAULT_TRUST_FORWARDED` Default aus
+- [x] Reverse-Proxy: Origin durchreichen; `TEAMVAULT_TRUST_FORWARDED` Default aus; Startup-WARN bei Aktivierung
 
 ## UI / Client
 
@@ -49,6 +51,7 @@ Vor dem Betrieb mit echten Zugangsdaten: externes Audit + internes Walkthrough g
 - [x] CSP und Trusted Types soweit praktikabel
 - [x] Escrow-Gen: kein voller SK im DOM; Shares + Download
 - [x] Extension Fill/Copy nur bei Host-Match
+- [x] Skip-Link, `aria-live` für Status/Fehler, Lock-Dialog mit Escape
 
 ## Dokumentation
 

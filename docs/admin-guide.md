@@ -115,6 +115,7 @@ Sidebar **Administration → LDAP**:
 - Argon2-Defaults / Presets für neue Onboardings
 - TOTP-Pflicht (Hinweis/Policy nach Login)
 - Idle-Lock der Vault-Session (Default 15 min) — nur Client-Unlock
+- **Admins: Secret-Liste nur mit Envelope** (`admin_secrets_envelope_only`): Wenn aktiv, sehen Tenant-Admins in der Secret-Liste nur Einträge, für die sie selbst ein Envelope haben (Inventar-Metadaten anderer Secrets ausgeblendet). Default: aus — Admins sehen alle Secret-Metadaten (IDs, Title-Ciphertext), Klartext bleibt Zero-Knowledge-geschützt.
 
 ### 3.6 Escrow & Shamir
 
@@ -135,9 +136,9 @@ Der private Escrow-Key darf nie in Logs oder dauerhaft auf dem Server landen.
 
 ![API-Keys](images/admin-apikeys.png)
 
-- Audit-Liste (Tenant-Ereignisse) — Fehlerhinweise erscheinen oben im Admin-Bereich; kritische Vault-Mutationen (Share/Rotate/Delete) scheitern, wenn der Audit-Schreibvorgang fehlschlägt
+- Audit-Liste (Tenant-Ereignisse) — Fehlerhinweise erscheinen oben im Admin-Bereich; kritische Vault-Mutationen (Create/Share/Rotate/Delete) sowie Recovery-Reonboard und zentrale Admin-Mutationen scheitern, wenn der Audit-Schreibvorgang fehlschlägt
 - API-Keys für Automation/CLI (`Authorization: Bearer …` / `TEAMVAULT_API_KEY`) — Token nur einmal anzeigen
-- Scopes (**Pflicht**, mind. einer; UI-Checkboxen):
+- Scopes (**Pflicht** bei Neuanlage, mind. einer; UI-Checkboxen):
 
   | Scope | Wirkung |
   |-------|---------|
@@ -145,9 +146,9 @@ Der private Escrow-Key darf nie in Logs oder dauerhaft auf dem Server landen.
   | `vault` | Secret-/Vault-Schreibaktionen (Create/Share/Rotate/Delete, …) |
   | `admin` | `/api/admin/*` — zusätzlich müssen die **User-Rollen** Admin erlauben |
 
-- Cookie-Sessions ohne Scope-Einschränkung. Legacy-Keys ohne Scopes gelten als uneingeschränkt (nicht neu anlegen).
+- Cookie-Sessions ohne Scope-Einschränkung. **Legacy-Keys ohne Scopes** (`legacy_no_scopes` in der Key-Liste): nur **read-only** GET-Allowlist — keine Schreib- oder Admin-Aktionen. Key mit expliziten Scopes neu ausstellen und alten Key widerrufen.
 - Nach User-Disable: Secrets mit Envelope dieses Users rotieren (Hinweis + Liste `accessible-secrets` in Admin-UI; kein Auto-Rotate wegen ZK)
-- Tenant-Admins sehen in der Secret-Liste **Metadaten** (IDs, Title-Ciphertext) auch ohne eigenen Envelope — Klartext bleibt ZK-geschützt
+- Tenant-Admins sehen standardmäßig in der Secret-Liste **Metadaten** (IDs, Title-Ciphertext) auch ohne eigenen Envelope — optional einschränkbar über Policy (siehe §3.5)
 
 ### 3.8 Tenants & Storage-Migration (`platform_admin`)
 
@@ -189,7 +190,7 @@ CI baut Images auf dem Ubuntu-Runner, scanned sie mit **Trivy** (Severity HIGH/C
 
 - [ ] TLS am Proxy; App nur intern erreichbar
 - [ ] `Origin` / `Referer` an die App durchreichen (Cookie-Mutationen prüfen Origin; leerer Origin bei Cookie → 403)
-- [ ] `X-Forwarded-Proto` / `X-Forwarded-Host` nur setzen, wenn `TEAMVAULT_TRUST_FORWARDED=1` (Default: aus — nicht blind vertrauen)
+- [ ] `X-Forwarded-Proto` / `X-Forwarded-Host` nur setzen, wenn `TEAMVAULT_TRUST_FORWARDED=1` (Default: aus — nicht blind vertrauen). Bei Aktivierung loggt der Server beim Start `WARN: TEAMVAULT_TRUST_FORWARDED is enabled …` — nur hinter vertrauenswürdigem Edge-Proxy verwenden.
 - [ ] HSTS am Proxy oder App (bei HTTPS)
 - [ ] WebAuthn RP-ID/Origin passen zur öffentlichen URL
 

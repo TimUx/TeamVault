@@ -147,11 +147,12 @@ func (a *API) handleLDAPSync(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		disabled++
-		_ = a.App.Vault.AppendAudit(r.Context(), store.AuditEvent{
-			ID: newID("aud"), TenantID: sess.TenantID, ActorID: string(sess.UserID),
+		if !a.appendAuditStrict(w, r, store.AuditEvent{
+			TenantID: sess.TenantID, ActorID: string(sess.UserID),
 			Action: "admin.ldap.sync_disable", ResourceType: "user", ResourceID: string(u.ID),
-			CreatedAt: time.Now().UTC(),
-		})
+		}) {
+			return
+		}
 		a.maybeMailDisabled(u, sess.TenantID)
 	}
 	b := a.bundle()

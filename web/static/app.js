@@ -613,7 +613,14 @@ function touchIdle() {
       };
       overlay._focusTrap = trap;
       document.addEventListener("keydown", trap);
+      document.addEventListener("keydown", overlay._escLock = (ev) => {
+        if (ev.key === "Escape" && !overlay.hidden) {
+          ev.preventDefault();
+          mpw?.focus();
+        }
+      });
       mpw?.focus();
+      announceA11y("Vault gesperrt. Master-Passwort eingeben.");
     }
   }, vault.idleMin * 60 * 1000);
 }
@@ -727,6 +734,13 @@ function isSecretExtraType(type) {
 
 function extraSupportsFile(type) {
   return type === "ssh_private_key" || type === "ssh_public_key" || type === "certificate";
+}
+
+function announceA11y(msg) {
+  const live = document.getElementById("a11yLive");
+  if (!live || !msg) return;
+  live.textContent = "";
+  live.textContent = msg;
 }
 
 function renderApp(app) {
@@ -987,6 +1001,7 @@ function renderApp(app) {
                   <label>Argon2 Time</label><input id="arg_time" type="number" />
                   <label>Argon2 Threads</label><input id="arg_threads" type="number" value="1" />
                   <label class="inline"><input id="totp_req" type="checkbox" /> TOTP Pflicht (Hinweis nach Login)</label>
+                  <label class="inline"><input id="admin_env_only" type="checkbox" /> Admins: Secret-Liste nur mit Envelope</label>
                   <div class="row">
                     <button class="btn-accent" type="button" id="crypto_save">Krypto speichern</button>
                     <button class="btn-ghost" type="button" id="policy_save">Policy speichern</button>
@@ -1044,6 +1059,12 @@ function renderApp(app) {
     </div>
   </div>`);
   app.appendChild(n);
+  const live = document.createElement("div");
+  live.id = "a11yLive";
+  live.className = "visually-hidden";
+  live.setAttribute("aria-live", "polite");
+  live.setAttribute("aria-atomic", "true");
+  app.appendChild(live);
   let currentSecret = null;
   let totpSecretPlain = "";
 
@@ -1380,6 +1401,10 @@ function renderApp(app) {
     if (lockOv && lockOv._focusTrap) {
       document.removeEventListener("keydown", lockOv._focusTrap);
       lockOv._focusTrap = null;
+    }
+    if (lockOv && lockOv._escLock) {
+      document.removeEventListener("keydown", lockOv._escLock);
+      lockOv._escLock = null;
     }
     n.querySelector("#vaultui").hidden = false;
     n.querySelector("#appSidebar").hidden = false;
@@ -2154,16 +2179,18 @@ function renderApp(app) {
     } catch (_) {}
     const pol = await api("/api/admin/policy");
     n.querySelector("#totp_req").checked = !!pol.totp_required;
+    n.querySelector("#admin_env_only").checked = !!pol.admin_secrets_envelope_only;
     const auditRaw = await api("/api/admin/audit");
     const audit = Array.isArray(auditRaw) ? auditRaw : (auditRaw.items || []);
     n.querySelector("#alist").innerHTML = audit.slice(0, 30).map((e) =>
       `<div>${e.created_at} · ${e.action} · ${e.actor_id} · ${e.resource_type}/${e.resource_id}</div>`
     ).join("") || "<p>Keine Events</p>";
     const keys = await api("/api/admin/api-keys");
-    n.querySelector("#klist").innerHTML = keys.map((k) =>
-      `<div class="list-row"><span>${k.name} ${k.revoked ? "(revoked)" : ""}</span>` +
-      (!k.revoked ? `<button class="btn-ghost" data-kr="${k.id}" type="button">Revoke</button>` : "") + `</div>`
-    ).join("") || "<p class='hint'>Keine Keys</p>";
+    n.querySelector("#klist").innerHTML = keys.map((k) => {
+      const scopeLabel = k.legacy_no_scopes ? "legacy (nur read)" : (k.scopes || []).join(", ") || "?";
+      return `<div class="list-row"><span>${k.name} [${scopeLabel}] ${k.revoked ? "(revoked)" : ""}</span>` +
+      (!k.revoked ? `<button class="btn-ghost" data-kr="${k.id}" type="button">Revoke</button>` : "") + `</div>`;
+    }).join("") || "<p class='hint'>Keine Keys</p>";
     n.querySelector("#klist").querySelectorAll("[data-kr]").forEach((btn) => {
       btn.onclick = async () => {
         await api("/api/admin/api-keys/" + btn.dataset.kr + "/revoke", { method: "POST", body: "{}" });
@@ -2290,6 +2317,7 @@ function renderApp(app) {
         method: "PUT",
         body: JSON.stringify({
           totp_required: n.querySelector("#totp_req").checked,
+          admin_secrets_envelope_only: n.querySelector("#admin_env_only").checked,
           session_hours: 8,
           unlock_idle_minutes: vault.idleMin || 15,
           escrow_shamir_k: Number(n.querySelector("#shamir_k").value) || 3,

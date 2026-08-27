@@ -113,6 +113,7 @@ Der Key entsperrt nur die **verschlüsselte Config** — keine Vault-Klartexte.
 - Phases 9–13: Hardening, UX-Kern, Performance, Features, Dark/Mobile (Postgres/IdP deferred; React abgesagt → Vanilla)
 - Findings-Stufenplan: Authz/Scopes/CSRF, Ops-Docs, A11y/Host-Gate, Export & Self-Service-Passwörter
 - Post-Stufenplan: atomare Rotation, API-Key-Scopes `read`/`vault`/`admin`, `GET /api/groups`, List-Batching, Trivy-CI, Extension Copy Host-Gate
+- Residual-Härtung: Legacy-Keys read-only, `CreateSecret` atomar + Audit, Admin-Envelope-Policy, Recovery/Admin-Audit fail-hard, accessible-secrets Batch, A11y skip-link/`aria-live`, TRUST_FORWARDED Startup-Warnung
 
 Self-Check: [`docs/phase9-13-security-self-check.md`](docs/phase9-13-security-self-check.md) · Checklist: [`SECURITY-REVIEW-CHECKLIST.md`](SECURITY-REVIEW-CHECKLIST.md)
 

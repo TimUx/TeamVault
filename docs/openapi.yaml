@@ -289,13 +289,43 @@ paths:
       responses:
         '200':
           description: Saved
+  /api/admin/policy:
+    get:
+      tags: [admin]
+      summary: Tenant policy (TOTP, session, escrow Shamir, LDAP sync, admin list mode)
+      responses:
+        '200':
+          description: Policy object including admin_secrets_envelope_only
+    put:
+      tags: [admin]
+      summary: Update tenant policy
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                totp_required: { type: boolean }
+                session_hours: { type: integer }
+                unlock_idle_minutes: { type: integer }
+                escrow_shamir_k: { type: integer }
+                escrow_shamir_n: { type: integer }
+                ldap_sync_hours: { type: integer }
+                admin_secrets_envelope_only:
+                  type: boolean
+                  description: When true, tenant admins only see secrets they have an envelope for in list views
+      responses:
+        '200':
+          description: Updated policy
   /api/admin/api-keys:
     get:
       tags: [admin]
       summary: List API keys (no secrets)
       responses:
         '200':
-          description: Metadata only
+          description: |
+            Array of { id, name, scopes, legacy_no_scopes, created_at, expires_at?, revoked }.
+            legacy_no_scopes=true → key has no scopes (read-only GET allowlist only).
     post:
       tags: [admin]
       summary: Create API key (token shown once)

@@ -28,6 +28,11 @@ func trustForwarded() bool {
 	return v == "1" || v == "true" || v == "yes"
 }
 
+// TrustForwardedEnabled reports whether forwarded headers are trusted (for startup warnings).
+func TrustForwardedEnabled() bool {
+	return trustForwarded()
+}
+
 func (a *API) setSessionCookie(w http.ResponseWriter, r *http.Request, sess session.Session) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     "tv_session",

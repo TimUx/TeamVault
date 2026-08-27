@@ -34,6 +34,9 @@ func main() {
 		IdleTimeout:       120 * time.Second,
 	}
 	fmt.Printf("TeamVault listening on %s (initialized=%v)\n", *addr, app.Config.Initialized)
+	if server.TrustForwardedEnabled() {
+		log.Println("WARN: TEAMVAULT_TRUST_FORWARDED is enabled — only use behind a trusted reverse proxy")
+	}
 	if err := srv.ListenAndServe(); err != nil {
 		log.Println(err)
 		os.Exit(1)

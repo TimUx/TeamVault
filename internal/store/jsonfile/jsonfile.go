@@ -683,6 +683,33 @@ func (s *Store) RotateSecret(_ context.Context, tenant store.TenantID, id store.
 	return s.flush()
 }
 
+func (s *Store) CreateSecret(_ context.Context, meta store.SecretMeta, blob store.CiphertextBlob, envelopes []store.KeyEnvelope) error {
+	if err := requireTenant(meta.TenantID); err != nil {
+		return err
+	}
+	if len(envelopes) == 0 {
+		return errors.New("envelopes required")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	now := time.Now().UTC()
+	if meta.CreatedAt.IsZero() {
+		meta.CreatedAt = now
+	}
+	meta.UpdatedAt = now
+	s.data.Secrets[secretKey(meta.TenantID, meta.ID)] = meta
+	s.data.Blobs[secretKey(meta.TenantID, meta.ID)] = blob
+
+	for _, env := range envelopes {
+		if env.TenantID != meta.TenantID || env.SecretID != meta.ID {
+			return store.ErrConflict
+		}
+		s.data.Envelopes = append(s.data.Envelopes, envelopeRec{KeyEnvelope: env})
+	}
+	return s.flush()
+}
+
 func (s *Store) AppendAudit(_ context.Context, e store.AuditEvent) error {
 	if err := requireTenant(e.TenantID); err != nil {
 		return err

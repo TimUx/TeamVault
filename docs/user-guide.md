@@ -194,6 +194,8 @@ API-Keys brauchen mindestens einen Scope:
 
 Nur `read` → keine Admin- oder Schreibaktionen. Cookie-Login ohne API-Key ist nicht scope-beschränkt.
 
+**Legacy-Keys** (vor Scope-Pflicht angelegt, ohne `scopes`): nur lesende GET-Requests — für Automation/CLI neuen Key mit passenden Scopes ausstellen lassen.
+
 ## 9. Gute Praxis
 
 - Master-Passwort lang und einzigartig; Recovery-Kit offline sichern  

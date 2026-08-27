@@ -193,8 +193,8 @@ func apiKeyScopesOK(sess session.Session, r *http.Request) bool {
 	}
 	scopes := sess.Scopes
 	if len(scopes) == 0 {
-		// Legacy unrestricted key — treat as vault+admin for the owning user roles.
-		return true
+		// Legacy keys without scopes: read-only GET allowlist (re-issue key with explicit scopes).
+		return apiKeyReadAllowed(r)
 	}
 	if isReadOnlyAPIKey(scopes) {
 		return apiKeyReadAllowed(r)
@@ -743,7 +743,11 @@ func (a *API) handleAdminRecovery(w http.ResponseWriter, r *http.Request) {
 	}
 	reOnboarded := 0
 	if modeChanged {
-		users, _ := a.App.Vault.ListUsers(r.Context(), ten.ID, store.UserQuery{Limit: 10000})
+		users, err := a.App.Vault.ListUsers(r.Context(), ten.ID, store.UserQuery{Limit: 10000})
+		if err != nil {
+			writeErr(w, http.StatusInternalServerError, err.Error())
+			return
+		}
 		for _, u := range users {
 			u.OnboardedAt = nil
 			u.Status = "pending_onboarding"
@@ -751,20 +755,25 @@ func (a *API) handleAdminRecovery(w http.ResponseWriter, r *http.Request) {
 			u.EncryptedPrivateKey = nil
 			u.EncryptedPrivateKeyRecovery = nil
 			u.EscrowEnvelope = nil
-			_ = a.App.Vault.UpsertUser(r.Context(), u)
+			if err := a.App.Vault.UpsertUser(r.Context(), u); err != nil {
+				writeErr(w, http.StatusInternalServerError, "re-onboard user: "+err.Error())
+				return
+			}
 			reOnboarded++
 		}
-		_ = a.App.Vault.AppendAudit(r.Context(), store.AuditEvent{
-			ID: newID("aud"), TenantID: ten.ID, ActorID: string(sess.UserID),
+		if !a.appendAuditStrict(w, r, store.AuditEvent{
+			TenantID: ten.ID, ActorID: string(sess.UserID),
 			Action: "tenant.recovery_mode_change", ResourceType: "tenant", ResourceID: string(ten.ID),
-			CreatedAt: time.Now().UTC(),
-		})
+		}) {
+			return
+		}
 	} else {
-		_ = a.App.Vault.AppendAudit(r.Context(), store.AuditEvent{
-			ID: newID("aud"), TenantID: ten.ID, ActorID: string(sess.UserID),
+		if !a.appendAuditStrict(w, r, store.AuditEvent{
+			TenantID: ten.ID, ActorID: string(sess.UserID),
 			Action: "tenant.recovery_settings", ResourceType: "tenant", ResourceID: string(ten.ID),
-			CreatedAt: time.Now().UTC(),
-		})
+		}) {
+			return
+		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "re_onboarded": reOnboarded})
 }

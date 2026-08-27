@@ -884,6 +884,53 @@ WHERE key_envelopes.revoked = 0
 	return tx.Commit()
 }
 
+func (s *Store) CreateSecret(ctx context.Context, meta store.SecretMeta, blob store.CiphertextBlob, envelopes []store.KeyEnvelope) error {
+	if err := requireTenant(meta.TenantID); err != nil {
+		return err
+	}
+	if len(envelopes) == 0 {
+		return errors.New("envelopes required")
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	now := time.Now().UTC()
+	if meta.CreatedAt.IsZero() {
+		meta.CreatedAt = now
+	}
+	meta.UpdatedAt = now
+	if _, err := tx.ExecContext(ctx, `
+INSERT INTO secrets(id, tenant_id, collection_id, title_ciphertext, title_nonce, created_by, created_at, updated_at)
+VALUES(?,?,?,?,?,?,?,?)
+`, meta.ID, meta.TenantID, meta.CollectionID, meta.TitleCiphertext, meta.TitleNonce, meta.CreatedBy,
+		meta.CreatedAt.Format(time.RFC3339Nano), meta.UpdatedAt.Format(time.RFC3339Nano)); err != nil {
+		return err
+	}
+
+	if _, err := tx.ExecContext(ctx, `
+INSERT INTO secret_ciphertext(secret_id, tenant_id, ciphertext, nonce, key_version, content_type)
+VALUES(?,?,?,?,?,?)
+`, meta.ID, meta.TenantID, blob.Ciphertext, blob.Nonce, blob.KeyVersion, blob.ContentType); err != nil {
+		return err
+	}
+
+	for _, env := range envelopes {
+		if env.TenantID != meta.TenantID || env.SecretID != meta.ID {
+			return store.ErrConflict
+		}
+		if _, err := tx.ExecContext(ctx, `
+INSERT INTO key_envelopes(secret_id, tenant_id, user_id, key_version, wrapped_dk, revoked)
+VALUES(?,?,?,?,?,0)
+`, env.SecretID, env.TenantID, env.UserID, env.KeyVersion, env.WrappedDK); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
 func (s *Store) AppendAudit(ctx context.Context, e store.AuditEvent) error {
 	if err := requireTenant(e.TenantID); err != nil {
 		return err

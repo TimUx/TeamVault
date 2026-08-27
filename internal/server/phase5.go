@@ -177,21 +177,32 @@ func (a *API) handleUserAccessibleSecrets(w http.ResponseWriter, r *http.Request
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	allEnvs, err := a.App.Vault.ListKeyEnvelopesByTenant(r.Context(), sess.TenantID)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	bySecret := make(map[store.SecretID][]store.KeyEnvelope)
+	for i := range allEnvs {
+		e := allEnvs[i]
+		bySecret[e.SecretID] = append(bySecret[e.SecretID], e)
+	}
+	versions, err := a.App.Vault.ListSecretKeyVersions(r.Context(), sess.TenantID)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 	type row struct {
 		ID         string `json:"id"`
 		KeyVersion uint32 `json:"key_version"`
 	}
 	out := make([]row, 0)
 	for _, m := range metas {
-		envs, err := a.App.Vault.ListKeyEnvelopes(r.Context(), sess.TenantID, m.ID)
-		if err != nil {
-			continue
-		}
-		for _, e := range envs {
+		for _, e := range bySecret[m.ID] {
 			if e.UserID == uid {
-				kv := e.KeyVersion
-				if blob, err := a.App.Vault.GetSecretCiphertext(r.Context(), sess.TenantID, m.ID); err == nil {
-					kv = blob.KeyVersion
+				kv := versions[m.ID]
+				if kv == 0 {
+					kv = e.KeyVersion
 				}
 				out = append(out, row{ID: string(m.ID), KeyVersion: kv})
 				break
@@ -383,34 +394,42 @@ func (a *API) handleCreateSecret(w http.ResponseWriter, r *http.Request) {
 	if req.KeyVersion == 0 {
 		req.KeyVersion = 1
 	}
+	if len(req.Envelopes) == 0 {
+		writeErr(w, http.StatusBadRequest, "envelopes required")
+		return
+	}
 	id := store.SecretID(newID("sec"))
 	meta := store.SecretMeta{
 		ID: id, TenantID: sess.TenantID, CollectionID: req.CollectionID,
 		TitleCiphertext: titleCT, TitleNonce: titleN, CreatedBy: sess.UserID,
 	}
-	if err := a.App.Vault.PutSecretMeta(r.Context(), meta); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	if err := a.App.Vault.PutSecretCiphertext(r.Context(), sess.TenantID, id, store.CiphertextBlob{
-		Ciphertext: ct, Nonce: nonce, KeyVersion: req.KeyVersion, ContentType: "application/octet-stream",
-	}); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
-		return
-	}
+	envs := make([]store.KeyEnvelope, 0, len(req.Envelopes))
 	for _, e := range req.Envelopes {
 		packed, err := packEnvelope(e)
 		if err != nil {
 			writeErr(w, http.StatusBadRequest, "invalid envelope")
 			return
 		}
-		if err := a.App.Vault.PutKeyEnvelope(r.Context(), store.KeyEnvelope{
-			SecretID: id, TenantID: sess.TenantID, UserID: store.UserID(e.UserID),
-			KeyVersion: req.KeyVersion, WrappedDK: packed,
-		}); err != nil {
-			writeErr(w, http.StatusInternalServerError, err.Error())
-			return
+		kv := e.KeyVersion
+		if kv == 0 {
+			kv = req.KeyVersion
 		}
+		envs = append(envs, store.KeyEnvelope{
+			SecretID: id, TenantID: sess.TenantID, UserID: store.UserID(e.UserID),
+			KeyVersion: kv, WrappedDK: packed,
+		})
+	}
+	if err := a.App.Vault.CreateSecret(r.Context(), meta, store.CiphertextBlob{
+		Ciphertext: ct, Nonce: nonce, KeyVersion: req.KeyVersion, ContentType: "application/octet-stream",
+	}, envs); err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if !a.appendAuditStrict(w, r, store.AuditEvent{
+		TenantID: sess.TenantID, ActorID: string(sess.UserID),
+		Action: "secret.create", ResourceType: "secret", ResourceID: string(id),
+	}) {
+		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"id": id, "key_version": req.KeyVersion})
 }
@@ -438,6 +457,7 @@ func (a *API) handleListSecrets(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	limit, offset := parseLimitOffset(r, 200, 0)
+	adminSeeAll := !a.bundle().Policy.AdminSecretsEnvelopeOnly
 	type envOut struct {
 		EphemeralPubB64 string `json:"ephemeral_pub_b64"`
 		NonceB64        string `json:"nonce_b64"`
@@ -466,8 +486,12 @@ func (a *API) handleListSecrets(w http.ResponseWriter, r *http.Request) {
 				break
 			}
 		}
-		if !access && !hasRole(sess.Roles, "tenant_admin") && !hasRole(sess.Roles, "platform_admin") {
-			continue
+		if !access {
+			if adminSeeAll && (hasRole(sess.Roles, "tenant_admin") || hasRole(sess.Roles, "platform_admin")) {
+				// Admin inventory (title ciphertext only — no envelope in response).
+			} else {
+				continue
+			}
 		}
 		kv := versions[m.ID]
 		it := item{
