@@ -1,6 +1,6 @@
 # TeamVault – UI Brand Tokens
 
-**Status:** Aktuell (Sidebar-Shell, HaushaltsRadar-inspiriert, 2026-08-26)  
+**Status:** Aktuell (Sidebar-Shell + flache Inline-Icons, 2026-08-27)  
 **Design-Richtung:** Flache App-Shell mit linker Navigation; kühle Slate-Blau-Palette (kein Regenbogen-Hero).
 
 ---
@@ -72,3 +72,12 @@ Unterkante der Topbar: dezenter Accent-Streifen (2px), kein Multi-Color-Gradient
 - Setup/Login bleiben zentrierte Panels ohne Sidebar  
 
 Implementierung: [`web/static/styles.css`](../../web/static/styles.css), [`web/static/app.js`](../../web/static/app.js).
+
+## 6. Icons
+
+- Stroke-SVGs inline in `app.js` (`ICO` / `icon()`), `currentColor`, ~1–1.2 rem  
+- Theme: Sonne (Hellmodus) / Mond (Dunkelmodus) als `btn-icon`  
+- Sidebar: Key, Plus, Upload, User, Users/Group, Network, Mail, Shield, Lock, Building, Clipboard  
+- Aktionen: Copy, Share, Trash, Download, Unlock, Logout, Open, Eye, Save  
+
+Keine Kategorien neben Ordnern/Tags — Ordner = Struktur, Tags = Labels (bewusst schlank).

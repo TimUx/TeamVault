@@ -46,13 +46,13 @@ Nach dem Login erscheint **Vault entsperren**. Master-Passwort eingeben → **En
 - Bei Inaktivität (Default ca. 15 Minuten) sperrt die App den Vault erneut (opakes Overlay).
 - Logout beendet die Server-Session; der Schlüssel im Speicher wird gelöscht.
 
-Oben rechts: Theme **Dunkel** / **Hell** (wird lokal gespeichert). Auf schmalen Viewports: Menü-Taste öffnet die Sidebar (Schließen mit Backdrop oder **Escape**).
+Oben rechts: Theme-Umschalter als **Sonne/Mond-Icon** (wird lokal gespeichert). Die Sidebar nutzt flache Inline-Icons neben den Menüpunkten. Auf schmalen Viewports: Menü-Taste öffnet die Sidebar (Schließen mit Backdrop oder **Escape**).
 
 ![Dark Theme](images/theme-dark.png)
 
 ## 5. Secrets
 
-Nach dem Entsperren: linke **Sidebar** (Vault / Konto / ggf. Administration) und Liste mit clientseitiger **Suche** und **Ordner**-Filter.
+Nach dem Entsperren: linke **Sidebar** mit Icons (Vault / Konto / ggf. Administration) und Liste mit clientseitiger **Suche** und **Ordner**-Filter.
 
 ![Secrets-Liste mit Sidebar](images/vault-secrets.png)
 

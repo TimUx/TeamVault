@@ -75,7 +75,7 @@ Nach dem Commit: Login → **Vault-Onboarding** (Master-Passwort) → App.
 
 ## 3. Admin-UI (nach Vault-Entsperren)
 
-In der **Sidebar** unter **Administration** (sichtbar für `tenant_admin` / `platform_admin`; Auditoren nur **Audit**). Jeder Unterpunkt öffnet den jeweiligen Abschnitt.
+In der **Sidebar** unter **Administration** (sichtbar für `tenant_admin` / `platform_admin`; Auditoren nur **Audit**). Menüpunkte und Topbar-Theme nutzen flache Inline-SVG-Icons (kein externes Icon-CDN). Jeder Unterpunkt öffnet den jeweiligen Abschnitt.
 
 ### 3.1 Benutzer
 
