@@ -30,13 +30,14 @@ concurrency:
 
 env:
   CGO_ENABLED: "0"
+  REGISTRY: ${{ vars.REGISTRY || 'git.example.internal' }}
+  BASE_REGISTRY: ${{ vars.REGISTRY || 'git.example.internal' }}/cc-3.3
   HTTP_PROXY: ${{ vars.HTTP_PROXY || 'http://proxy.example.internal:8080' }}
   HTTPS_PROXY: ${{ vars.HTTPS_PROXY || 'http://proxy.example.internal:8080' }}
   NO_PROXY: ${{ vars.NO_PROXY || 'localhost,127.0.0.1,gitea,git.example.internal,.example.internal' }}
   http_proxy: ${{ vars.HTTP_PROXY || 'http://proxy.example.internal:8080' }}
   https_proxy: ${{ vars.HTTPS_PROXY || 'http://proxy.example.internal:8080' }}
   no_proxy: ${{ vars.NO_PROXY || 'localhost,127.0.0.1,gitea,git.example.internal,.example.internal' }}
-  BASE_REGISTRY: ${{ vars.REGISTRY || 'git.example.internal' }}/cc-3.3
 
 jobs:
   test:
@@ -74,8 +75,7 @@ jobs:
           REGISTRY_TOKEN: ${{ secrets.REGISTRY_TOKEN || gitea.token }}
         run: |
           set -euo pipefail
-          REGISTRY="$(echo '${{ gitea.server_url }}' | sed -E 's#^https?://##' | cut -d/ -f1)"
-          if [ -n "${{ vars.REGISTRY }}" ]; then REGISTRY="${{ vars.REGISTRY }}"; fi
+          # Always use public registry host — gitea.server_url is often http://gitea:3000
           echo "${REGISTRY_TOKEN}" | docker login "${REGISTRY}" -u "${REGISTRY_USER}" --password-stdin
 
       - name: Go test via docker build
