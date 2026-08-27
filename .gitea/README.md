@@ -1,50 +1,52 @@
 # Gitea Actions (act_runner)
 
 Workflows:
-- [`workflows/ci.yml`](workflows/ci.yml) — Test + Docker package
-- [`workflows/mirror-base-images.yml`](workflows/mirror-base-images.yml) — einmalig Base-Images spiegeln
+- [`workflows/ci.yml`](workflows/ci.yml) — Test + Docker package (nur interne Registry + `vendor/`)
+- [`workflows/mirror-base-images.yml`](workflows/mirror-base-images.yml) — optionaler Runner-Spiegel (Fallback)
 
-## Runner
+## Offline-Build-Artefakte (Laptop → Gitea)
 
-Label: `ubuntu-latest` (anpassen, falls euer Runner anders heißt).
+Lokal mit **Windows DefaultNetworkCredentials** über `proxyits` laden und nach Gitea pushen (kein Docker Desktop nötig):
 
-## Einmalig: Base-Images spiegeln
+```powershell
+# Container-Base-Images → Registry
+.\scripts\mirror-oci-to-gitea.ps1
 
-Ohne Docker Hub/gcr.io im CI: Workflow **Mirror base images** manuell starten (Runner pullt über Daemon-Proxy, pusht nach Gitea):
+# Optional: Go-Tarball → Generic Package
+.\scripts\publish-go-toolchain.ps1
+```
 
-| Image | Interner Tag |
-|-------|----------------|
-| `golang:1.23.3-bookworm` | `git.example.internal/cc-3.3/golang:1.23.3-bookworm` |
-| `gcr.io/distroless/static-debian12:nonroot` | `…/cc-3.3/distroless-static:nonroot` |
-| `aquasec/trivy:latest` | `…/cc-3.3/trivy:latest` |
+| Artefakt | Quelle | Ziel in Gitea |
+|----------|--------|----------------|
+| Go-Toolchain Image | `golang:1.23.3-bookworm` | `git.example.internal/cc-3.3/golang:1.23.3-bookworm` |
+| Runtime | `gcr.io/distroless/static-debian12:nonroot` | `…/cc-3.3/distroless-static:nonroot` |
+| Trivy | `aquasec/trivy:latest` | `…/cc-3.3/trivy:latest` |
+| Go-Module | Repo `vendor/` | Git (Commit) |
+| Go-Tarball (optional) | `go1.23.3.linux-amd64.tar.gz` | Generic `CC-3.3/go-toolchain/1.23.3/…` |
 
-Optional Go-Tarball (ohne Docker): `.\scripts\publish-go-toolchain.ps1` → Generic Package `CC-3.3/go-toolchain`.
-
-## Jobs (CI)
-
-| Job | Trigger | What |
-|-----|---------|------|
-| **Test** | push/PR `main`, Tags `v*`, manuell | cryptocore-Check + `docker build --target test` (`vendor/`) |
-| **Docker package** | push `main` / Tags `v*` / manuell (nach Test) | Image → Gitea Package Registry + Trivy |
-
-## Image
-
-`{registry}/cc-3.3/teamvault` — Registry-Host aus `vars.REGISTRY` oder Hostname der Gitea-URL.
-
-Tags: `latest`/`main` (Branch main), `sha-<7>`, bei Tag `v*` zusätzlich Versions-Tags.
+Der **act_runner** braucht für TeamVault-CI dann **kein Internet** mehr (nur Gitea/`gitea:3000` + Registry). Ubuntu-Packages auf dem Runner-Host dürfen weiter über den freigeschalteten Proxy.
 
 ## Secrets / Vars
 
 | Name | Art | Zweck |
 |------|-----|--------|
-| `REGISTRY_TOKEN` | Secret | PAT mit `write:package` (Fallback: Job-Token) |
+| `REGISTRY_TOKEN` | Secret | PAT mit `write:package` (+ Pull der Base-Images) |
+| `REGISTRY_USER` | Secret | Login-User zur Registry (nicht `admin`-Job-Token) |
 | `ACT_RUN_TOKEN` | Secret | Interner Git-Clone (Fallback: Job-Token) |
 | `REGISTRY` | Variable | Registry-Hostname überschreiben |
-| `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY` | Variablen | Nur noch für Mirror-Workflow / Fallback |
 
-**Wichtig:** Keine `actions/*` von github.com. Checkout über `gitea:3000`. Build nutzt **interne** Base-Images + **`vendor/`** (kein `go mod download` über Auth-Proxy).
+## Jobs (CI)
+
+| Job | Trigger | What |
+|-----|---------|------|
+| **Test** | push/PR `main`, Tags `v*`, manuell | cryptocore + `docker build --target test` |
+| **Docker package** | push `main` / Tags `v*` / manuell | Image bauen, Trivy, Push |
+
+Image: `{registry}/cc-3.3/teamvault` — Tags `latest`/`main`, `sha-<7>`, bei Release `v*`/`1.0.0`.
+
+**Wichtig:** Keine `actions/*` von github.com. Checkout über `gitea:3000`. Build nur aus internen Base-Images + `vendor/`.
 
 ```bash
 docker login git.example.internal
-docker pull git.example.internal/cc-3.3/teamvault:latest
+docker pull git.example.internal/cc-3.3/teamvault:v1.0.0
 ```

@@ -164,7 +164,7 @@ Siehe Root-[README](../README.md#docker). Compose mountet:
 - Volume `/data` — Vault/Config
 - Unlock-Datei → `/run/secrets/teamvault_unlock` (read-only)
 
-CI baut Images auf dem Ubuntu-Runner, scanned sie mit **Trivy** und pusht bei Erfolg ins Gitea-Package-Registry (`.gitea/workflows/ci.yml`). Base-Images (`golang`, distroless, Trivy) einmalig mit Workflow **Mirror base images** nach `git.example.internal/cc-3.3/…` spiegeln; Go-Module liegen in `vendor/`. Details: [`.gitea/README.md`](../.gitea/README.md).
+CI baut Images auf dem Ubuntu-Runner und pusht sie ins Gitea-Package-Registry. Base-Images und optional die Go-Toolchain werden **vom Laptop** mit Windows-Proxy-Credentials nach Gitea gespiegelt (`scripts/mirror-oci-to-gitea.ps1`, `scripts/publish-go-toolchain.ps1`); Module liegen in `vendor/`. Details: [`.gitea/README.md`](../.gitea/README.md).
 
 ### 4.1 Client-Downloads (CLI & Extension)
 

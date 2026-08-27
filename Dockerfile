@@ -1,8 +1,9 @@
 # TeamVault server — multi-stage, static Go binary (CGO_ENABLED=0, modernc sqlite).
 # Unlock key is never baked into the image; mount via TEAMVAULT_MASTER_UNLOCK_KEY_FILE.
 #
-# Base images come from the internal Gitea registry (mirrored via
-# .gitea/workflows/mirror-base-images.yml). Modules are vendored (vendor/).
+# Base images come from the internal Gitea registry
+# (laptop: .\scripts\mirror-oci-to-gitea.ps1 — Windows proxy credentials).
+# Modules are vendored (vendor/).
 
 ARG BASE_REGISTRY=git.example.internal/cc-3.3
 ARG GO_VERSION=1.23.3

@@ -67,6 +67,17 @@ jobs:
           fi
           echo "cryptocore.js ok ($h1)"
 
+      - name: Login to Gitea registry
+        shell: bash
+        env:
+          REGISTRY_USER: ${{ secrets.REGISTRY_USER || gitea.actor }}
+          REGISTRY_TOKEN: ${{ secrets.REGISTRY_TOKEN || gitea.token }}
+        run: |
+          set -euo pipefail
+          REGISTRY="$(echo '${{ gitea.server_url }}' | sed -E 's#^https?://##' | cut -d/ -f1)"
+          if [ -n "${{ vars.REGISTRY }}" ]; then REGISTRY="${{ vars.REGISTRY }}"; fi
+          echo "${REGISTRY_TOKEN}" | docker login "${REGISTRY}" -u "${REGISTRY_USER}" --password-stdin
+
       - name: Go test via docker build
         shell: bash
         run: |
