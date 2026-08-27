@@ -12,7 +12,7 @@
 #
 # Note: Do not use actions/checkout or actions/setup-go from github.com — act clones
 # those before workflow env is applied. Checkout via internal Gitea (storage-dashboard
-# pattern); Go via docker.io/library/golang with HTTP(S)_PROXY.
+# pattern); install Go via curl through HTTP_PROXY.
 
 name: CI
 
@@ -38,7 +38,6 @@ env:
   http_proxy: ${{ vars.HTTP_PROXY || 'http://proxy.example.internal:8080' }}
   https_proxy: ${{ vars.HTTPS_PROXY || 'http://proxy.example.internal:8080' }}
   no_proxy: ${{ vars.NO_PROXY || 'localhost,127.0.0.1,gitea,git.example.internal,.example.internal' }}
-  GO_IMAGE: golang:1.23.3-bookworm
 
 jobs:
   test:
@@ -56,39 +55,44 @@ jobs:
           git checkout --force "${{ gitea.sha }}"
           test -f go.mod
 
-      - name: Go test / vet / smoke (via golang image)
+      - name: Install Go
         shell: bash
         run: |
           set -euo pipefail
-          docker pull "${GO_IMAGE}"
-          docker run --rm \
-            -v "$PWD:/src" -w /src \
-            -e GOPROXY -e GOSUMDB -e CGO_ENABLED \
-            -e HTTP_PROXY -e HTTPS_PROXY -e NO_PROXY \
-            -e http_proxy -e https_proxy -e no_proxy \
-            "${GO_IMAGE}" \
-            bash -c '
-              set -euo pipefail
-              go test ./...
-              h1=$(sha256sum web/static/cryptocore.js | awk "{print \$1}")
-              h2=$(sha256sum clients/js/cryptocore.js | awk "{print \$1}")
-              h3=$(sha256sum clients/extension/cryptocore.js | awk "{print \$1}")
-              if [ "$h1" != "$h2" ] || [ "$h1" != "$h3" ]; then
-                echo "cryptocore.js mismatch — keep web/static, clients/js, clients/extension in sync"
-                exit 1
-              fi
-              echo "cryptocore.js ok ($h1)"
-              go vet ./...
-              go install golang.org/x/vuln/cmd/govulncheck@latest
-              govulncheck ./...
-              VER="$(git describe --tags --always --dirty 2>/dev/null || echo dev)"
-              COMMIT="$(git rev-parse --short HEAD 2>/dev/null || echo none)"
-              LDFLAGS="-s -w -X github.com/teamvault/teamvault/internal/buildinfo.Version=${VER} -X github.com/teamvault/teamvault/internal/buildinfo.Commit=${COMMIT}"
-              go build -trimpath -ldflags="${LDFLAGS}" -o /tmp/teamvault ./cmd/teamvault
-              go build -trimpath -o /tmp/tvcli ./cmd/tvcli
-              /tmp/teamvault -version
-              /tmp/tvcli version
-            '
+          GO_VER=1.23.3
+          curl -fsSL --proxy "${HTTP_PROXY}" \
+            "https://go.dev/dl/go${GO_VER}.linux-amd64.tar.gz" \
+            -o /tmp/go.tgz
+          rm -rf /usr/local/go
+          tar -C /usr/local -xzf /tmp/go.tgz
+          echo "/usr/local/go/bin" >> "$GITHUB_PATH"
+          export PATH="/usr/local/go/bin:$PATH"
+          go version
+
+      - name: Go test / vet / smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PATH="/usr/local/go/bin:$PATH"
+          go test ./...
+          h1=$(sha256sum web/static/cryptocore.js | awk '{print $1}')
+          h2=$(sha256sum clients/js/cryptocore.js | awk '{print $1}')
+          h3=$(sha256sum clients/extension/cryptocore.js | awk '{print $1}')
+          if [ "$h1" != "$h2" ] || [ "$h1" != "$h3" ]; then
+            echo "cryptocore.js mismatch — keep web/static, clients/js, clients/extension in sync"
+            exit 1
+          fi
+          echo "cryptocore.js ok ($h1)"
+          go vet ./...
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...
+          VER="$(git describe --tags --always --dirty 2>/dev/null || echo dev)"
+          COMMIT="$(git rev-parse --short HEAD 2>/dev/null || echo none)"
+          LDFLAGS="-s -w -X github.com/teamvault/teamvault/internal/buildinfo.Version=${VER} -X github.com/teamvault/teamvault/internal/buildinfo.Commit=${COMMIT}"
+          go build -trimpath -ldflags="${LDFLAGS}" -o /tmp/teamvault ./cmd/teamvault
+          go build -trimpath -o /tmp/tvcli ./cmd/tvcli
+          /tmp/teamvault -version
+          /tmp/tvcli version
 
   docker:
     name: Docker package
