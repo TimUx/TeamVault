@@ -82,7 +82,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # Pre-pull via docker CLI (BuildKit token fetch fails on corp TLS MITM)
+          docker pull "${BASE_REGISTRY}/golang:1.23.3-bookworm"
           docker build \
+            --pull=false \
             --target test \
             --build-arg "BASE_REGISTRY=${BASE_REGISTRY}" \
             -f Dockerfile \
