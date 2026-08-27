@@ -112,11 +112,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [ -n "${{ vars.REGISTRY }}" ]; then
-            REGISTRY="${{ vars.REGISTRY }}"
-          else
-            REGISTRY="$(echo '${{ gitea.server_url }}' | sed -E 's#^https?://##' | cut -d/ -f1)"
-          fi
+          # Public registry host (never gitea:3000 from gitea.server_url)
+          REGISTRY="${REGISTRY:-git.example.internal}"
+          case "${REGISTRY}" in
+            gitea|gitea:*|localhost|127.0.0.1) REGISTRY="git.example.internal" ;;
+          esac
           REPO_LC="$(echo '${{ gitea.repository }}' | tr '[:upper:]' '[:lower:]')"
           IMAGE="${REGISTRY}/${REPO_LC}"
 
@@ -147,15 +147,19 @@ jobs:
       - name: Login to Gitea container registry
         shell: bash
         env:
-          REGISTRY: ${{ steps.meta.outputs.registry }}
           REGISTRY_USER: ${{ secrets.REGISTRY_USER || gitea.actor }}
           REGISTRY_TOKEN: ${{ secrets.REGISTRY_TOKEN || gitea.token }}
         run: |
           set -euo pipefail
+          REGISTRY="${REGISTRY:-git.example.internal}"
+          case "${REGISTRY}" in
+            gitea|gitea:*|localhost|127.0.0.1) REGISTRY="git.example.internal" ;;
+          esac
           if [ -z "${REGISTRY_TOKEN}" ]; then
             echo "Missing registry token (set secrets.REGISTRY_TOKEN or ensure gitea.token is available)" >&2
             exit 1
           fi
+          echo "docker login ${REGISTRY} as ${REGISTRY_USER}"
           echo "${REGISTRY_TOKEN}" | docker login "${REGISTRY}" -u "${REGISTRY_USER}" --password-stdin
 
       - name: Build image
