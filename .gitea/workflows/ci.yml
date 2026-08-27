@@ -66,8 +66,12 @@ jobs:
 
       - name: Build server + CLI (smoke)
         run: |
-          go build -trimpath -o /tmp/teamvault ./cmd/teamvault
+          VER="$(git describe --tags --always --dirty 2>/dev/null || echo dev)"
+          COMMIT="$(git rev-parse --short HEAD 2>/dev/null || echo none)"
+          LDFLAGS="-s -w -X github.com/teamvault/teamvault/internal/buildinfo.Version=${VER} -X github.com/teamvault/teamvault/internal/buildinfo.Commit=${COMMIT}"
+          go build -trimpath -ldflags="${LDFLAGS}" -o /tmp/teamvault ./cmd/teamvault
           go build -trimpath -o /tmp/tvcli ./cmd/tvcli
+          /tmp/teamvault -version
           /tmp/tvcli version
 
   docker:
@@ -145,9 +149,13 @@ jobs:
         run: |
           set -euo pipefail
           PRIMARY="$(echo '${{ steps.meta.outputs.tags }}' | head -n1)"
+          VER="$(git describe --tags --always --dirty 2>/dev/null || echo '${{ gitea.sha }}' | cut -c1-7)"
+          COMMIT="$(echo '${{ gitea.sha }}' | cut -c1-7)"
           docker build \
             --build-arg "GOPROXY=${GOPROXY}" \
             --build-arg "GOSUMDB=${GOSUMDB}" \
+            --build-arg "VERSION=${VER}" \
+            --build-arg "COMMIT=${COMMIT}" \
             -t "${PRIMARY}" \
             -f Dockerfile \
             .

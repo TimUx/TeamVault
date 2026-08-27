@@ -63,7 +63,7 @@ func (a *API) loadPasskeyUser(r *http.Request, tenant store.TenantID, userID sto
 }
 
 func (a *API) handleWARegisterBegin(w http.ResponseWriter, r *http.Request) {
-	// Passkeys are login-only — never vault unlock (OQ-04).
+	// Passkeys are login-only — never vault unlock.
 	sess, _ := a.sessionFrom(r)
 	user, err := a.loadPasskeyUser(r, sess.TenantID, sess.UserID)
 	if err != nil {
@@ -272,6 +272,6 @@ func (a *API) handleWALoginFinish(w http.ResponseWriter, r *http.Request) {
 		"username": u.Username, "tenant_id": tenant.ID, "roles": roles,
 		"needs_vault_onboard": u.OnboardedAt == nil, "totp_enabled": u.TotpEnabled,
 		"auth": "passkey",
-		"note": "vault unlock still requires master password (OQ-04)",
+		"note": "vault unlock still requires master password",
 	})
 }

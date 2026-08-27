@@ -3,6 +3,8 @@
 Anleitung für den Alltag: Anmelden, Vault nutzen, teilen, Absichern.  
 Installation und Admin-Themen: [Admin Guide](admin-guide.md).
 
+Version und Entwickler (Timo Braun) sehen Sie unten in der App bzw. unter Login.
+
 ![Login](images/login.png)
 
 ## 1. Zwei Passwörter — warum?

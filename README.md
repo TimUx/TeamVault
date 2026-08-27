@@ -33,18 +33,24 @@ Details: [`.cursor/rules/security-principles.mdc`](.cursor/rules/security-princi
 |-------|------------|
 | [**User Guide**](docs/user-guide.md) | Alltag: Login, Onboarding, Vault, Sharing, Export, Passwort-Wechsel, Extension/CLI |
 | [**Admin Guide**](docs/admin-guide.md) | Betrieb: Setup-Wizard, User/LDAP/SMTP, Escrow, Proxy/TLS, Backup, CI |
-| [**Roadmap Phase 9+**](docs/planning/roadmap-phase9plus.md) | Analyse + nächste Phasen (Hardening, UX, Perf, Features) |
+| [**Roadmap**](docs/planning/roadmap-phase9plus.md) | Weitere Ausbaupfade (Hardening, UX, Perf, Features) |
 | [**Vergleich Password Manager**](docs/planning/competitive-comparison.md) | TeamVault vs. Bitwarden, Vaultwarden, Passbolt, … |
 | [Clients](clients/README.md) | CLI-Binaries & Extension |
 | [OpenAPI](docs/openapi.yaml) | REST-API (`GET /openapi.yaml` am Server) |
-| [Planung](docs/planning/) | Architektur, Crypto, Open Questions |
+| [Planung](docs/planning/) | Architektur, Crypto, Entscheidungen |
+
+## Entwickler & Version
+
+**Entwickler:** Timo Braun  
+
+Die laufende Version liefert `GET /api/version` bzw. `teamvault -version` (Build-Infos per `-ldflags`). In der Web-UI erscheint Version und Entwickler im Footer bzw. in der Sidebar.
 
 ## Stack
 
 | Schicht | Technologie |
 |---------|-------------|
 | Backend | Go (`cmd/teamvault`) |
-| Web-UI | Vanilla JS eingebettet (`web/static`; kein React-Rewrite) |
+| Web-UI | Vanilla JS eingebettet (`web/static`) |
 | Client-Crypto | `web/static/cryptocore.js` / `internal/cryptocore` (Argon2id, NaCl) |
 | Storage | SQLite (Default) oder JSON-File |
 | Clients | `tvcli` (standalone Win/Linux), Browser-Extension |
@@ -107,14 +113,10 @@ Ubuntu-Runner: Tests, `govulncheck`, Docker-Build, **Trivy-Image-Scan** (HIGH/CR
 
 Der Key entsperrt nur die **verschlüsselte Config** — keine Vault-Klartexte.
 
-## Status
+## Überblick
 
-- Phases 1–8: MVP (Setup, Vault, Sharing, Admin, Passkeys, OpenAPI, CLI, Extension, Docker/CI)
-- Phases 9–13: Hardening, UX-Kern, Performance, Features, Dark/Mobile (Postgres/IdP deferred; React abgesagt → Vanilla)
-- Findings-Stufenplan: Authz/Scopes/CSRF, Ops-Docs, A11y/Host-Gate, Export & Self-Service-Passwörter
-- Post-Stufenplan: atomare Rotation, API-Key-Scopes `read`/`vault`/`admin`, `GET /api/groups`, List-Batching, Trivy-CI, Extension Copy Host-Gate
-- Residual-Härtung: Legacy-Keys read-only, `CreateSecret` atomar + Audit, Admin-Envelope-Policy, Recovery/Admin-Audit fail-hard, accessible-secrets Batch, A11y skip-link/`aria-live`, TRUST_FORWARDED Startup-Warnung
+TeamVault umfasst Setup-Wizard, Zero-Knowledge-Vault, Sharing mit Envelope-Rotation, Admin (User/LDAP/SMTP/Policy/Escrow/API-Keys), Passkeys (nur Login), OpenAPI, CLI und Browser-Extension.
 
-Self-Check: [`docs/phase9-13-security-self-check.md`](docs/phase9-13-security-self-check.md) · Checklist: [`SECURITY-REVIEW-CHECKLIST.md`](SECURITY-REVIEW-CHECKLIST.md)
+Betriebs-Checkliste: [`SECURITY-REVIEW-CHECKLIST.md`](SECURITY-REVIEW-CHECKLIST.md)
 
 ![Dark Theme](docs/images/theme-dark.png)

@@ -46,7 +46,7 @@ func TestPhase7PasskeyRegisterBeginAndStore(t *testing.T) {
 		t.Fatalf("begin=%v", begin)
 	}
 	if begin["note"] == "" {
-		t.Fatal("expected OQ-04 note")
+		t.Fatal("expected login-only note")
 	}
 
 	me := getJSONCookie(t, ts.URL+"/api/me", jar)

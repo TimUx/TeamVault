@@ -371,6 +371,18 @@ h1 .heading-ico,
   gap: 0.4rem;
 }
 .app-sidebar-foot .hint { margin: 0; font-size: 0.75rem; }
+.app-sidebar-foot .about-line {
+  color: var(--color-hint);
+  font-size: 0.7rem;
+  line-height: 1.35;
+}
+
+.about-foot {
+  text-align: center;
+  padding: 1.25rem 1rem 1.5rem;
+  font-size: 0.75rem;
+  color: var(--color-hint);
+}
 
 .app-main {
   flex: 1;

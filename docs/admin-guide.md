@@ -2,6 +2,8 @@
 
 Betrieb und Verwaltung der Instanz. Für den Alltag der Endanwender: [User Guide](user-guide.md).
 
+**Entwickler:** Timo Braun · Version der laufenden Instanz: `GET /api/version` oder `teamvault -version` (auch in der Web-UI Sidebar/Footer).
+
 ## 1. Rollen
 
 | Rolle | Rechte (Auszug) |

@@ -18,6 +18,7 @@ import (
 	"github.com/teamvault/teamvault/internal/auth/session"
 	"github.com/teamvault/teamvault/internal/auth/totp"
 	"github.com/teamvault/teamvault/internal/bootstrap"
+	"github.com/teamvault/teamvault/internal/buildinfo"
 	"github.com/teamvault/teamvault/internal/cryptocore"
 	"github.com/teamvault/teamvault/internal/instcfg"
 	"github.com/teamvault/teamvault/internal/setup"
@@ -89,6 +90,7 @@ func (a *API) ldapSyncLoop() {
 func (a *API) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/health", a.handleHealth)
+	mux.HandleFunc("GET /api/version", a.handleVersion)
 	mux.HandleFunc("GET /openapi.yaml", a.handleOpenAPI)
 	mux.HandleFunc("GET /api/openapi.yaml", a.handleOpenAPI)
 	mux.HandleFunc("GET /api/setup/status", a.handleSetupStatus)
@@ -236,6 +238,15 @@ func (a *API) handleHealth(w http.ResponseWriter, r *http.Request) {
 	h, err := a.App.Vault.Health(r.Context())
 	writeJSON(w, http.StatusOK, map[string]any{
 		"ok": err == nil && h.OK, "initialized": a.App.Config.Initialized, "storage": a.App.Config.Storage.Backend,
+	})
+}
+
+func (a *API) handleVersion(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]any{
+		"product":   buildinfo.Product,
+		"version":   buildinfo.Version,
+		"commit":    buildinfo.Commit,
+		"developer": buildinfo.Developer,
 	})
 }
 

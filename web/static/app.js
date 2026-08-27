@@ -119,6 +119,48 @@ function ensureHeaderControls() {
   syncThemeToggles(document.documentElement.getAttribute("data-theme") || "light");
 }
 
+function formatAboutLine(info) {
+  const product = (info && info.product) || "TeamVault";
+  const version = (info && info.version) || "dev";
+  const commit = info && info.commit && info.commit !== "none" ? ` (${info.commit})` : "";
+  const developer = (info && info.developer) || "Timo Braun";
+  return `${product} ${version}${commit} · Entwickler: ${developer}`;
+}
+
+let aboutCache = null;
+
+async function loadAboutInfo() {
+  if (aboutCache) return aboutCache;
+  try {
+    aboutCache = await api("/api/version");
+  } catch (_) {
+    aboutCache = { product: "TeamVault", version: "dev", commit: "none", developer: "Timo Braun" };
+  }
+  return aboutCache;
+}
+
+async function paintAbout() {
+  const info = await loadAboutInfo();
+  const line = formatAboutLine(info);
+  document.querySelectorAll("#about, .about-line").forEach((el) => {
+    el.textContent = line;
+  });
+  let foot = document.getElementById("aboutFoot");
+  if (!foot) {
+    foot = document.createElement("footer");
+    foot.id = "aboutFoot";
+    foot.className = "about-foot";
+    document.body.appendChild(foot);
+  }
+  // Hide page footer inside app shell (sidebar already shows about).
+  if (document.body.classList.contains("app-wide")) {
+    foot.hidden = true;
+  } else {
+    foot.hidden = false;
+    foot.textContent = line;
+  }
+}
+
 function copyText(text) {
   return navigator.clipboard.writeText(text || "");
 }
@@ -399,7 +441,7 @@ function stepView(repaint) {
 function renderLogin(app) {
   const n = el(`<div class="panel">
     <h1>Login</h1>
-    <p class="lead">Login-Passwort oder Passkey. Vault-Entschlüsselung braucht weiterhin das Master-Passwort (OQ-04).</p>
+    <p class="lead">Login-Passwort oder Passkey. Zum Entschlüsseln des Vaults brauchen Sie weiterhin Ihr Master-Passwort.</p>
     <label>Tenant-Slug</label><input id="slug" />
     <label>Username</label><input id="user" />
     <label>Passwort</label><input id="pw" type="password" />
@@ -844,6 +886,7 @@ function renderApp(app) {
       </nav>
       <div class="app-sidebar-foot">
         <p class="hint" id="info">Lade…</p>
+        <p class="hint about-line" id="about"></p>
         <button class="btn-ghost btn-with-ico" type="button" id="out">${btnLabel("logout", "Logout")}</button>
       </div>
     </aside>
@@ -986,7 +1029,7 @@ function renderApp(app) {
 
           <div class="app-tab" data-pane="account">
             <div class="panel">
-              <p class="hint">TOTP und Passkey betreffen nur den Login — Vault bleibt Master-Passwort-pflichtig (OQ-04).</p>
+              <p class="hint">TOTP und Passkey betreffen nur den Login — der Vault bleibt Master-Passwort-pflichtig.</p>
               <div class="row">
                 <button class="btn-accent" type="button" id="totp">TOTP einrichten</button>
                 <button class="btn-ghost" type="button" id="passkey">Passkeys</button>
@@ -1085,7 +1128,7 @@ function renderApp(app) {
                   </div>
                 </div>
                 <div class="admin-section" data-admin-section="recovery">
-                  <p class="hint">Wechsel erzwingt Re-Onboarding aller User (OQ-03). Bestätigung: <code>REONBOARD</code></p>
+                  <p class="hint">Wechsel erzwingt Re-Onboarding aller User. Bestätigung: <code>REONBOARD</code></p>
                   <label>Modus</label>
                   <select id="rec_mode">
                     <option value="user_kit">User Recovery-Kit</option>
@@ -2689,6 +2732,7 @@ function renderApp(app) {
 async function boot() {
   initTheme();
   ensureHeaderControls();
+  paintAbout();
   const status = await api("/api/setup/status");
   const app = document.getElementById("app");
   app.innerHTML = "";
@@ -2696,15 +2740,18 @@ async function boot() {
   if (!status.initialized) {
     if (path !== "/setup" && path !== "/") location.href = "/setup";
     renderWizard(app);
+    paintAbout();
     return;
   }
   if (path === "/setup") {
     app.appendChild(el(`<div class="panel"><h1>Bereits eingerichtet</h1><a class="btn-accent" href="/login" style="display:inline-block;text-decoration:none;padding:.6rem 1rem;">Zum Login</a></div>`));
+    paintAbout();
     return;
   }
-  if (path === "/onboard") { renderOnboard(app); return; }
-  if (path === "/app") { renderApp(app); return; }
+  if (path === "/onboard") { renderOnboard(app); paintAbout(); return; }
+  if (path === "/app") { renderApp(app); paintAbout(); return; }
   renderLogin(app);
+  paintAbout();
 }
 
 boot().catch((e) => {

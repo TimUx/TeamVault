@@ -15,7 +15,11 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
-RUN go build -trimpath -ldflags="-s -w" -o /out/teamvault ./cmd/teamvault
+ARG VERSION=dev
+ARG COMMIT=none
+RUN go build -trimpath \
+    -ldflags="-s -w -X github.com/teamvault/teamvault/internal/buildinfo.Version=${VERSION} -X github.com/teamvault/teamvault/internal/buildinfo.Commit=${COMMIT}" \
+    -o /out/teamvault ./cmd/teamvault
 
 FROM gcr.io/distroless/static-debian12:nonroot
 WORKDIR /data

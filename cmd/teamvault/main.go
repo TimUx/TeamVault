@@ -9,13 +9,21 @@ import (
 	"time"
 
 	"github.com/teamvault/teamvault/internal/bootstrap"
+	"github.com/teamvault/teamvault/internal/buildinfo"
 	"github.com/teamvault/teamvault/internal/server"
 )
 
 func main() {
 	addr := flag.String("addr", envOr("TEAMVAULT_ADDR", ":8080"), "listen address")
 	dataDir := flag.String("data", envOr("TEAMVAULT_DATA_DIR", "./data"), "data directory")
+	showVersion := flag.Bool("version", false, "print version and exit")
 	flag.Parse()
+
+	if *showVersion {
+		fmt.Printf("%s %s (%s)\n", buildinfo.Product, buildinfo.Version, buildinfo.Commit)
+		fmt.Printf("Developer: %s\n", buildinfo.Developer)
+		return
+	}
 
 	log.SetFlags(0)
 	app, err := bootstrap.Run(bootstrap.Options{DataDir: *dataDir})
@@ -33,7 +41,7 @@ func main() {
 		WriteTimeout:      120 * time.Second,
 		IdleTimeout:       120 * time.Second,
 	}
-	fmt.Printf("TeamVault listening on %s (initialized=%v)\n", *addr, app.Config.Initialized)
+	fmt.Printf("%s %s listening on %s (initialized=%v)\n", buildinfo.Product, buildinfo.Version, *addr, app.Config.Initialized)
 	if server.TrustForwardedEnabled() {
 		log.Println("WARN: TEAMVAULT_TRUST_FORWARDED is enabled — only use behind a trusted reverse proxy")
 	}

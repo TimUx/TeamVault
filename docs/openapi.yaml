@@ -76,6 +76,23 @@ paths:
       responses:
         '200':
           description: OK
+  /api/version:
+    get:
+      tags: [health]
+      security: []
+      summary: Product version and developer
+      responses:
+        '200':
+          description: version metadata
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  product: { type: string }
+                  version: { type: string }
+                  commit: { type: string }
+                  developer: { type: string }
   /api/setup/status:
     get:
       tags: [health]
@@ -361,7 +378,7 @@ paths:
   /api/webauthn/register/begin:
     post:
       tags: [auth]
-      summary: Begin Passkey registration (login-only, OQ-04)
+      summary: Begin Passkey registration (login-only; vault still needs master password)
       responses:
         '200':
           description: publicKey options + challenge_key
