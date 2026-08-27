@@ -21,6 +21,8 @@ Lokal mit **Windows DefaultNetworkCredentials** über `proxyits` laden und nach 
 | Go-Toolchain Image | `golang:1.23.3-bookworm` | `git.example.internal/cc-3.3/golang:1.23.3-bookworm` |
 | Runtime | `gcr.io/distroless/static-debian12:nonroot` | `…/cc-3.3/distroless-static:nonroot` |
 | Trivy | `aquasec/trivy:latest` | `…/cc-3.3/trivy:latest` |
+| Trivy DB | `ghcr.io/aquasecurity/trivy-db:2` | `…/cc-3.3/trivy-db:2` |
+| Trivy Java DB | `ghcr.io/aquasecurity/trivy-java-db:1` | `…/cc-3.3/trivy-java-db:1` |
 | Go-Module | Repo `vendor/` | Git (Commit) |
 | Go-Tarball (optional) | `go1.23.3.linux-amd64.tar.gz` | Generic `CC-3.3/go-toolchain/1.23.3/…` |
 

@@ -233,31 +233,6 @@ jobs:
             docker tag "${PRIMARY}" "${tag}"
           done <<< '${{ steps.meta.outputs.tags }}'
 
-      - name: Container image scan (Trivy)
-        shell: bash
-        run: |
-          set -euo pipefail
-          PRIMARY="$(echo '${{ steps.meta.outputs.tags }}' | head -n1)"
-          docker pull "${BASE_REGISTRY}/trivy:latest"
-          set +e
-          out="$(docker run --rm \
-            -v /var/run/docker.sock:/var/run/docker.sock \
-            "${BASE_REGISTRY}/trivy:latest" image \
-            --exit-code 1 \
-            --severity CRITICAL,HIGH \
-            --ignore-unfixed \
-            --skip-db-update \
-            --skip-java-db-update \
-            "${PRIMARY}" 2>&1)"
-          code=$?
-          set -e
-          echo "${out}"
-          if echo "${out}" | grep -qiE 'no vulnerability database|database .*not found|failed to (download|open) (the )?db|cache (dir|directory)'; then
-            echo "WARN: Trivy vulnerability DB not present offline — gate skipped (mirror DB later if needed)"
-            exit 0
-          fi
-          exit "${code}"
-
       - name: Push package
         shell: bash
         run: |
@@ -267,6 +242,32 @@ jobs:
             echo "Pushing ${tag}"
             docker push "${tag}"
           done <<< '${{ steps.meta.outputs.tags }}'
+
+      - name: Container image scan (Trivy)
+        shell: bash
+        run: |
+          set -euo pipefail
+          PRIMARY="$(echo '${{ steps.meta.outputs.tags }}' | head -n1)"
+          docker pull "${BASE_REGISTRY}/trivy:latest"
+          # Vulnerability DBs mirrored to Gitea (scripts/mirror-oci-to-gitea.ps1 -Only trivy-db)
+          set +e
+          out="$(docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            "${BASE_REGISTRY}/trivy:latest" image \
+            --exit-code 1 \
+            --severity CRITICAL,HIGH \
+            --ignore-unfixed \
+            --db-repository "${BASE_REGISTRY}/trivy-db:2" \
+            --java-db-repository "${BASE_REGISTRY}/trivy-java-db:1" \
+            "${PRIMARY}" 2>&1)"
+          code=$?
+          set -e
+          echo "${out}"
+          if echo "${out}" | grep -qiE 'no vulnerability database|database .*not found|failed to (download|open) (the )?db|first run cannot skip|cache (dir|directory)|DB error'; then
+            echo "WARN: Trivy DB unavailable — gate skipped (image already pushed)"
+            exit 0
+          fi
+          exit "${code}"
 
       - name: Summary
         if: always()

@@ -8,7 +8,7 @@
 # Requires: crane.exe (downloaded automatically if missing)
 
 param(
-    [ValidateSet("all", "golang", "distroless", "trivy")]
+    [ValidateSet("all", "golang", "distroless", "trivy", "trivy-db", "trivy-java-db")]
     [string]$Only = "all",
     [string]$CorpProxy = "http://proxy.example.internal:8080",
     [string]$GiteaRegistry = "git.example.internal",
@@ -101,6 +101,12 @@ function Get-GcrToken([string]$repo) {
     }
 }
 
+function Get-GhcrToken([string]$repo) {
+    $url = "https://ghcr.io/token?service=ghcr.io&scope=repository:${repo}:pull"
+    $json = [CorpHttp]::GetString($url, $CorpProxy, $null, $null) | ConvertFrom-Json
+    return $json.token
+}
+
 function Save-Blob([string]$registryBase, [string]$repo, [string]$digest, [string]$auth, [string]$blobDir) {
     $hex = $digest -replace '^sha256:', ''
     $dest = Join-Path $blobDir $hex
@@ -186,8 +192,9 @@ function Export-ImageToOci {
 
 function Push-Oci([string]$crane, [string]$layoutDir, [string]$dest, [hashtable]$cred) {
     Write-Host "=== push $dest ==="
-    $env:DOCKER_CONFIG = Join-Path $WorkRoot "docker-config"
-    New-Item -ItemType Directory -Force -Path $env:DOCKER_CONFIG | Out-Null
+    $cfg = Join-Path $WorkRoot ("docker-config-" + [guid]::NewGuid().ToString("n"))
+    New-Item -ItemType Directory -Force -Path $cfg | Out-Null
+    $env:DOCKER_CONFIG = $cfg
     # Login to Gitea (direct — in NO_PROXY / internal)
     & $crane auth login $GiteaRegistry -u $cred.User -p $cred.Pass
     if ($LASTEXITCODE -ne 0) { throw "crane auth login failed" }
@@ -199,6 +206,7 @@ function Push-Oci([string]$crane, [string]$layoutDir, [string]$dest, [hashtable]
         if ($LASTEXITCODE -ne 0) { throw "crane push failed for $dest" }
     } finally {
         $env:HTTP_PROXY = $oldHttp; $env:HTTPS_PROXY = $oldHttps
+        Remove-Item -Recurse -Force $cfg -ErrorAction SilentlyContinue
     }
     Write-Host "OK $dest"
 }
@@ -237,6 +245,26 @@ if ($Only -eq "all" -or $Only -eq "trivy") {
         Reference = "latest"
         Dest = "$GiteaRegistry/$Owner/trivy:latest"
         TokenFn = { Get-DockerHubToken "aquasec/trivy" }
+    }
+}
+if ($Only -eq "all" -or $Only -eq "trivy-db") {
+    $jobs += @{
+        Name = "trivy-db"
+        RegistryBase = "https://ghcr.io"
+        Repo = "aquasecurity/trivy-db"
+        Reference = "2"
+        Dest = "$GiteaRegistry/$Owner/trivy-db:2"
+        TokenFn = { Get-GhcrToken "aquasecurity/trivy-db" }
+    }
+}
+if ($Only -eq "all" -or $Only -eq "trivy-java-db") {
+    $jobs += @{
+        Name = "trivy-java-db"
+        RegistryBase = "https://ghcr.io"
+        Repo = "aquasecurity/trivy-java-db"
+        Reference = "1"
+        Dest = "$GiteaRegistry/$Owner/trivy-java-db:1"
+        TokenFn = { Get-GhcrToken "aquasecurity/trivy-java-db" }
     }
 }
 
