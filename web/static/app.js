@@ -20,9 +20,9 @@ async function api(path, opts = {}) {
 }
 
 function el(html) {
-  const d = document.createElement("div");
-  d.innerHTML = html.trim();
-  return d.firstChild;
+  const t = document.createElement("template");
+  t.innerHTML = html.trim();
+  return t.content.firstChild;
 }
 
 /** Flat stroke icons (inline SVG, no CDN — air-gap). */
@@ -57,6 +57,9 @@ const ICO = {
   open: '<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"/>',
   star: '<path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>',
   chevron: '<path d="M9 18l6-6-6-6"/>',
+  layoutList: '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
+  layoutTable: '<path d="M3 3h18v18H3zM3 9h18M3 15h18M9 3v18"/>',
+  layoutGrid: '<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>',
 };
 
 function icon(name, cls) {
@@ -612,6 +615,14 @@ const vault = {
   pageLimit: 50,
   searchQuery: "",
   folderFilter: "",
+  ownershipFilter: "mine", // mine | shared
+  viewMode: (function () {
+    try {
+      const v = localStorage.getItem("tv-secrets-view");
+      if (v === "table" || v === "tiles" || v === "list") return v;
+    } catch (_) {}
+    return "list";
+  })(),
   groups: [],
   totpTimer: null,
 };
@@ -809,7 +820,8 @@ function renderApp(app) {
       <nav class="app-sidebar-nav" id="appSidebarNav">
         <div class="sidebar-section">
           <div class="sidebar-section-title">Vault</div>
-          ${navLink("vault:secrets", "key", "Secrets", "active")}
+          ${navLink("vault:mine", "key", "Meine Secrets", "active")}
+          ${navLink("vault:shared", "share", "Geteilt mit mir")}
           ${navLink("vault:create", "plus", "Neu anlegen")}
           ${navLink("vault:import", "upload", "Import")}
         </div>
@@ -878,8 +890,16 @@ function renderApp(app) {
                     <label><span class="label-with-ico">${icon("folder", "label-ico")} Ordner</span></label>
                     <select id="sfolder"><option value="">Alle</option></select>
                   </div>
+                  <div class="secrets-view-wrap">
+                    <label>Ansicht</label>
+                    <div class="secrets-view-toggle" role="group" aria-label="Ansicht">
+                      <button type="button" class="btn-icon" data-view="list" title="Liste" aria-label="Liste">${icon("layoutList")}</button>
+                      <button type="button" class="btn-icon" data-view="table" title="Tabelle" aria-label="Tabelle">${icon("layoutTable")}</button>
+                      <button type="button" class="btn-icon" data-view="tiles" title="Kacheln" aria-label="Kacheln">${icon("layoutGrid")}</button>
+                    </div>
+                  </div>
                 </div>
-                <div id="slist" class="list"></div>
+                <div id="slist" class="list secrets-list"></div>
                 <div class="row">
                   <button class="btn-ghost btn-with-ico" type="button" id="sMore" hidden>${btnLabel("chevron", "Mehr laden")}</button>
                   <button class="btn-ghost btn-with-ico" type="button" id="sExportJson">${btnLabel("download", "Export JSON")}</button>
@@ -1126,7 +1146,8 @@ function renderApp(app) {
   let totpSecretPlain = "";
 
   const NAV_TITLES = {
-    "vault:secrets": "Secrets",
+    "vault:mine": "Meine Secrets",
+    "vault:shared": "Geteilt mit mir",
     "vault:create": "Neu anlegen",
     "vault:import": "Import",
     account: "Konto",
@@ -1169,6 +1190,10 @@ function renderApp(app) {
     } else if (nav.startsWith("vault:")) {
       pane = "vault";
       vaultSec = nav.slice("vault:".length);
+      if (vaultSec === "mine" || vaultSec === "shared") {
+        vault.ownershipFilter = vaultSec;
+        vaultSec = "secrets";
+      }
     }
 
     n.querySelectorAll(".app-tab").forEach((p) => {
@@ -1178,6 +1203,7 @@ function renderApp(app) {
       n.querySelectorAll(".vault-section").forEach((s) => {
         s.classList.toggle("active", s.dataset.vault === vaultSec);
       });
+      if (vaultSec === "secrets") paintSecretList();
     }
     if (pane === "admin") {
       n.querySelectorAll(".admin-section").forEach((s) => {
@@ -1218,10 +1244,7 @@ function renderApp(app) {
     applyTheme(cur === "dark" ? "light" : "dark");
   };
   syncThemeToggles(document.documentElement.getAttribute("data-theme") || "light");
-  {
-    const t = document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light";
-    n.querySelector("[data-theme-toggle]").textContent = t === "dark" ? "Hell" : "Dunkel";
-  }
+
 
   n.querySelector("#totp").onclick = async () => {
     const box = n.querySelector("#totpbox"); box.hidden = false;
@@ -1507,7 +1530,7 @@ function renderApp(app) {
     vault.secretsCache = [];
     vault.secretsOffset = 0;
     await refreshSecrets(true);
-    navigateTo("vault:secrets");
+    navigateTo("vault:mine");
   }
 
   n.querySelector("#ulock").onclick = async () => {
@@ -1535,6 +1558,27 @@ function renderApp(app) {
   n.querySelector("#lockMpw").addEventListener("keydown", (ev) => {
     if (ev.key === "Enter") n.querySelector("#lockUnlock").click();
   });
+
+  function syncViewToggle() {
+    n.querySelectorAll("[data-view]").forEach((btn) => {
+      const on = btn.dataset.view === vault.viewMode;
+      btn.classList.toggle("active", on);
+      btn.setAttribute("aria-pressed", on ? "true" : "false");
+    });
+  }
+
+  function setViewMode(mode) {
+    if (mode !== "list" && mode !== "table" && mode !== "tiles") return;
+    vault.viewMode = mode;
+    try { localStorage.setItem("tv-secrets-view", mode); } catch (_) {}
+    syncViewToggle();
+    paintSecretList();
+  }
+
+  n.querySelectorAll("[data-view]").forEach((btn) => {
+    btn.onclick = () => setViewMode(btn.dataset.view);
+  });
+  syncViewToggle();
 
   n.querySelector("#ssearch").oninput = () => {
     vault.searchQuery = n.querySelector("#ssearch").value.trim().toLowerCase();
@@ -1802,35 +1846,161 @@ function renderApp(app) {
     }
   }
 
-  function paintSecretList() {
-    const list = n.querySelector("#slist");
-    list.innerHTML = "";
+  function matchesOwnership(it) {
+    const me = vault.me?.user_id;
+    if (!it.has_access || !me) return false;
+    const mine = (it.created_by || "") === me;
+    return vault.ownershipFilter === "shared" ? !mine : mine;
+  }
+
+  function filterVisibleSecrets() {
     const q = vault.searchQuery;
     const folder = vault.folderFilter;
-    const visible = vault.secretsCache.filter((it) => {
+    return vault.secretsCache.filter((it) => {
+      if (!matchesOwnership(it)) return false;
       if (folder && (it.collection_id || "") !== folder) return false;
       if (!q) return true;
       const title = (it._title || "").toLowerCase();
       const folderName = (it.collection_id || "").toLowerCase();
-      return title.includes(q) || folderName.includes(q) || (it.id || "").toLowerCase().includes(q);
+      const user = (it._username || "").toLowerCase();
+      const tags = (it._tags || []).join(" ").toLowerCase();
+      return title.includes(q) || folderName.includes(q) || user.includes(q) || tags.includes(q) ||
+        (it.id || "").toLowerCase().includes(q);
     });
-    for (const it of visible) {
-      const row = el(`<div class="list-row"><span class="list-row-main"></span><button class="btn-ghost btn-with-ico" type="button">${btnLabel("open", "Öffnen")}</button></div>`);
-      const span = row.querySelector("span");
-      const mark = it._favorite ? `<span class="fav-mark" title="Favorit">${icon("star", "fav-ico")}</span>` : "";
-      const lead = `<span class="list-row-ico" aria-hidden="true">${icon(it.has_access ? "key" : "lock")}</span>`;
-      if (it._title) {
-        span.innerHTML = lead + mark;
-        span.appendChild(document.createTextNode(it._title + (it.collection_id ? ` · ${it.collection_id}` : "")));
-      } else {
-        span.innerHTML = lead;
-        span.appendChild(document.createTextNode(it.id + (it.has_access ? " (Titel n.v.)" : " · kein Zugriff")));
-      }
-      row.querySelector("button").onclick = () => openSecret(it.id);
-      list.appendChild(row);
+  }
+
+  function escHtml(s) {
+    return String(s == null ? "" : s)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+
+  async function enrichSecretMeta(it) {
+    if (it._metaLoaded || !it.has_access || !it.envelope || !vault.sk) {
+      it._metaLoaded = true;
+      return;
     }
+    try {
+      const det = await api("/api/secrets/" + it.id);
+      const dk = openDKFromEnvelope(det.envelope);
+      const kv = det.key_version || it.envelope.key_version || 1;
+      const pt = await TVCrypto.decryptPayload(
+        TVCrypto.b64dec(det.ciphertext_b64),
+        TVCrypto.b64dec(det.nonce_b64),
+        dk, kv
+      );
+      dk.fill(0);
+      const payload = normalizeSecretPayload(JSON.parse(pt));
+      it._username = payload.username || "";
+      it._tags = payload.tags || [];
+      it._favorite = !!payload.favorite;
+      it._url = (payload.urls && payload.urls[0]) || "";
+      it._metaLoaded = true;
+    } catch {
+      it._username = "";
+      it._tags = [];
+      it._favorite = false;
+      it._url = "";
+      it._metaLoaded = true;
+    }
+  }
+
+  function secretTitleLabel(it) {
+    if (it._title) return it._title;
+    return it.id + (it.has_access ? " (Titel n.v.)" : " · kein Zugriff");
+  }
+
+  function paintSecretList() {
+    const list = n.querySelector("#slist");
+    if (!list) return;
+    list.innerHTML = "";
+    list.className = "list secrets-list secrets-view-" + vault.viewMode;
+    const visible = filterVisibleSecrets();
+
+    const needsMeta = vault.viewMode === "table" || vault.viewMode === "tiles";
+    if (needsMeta) {
+      const pending = visible.filter((it) => !it._metaLoaded);
+      if (pending.length) {
+        list.innerHTML = `<p class="hint">Lade Details…</p>`;
+        mapPool(pending, 4, enrichSecretMeta).then(() => paintSecretList());
+        return;
+      }
+    }
+
+    if (!visible.length) {
+      const empty = vault.ownershipFilter === "shared"
+        ? "Keine geteilten Secrets."
+        : "Noch keine eigenen Secrets.";
+      list.innerHTML = `<p class="hint">${empty}</p>`;
+    } else if (vault.viewMode === "table") {
+      const table = el(`<table class="secrets-table"><thead><tr>
+        <th>Titel</th><th>Ordner</th><th>Benutzer</th><th>Tags</th><th></th><th></th>
+      </tr></thead><tbody></tbody></table>`);
+      const tbody = table.querySelector("tbody");
+      for (const it of visible) {
+        const tr = el(`<tr>
+          <td class="st-title"></td>
+          <td class="st-folder muted">${escHtml(it.collection_id || "—")}</td>
+          <td class="st-user">${escHtml(it._username || "—")}</td>
+          <td class="st-tags"></td>
+          <td class="st-fav">${it._favorite ? icon("star", "fav-ico") : ""}</td>
+          <td class="st-act"><button type="button" class="btn-ghost btn-with-ico btn-sm">${btnLabel("open", "Öffnen")}</button></td>
+        </tr>`);
+        const titleCell = tr.querySelector(".st-title");
+        titleCell.appendChild(document.createTextNode(secretTitleLabel(it)));
+        const tagsCell = tr.querySelector(".st-tags");
+        if (it._tags && it._tags.length) {
+          tagsCell.innerHTML = `<span class="tags">${it._tags.map((t) => `<span class="tag">${escHtml(t)}</span>`).join("")}</span>`;
+        } else {
+          tagsCell.textContent = "—";
+        }
+        tr.querySelector("button").onclick = () => openSecret(it.id);
+        tbody.appendChild(tr);
+      }
+      list.appendChild(table);
+    } else if (vault.viewMode === "tiles") {
+      const grid = el(`<div class="secrets-tiles"></div>`);
+      for (const it of visible) {
+        const tile = el(`<article class="secret-tile">
+          <div class="secret-tile-head">
+            <span class="list-row-ico" aria-hidden="true">${icon("key")}</span>
+            ${it._favorite ? `<span class="fav-mark" title="Favorit">${icon("star", "fav-ico")}</span>` : ""}
+          </div>
+          <h3 class="secret-tile-title"></h3>
+          <p class="secret-tile-meta hint"></p>
+          <div class="secret-tile-tags"></div>
+          <button type="button" class="btn-ghost btn-with-ico btn-sm">${btnLabel("open", "Öffnen")}</button>
+        </article>`);
+        tile.querySelector(".secret-tile-title").textContent = secretTitleLabel(it);
+        const bits = [];
+        if (it.collection_id) bits.push(it.collection_id);
+        if (it._username) bits.push(it._username);
+        if (it._url) bits.push(it._url);
+        tile.querySelector(".secret-tile-meta").textContent = bits.join(" · ") || "—";
+        const tagsEl = tile.querySelector(".secret-tile-tags");
+        if (it._tags && it._tags.length) {
+          tagsEl.innerHTML = `<span class="tags">${it._tags.map((t) => `<span class="tag">${escHtml(t)}</span>`).join("")}</span>`;
+        }
+        tile.querySelector("button").onclick = () => openSecret(it.id);
+        grid.appendChild(tile);
+      }
+      list.appendChild(grid);
+    } else {
+      for (const it of visible) {
+        const row = el(`<div class="list-row"><span class="list-row-main"></span><button class="btn-ghost btn-with-ico" type="button">${btnLabel("open", "Öffnen")}</button></div>`);
+        const span = row.querySelector("span");
+        const lead = `<span class="list-row-ico" aria-hidden="true">${icon(it.has_access ? "key" : "lock")}</span>`;
+        span.innerHTML = lead;
+        span.appendChild(document.createTextNode(
+          secretTitleLabel(it) + (it.collection_id ? ` · ${it.collection_id}` : "")
+        ));
+        row.querySelector("button").onclick = () => openSecret(it.id);
+        list.appendChild(row);
+      }
+    }
+
+    const scopeLabel = vault.ownershipFilter === "shared" ? "geteilt" : "eigene";
     n.querySelector("#sCount").textContent =
-      `${visible.length} angezeigt · ${vault.secretsCache.length} geladen · ${vault.secretsTotal} gesamt`;
+      `${visible.length} ${scopeLabel} · ${vault.secretsCache.length} geladen · ${vault.secretsTotal} gesamt`;
     n.querySelector("#sMore").hidden = vault.secretsCache.length >= vault.secretsTotal;
   }
 
@@ -1880,7 +2050,7 @@ function renderApp(app) {
   async function openSecret(id) {
     const err = n.querySelector("#derr"); err.hidden = true;
     const panel = n.querySelector("#sdetail"); panel.hidden = false;
-    navigateTo("vault:secrets");
+    navigateTo(vault.ownershipFilter === "shared" ? "vault:shared" : "vault:mine");
     if (vault.totpTimer) {
       clearInterval(vault.totpTimer);
       vault.totpTimer = null;
@@ -2038,7 +2208,7 @@ function renderApp(app) {
       await postEncryptedSecret(title, payload, collectionId);
       resetCreateForm();
       await refreshSecrets(true);
-      navigateTo("vault:secrets");
+      navigateTo("vault:mine");
     } catch (e) {
       err.hidden = false; err.textContent = e.message;
     }

@@ -52,11 +52,26 @@ Oben rechts: Theme-Umschalter als **Sonne/Mond-Icon** (wird lokal gespeichert). 
 
 ## 5. Secrets
 
-Nach dem Entsperren: linke **Sidebar** mit Icons (Vault / Konto / ggf. Administration) und Liste mit clientseitiger **Suche** und **Ordner**-Filter.
+Nach dem Entsperren: linke **Sidebar** mit Icons. Unter Vault getrennt:
 
-![Secrets-Liste mit Sidebar](images/vault-secrets.png)
+| Menü | Inhalt |
+|------|--------|
+| **Meine Secrets** | Einträge, die Sie angelegt haben (`created_by` = Sie) |
+| **Geteilt mit mir** | Einträge mit Zugriff, die jemand anderes angelegt hat |
+
+Kein vermischter „Alle“-Eintrag. Clientseitige **Suche** und **Ordner**-Filter gelten jeweils für die aktive Ansicht.
+
+**Ansicht:** Umschalter Liste / Tabelle / Kacheln (Preference lokal im Browser). Liste zeigt Titel und Ordner; Tabelle und Kacheln laden zusätzlich Benutzer, Tags und Favorit (clientseitig entschlüsselt).
+
+![Meine Secrets – Liste](images/vault-secrets.png)
+
+![Meine Secrets – Tabelle](images/vault-secrets-table.png)
+
+![Meine Secrets – Kacheln](images/vault-secrets-tiles.png)
 
 ![Navigation](images/nav-sidebar.png)
+
+![Geteilt mit mir](images/vault-shared.png)
 
 ### Anlegen
 
@@ -89,9 +104,7 @@ In der Liste **Öffnen** — Klartext erscheint nur bei Ihnen im Browser. Felder
 Im Secret-Detail einen anderen User wählen → **Teilen**.  
 Jeder Empfänger erhält einen eigenen Umschlag um den Datenschlüssel (kein gemeinsames Gruppenpasswort). Empfänger müssen im gleichen Tenant **onboarded** sein.
 
-Admins und Gruppenmitglieder können eine **Gruppe** wählen → **Gruppe teilen** (Mitglieder sehen nur eigene Gruppen; pro Mitglied eigener Envelope).
-
-![Geteiltes Secret](images/vault-shared.png)
+Admins und Gruppenmitglieder können eine **Gruppe** wählen → **Gruppe teilen** (Mitglieder sehen nur eigene Gruppen; pro Mitglied eigener Envelope). Empfänger sehen den Eintrag unter **Geteilt mit mir**.
 
 ### Ordner
 
