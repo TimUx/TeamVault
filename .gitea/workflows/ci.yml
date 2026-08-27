@@ -172,7 +172,11 @@ jobs:
           PRIMARY="$(echo '${{ steps.meta.outputs.tags }}' | head -n1)"
           VER="$(git describe --tags --always --dirty 2>/dev/null || echo '${{ gitea.sha }}' | cut -c1-7)"
           COMMIT="$(echo '${{ gitea.sha }}' | cut -c1-7)"
+          # Pre-pull via docker CLI (BuildKit oauth to registry hits x509 unknown authority)
+          docker pull "${BASE_REGISTRY}/golang:1.23.3-bookworm"
+          docker pull "${BASE_REGISTRY}/distroless-static:nonroot"
           docker build \
+            --pull=false \
             --build-arg "BASE_REGISTRY=${BASE_REGISTRY}" \
             --build-arg "VERSION=${VER}" \
             --build-arg "COMMIT=${COMMIT}" \
