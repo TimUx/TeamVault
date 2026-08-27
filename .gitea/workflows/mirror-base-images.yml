@@ -27,7 +27,7 @@ jobs:
       - name: Login to Gitea registry
         shell: bash
         env:
-          REGISTRY_USER: ${{ gitea.actor }}
+          REGISTRY_USER: ${{ secrets.REGISTRY_USER || gitea.actor }}
           REGISTRY_TOKEN: ${{ secrets.REGISTRY_TOKEN || gitea.token }}
         run: |
           set -euo pipefail

@@ -137,7 +137,7 @@ jobs:
         shell: bash
         env:
           REGISTRY: ${{ steps.meta.outputs.registry }}
-          REGISTRY_USER: ${{ gitea.actor }}
+          REGISTRY_USER: ${{ secrets.REGISTRY_USER || gitea.actor }}
           REGISTRY_TOKEN: ${{ secrets.REGISTRY_TOKEN || gitea.token }}
         run: |
           set -euo pipefail
