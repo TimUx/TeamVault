@@ -1,29 +1,19 @@
 # TeamVault server — multi-stage, static Go binary (CGO_ENABLED=0, modernc sqlite).
 # Unlock key is never baked into the image; mount via TEAMVAULT_MASTER_UNLOCK_KEY_FILE.
+#
+# Base images come from the internal Gitea registry (mirrored via
+# .gitea/workflows/mirror-base-images.yml). Modules are vendored (vendor/).
 
+ARG BASE_REGISTRY=git.example.internal/cc-3.3
 ARG GO_VERSION=1.23.3
 
-FROM golang:${GO_VERSION}-bookworm AS build
+FROM ${BASE_REGISTRY}/golang:${GO_VERSION}-bookworm AS build
 WORKDIR /src
 
-# Corp HTTP(S) proxy (CI / docker build --build-arg), same idea as storage-dashboard
-ARG HTTP_PROXY
-ARG HTTPS_PROXY
-ARG NO_PROXY
-ARG http_proxy
-ARG https_proxy
-ARG no_proxy
-ENV HTTP_PROXY=${HTTP_PROXY} HTTPS_PROXY=${HTTPS_PROXY} NO_PROXY=${NO_PROXY} \
-    http_proxy=${http_proxy} https_proxy=${https_proxy} no_proxy=${no_proxy}
-
-# Optional corp module proxy (build-arg), e.g. --build-arg GOPROXY=http://…
-ARG GOPROXY=https://proxy.golang.org,direct
-ARG GOSUMDB=sum.golang.org
-ENV GOPROXY=${GOPROXY} GOSUMDB=${GOSUMDB} CGO_ENABLED=0
+ENV CGO_ENABLED=0 GOFLAGS=-mod=vendor
 
 COPY go.mod go.sum ./
-RUN go mod download
-
+COPY vendor/ vendor/
 COPY . .
 
 # CI target: unit tests + vet (build with: docker build --target test …)
@@ -37,7 +27,8 @@ RUN go build -trimpath \
     -ldflags="-s -w -X github.com/teamvault/teamvault/internal/buildinfo.Version=${VERSION} -X github.com/teamvault/teamvault/internal/buildinfo.Commit=${COMMIT}" \
     -o /out/teamvault ./cmd/teamvault
 
-FROM gcr.io/distroless/static-debian12:nonroot
+ARG BASE_REGISTRY=git.example.internal/cc-3.3
+FROM ${BASE_REGISTRY}/distroless-static:nonroot
 WORKDIR /data
 
 COPY --from=bin /out/teamvault /usr/local/bin/teamvault

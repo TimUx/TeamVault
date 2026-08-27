@@ -17,7 +17,6 @@ secrets/
 # Build artifacts
 bin/
 dist/
-vendor/
 *.exe
 *.test
 

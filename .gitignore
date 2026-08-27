@@ -13,7 +13,6 @@ unlock-docs-setup.key
 unlock-docs-shot.key
 
 # Go
-/vendor/
 /bin/
 /dist/
 

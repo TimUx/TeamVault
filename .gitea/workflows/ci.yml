@@ -1,19 +1,18 @@
 # TeamVault CI — Gitea Actions (ubuntu runner)
 #
-# Prerequisites on the instance:
-#   - Act-Runner with label "ubuntu-latest" (or change runs-on below)
-#   - Container registry / Packages enabled
-# Optional repo secrets/vars:
-#   - secrets.REGISTRY_TOKEN  — PAT with write:package (fallback: gitea.token)
-#   - secrets.ACT_RUN_TOKEN   — token for internal git clone (fallback: gitea.token)
-#   - vars.REGISTRY           — registry host (default: hostname of gitea.server_url)
-#   - vars.GOPROXY / vars.GOSUMDB — corp module proxy if needed
-#   - vars.HTTP_PROXY / HTTPS_PROXY / NO_PROXY — corp HTTP proxy (defaults: proxyits)
+# Prerequisites:
+#   - Act-Runner label "ubuntu-latest"
+#   - Mirrored base images (run workflow "Mirror base images" once):
+#       {registry}/cc-3.3/golang:1.23.3-bookworm
+#       {registry}/cc-3.3/distroless-static:nonroot
+#       {registry}/cc-3.3/trivy:latest
+#   - vendor/ committed (no go mod download in CI)
 #
-# Note: Do not use actions/checkout or actions/setup-go from github.com — act clones
-# those before workflow env is applied. Checkout via internal Gitea; Go test/build via
-# docker build with HTTP(S)_PROXY build-args (daemon already talks to proxyits; curl in
-# the job container gets 407 without NTLM creds).
+# Optional secrets/vars:
+#   - secrets.REGISTRY_TOKEN / secrets.ACT_RUN_TOKEN
+#   - vars.REGISTRY, vars.HTTP_PROXY / HTTPS_PROXY / NO_PROXY
+#
+# No actions/* from github.com — act cannot clone them through the corp proxy.
 
 name: CI
 
@@ -30,8 +29,6 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  GOPROXY: ${{ vars.GOPROXY || 'https://proxy.golang.org,direct' }}
-  GOSUMDB: ${{ vars.GOSUMDB || 'sum.golang.org' }}
   CGO_ENABLED: "0"
   HTTP_PROXY: ${{ vars.HTTP_PROXY || 'http://proxy.example.internal:8080' }}
   HTTPS_PROXY: ${{ vars.HTTPS_PROXY || 'http://proxy.example.internal:8080' }}
@@ -39,6 +36,7 @@ env:
   http_proxy: ${{ vars.HTTP_PROXY || 'http://proxy.example.internal:8080' }}
   https_proxy: ${{ vars.HTTPS_PROXY || 'http://proxy.example.internal:8080' }}
   no_proxy: ${{ vars.NO_PROXY || 'localhost,127.0.0.1,gitea,git.example.internal,.example.internal' }}
+  BASE_REGISTRY: ${{ vars.REGISTRY || 'git.example.internal' }}/cc-3.3
 
 jobs:
   test:
@@ -54,6 +52,7 @@ jobs:
           git clone --no-checkout "http://oauth2:${ACT_TOKEN}@gitea:3000/${{ gitea.repository }}.git" .
           git checkout --force "${{ gitea.sha }}"
           test -f go.mod
+          test -f vendor/modules.txt
 
       - name: cryptocore.js checksum sync
         shell: bash
@@ -74,14 +73,7 @@ jobs:
           set -euo pipefail
           docker build \
             --target test \
-            --build-arg "HTTP_PROXY=${HTTP_PROXY}" \
-            --build-arg "HTTPS_PROXY=${HTTPS_PROXY}" \
-            --build-arg "http_proxy=${HTTP_PROXY}" \
-            --build-arg "https_proxy=${HTTPS_PROXY}" \
-            --build-arg "NO_PROXY=${NO_PROXY}" \
-            --build-arg "no_proxy=${NO_PROXY}" \
-            --build-arg "GOPROXY=${GOPROXY}" \
-            --build-arg "GOSUMDB=${GOSUMDB}" \
+            --build-arg "BASE_REGISTRY=${BASE_REGISTRY}" \
             -f Dockerfile \
             .
 
@@ -157,26 +149,13 @@ jobs:
 
       - name: Build image
         shell: bash
-        env:
-          GOPROXY: ${{ env.GOPROXY }}
-          GOSUMDB: ${{ env.GOSUMDB }}
-          HTTP_PROXY: ${{ env.HTTP_PROXY }}
-          HTTPS_PROXY: ${{ env.HTTPS_PROXY }}
-          NO_PROXY: ${{ env.NO_PROXY }}
         run: |
           set -euo pipefail
           PRIMARY="$(echo '${{ steps.meta.outputs.tags }}' | head -n1)"
           VER="$(git describe --tags --always --dirty 2>/dev/null || echo '${{ gitea.sha }}' | cut -c1-7)"
           COMMIT="$(echo '${{ gitea.sha }}' | cut -c1-7)"
           docker build \
-            --build-arg "HTTP_PROXY=${HTTP_PROXY}" \
-            --build-arg "HTTPS_PROXY=${HTTPS_PROXY}" \
-            --build-arg "http_proxy=${HTTP_PROXY}" \
-            --build-arg "https_proxy=${HTTPS_PROXY}" \
-            --build-arg "NO_PROXY=${NO_PROXY}" \
-            --build-arg "no_proxy=${NO_PROXY}" \
-            --build-arg "GOPROXY=${GOPROXY}" \
-            --build-arg "GOSUMDB=${GOSUMDB}" \
+            --build-arg "BASE_REGISTRY=${BASE_REGISTRY}" \
             --build-arg "VERSION=${VER}" \
             --build-arg "COMMIT=${COMMIT}" \
             -t "${PRIMARY}" \
@@ -193,10 +172,8 @@ jobs:
           set -euo pipefail
           PRIMARY="$(echo '${{ steps.meta.outputs.tags }}' | head -n1)"
           docker run --rm \
-            -e HTTP_PROXY -e HTTPS_PROXY -e NO_PROXY \
-            -e http_proxy -e https_proxy -e no_proxy \
             -v /var/run/docker.sock:/var/run/docker.sock \
-            aquasec/trivy:latest image \
+            "${BASE_REGISTRY}/trivy:latest" image \
             --exit-code 1 \
             --severity CRITICAL,HIGH \
             --ignore-unfixed \
