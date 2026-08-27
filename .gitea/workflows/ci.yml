@@ -5,9 +5,14 @@
 #   - Container registry / Packages enabled
 # Optional repo secrets/vars:
 #   - secrets.REGISTRY_TOKEN  — PAT with write:package (fallback: gitea.token)
+#   - secrets.ACT_RUN_TOKEN   — token for internal git clone (fallback: gitea.token)
 #   - vars.REGISTRY           — registry host (default: hostname of gitea.server_url)
 #   - vars.GOPROXY / vars.GOSUMDB — corp module proxy if needed
 #   - vars.HTTP_PROXY / HTTPS_PROXY / NO_PROXY — corp HTTP proxy (defaults: proxyits)
+#
+# Note: Do not use actions/checkout or actions/setup-go from github.com — act clones
+# those before workflow env is applied. Checkout via internal Gitea (storage-dashboard
+# pattern); Go via docker.io/library/golang with HTTP(S)_PROXY.
 
 name: CI
 
@@ -27,86 +32,93 @@ env:
   GOPROXY: ${{ vars.GOPROXY || 'https://proxy.golang.org,direct' }}
   GOSUMDB: ${{ vars.GOSUMDB || 'sum.golang.org' }}
   CGO_ENABLED: "0"
-  # Corp proxy for github.com Actions + outbound fetches (same pattern as storage-dashboard)
   HTTP_PROXY: ${{ vars.HTTP_PROXY || 'http://proxy.example.internal:8080' }}
   HTTPS_PROXY: ${{ vars.HTTPS_PROXY || 'http://proxy.example.internal:8080' }}
   NO_PROXY: ${{ vars.NO_PROXY || 'localhost,127.0.0.1,gitea,git.example.internal,.example.internal' }}
   http_proxy: ${{ vars.HTTP_PROXY || 'http://proxy.example.internal:8080' }}
   https_proxy: ${{ vars.HTTPS_PROXY || 'http://proxy.example.internal:8080' }}
   no_proxy: ${{ vars.NO_PROXY || 'localhost,127.0.0.1,gitea,git.example.internal,.example.internal' }}
+  GO_IMAGE: golang:1.23.3-bookworm
 
 jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-          cache: true
-
-      - name: Go test
-        run: go test ./...
-
-      - name: cryptocore.js checksum sync
+      - name: Checkout repository
+        shell: bash
+        env:
+          ACT_TOKEN: ${{ secrets.ACT_RUN_TOKEN || gitea.token }}
         run: |
           set -euo pipefail
-          h1=$(sha256sum web/static/cryptocore.js | awk '{print $1}')
-          h2=$(sha256sum clients/js/cryptocore.js | awk '{print $1}')
-          h3=$(sha256sum clients/extension/cryptocore.js | awk '{print $1}')
-          if [ "$h1" != "$h2" ] || [ "$h1" != "$h3" ]; then
-            echo "cryptocore.js mismatch — keep web/static, clients/js, clients/extension in sync"
-            exit 1
-          fi
-          echo "cryptocore.js ok ($h1)"
+          # Internal clone (docker-apps network), same approach as storage-dashboard CI logs
+          git clone --no-checkout "http://oauth2:${ACT_TOKEN}@gitea:3000/${{ gitea.repository }}.git" .
+          git checkout --force "${{ gitea.sha }}"
+          test -f go.mod
 
-      - name: Go vet
-        run: go vet ./...
-
-      - name: govulncheck
+      - name: Go test / vet / smoke (via golang image)
+        shell: bash
         run: |
-          go install golang.org/x/vuln/cmd/govulncheck@latest
-          govulncheck ./...
-
-      - name: Build server + CLI (smoke)
-        run: |
-          VER="$(git describe --tags --always --dirty 2>/dev/null || echo dev)"
-          COMMIT="$(git rev-parse --short HEAD 2>/dev/null || echo none)"
-          LDFLAGS="-s -w -X github.com/teamvault/teamvault/internal/buildinfo.Version=${VER} -X github.com/teamvault/teamvault/internal/buildinfo.Commit=${COMMIT}"
-          go build -trimpath -ldflags="${LDFLAGS}" -o /tmp/teamvault ./cmd/teamvault
-          go build -trimpath -o /tmp/tvcli ./cmd/tvcli
-          /tmp/teamvault -version
-          /tmp/tvcli version
+          set -euo pipefail
+          docker pull "${GO_IMAGE}"
+          docker run --rm \
+            -v "$PWD:/src" -w /src \
+            -e GOPROXY -e GOSUMDB -e CGO_ENABLED \
+            -e HTTP_PROXY -e HTTPS_PROXY -e NO_PROXY \
+            -e http_proxy -e https_proxy -e no_proxy \
+            "${GO_IMAGE}" \
+            bash -c '
+              set -euo pipefail
+              go test ./...
+              h1=$(sha256sum web/static/cryptocore.js | awk "{print \$1}")
+              h2=$(sha256sum clients/js/cryptocore.js | awk "{print \$1}")
+              h3=$(sha256sum clients/extension/cryptocore.js | awk "{print \$1}")
+              if [ "$h1" != "$h2" ] || [ "$h1" != "$h3" ]; then
+                echo "cryptocore.js mismatch — keep web/static, clients/js, clients/extension in sync"
+                exit 1
+              fi
+              echo "cryptocore.js ok ($h1)"
+              go vet ./...
+              go install golang.org/x/vuln/cmd/govulncheck@latest
+              govulncheck ./...
+              VER="$(git describe --tags --always --dirty 2>/dev/null || echo dev)"
+              COMMIT="$(git rev-parse --short HEAD 2>/dev/null || echo none)"
+              LDFLAGS="-s -w -X github.com/teamvault/teamvault/internal/buildinfo.Version=${VER} -X github.com/teamvault/teamvault/internal/buildinfo.Commit=${COMMIT}"
+              go build -trimpath -ldflags="${LDFLAGS}" -o /tmp/teamvault ./cmd/teamvault
+              go build -trimpath -o /tmp/tvcli ./cmd/tvcli
+              /tmp/teamvault -version
+              /tmp/tvcli version
+            '
 
   docker:
     name: Docker package
     needs: test
-    # Publish only from main / version tags (not PRs)
     if: >-
       gitea.event_name == 'workflow_dispatch' ||
       (gitea.event_name == 'push' &&
         (gitea.ref == 'refs/heads/main' || startsWith(gitea.ref, 'refs/tags/v')))
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: Checkout repository
+        shell: bash
+        env:
+          ACT_TOKEN: ${{ secrets.ACT_RUN_TOKEN || gitea.token }}
+        run: |
+          set -euo pipefail
+          git clone --no-checkout "http://oauth2:${ACT_TOKEN}@gitea:3000/${{ gitea.repository }}.git" .
+          git checkout --force "${{ gitea.sha }}"
+          test -f go.mod
 
       - name: Resolve registry and image names
         id: meta
         shell: bash
         run: |
           set -euo pipefail
-          # Prefer explicit var; else host from Gitea server URL (strip path like /git)
           if [ -n "${{ vars.REGISTRY }}" ]; then
             REGISTRY="${{ vars.REGISTRY }}"
           else
             REGISTRY="$(echo '${{ gitea.server_url }}' | sed -E 's#^https?://##' | cut -d/ -f1)"
           fi
-          # Container packages require lowercase owner/name
           REPO_LC="$(echo '${{ gitea.repository }}' | tr '[:upper:]' '[:lower:]')"
           IMAGE="${REGISTRY}/${REPO_LC}"
 
@@ -138,7 +150,6 @@ jobs:
         shell: bash
         env:
           REGISTRY: ${{ steps.meta.outputs.registry }}
-          # Prefer PAT with package write; job token as fallback
           REGISTRY_USER: ${{ gitea.actor }}
           REGISTRY_TOKEN: ${{ secrets.REGISTRY_TOKEN || gitea.token }}
         run: |
@@ -187,6 +198,8 @@ jobs:
           set -euo pipefail
           PRIMARY="$(echo '${{ steps.meta.outputs.tags }}' | head -n1)"
           docker run --rm \
+            -e HTTP_PROXY -e HTTPS_PROXY -e NO_PROXY \
+            -e http_proxy -e https_proxy -e no_proxy \
             -v /var/run/docker.sock:/var/run/docker.sock \
             aquasec/trivy:latest image \
             --exit-code 1 \

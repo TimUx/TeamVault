@@ -28,11 +28,13 @@ Tags: `latest`/`main` (Branch main), `sha-<7>`, bei Tag `v*` zusätzlich Version
 | `GOPROXY` / `GOSUMDB` | Variablen | Corp Go-Proxy |
 | `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY` | Variablen | Corp-HTTP-Proxy (Default: `proxy.example.internal:8080`) |
 
-### Firmenproxy (GitHub Actions + Docker)
+### Firmenproxy (GitHub + Docker)
 
-Wie bei **storage-dashboard**: Workflow-`env` setzt `HTTP_PROXY`/`HTTPS_PROXY` auf `http://proxy.example.internal:8080` und `NO_PROXY` für interne Hosts (`gitea`, `git.example.internal`, `.example.internal`). Damit kann der Runner `actions/*` von github.com laden; `docker build` bekommt dieselben Werte als Build-Args.
+Wie bei **storage-dashboard**: Workflow-`env` setzt `HTTP_PROXY`/`HTTPS_PROXY` auf `http://proxy.example.internal:8080` und `NO_PROXY` für interne Hosts (`gitea`, `git.example.internal`, `.example.internal`).
 
-Gitea-/Runner-Host sollten für Action-Fetches dieselben Proxy-Defaults nutzen (ggf. `app.ini` / act_runner `container.env`).
+**Wichtig:** `actions/checkout` / `actions/setup-go` von github.com werden **nicht** verwendet — act klont Actions *bevor* Workflow-Env greift. Checkout läuft per internen Clone (`gitea:3000`); Go-Tests im Image `golang:1.23.3-bookworm`. `docker build` bekommt die Proxy-Werte als Build-Args.
+
+Optional: `secrets.ACT_RUN_TOKEN` für den internen Clone (Fallback: Job-Token).
 
 ```bash
 docker login git.example.internal
