@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <title>TeamVault</title>
+  <style>
+    :root { --p: #A70240; --a: #0098DB; --bg: #f5f7fa; --t: #333; --bd: #e1e8ed; }
+    body { width: 360px; margin: 0; font: 13px/1.4 "Segoe UI", system-ui, sans-serif; background: var(--bg); color: var(--t); }
+    header { padding: 0.75rem 1rem; background: #fff; border-bottom: 3px solid var(--a); font-weight: 700; font-size: 1.1rem; }
+    main { padding: 0.85rem 1rem 1.1rem; }
+    label { display: block; font-weight: 600; margin: 0.55rem 0 0.25rem; }
+    input[type="text"], input[type="password"], input[type="search"], input:not([type]) {
+      width: 100%; box-sizing: border-box; padding: 0.4rem 0.5rem; border: 1px solid #d1d9e0;
+    }
+    button { margin-top: 0.45rem; border: 0; padding: 0.4rem 0.65rem; font-weight: 600; cursor: pointer; background: var(--a); color: #fff; }
+    button.ghost { background: transparent; border: 1px solid #ccc; color: var(--t); }
+    .err { color: var(--p); margin-top: 0.5rem; white-space: pre-wrap; }
+    .hint { color: #666; font-size: 0.8rem; }
+    .list { max-height: 280px; overflow: auto; margin-top: 0.5rem; }
+    .row-item { display: flex; justify-content: space-between; gap: 0.4rem; padding: 0.4rem 0; border-bottom: 1px solid var(--bd); align-items: flex-start; }
+    .title { flex: 1; min-width: 0; word-break: break-word; }
+    .title small { color: #666; font-size: 0.75rem; }
+    .actions { display: flex; flex-direction: column; gap: 0.25rem; }
+    .actions button { margin-top: 0; white-space: nowrap; }
+    .toolbar { display: flex; flex-direction: column; gap: 0.35rem; margin-top: 0.5rem; }
+    .inline { display: flex; align-items: center; gap: 0.4rem; font-weight: 500; }
+  </style>
+</head>
+<body>
+  <header>TeamVault</header>
+  <main>
+    <section id="cfg">
+      <label>Server-URL</label>
+      <input id="base" placeholder="http://127.0.0.1:8080" />
+      <button id="saveBase" type="button">Speichern</button>
+    </section>
+    <section id="login">
+      <label>Tenant</label><input id="tenant" />
+      <label>User</label><input id="user" />
+      <label>Login-Passwort</label><input id="lpw" type="password" />
+      <label>TOTP</label><input id="totp" />
+      <button id="doLogin" type="button">Anmelden</button>
+    </section>
+    <section id="unlock" hidden>
+      <p class="hint" id="who"></p>
+      <label>Master-Passwort</label><input id="mpw" type="password" />
+      <button id="doUnlock" type="button">Vault entsperren</button>
+      <button class="ghost" id="logout" type="button">Logout</button>
+    </section>
+    <section id="vault" hidden>
+      <p class="hint" id="tabHost"></p>
+      <div class="toolbar">
+        <input id="filter" type="search" placeholder="Suche Titel / Domain…" />
+        <label class="inline"><input id="matchHost" type="checkbox" /> Nur passende Domain</label>
+        <span class="hint" id="matchHint"></span>
+      </div>
+      <div class="list" id="slist"></div>
+      <button class="ghost" id="lock" type="button">Sperren</button>
+    </section>
+    <div class="err" id="err" hidden></div>
+  </main>
+  <script src="vendor/nacl-fast.min.js"></script>
+  <script src="vendor/argon2.umd.min.js"></script>
+  <script src="vendor/secrets.min.js"></script>
+  <script src="cryptocore.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

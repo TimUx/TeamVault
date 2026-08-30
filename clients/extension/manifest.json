@@ -1,0 +1,32 @@
+{
+  "manifest_version": 3,
+  "name": "TeamVault",
+  "version": "0.10.0",
+  "description": "Zero-Knowledge vault client — decrypts only in the browser extension.",
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "TeamVault"
+  },
+  "permissions": ["storage", "clipboardWrite", "activeTab", "scripting"],
+  "host_permissions": ["http://127.0.0.1/*", "http://localhost/*"],
+  "optional_host_permissions": ["https://*/*", "http://*/*"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "teamvault@local",
+      "strict_min_version": "109.0"
+    }
+  }
+}

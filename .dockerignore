@@ -1,0 +1,33 @@
+# Context sent to the Docker daemon — keep small and secret-free.
+.git
+.cursor
+**/.DS_Store
+**/Thumbs.db
+
+# Local data & secrets (never bake unlock keys into the image)
+data/
+*.db
+*.sealed
+unlock.key
+*.key
+.env
+.env.*
+secrets/
+
+# Build artifacts
+bin/
+dist/
+*.exe
+*.test
+
+# Not required for the server image (static UI is under web/)
+docs/
+clients/
+scripts/
+*.md
+SECURITY-REVIEW-CHECKLIST.md
+cursor-prompt-passwortmanager.md
+
+# IDE
+.vscode/
+.idea/

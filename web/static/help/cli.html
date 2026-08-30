@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CLI – TeamVault Hilfe</title>
+  <link rel="stylesheet" href="/styles.css" />
+  <link rel="stylesheet" href="/help/help.css" />
+</head>
+<body>
+  <a class="skip-link" href="#main">Zum Inhalt springen</a>
+  <header class="top">
+    <div class="brand"><a href="/help" style="color:inherit;text-decoration:none">TeamVault Hilfe</a></div>
+    <div class="top-actions">
+      <a class="btn-ghost" href="/help" style="text-decoration:none;padding:.4rem .75rem">Übersicht</a>
+    </div>
+  </header>
+  <main id="main" class="help-wrap">
+    <h1>CLI installieren &amp; nutzen</h1>
+    <p class="lead"><code>tvcli</code> spricht Ihre TeamVault-Instanz an. Secrets werden nur lokal entschlüsselt (Zero-Knowledge).</p>
+
+    <nav class="help-nav">
+      <a href="/help">Hilfe</a>
+      <a href="/help/extension">Extension</a>
+      <a class="primary" href="#install">Installation</a>
+      <a href="#nutzen">Nutzen</a>
+    </nav>
+
+    <h2 id="install">Installation (Einzeiler)</h2>
+    <p>Voraussetzung: Admin hat die Binaries unter <code>/downloads/</code> abgelegt (siehe Hinweis unten).</p>
+
+    <div class="help-step">
+      <h3>Windows (PowerShell)</h3>
+      <code class="onedliner" id="cmdWin"></code>
+      <div class="help-actions">
+        <button type="button" class="btn-accent" data-copy="cmdWin">Kopieren</button>
+      </div>
+    </div>
+
+    <div class="help-step">
+      <h3>Linux / macOS (Bash)</h3>
+      <code class="onedliner" id="cmdUnix"></code>
+      <div class="help-actions">
+        <button type="button" class="btn-accent" data-copy="cmdUnix">Kopieren</button>
+      </div>
+      <p class="help-note">Das Skript wählt amd64 oder arm64 automatisch und legt <code>tvcli</code> nach <code>~/.local/bin</code> (PATH ggf. ergänzen).</p>
+    </div>
+
+    <div class="help-step">
+      <h3>Manuell</h3>
+      <ol>
+        <li>Passende Datei von <a id="dlLink" href="/downloads/">/downloads/</a> holen (z. B. <code>tvcli-windows-amd64.exe</code>).</li>
+        <li>Windows: irgendwohin legen und in der PowerShell aufrufen.</li>
+        <li>Linux: <code>chmod +x tvcli-…</code> und nach <code>~/.local/bin/tvcli</code> kopieren.</li>
+      </ol>
+    </div>
+
+    <h2 id="nutzen">Einrichten &amp; nutzen</h2>
+    <div class="help-step">
+      <h3>Schritt 1 · Server-URL</h3>
+      <p>Merken Sie sich Ihre Instanz-URL (diese Seite): <strong id="baseUrl"></strong></p>
+    </div>
+    <div class="help-step">
+      <h3>Schritt 2 · Anmelden</h3>
+      <p><strong>Option A – Login (interaktiv):</strong></p>
+      <code class="onedliner" id="cmdLogin"></code>
+      <p><strong>Option B – API-Key</strong> (Admin → API-Keys, Scope mindestens <code>read</code>, für Schreiben <code>vault</code>):</p>
+      <code class="onedliner" id="cmdKey"></code>
+    </div>
+    <div class="help-step">
+      <h3>Schritt 3 · Alltagsbefehle</h3>
+      <code class="onedliner">tvcli whoami
+tvcli secrets list
+tvcli secrets get -id sec_…
+tvcli secrets create -title "VPN" -username alice</code>
+      <p class="help-note">Bei Bedarf fragt <code>tvcli</code> lokal nach dem Master-Passwort — es wird nicht an den Server gesendet.</p>
+    </div>
+
+    <p class="help-note"><strong>Admin:</strong> Binaries bauen mit <code>scripts/build-tvcli.ps1</code> (oder <code>.sh</code>) und nach <code>&lt;data-dir&gt;/downloads/</code> kopieren. Optional: <code>scripts/pack-clients.ps1</code>.</p>
+
+    <footer class="help-foot"><a href="/help">← Zurück zur Hilfe</a></footer>
+  </main>
+  <script src="/help/cli.js"></script>
+</body>
+</html>

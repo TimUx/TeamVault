@@ -1,0 +1,33 @@
+# Binaries / local data
+/data/
+/data-docs/
+/data-docs-setup/
+/data-docs-shot/
+*.db
+*.sealed
+*.exe
+*.test
+unlock.key
+unlock-docs.key
+unlock-docs-setup.key
+unlock-docs-shot.key
+
+# Go
+/bin/
+/dist/
+
+# Docker / unlock material (never commit real keys)
+/secrets/*
+!/secrets/.gitkeep
+.env
+.env.local
+
+# Not published to GitHub (modules via GOPROXY; internal CA/CI stay off this remote)
+/vendor/
+/certs/
+/.gitea/
+scripts/goproxy-corp.ps1
+scripts/go-env.ps1
+scripts/mirror-oci-to-gitea.ps1
+scripts/publish-go-toolchain.ps1
+docs/dev-proxy.md

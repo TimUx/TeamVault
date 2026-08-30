@@ -1,0 +1,370 @@
+openapi: 3.0.3
+info:
+  title: TeamVault API
+  version: 0.9.0
+  description: |
+    Zero-Knowledge Passwortmanager REST-API.
+    Der Server speichert nur Ciphertext + Envelopes; Ver-/Entschlüsselung
+    erfolgt ausschließlich in WebUI, Extension oder CLI (cryptocore).
+
+    API-Key-Scopes (mind. einer): `read` (GET-Allowlist), `vault` (Secret-/Vault-Mutationen),
+    `admin` (`/api/admin/*`, plus User-Rollen). Cookie-Sessions ohne Scope-Limit.
+servers:
+  - url: http://127.0.0.1:8080
+    description: Local default
+tags:
+  - name: health
+  - name: auth
+  - name: vault
+  - name: secrets
+  - name: admin
+security:
+  - sessionCookie: []
+  - bearerAPIKey: []
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: tv_session
+    bearerAPIKey:
+      type: http
+      scheme: bearer
+      bearerFormat: tvk_
+      description: |
+        API-Key aus Admin-UI (einmalig angezeigt). Gebunden an User+Tenant.
+        Scopes: read | vault | admin (mind. einer).
+  schemas:
+    Error:
+      type: object
+      properties:
+        error: { type: string }
+    Argon2Params:
+      type: object
+      properties:
+        Time: { type: integer }
+        Memory: { type: integer, description: KiB }
+        Threads: { type: integer }
+        KeyLen: { type: integer }
+    EnvelopeIn:
+      type: object
+      required: [user_id, key_version, wrapped_dk_b64, ephemeral_pub_b64, nonce_b64]
+      properties:
+        user_id: { type: string }
+        key_version: { type: integer }
+        wrapped_dk_b64: { type: string, format: byte }
+        ephemeral_pub_b64: { type: string, format: byte }
+        nonce_b64: { type: string, format: byte }
+    SecretCreate:
+      type: object
+      required: [title_ciphertext_b64, title_nonce_b64, ciphertext_b64, nonce_b64, key_version, envelopes]
+      properties:
+        title_ciphertext_b64: { type: string }
+        title_nonce_b64: { type: string }
+        ciphertext_b64: { type: string }
+        nonce_b64: { type: string }
+        key_version: { type: integer }
+        envelopes:
+          type: array
+          items: { $ref: '#/components/schemas/EnvelopeIn' }
+paths:
+  /api/health:
+    get:
+      tags: [health]
+      security: []
+      summary: Health check
+      responses:
+        '200':
+          description: OK
+  /api/version:
+    get:
+      tags: [health]
+      security: []
+      summary: Product version and developer
+      responses:
+        '200':
+          description: version metadata
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  product: { type: string }
+                  version: { type: string }
+                  commit: { type: string }
+                  developer: { type: string }
+  /api/setup/status:
+    get:
+      tags: [health]
+      security: []
+      summary: Setup status
+      responses:
+        '200':
+          description: initialized flag and storage info
+  /api/auth/login:
+    post:
+      tags: [auth]
+      security: []
+      summary: Login (local or LDAP bind)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tenant_slug, username, password]
+              properties:
+                tenant_slug: { type: string }
+                username: { type: string }
+                password: { type: string }
+                totp_code: { type: string }
+      responses:
+        '200':
+          description: Sets tv_session cookie
+        '401':
+          description: Invalid credentials
+  /api/auth/logout:
+    post:
+      tags: [auth]
+      summary: Logout
+      responses:
+        '200':
+          description: Cookie cleared
+  /api/me:
+    get:
+      tags: [auth]
+      summary: Current session user
+      responses:
+        '200':
+          description: user_id, roles, needs_vault_onboard, …
+  /api/vault/status:
+    get:
+      tags: [vault]
+      summary: Onboarding / recovery status
+      responses:
+        '200':
+          description: onboarded, recovery_mode, has_escrow_pubkey
+  /api/vault/crypto-params:
+    get:
+      tags: [vault]
+      summary: Argon2id params for client KDF
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Argon2Params' }
+  /api/vault/keys:
+    get:
+      tags: [vault]
+      summary: Sealed private key material (ciphertext only)
+      responses:
+        '200':
+          description: public_key_b64, salt, nonce, sealed SK
+  /api/vault/onboard:
+    post:
+      tags: [vault]
+      summary: Complete vault onboarding (ciphertext blobs only)
+      responses:
+        '200':
+          description: ok
+  /api/vault/escrow-pubkey:
+    get:
+      tags: [vault]
+      summary: Tenant escrow X25519 public key
+      responses:
+        '200':
+          description: public_key_b64
+  /api/secrets:
+    get:
+      tags: [secrets]
+      summary: List secret metas (title ciphertext)
+      responses:
+        '200':
+          description: Array of secrets with has_access
+    post:
+      tags: [secrets]
+      summary: Create secret (client-encrypted)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SecretCreate' }
+      responses:
+        '200':
+          description: id + key_version
+  /api/secrets/{id}:
+    get:
+      tags: [secrets]
+      summary: Get ciphertext + caller envelope
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Ciphertext blobs + envelope
+        '403':
+          description: No access envelope
+    delete:
+      tags: [secrets]
+      summary: Delete secret
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: deleted
+  /api/secrets/{id}/share:
+    post:
+      tags: [secrets]
+      summary: Add per-user envelopes (same DK)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                envelopes:
+                  type: array
+                  items: { $ref: '#/components/schemas/EnvelopeIn' }
+      responses:
+        '200':
+          description: ok
+  /api/secrets/{id}/rotate:
+    post:
+      tags: [secrets]
+      summary: Mandatory key rotation (revoke = rotate without removed users)
+      description: |
+        Atomically invalidates the previous key_version, updates title/ciphertext,
+        and writes new envelopes. Request must include at least one valid envelope;
+        invalid envelopes are rejected before mutation.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SecretCreate' }
+      responses:
+        '200':
+          description: new key_version
+        '400':
+          description: envelopes missing/invalid or key_version not increased
+  /api/groups:
+    get:
+      tags: [secrets]
+      summary: Groups the caller belongs to (id + name)
+      description: For group-share UI; members only, no full membership roster.
+      responses:
+        '200':
+          description: Array of { id, name }
+  /api/users/public-keys:
+    get:
+      tags: [secrets]
+      summary: Onboarded users' public keys for sharing
+      responses:
+        '200':
+          description: Array of user_id + public_key_b64
+  /api/admin/overview:
+    get:
+      tags: [admin]
+      summary: Instance health overview
+      responses:
+        '200':
+          description: storage, ldap, tenants, …
+  /api/admin/ldap:
+    get:
+      tags: [admin]
+      summary: LDAP config (password redacted)
+      responses:
+        '200':
+          description: LDAP config
+    put:
+      tags: [admin]
+      summary: Update LDAP config
+      responses:
+        '200':
+          description: Saved (redacted)
+  /api/admin/mail:
+    get:
+      tags: [admin]
+      responses:
+        '200':
+          description: SMTP config redacted
+    put:
+      tags: [admin]
+      responses:
+        '200':
+          description: Saved
+  /api/admin/api-keys:
+    get:
+      tags: [admin]
+      summary: List API keys (no secrets)
+      responses:
+        '200':
+          description: Metadata only
+    post:
+      tags: [admin]
+      summary: Create API key (token shown once)
+      responses:
+        '200':
+          description: id + token
+  /api/admin/storage/migrate:
+    post:
+      tags: [admin]
+      summary: Migrate vault store (ciphertext only); confirm=MIGRATE
+      responses:
+        '200':
+          description: New storage config
+  /api/webauthn/register/begin:
+    post:
+      tags: [auth]
+      summary: Begin Passkey registration (login-only; vault still needs master password)
+      responses:
+        '200':
+          description: publicKey options + challenge_key
+  /api/webauthn/register/finish:
+    post:
+      tags: [auth]
+      summary: Finish Passkey registration
+      responses:
+        '200':
+          description: credential id
+  /api/webauthn/login/begin:
+    post:
+      tags: [auth]
+      security: []
+      summary: Begin Passkey login
+      responses:
+        '200':
+          description: publicKey assertion options
+  /api/webauthn/login/finish:
+    post:
+      tags: [auth]
+      security: []
+      summary: Finish Passkey login (optional TOTP if enabled)
+      responses:
+        '200':
+          description: Sets tv_session cookie
+  /openapi.yaml:
+    get:
+      tags: [health]
+      security: []
+      summary: This OpenAPI document
+      responses:
+        '200':
+          description: YAML
+          content:
+            application/yaml:
+              schema:
+                type: string
