@@ -715,7 +715,7 @@ const vault = {
   secretsOffset: 0,
   pageLimit: 50,
   searchQuery: "",
-  folderFilter: "",
+  tagFilter: "",
   ownershipFilter: "mine", // mine | shared
   viewMode: (function () {
     try {
@@ -875,6 +875,37 @@ function normalizeSecretPayload(raw) {
   };
 }
 
+function parseTagsInput(raw) {
+  return String(raw || "")
+    .split(",")
+    .map((t) => t.trim())
+    .filter(Boolean);
+}
+
+function mergeTags(...lists) {
+  const seen = new Set();
+  const out = [];
+  for (const list of lists) {
+    for (const t of list) {
+      if (t && !seen.has(t)) {
+        seen.add(t);
+        out.push(t);
+      }
+    }
+  }
+  return out;
+}
+
+function mergeFolderIntoTags(payload, collectionId) {
+  const folder = String(collectionId || "").trim();
+  if (!folder) return payload;
+  return { ...payload, tags: mergeTags(payload.tags || [], [folder]) };
+}
+
+function importItemTags(it) {
+  return mergeTags(it.tags || [], parseTagsInput(it.collection_id));
+}
+
 function newExtraId() {
   return "x_" + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
 }
@@ -990,11 +1021,11 @@ function renderApp(app) {
                   <div class="toolbar toolbar-compact">
                     <div>
                       <label><span class="label-with-ico">${icon("search", "label-ico")} Suche</span></label>
-                      <input id="ssearch" type="search" placeholder="Titel, Ordner, Benutzer, Tags…" />
+                      <input id="ssearch" type="search" placeholder="Titel, Tags, Benutzer, Gruppen…" />
                     </div>
                     <div>
-                      <label><span class="label-with-ico">${icon("folder", "label-ico")} Ordner</span></label>
-                      <select id="sfolder"><option value="">Alle</option></select>
+                      <label>Tag</label>
+                      <select id="stag"><option value="">Alle Tags</option></select>
                     </div>
                     <div class="secrets-view-wrap">
                       <label>Ansicht</label>
@@ -1038,14 +1069,19 @@ function renderApp(app) {
                     <div id="dfields" class="secret-fields"></div>
                     <p class="hint" id="drec"></p>
                     <label>Teilen mit User</label>
-                    <select id="shareto"></select>
-                    <div id="gshareWrap" hidden>
-                      <label>Gruppe teilen</label>
-                      <select id="sharegroup"><option value="">— Gruppe wählen —</option></select>
+                    <div class="row row-compact share-row">
+                      <select id="shareto"></select>
+                      <button class="btn-accent btn-sm btn-with-ico" type="button" id="share">${btnLabel("share", "Teilen")}</button>
+                    </div>
+                    <div id="groupShareBlock" hidden>
+                      <label>Teilen mit Gruppe</label>
+                      <div class="row row-compact share-row">
+                        <select id="sharegroup"><option value="">— Gruppe wählen —</option></select>
+                        <button class="btn-ghost btn-sm btn-with-ico" type="button" id="shareGroup">${btnLabel("users", "Gruppe teilen")}</button>
+                      </div>
+                      <p class="hint" id="groupShareHint" hidden></p>
                     </div>
                     <div class="row row-compact">
-                      <button class="btn-accent btn-sm btn-with-ico" type="button" id="share">${btnLabel("share", "Teilen")}</button>
-                      <button class="btn-ghost btn-sm btn-with-ico" type="button" id="shareGroup" hidden>${btnLabel("users", "Gruppe teilen")}</button>
                       <button class="btn-ghost btn-sm btn-with-ico" type="button" id="revoke">${btnLabel("rotate", "Zugriff entziehen + rotieren")}</button>
                       <button class="btn-danger btn-sm btn-with-ico" type="button" id="sdel">${btnLabel("trash", "Löschen")}</button>
                       <button class="btn-ghost btn-sm btn-with-ico" type="button" id="sExportOne">${btnLabel("download", "Export")}</button>
@@ -1053,10 +1089,9 @@ function renderApp(app) {
                   </div>
                   <div id="deditForm" hidden>
                     <label>Titel</label><input id="edtitle" />
-                    <label>Ordner</label><input id="edfolder" list="folderList" />
+                    <label>Tags</label><input id="edtags" placeholder="storage, prod (Komma)" />
                     <label>Benutzername</label><input id="eduser" autocomplete="off" />
                     <label>Passwort</label><input id="edpw" type="password" autocomplete="off" />
-                    <label>Tags (Komma)</label><input id="edtags" />
                     <label>Notizen</label><textarea id="ednotes" rows="3"></textarea>
                     <div class="row row-compact">
                       <button class="btn-accent btn-sm" type="button" id="dsave">Speichern</button>
@@ -1071,9 +1106,7 @@ function renderApp(app) {
             <div class="vault-section" data-vault="create">
               <div class="panel">
                 <label>Titel</label><input id="stitle" />
-                <label>Ordner</label>
-                <input id="sfolderIn" list="folderList" placeholder="z. B. Infrastruktur" autocomplete="off" />
-                <datalist id="folderList"></datalist>
+                <label>Tags</label><input id="stagsIn" placeholder="storage, prod (Komma)" autocomplete="off" />
                 <label>Benutzername</label><input id="suser" autocomplete="off" />
                 <label>Passwort</label>
                 <div class="row gen-row" style="margin-top:0.35rem">
@@ -1134,7 +1167,7 @@ function renderApp(app) {
                   <span class="hint" id="simportCount"></span>
                   <div class="import-preview-wrap">
                     <table class="secrets-table" id="simportPreview">
-                      <thead><tr><th></th><th>Titel</th><th>Benutzer</th><th>URL</th><th>Ordner</th></tr></thead>
+                      <thead><tr><th></th><th>Titel</th><th>Benutzer</th><th>URL</th><th>Tags</th></tr></thead>
                       <tbody></tbody>
                     </table>
                   </div>
@@ -1663,7 +1696,7 @@ function renderApp(app) {
         );
         ddk.fill(0); dk.fill(0);
         const payload = normalizeSecretPayload(JSON.parse(new TextDecoder().decode(pt)));
-        items.push({ title, payload, collection_id: it.collection_id || "" });
+        items.push({ title, payload: mergeFolderIntoTags(payload, it.collection_id) });
       } catch (_) { /* skip undecryptable */ }
     }
     return items;
@@ -1814,32 +1847,46 @@ function renderApp(app) {
       }
       try { await refreshAdmin(); } catch (e) { console.warn('refreshAdmin', e); }
     }
-    if (isAdmin()) {
-      n.querySelector("#gshareWrap").hidden = false;
-      n.querySelector("#shareGroup").hidden = false;
-      try {
-        vault.groups = await api("/api/admin/groups");
-        const sel = n.querySelector("#sharegroup");
-        sel.innerHTML = `<option value="">— Gruppe wählen —</option>` +
-          vault.groups.map((g) => `<option value="${g.id}">${g.name}</option>`).join("");
-      } catch (_) { vault.groups = []; }
-    } else {
-      try {
-        vault.groups = await api("/api/groups");
-        if (vault.groups.length) {
-          n.querySelector("#gshareWrap").hidden = false;
-          n.querySelector("#shareGroup").hidden = false;
-          const sel = n.querySelector("#sharegroup");
-          sel.innerHTML = `<option value="">— Gruppe wählen —</option>` +
-            vault.groups.map((g) => `<option value="${g.id}">${g.name}</option>`).join("");
-        }
-      } catch (_) { vault.groups = []; }
-    }
+    await refreshGroupShareUI();
     await refreshSharePickers();
     vault.secretsCache = [];
     vault.secretsOffset = 0;
     await refreshSecrets(true);
     navigateTo("vault:mine");
+  }
+
+  async function refreshGroupShareUI() {
+    const block = n.querySelector("#groupShareBlock");
+    const sel = n.querySelector("#sharegroup");
+    const hint = n.querySelector("#groupShareHint");
+    if (!block || !sel) return;
+    try {
+      vault.groups = await api("/api/groups");
+    } catch (_) {
+      vault.groups = [];
+    }
+    const groups = vault.groups || [];
+    sel.innerHTML = `<option value="">— Gruppe wählen —</option>` +
+      groups.map((g) => `<option value="${g.id}">${g.name}</option>`).join("");
+    const canShare = isAdmin() || groups.length > 0;
+    block.hidden = !canShare;
+    if (hint) {
+      if (canShare && !groups.length && isAdmin()) {
+        hint.hidden = false;
+        hint.textContent = "Noch keine Gruppen — unter Admin → Gruppen anlegen.";
+      } else {
+        hint.hidden = true;
+        hint.textContent = "";
+      }
+    }
+    const gWrap = n.querySelector("#screateGroupsWrap");
+    const gSel = n.querySelector("#screateGroups");
+    if (gWrap && gSel) {
+      gWrap.hidden = !groups.length;
+      if (groups.length) {
+        gSel.innerHTML = groups.map((g) => `<option value="${g.id}">${g.name}</option>`).join("");
+      }
+    }
   }
 
   async function refreshSharePickers() {
@@ -1853,12 +1900,6 @@ function renderApp(app) {
           .join("");
       }
     } catch (_) {}
-    const gWrap = n.querySelector("#screateGroupsWrap");
-    const gSel = n.querySelector("#screateGroups");
-    if (gWrap && gSel && vault.groups?.length) {
-      gWrap.hidden = false;
-      gSel.innerHTML = vault.groups.map((g) => `<option value="${g.id}">${g.name}</option>`).join("");
-    }
   }
 
   function closeSecretModal() {
@@ -1883,7 +1924,6 @@ function renderApp(app) {
   n.querySelector("#dedit").onclick = () => {
     if (!currentSecret || !currentSecretPayload) return;
     n.querySelector("#edtitle").value = currentSecretTitle || "";
-    n.querySelector("#edfolder").value = currentSecret.collection_id || "";
     n.querySelector("#eduser").value = currentSecretPayload.username || "";
     n.querySelector("#edpw").value = currentSecretPayload.password || "";
     n.querySelector("#edtags").value = (currentSecretPayload.tags || []).join(", ");
@@ -1904,7 +1944,6 @@ function renderApp(app) {
         tags: n.querySelector("#edtags").value.split(",").map((t) => t.trim()).filter(Boolean),
         notes: n.querySelector("#ednotes").value,
       });
-      const collectionId = n.querySelector("#edfolder").value.trim();
       const kv = currentSecret.key_version;
       const dk = openDKFromEnvelope(currentSecret.envelope);
       const titleEnc = await TVCrypto.encryptTitle(title, dk, kv);
@@ -1921,7 +1960,6 @@ function renderApp(app) {
           ciphertext_b64: TVCrypto.b64enc(bodyEnc.ciphertext),
           nonce_b64: TVCrypto.b64enc(bodyEnc.nonce),
           key_version: kv,
-          collection_id: collectionId,
         }),
       });
       n.querySelector("#deditForm").hidden = true;
@@ -1984,8 +2022,8 @@ function renderApp(app) {
     vault.searchQuery = n.querySelector("#ssearch").value.trim().toLowerCase();
     paintSecretList();
   };
-  n.querySelector("#sfolder").onchange = () => {
-    vault.folderFilter = n.querySelector("#sfolder").value;
+  n.querySelector("#stag").onchange = () => {
+    vault.tagFilter = n.querySelector("#stag").value;
     paintSecretList();
   };
   n.querySelector("#spwGen").onclick = () => {
@@ -2090,10 +2128,7 @@ function renderApp(app) {
         return;
       }
       if (type === "tags") {
-        payload.tags = (row.querySelector(".slot-val")?.value || "")
-          .split(",")
-          .map((t) => t.trim())
-          .filter(Boolean);
+        payload.tags = mergeTags(payload.tags, parseTagsInput(row.querySelector(".slot-val")?.value));
         return;
       }
       if (type === "favorite") {
@@ -2106,6 +2141,7 @@ function renderApp(app) {
       const value = row.querySelector(".slot-val")?.value || "";
       payload.extra.push({ id: row.dataset.slotId || newExtraId(), type, label, value });
     });
+    payload.tags = mergeTags(payload.tags, parseTagsInput(n.querySelector("#stagsIn")?.value));
     return payload;
   }
 
@@ -2114,7 +2150,7 @@ function renderApp(app) {
     n.querySelector("#suser").value = "";
     n.querySelector("#spw").value = "";
     n.querySelector("#spw").type = "password";
-    n.querySelector("#sfolderIn").value = "";
+    n.querySelector("#stagsIn").value = "";
     n.querySelector("#sextraSlots").innerHTML = "";
     n.querySelector("#sextraAdd").value = "";
     n.querySelector("#spwShow").innerHTML = btnLabel("eye", "Anzeigen");
@@ -2159,7 +2195,7 @@ function renderApp(app) {
       tr.children[1].textContent = it.title || "Import";
       tr.children[2].textContent = it.username || "—";
       tr.children[3].textContent = it.url || (it.urls && it.urls[0]) || "—";
-      tr.children[4].textContent = it.collection_id || "—";
+      tr.children[4].textContent = importItemTags(it).join(", ") || "—";
       tbody.appendChild(tr);
     });
     wrap.hidden = items.length === 0;
@@ -2213,7 +2249,7 @@ function renderApp(app) {
     }
   };
 
-  async function postEncryptedSecret(title, payload, collectionId, shareOpts) {
+  async function postEncryptedSecret(title, payload, shareOpts) {
     const kv = 1;
     const dk = TVCrypto.generateDataKey();
     const titleEnc = await TVCrypto.encryptTitle(title, dk, kv);
@@ -2256,7 +2292,6 @@ function renderApp(app) {
       key_version: kv,
       envelopes,
     };
-    if (collectionId) body.collection_id = collectionId;
     await api("/api/secrets", { method: "POST", body: JSON.stringify(body) });
   }
 
@@ -2279,11 +2314,10 @@ function renderApp(app) {
             url: it.url || "",
             urls: it.urls || [],
             totp_seed: it.totp_seed || "",
-            tags: it.tags || [],
+            tags: importItemTags(it),
             favorite: !!it.favorite,
             extra: it.extra || [],
-          }),
-          it.collection_id || ""
+          })
         );
         done++;
       } catch {
@@ -2368,18 +2402,20 @@ function renderApp(app) {
     }
   };
 
-  function updateFolderOptions() {
-    const sel = n.querySelector("#sfolder");
-    const cur = vault.folderFilter;
-    const folders = [...new Set(vault.secretsCache.map((s) => s.collection_id).filter(Boolean))].sort();
-    sel.innerHTML = `<option value="">Alle</option>` + folders.map((f) =>
-      `<option value="${f.replace(/"/g, "&quot;")}">${f}</option>`
+  function updateTagOptions() {
+    const sel = n.querySelector("#stag");
+    if (!sel) return;
+    const cur = vault.tagFilter;
+    const tags = [...new Set(vault.secretsCache.flatMap((s) => s._tags || []).filter(Boolean))].sort();
+    sel.innerHTML = `<option value="">Alle Tags</option>` + tags.map((t) =>
+      `<option value="${escHtml(t).replace(/"/g, "&quot;")}">${escHtml(t)}</option>`
     ).join("");
-    sel.value = cur;
-    const dl = n.querySelector("#folderList");
-    if (dl) {
-      dl.innerHTML = folders.map((f) => `<option value="${f.replace(/"/g, "&quot;")}"></option>`).join("");
-    }
+    sel.value = tags.includes(cur) ? cur : "";
+    if (sel.value !== cur) vault.tagFilter = sel.value;
+  }
+
+  function needsSecretMeta(it) {
+    return !it._metaLoaded && it.has_access;
   }
 
   function matchesOwnership(it) {
@@ -2391,16 +2427,18 @@ function renderApp(app) {
 
   function filterVisibleSecrets() {
     const q = vault.searchQuery;
-    const folder = vault.folderFilter;
+    const tag = vault.tagFilter;
     return vault.secretsCache.filter((it) => {
       if (!matchesOwnership(it)) return false;
-      if (folder && (it.collection_id || "") !== folder) return false;
+      if (tag && !(it._tags || []).includes(tag)) return false;
       if (!q) return true;
       const title = (it._title || "").toLowerCase();
-      const folderName = (it.collection_id || "").toLowerCase();
       const user = (it._username || "").toLowerCase();
       const tags = (it._tags || []).join(" ").toLowerCase();
-      return title.includes(q) || folderName.includes(q) || user.includes(q) || tags.includes(q) ||
+      const creator = (it.created_by_username || "").toLowerCase();
+      const groups = (it.shared_groups || []).join(" ").toLowerCase();
+      return title.includes(q) || user.includes(q) || tags.includes(q) ||
+        creator.includes(q) || groups.includes(q) ||
         (it.id || "").toLowerCase().includes(q);
     });
   }
@@ -2411,10 +2449,8 @@ function renderApp(app) {
   }
 
   async function enrichSecretMeta(it) {
-    if (it._metaLoaded || !it.has_access || !it.envelope || !vault.sk) {
-      it._metaLoaded = true;
-      return;
-    }
+    if (it._metaLoaded) return;
+    if (!it.has_access || !it.envelope || !vault.sk) return;
     try {
       const det = await api("/api/secrets/" + it.id);
       const dk = openDKFromEnvelope(det.envelope);
@@ -2425,7 +2461,7 @@ function renderApp(app) {
         dk, kv
       );
       dk.fill(0);
-      const payload = normalizeSecretPayload(JSON.parse(pt));
+      const payload = normalizeSecretPayload(JSON.parse(new TextDecoder().decode(pt)));
       it._username = payload.username || "";
       it._tags = payload.tags || [];
       it._favorite = !!payload.favorite;
@@ -2450,16 +2486,29 @@ function renderApp(app) {
     if (!list) return;
     list.innerHTML = "";
     list.className = "list secrets-list secrets-view-" + vault.viewMode;
-    const visible = filterVisibleSecrets();
 
-    const needsMeta = true;
-    if (needsMeta) {
-      const pending = visible.filter((it) => !it._metaLoaded);
+    const enrichThenRepaint = (pending) => {
+      list.innerHTML = `<p class="hint">Lade Details…</p>`;
+      mapPool(pending, 4, enrichSecretMeta).then(() => {
+        updateTagOptions();
+        paintSecretList();
+      });
+    };
+
+    if (vault.tagFilter || vault.searchQuery) {
+      const pending = vault.secretsCache.filter(needsSecretMeta);
       if (pending.length) {
-        list.innerHTML = `<p class="hint">Lade Details…</p>`;
-        mapPool(pending, 4, enrichSecretMeta).then(() => paintSecretList());
+        enrichThenRepaint(pending);
         return;
       }
+    }
+
+    const visible = filterVisibleSecrets();
+
+    const pendingVisible = visible.filter(needsSecretMeta);
+    if (pendingVisible.length) {
+      enrichThenRepaint(pendingVisible);
+      return;
     }
 
     if (!visible.length) {
@@ -2469,16 +2518,16 @@ function renderApp(app) {
       list.innerHTML = `<p class="hint">${empty}</p>`;
     } else if (vault.viewMode === "table") {
       const table = el(`<table class="secrets-table"><thead><tr>
-        <th class="st-check"></th><th>Titel</th><th>Ordner</th><th>Benutzer</th><th>Tags</th><th></th><th></th>
+        <th class="st-check"></th><th>Titel</th><th>Benutzer</th><th>Tags</th><th>Gruppen</th><th></th><th></th>
       </tr></thead><tbody></tbody></table>`);
       const tbody = table.querySelector("tbody");
       for (const it of visible) {
         const tr = el(`<tr>
           <td class="st-check"><input type="checkbox" class="sec-check" ${it.has_access ? "" : "disabled"} /></td>
           <td class="st-title"></td>
-          <td class="st-folder muted">${escHtml(it.collection_id || "—")}</td>
           <td class="st-user">${escHtml(it._username || "—")}</td>
           <td class="st-tags"></td>
+          <td class="st-groups muted">${escHtml((it.shared_groups || []).join(", ") || "—")}</td>
           <td class="st-fav">${it._favorite ? icon("star", "fav-ico") : ""}</td>
           <td class="st-act"><button type="button" class="btn-ghost btn-with-ico btn-sm">${btnLabel("open", "Öffnen")}</button></td>
         </tr>`);
@@ -2512,8 +2561,8 @@ function renderApp(app) {
         bindSecretCheckbox(tile.querySelector(".sec-check"), it.id);
         tile.querySelector(".secret-tile-title").textContent = secretTitleLabel(it);
         const bits = [];
-        if (it.collection_id) bits.push(it.collection_id);
         if (it._username) bits.push(it._username);
+        if (it.shared_groups && it.shared_groups.length) bits.push(it.shared_groups.join(", "));
         if (it._url) bits.push(it._url);
         tile.querySelector(".secret-tile-meta").textContent = bits.join(" · ") || "—";
         const tagsEl = tile.querySelector(".secret-tile-tags");
@@ -2536,8 +2585,9 @@ function renderApp(app) {
         const lead = `<span class="list-row-ico" aria-hidden="true">${icon(it.has_access ? "key" : "lock")}</span>`;
         span.innerHTML = lead;
         span.appendChild(document.createTextNode(
-          secretTitleLabel(it) + (it.collection_id ? ` · ${it.collection_id}` : "") +
+          secretTitleLabel(it) +
           (it._username ? ` · ${it._username}` : "") +
+          (it.shared_groups && it.shared_groups.length ? ` · ${it.shared_groups.join(", ")}` : "") +
           (it._tags && it._tags.length ? ` · #${it._tags.join(", #")}` : "")
         ));
         row.querySelector("button").onclick = () => openSecret(it.id);
@@ -2549,6 +2599,7 @@ function renderApp(app) {
     n.querySelector("#sCount").textContent =
       `${visible.length} ${scopeLabel} · ${vault.secretsCache.length} geladen · ${vault.secretsTotal} gesamt`;
     n.querySelector("#sMore").hidden = vault.secretsCache.length >= vault.secretsTotal;
+    updateTagOptions();
     updateSelectionBar();
   }
 
@@ -2587,7 +2638,7 @@ function renderApp(app) {
     await decryptListTitles(page);
     vault.secretsCache = vault.secretsCache.concat(page);
     vault.secretsOffset = vault.secretsCache.length;
-    updateFolderOptions();
+    updateTagOptions();
     paintSecretList();
   }
 
@@ -2738,14 +2789,16 @@ function renderApp(app) {
           };
         }
       }
+      const groupHint = (det.shared_groups || currentSecret?.shared_groups || []).join(", ");
       n.querySelector("#drec").textContent =
         "Empfänger: " + (det.recipients || []).join(", ") +
         " · v" + kv +
-        (det.collection_id ? " · Ordner " + det.collection_id : "");
+        (groupHint ? " · Gruppen: " + groupHint : "");
       const pks = await api("/api/users/public-keys");
       const sel = n.querySelector("#shareto");
       sel.innerHTML = pks.filter((p) => !(det.recipients || []).includes(p.user_id))
         .map((p) => `<option value="${p.user_id}" data-pk="${p.public_key_b64}">${p.username}</option>`).join("");
+      await refreshGroupShareUI();
     } catch (e) {
       err.hidden = false; err.textContent = e.message;
     }
@@ -2757,8 +2810,7 @@ function renderApp(app) {
       const title = n.querySelector("#stitle").value.trim();
       if (!title) throw new Error("Titel erforderlich");
       const payload = collectCreatePayload();
-      const collectionId = n.querySelector("#sfolderIn").value.trim();
-      await postEncryptedSecret(title, payload, collectionId);
+      await postEncryptedSecret(title, payload);
       resetCreateForm();
       await refreshSecrets(true);
       navigateTo("vault:mine");
@@ -3215,11 +3267,7 @@ function renderApp(app) {
     const groups = await api("/api/admin/groups");
     vault.groups = groups;
     paintGroupsWorkspace(users, groups);
-    const shareGsel = n.querySelector("#sharegroup");
-    if (shareGsel) {
-      shareGsel.innerHTML = `<option value="">— Gruppe wählen —</option>` +
-        groups.map((g) => `<option value="${g.id}">${g.name}</option>`).join("");
-    }
+    await refreshGroupShareUI();
     const ldap = await api("/api/admin/ldap");
     n.querySelector("#ldap_en").checked = !!ldap.enabled;
     n.querySelector("#ldap_host").value = ldap.host || "";

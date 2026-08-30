@@ -125,15 +125,27 @@ async function seedSecrets(page) {
   await page.click('[data-nav="vault:create"]');
   await page.waitForSelector("#stitle");
   await page.fill("#stitle", "GitHub");
-  await page.fill("#sfolderIn", "Dev");
+  await page.fill("#stagsIn", "dev, github");
   await page.fill("#suser", "octocat");
   await page.fill("#spw", "demo-secret-pw!");
   await shot(page, "vault-create.png", { fullPage: true });
   await page.click("#screate");
-  await page.waitForTimeout(2000);
+  await page.waitForSelector(".secrets-table tbody tr", { timeout: 30000 });
+  await page.waitForSelector(".secrets-table .tag", { timeout: 30000 }).catch(() => {});
+  await page.waitForTimeout(800);
+
+  await page.click('[data-nav="vault:create"]');
+  await page.waitForSelector("#stitle");
+  await page.fill("#stitle", "Pure Storage");
+  await page.fill("#stagsIn", "storage, infra");
+  await page.fill("#suser", "pureuser");
+  await page.fill("#spw", "demo-storage-pw!");
+  await page.click("#screate");
+  await page.waitForSelector(".secrets-table tbody tr", { timeout: 30000 });
+  await page.waitForTimeout(800);
 
   await page.click('[data-nav="vault:mine"]');
-  await page.waitForSelector(".secrets-table tbody tr, .secret-row", { timeout: 30000 });
+  await page.waitForSelector(".secrets-table tbody tr", { timeout: 30000 });
 }
 
 async function captureSetup(page) {
@@ -196,38 +208,29 @@ async function main() {
   console.log("Vault UI…");
   await page.click('[data-nav="vault:mine"]');
   await waitAppReady(page);
-  await page.waitForTimeout(800);
+  await seedSecrets(page);
+  await page.waitForSelector(".secrets-table .tag", { timeout: 30000 }).catch(() => {});
+  await page.waitForTimeout(600);
   await shot(page, "vault-secrets-table.png", { fullPage: true });
   await shot(page, "nav-sidebar.png");
 
   await page.click('[data-view="list"]');
-  await page.waitForTimeout(400);
+  await page.waitForTimeout(600);
   await shot(page, "vault-secrets.png", { fullPage: true });
 
   await page.click('[data-view="tiles"]');
-  await page.waitForTimeout(400);
+  await page.waitForTimeout(600);
   await shot(page, "vault-secrets-tiles.png", { fullPage: true });
 
   await page.click('[data-view="table"]');
-  await seedSecrets(page);
-
-  await page.click('[data-nav="vault:mine"]');
-  await page.selectOption("#sfolder", { label: "Dev" }).catch(async () => {
-    await page.locator("#sfolder").selectOption({ index: 1 });
-  });
   await page.waitForTimeout(400);
-  await shot(page, "vault-folder-filter.png", { fullPage: true });
-
-  await page.click('[data-nav="vault:mine"]');
-  await page.waitForSelector("button:has-text('Öffnen'), .secrets-table tbody tr", { timeout: 20000 });
-  const openBtn = page.locator("button:has-text('Öffnen')").first();
-  if (await openBtn.count()) {
-    await openBtn.click();
-    await page.waitForSelector("#sdetail:not([hidden])", { timeout: 15000 });
-    await page.waitForTimeout(500);
-    await shot(page, "vault-secret-detail.png");
-    await page.click("#sdetailClose");
-  }
+  await page.selectOption("#stag", { label: "dev" }).catch(async () => {
+    const opts = await page.locator("#stag option").count();
+    if (opts > 1) await page.locator("#stag").selectOption({ index: 1 });
+  });
+  await page.waitForTimeout(800);
+  await shot(page, "vault-tag-filter.png", { fullPage: true });
+  await page.selectOption("#stag", { label: "" }).catch(() => page.locator("#stag").selectOption({ index: 0 }));
 
   await page.click('[data-nav="vault:import"]');
   await shot(page, "vault-import.png", { fullPage: true });
@@ -268,6 +271,20 @@ async function main() {
   await page.click('[data-nav="admin:groups"]');
   await page.waitForTimeout(500);
   await shot(page, "admin-groups.png", { fullPage: true });
+
+  await page.click('[data-nav="vault:mine"]');
+  await page.waitForSelector("button:has-text('Öffnen')", { timeout: 20000 });
+  const storageRow = page.locator(".secrets-table tbody tr").filter({ hasText: "Pure Storage" }).first();
+  if (await storageRow.count()) {
+    await storageRow.locator("button:has-text('Öffnen')").click();
+  } else {
+    await page.locator("button:has-text('Öffnen')").first().click();
+  }
+  await page.waitForSelector("#sdetail:not([hidden])", { timeout: 15000 });
+  await page.waitForSelector("#groupShareBlock:not([hidden])", { timeout: 15000 }).catch(() => {});
+  await page.waitForTimeout(500);
+  await shot(page, "vault-secret-detail.png");
+  await page.click("#sdetailClose");
 
   await page.click('[data-nav="admin:recovery"]');
   await shot(page, "admin-recovery.png", { fullPage: true });

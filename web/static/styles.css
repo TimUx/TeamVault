@@ -754,7 +754,9 @@ body.admin-modal-open { overflow: hidden; }
 }
 .secrets-table .st-title { font-weight: 600; }
 .secrets-table .muted,
-.secrets-table .st-folder { color: var(--color-hint); }
+.share-row select { flex: 1; min-width: 0; }
+.share-row .btn-sm { flex-shrink: 0; }
+.secrets-table .st-groups { color: var(--color-hint); }
 .secrets-table .st-act { text-align: right; white-space: nowrap; }
 .secrets-table .st-fav .fav-ico { width: 0.95rem; height: 0.95rem; color: var(--color-accent); }
 

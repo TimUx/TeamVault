@@ -68,9 +68,9 @@ Nach dem Entsperren: linke **Sidebar** mit Icons. Unter Vault getrennt:
 | **Import** | Dateien aus anderen Passwortmanagern übernehmen |
 | **Sicherung** | Verschlüsselte `.tvbak`-Backup / Wiederherstellen |
 
-Kein vermischter „Alle“-Eintrag. Clientseitige **Suche** und **Ordner**-Filter gelten jeweils für die aktive Ansicht. In der Liste können Sie Einträge per Checkbox für den Export auswählen.
+Kein vermischter „Alle“-Eintrag. Clientseitige **Suche** (Titel, Tags, Benutzer, Gruppen) und **Tag**-Filter gelten jeweils für die aktive Ansicht. In der Liste können Sie Einträge per Checkbox für den Export auswählen.
 
-**Ansicht:** Standard ist **Tabelle**; Umschalter Liste / Tabelle / Kacheln (Preference lokal im Browser). Tabelle und Kacheln laden zusätzlich Benutzer, Tags und Favorit (clientseitig entschlüsselt); Liste zeigt Titel und Ordner.
+**Ansicht:** Standard ist **Tabelle**; Umschalter Liste / Tabelle / Kacheln (Preference lokal im Browser). Tabelle und Kacheln laden zusätzlich Benutzer, Tags, Gruppen und Favorit; Liste zeigt Titel, Benutzer, Tags und Gruppen kompakt.
 
 ![Meine Secrets – Tabelle (Standard)](images/vault-secrets-table.png)
 
@@ -84,7 +84,7 @@ Kein vermischter „Alle“-Eintrag. Clientseitige **Suche** und **Ordner**-Filt
 
 ### Anlegen
 
-Sidebar **Neu anlegen**: Titel, Ordner, Benutzername und Passwort sind immer sichtbar. Weitere Felder über **Feld hinzufügen**:
+Sidebar **Neu anlegen**: Titel, Tags, Benutzername und Passwort sind immer sichtbar. Weitere Felder über **Feld hinzufügen**:
 
 | Typ | Inhalt |
 |-----|--------|
@@ -108,7 +108,7 @@ Optional direkt beim Anlegen **User** und **Gruppen** zum Teilen auswählen (nur
 
 In der Liste **Öffnen** — Detail erscheint als **Modal** über der Liste (Schließen mit Button, Backdrop oder **Escape**). Klartext nur im Browser. Felder mit **Kopieren** / **Anzeigen**; Key/Zertifikat zusätzlich **Download**. Live-**TOTP** erscheint, wenn ein Seed hinterlegt ist. Mehrere Websites werden einzeln angezeigt.
 
-**Bearbeiten** im Modal: Titel, Ordner, Benutzername, Passwort, Tags, Notizen — Speichern verschlüsselt clientseitig (`PUT /api/secrets/{id}`).
+**Bearbeiten** im Modal: Titel, Benutzername, Passwort, Tags, Notizen — Speichern verschlüsselt clientseitig (`PUT /api/secrets/{id}`).
 
 ![Secret-Detail (Modal)](images/vault-secret-detail.png)
 
@@ -119,11 +119,11 @@ Jeder Empfänger erhält einen eigenen Umschlag um den Datenschlüssel (kein gem
 
 Admins und Gruppenmitglieder können eine **Gruppe** wählen → **Gruppe teilen** (Mitglieder sehen nur eigene Gruppen; pro Mitglied eigener Envelope). Empfänger sehen den Eintrag unter **Geteilt mit mir**.
 
-### Ordner
+### Tags & Suche
 
-Beim Anlegen einen **Ordner**-Namen setzen. Die Liste filtert nach Ordner; die Suche trifft Titel und Ordnernamen (clientseitig).
+Beim Anlegen **Tags** setzen (Komma-getrennt). Die Toolbar filtert nach Tag; die Suche trifft **Titel, Tags, Benutzername, Ersteller und Gruppen** (clientseitig bzw. aus der API).
 
-![Ordner-Filter](images/vault-folder-filter.png)
+![Tag-Filter](images/vault-tag-filter.png)
 
 ### TOTP im Eintrag
 
@@ -151,7 +151,7 @@ Nach dem Parsen erscheint eine **Vorschau** — einzelne, mehrere oder alle Eint
 
 ### Export
 
-In der Secrets-Liste Einträge per Checkbox wählen (eines, mehrere, oder **Alle geladenen**). Ohne Auswahl gelten die **sichtbaren** Einträge (aktueller Ordner/Suche).
+In der Secrets-Liste Einträge per Checkbox wählen (eines, mehrere, oder **Alle geladenen**). Ohne Auswahl gelten die **sichtbaren** Einträge (aktueller Tag-Filter/Suche).
 
 - **Export TeamVault** — vollständiges JSON inkl. Extra-Felder
 - **Export Bitwarden** — Login-Subset, unverschlüsselt

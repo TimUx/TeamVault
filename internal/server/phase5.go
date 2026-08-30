@@ -1,18 +1,80 @@
 package server
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
 	"github.com/teamvault/teamvault/internal/auth/password"
 	"github.com/teamvault/teamvault/internal/store"
 )
+
+type secretShareContext struct {
+	usernameByID map[store.UserID]string
+	groupsByUser map[store.UserID][]string
+}
+
+func (a *API) loadSecretShareContext(ctx context.Context, tenant store.TenantID) (*secretShareContext, error) {
+	users, err := a.App.Vault.ListUsers(ctx, tenant, store.UserQuery{Limit: 10000})
+	if err != nil {
+		return nil, err
+	}
+	usernameByID := make(map[store.UserID]string, len(users))
+	for _, u := range users {
+		usernameByID[u.ID] = u.Username
+	}
+	groups, err := a.App.Vault.ListGroups(ctx, tenant)
+	if err != nil {
+		return nil, err
+	}
+	groupsByUser := make(map[store.UserID][]string)
+	seen := make(map[store.UserID]map[string]bool)
+	for _, g := range groups {
+		members, err := a.App.Vault.ListGroupMembers(ctx, tenant, g.ID)
+		if err != nil {
+			continue
+		}
+		for _, uid := range members {
+			if seen[uid] == nil {
+				seen[uid] = map[string]bool{}
+			}
+			if seen[uid][g.Name] {
+				continue
+			}
+			seen[uid][g.Name] = true
+			groupsByUser[uid] = append(groupsByUser[uid], g.Name)
+		}
+	}
+	return &secretShareContext{usernameByID: usernameByID, groupsByUser: groupsByUser}, nil
+}
+
+func sharedGroupsForEnvelopes(sc *secretShareContext, envs []store.KeyEnvelope) []string {
+	if sc == nil || len(envs) == 0 {
+		return nil
+	}
+	names := map[string]bool{}
+	for _, e := range envs {
+		for _, g := range sc.groupsByUser[e.UserID] {
+			names[g] = true
+		}
+	}
+	if len(names) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(names))
+	for g := range names {
+		out = append(out, g)
+	}
+	sort.Strings(out)
+	return out
+}
 
 func (a *API) registerPhase5(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/admin/users", a.requireAuth(a.requireAdmin(a.handleListUsers)))
@@ -313,15 +375,27 @@ func (a *API) handleListGroups(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, out)
 }
 
-// handleMyGroups returns groups the caller belongs to (id + name only) for share UI.
+// handleMyGroups returns groups available for share UI (all groups for admins, membership for others).
 func (a *API) handleMyGroups(w http.ResponseWriter, r *http.Request) {
 	sess, _ := a.sessionFrom(r)
-	ids, err := a.App.Vault.ListUserGroups(r.Context(), sess.TenantID, sess.UserID)
+	all, err := a.App.Vault.ListGroups(r.Context(), sess.TenantID)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	all, err := a.App.Vault.ListGroups(r.Context(), sess.TenantID)
+	type g struct {
+		ID   string `json:"id"`
+		Name string `json:"name"`
+	}
+	if hasRole(sess.Roles, "tenant_admin") || hasRole(sess.Roles, "platform_admin") {
+		out := make([]g, 0, len(all))
+		for _, gr := range all {
+			out = append(out, g{ID: string(gr.ID), Name: gr.Name})
+		}
+		writeJSON(w, http.StatusOK, out)
+		return
+	}
+	ids, err := a.App.Vault.ListUserGroups(r.Context(), sess.TenantID, sess.UserID)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
@@ -329,10 +403,6 @@ func (a *API) handleMyGroups(w http.ResponseWriter, r *http.Request) {
 	want := map[store.GroupID]bool{}
 	for _, id := range ids {
 		want[id] = true
-	}
-	type g struct {
-		ID   string `json:"id"`
-		Name string `json:"name"`
 	}
 	out := make([]g, 0, len(ids))
 	for _, gr := range all {
@@ -584,6 +654,11 @@ func (a *API) handleListSecrets(w http.ResponseWriter, r *http.Request) {
 	}
 	limit, offset := parseLimitOffset(r, 200, 0)
 	adminSeeAll := !a.bundle().Policy.AdminSecretsEnvelopeOnly
+	shareCtx, err := a.loadSecretShareContext(r.Context(), sess.TenantID)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 	type envOut struct {
 		EphemeralPubB64 string `json:"ephemeral_pub_b64"`
 		NonceB64        string `json:"nonce_b64"`
@@ -591,14 +666,15 @@ func (a *API) handleListSecrets(w http.ResponseWriter, r *http.Request) {
 		KeyVersion      uint32 `json:"key_version"`
 	}
 	type item struct {
-		ID                 string  `json:"id"`
-		TitleCiphertextB64 string  `json:"title_ciphertext_b64"`
-		TitleNonceB64      string  `json:"title_nonce_b64"`
-		CreatedBy          string  `json:"created_by"`
-		HasAccess          bool    `json:"has_access"`
-		KeyVersion         uint32  `json:"key_version"`
-		CollectionID       string  `json:"collection_id,omitempty"`
-		Envelope           *envOut `json:"envelope,omitempty"`
+		ID                  string   `json:"id"`
+		TitleCiphertextB64  string   `json:"title_ciphertext_b64"`
+		TitleNonceB64       string   `json:"title_nonce_b64"`
+		CreatedBy           string   `json:"created_by"`
+		CreatedByUsername   string   `json:"created_by_username,omitempty"`
+		HasAccess           bool     `json:"has_access"`
+		KeyVersion          uint32   `json:"key_version"`
+		SharedGroups        []string `json:"shared_groups,omitempty"`
+		Envelope            *envOut  `json:"envelope,omitempty"`
 	}
 	var filtered []item
 	for _, m := range metas {
@@ -623,7 +699,11 @@ func (a *API) handleListSecrets(w http.ResponseWriter, r *http.Request) {
 		it := item{
 			ID: string(m.ID), TitleCiphertextB64: base64.StdEncoding.EncodeToString(m.TitleCiphertext),
 			TitleNonceB64: base64.StdEncoding.EncodeToString(m.TitleNonce), CreatedBy: string(m.CreatedBy),
-			HasAccess: access, KeyVersion: kv, CollectionID: m.CollectionID,
+			HasAccess: access, KeyVersion: kv,
+		}
+		if shareCtx != nil {
+			it.CreatedByUsername = shareCtx.usernameByID[m.CreatedBy]
+			it.SharedGroups = sharedGroupsForEnvelopes(shareCtx, envs)
 		}
 		if mine != nil && len(mine.WrappedDK) >= 32+24 {
 			eph, nonce, ct := mine.WrappedDK[:32], mine.WrappedDK[32:56], mine.WrappedDK[56:]
@@ -681,7 +761,7 @@ func (a *API) handleGetSecret(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	eph, nonce, ct := mine.WrappedDK[:32], mine.WrappedDK[32:56], mine.WrappedDK[56:]
-	writeJSON(w, http.StatusOK, map[string]any{
+	out := map[string]any{
 		"id": meta.ID,
 		"title_ciphertext_b64": base64.StdEncoding.EncodeToString(meta.TitleCiphertext),
 		"title_nonce_b64":      base64.StdEncoding.EncodeToString(meta.TitleNonce),
@@ -695,7 +775,12 @@ func (a *API) handleGetSecret(w http.ResponseWriter, r *http.Request) {
 			"key_version":       mine.KeyVersion,
 		},
 		"recipients": recipients,
-	})
+	}
+	if shareCtx, err := a.loadSecretShareContext(r.Context(), sess.TenantID); err == nil && shareCtx != nil {
+		out["created_by_username"] = shareCtx.usernameByID[meta.CreatedBy]
+		out["shared_groups"] = sharedGroupsForEnvelopes(shareCtx, envs)
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 func (a *API) callerHasEnvelope(r *http.Request, tenant store.TenantID, secret store.SecretID, user store.UserID) bool {
@@ -791,7 +876,6 @@ func (a *API) handleUpdateSecret(w http.ResponseWriter, r *http.Request) {
 		CiphertextB64      string `json:"ciphertext_b64"`
 		NonceB64           string `json:"nonce_b64"`
 		KeyVersion         uint32 `json:"key_version"`
-		CollectionID       string `json:"collection_id"`
 	}
 	if err := readJSON(r, &req); err != nil {
 		writeErr(w, http.StatusBadRequest, err.Error())
@@ -835,7 +919,6 @@ func (a *API) handleUpdateSecret(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	meta.TitleCiphertext, meta.TitleNonce = titleCT, titleN
-	meta.CollectionID = req.CollectionID
 	if err := a.App.Vault.PutSecretMeta(r.Context(), *meta); err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return

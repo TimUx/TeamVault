@@ -112,7 +112,7 @@ cp .env.example .env
 mkdir -p secrets
 openssl rand -out secrets/teamvault_unlock 48
 docker compose pull && docker compose up -d
-# Image: ghcr.io/timux/teamvault:latest  (Prod: :1.2.0 in .env pinnen)
+# Image: ghcr.io/timux/teamvault:latest  (Prod: :1.2.1 in .env pinnen)
 # → http://127.0.0.1:8080/setup
 
 # Nur bei Bedarf lokal bauen:
@@ -138,11 +138,11 @@ Workflow [`.github/workflows/docker.yml`](.github/workflows/docker.yml): Unit-Te
 | Trigger | Tags (Auszug) |
 |---------|----------------|
 | `main` | `latest`, `main`, `sha-…` |
-| `v1.2.0` | `1.2.0`, `1.2` |
+| `v1.2.1` | `1.2.1`, `1.2` |
 
 ```bash
 docker pull ghcr.io/timux/teamvault:latest
-docker pull ghcr.io/timux/teamvault:1.2.0
+docker pull ghcr.io/timux/teamvault:1.2.1
 ```
 
 Compose nutzt diese Images standardmäßig (`TEAMVAULT_IMAGE` in `.env`).
