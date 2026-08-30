@@ -67,17 +67,22 @@ New-Item -ItemType Directory -Force secrets | Out-Null
 
 | Variable | Verwendung |
 |----------|------------|
-| `TEAMVAULT_MASTER_UNLOCK_KEY_FILE` | Pfad zum Keyfile (Prod) |
+| `TEAMVAULT_MASTER_UNLOCK_KEY_FILE` | Pfad zum Keyfile (Prod / Go) |
 | `TEAMVAULT_MASTER_UNLOCK_KEY` | Nur Dev/Test-Fallback (Key-Bytes in Env) |
 | `TEAMVAULT_PUBLISH_PORT` / `TEAMVAULT_UNLOCK_KEY_HOST` | Docker Compose via `.env` |
+| `TEAMVAULT_IMAGE` | GHCR-Image, z. B. `ghcr.io/timux/teamvault:1.1.1` |
+| `TEAMVAULT_PULL_POLICY` | Default `always` |
 
 ### 2.4 Start
 
 ```bash
-docker compose up -d
-# oder mit gesourcter .env:
+# Docker: immer zuerst pullen (CI-Images)
+docker compose pull && docker compose up -d
+
+# Go: .env laden
 set -a; source .env; set +a
 go run ./cmd/teamvault
+# bzw. ./bin/teamvault nach go build
 ```
 
 Browser: `/setup` — solange `initialized=false`.
@@ -192,10 +197,11 @@ Der private Escrow-Key darf nie in Logs oder dauerhaft auf dem Server landen.
 - Nach User-Disable: Secrets mit Envelope dieses Users rotieren (Hinweis + Liste `accessible-secrets` in Admin-UI; kein Auto-Rotate wegen ZK)
 - Tenant-Admins sehen standardmäßig in der Secret-Liste **Metadaten** (IDs, Title-Ciphertext) auch ohne eigenen Envelope — optional einschränkbar über Policy (siehe §3.5)
 
-### 3.8 Tenants & Storage-Migration (`platform_admin`)
+### 3.8 Tenants, Storage-Migration & Instanz-Backup (`platform_admin`)
 
 - Weitere Tenants anlegen
 - Migration SQLite ↔ JSON: nur Ciphertext; Bestätigung `MIGRATE`
+- **Instanz-Snapshot** herunterladen / wiederherstellen (`GET /api/admin/backup`, `POST /api/admin/backup/restore` mit `confirm=RESTORE`) — siehe §5
 
 ## 4. Docker & Package
 
@@ -204,10 +210,14 @@ Siehe [Installationsanleitung](install-guide.md) und Root-[README](../README.md#
 - Volume `/data` — Vault/Config
 - Unlock-Datei → `/run/secrets/teamvault_unlock` (read-only), Host-Pfad über `TEAMVAULT_UNLOCK_KEY_HOST`
 
-Default-Image: `ghcr.io/timux/teamvault:latest` (`TEAMVAULT_IMAGE`) — von CI nach Push auf `main` / Tags `v*` veröffentlicht. Compose hat **keinen** lokalen `build:`-Schritt; nur Pull.
+Default-Image: `ghcr.io/timux/teamvault:latest` (`TEAMVAULT_IMAGE`) — von CI nach Push auf `main` / Tags `v*` veröffentlicht. Compose hat **keinen** lokalen `build:`-Schritt; nur Pull (`pull_policy: always`).
 
-Pin auf Release: `TEAMVAULT_IMAGE=ghcr.io/timux/teamvault:1.1.0` in `.env`.  
-Lokaler Build nur bei Bedarf: `docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build`.
+```bash
+docker compose pull && docker compose up -d
+```
+
+Pin auf Release (empfohlen Prod): `TEAMVAULT_IMAGE=ghcr.io/timux/teamvault:1.1.1` in `.env`.  
+Lokaler Build nur bei Bedarf: `docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build` bzw. Install-Skript mit `TEAMVAULT_BUILD=1`.
 
 Unlock-Key nie ins Image legen.
 
@@ -279,15 +289,19 @@ Sessions, Login-Rate-Limits und Passkey-Challenges liegen **im Prozessspeicher**
 
 | Symptom | Check |
 |---------|--------|
-| Start schlägt fehl „missing unlock key“ | `TEAMVAULT_MASTER_UNLOCK_KEY_FILE` gesetzt und lesbar? |
-| Setup erscheint erneut | Falsches Data-Dir oder Unlock-Key? |
+| Start schlägt fehl „missing unlock key“ | `TEAMVAULT_MASTER_UNLOCK_KEY_FILE` / Compose-Mount `TEAMVAULT_UNLOCK_KEY_HOST` gesetzt und lesbar? |
+| Setup erscheint erneut | Falsches Data-Dir/Volume oder anderes Unlock-Keyfile? |
+| GHCR-Pull fehlgeschlagen | `docker login ghcr.io`; Image `ghcr.io/timux/teamvault` sichtbar? Sonst lokal bauen (`docker-compose.build.yml`) |
 | LDAP-Login fehl | Test-Bind; Filter; User lokal nicht disabled |
 | Passkey funktioniert nicht | HTTPS, RP-ID, Browser-Support |
 | Vault „Idle gesperrt“ | Erneut Master-Passwort; Idle-Minuten in Policy |
 | Cookie-POST „origin check failed“ | Proxy leitet Origin durch? |
+| Restore `checksum mismatch` | Snapshot-Datei unverändert hochladen (Roh-JSON, nicht umgeschrieben) |
 
 ## 8. Weiterführend
 
+- Installation: [install-guide.md](install-guide.md)
 - Sicherheitsregeln: [`.cursor/rules/security-principles.mdc`](../.cursor/rules/security-principles.mdc)
 - Admin-UI Scope (Planung): [planning/admin-ui-scope.md](planning/admin-ui-scope.md)
 - OpenAPI: [openapi.yaml](openapi.yaml)
+- Checkliste: [SECURITY-REVIEW-CHECKLIST.md](../SECURITY-REVIEW-CHECKLIST.md)

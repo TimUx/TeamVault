@@ -1,7 +1,7 @@
 # TeamVault – User Guide
 
 Anleitung für den Alltag: Anmelden, Vault nutzen, teilen, Absichern.  
-Installation und Admin-Themen: [Admin Guide](admin-guide.md).
+Installation: [Installationsanleitung](install-guide.md) · Betrieb: [Admin Guide](admin-guide.md).
 
 Version und Entwickler (Timo Braun) sehen Sie unten in der App bzw. unter Login.
 
@@ -62,8 +62,11 @@ Nach dem Entsperren: linke **Sidebar** mit Icons. Unter Vault getrennt:
 |------|--------|
 | **Meine Secrets** | Einträge, die Sie angelegt haben (`created_by` = Sie) |
 | **Geteilt mit mir** | Einträge mit Zugriff, die jemand anderes angelegt hat |
+| **Neu anlegen** | Formular für einen neuen Eintrag |
+| **Import** | Dateien aus anderen Passwortmanagern übernehmen |
+| **Sicherung** | Verschlüsselte `.tvbak`-Backup / Wiederherstellen |
 
-Kein vermischter „Alle“-Eintrag. Clientseitige **Suche** und **Ordner**-Filter gelten jeweils für die aktive Ansicht.
+Kein vermischter „Alle“-Eintrag. Clientseitige **Suche** und **Ordner**-Filter gelten jeweils für die aktive Ansicht. In der Liste können Sie Einträge per Checkbox für den Export auswählen.
 
 **Ansicht:** Umschalter Liste / Tabelle / Kacheln (Preference lokal im Browser). Liste zeigt Titel und Ordner; Tabelle und Kacheln laden zusätzlich Benutzer, Tags und Favorit (clientseitig entschlüsselt).
 
@@ -229,7 +232,8 @@ Nur `read` → keine Admin- oder Schreibaktionen. Cookie-Login ohne API-Key ist 
 - Nach Teilen nur notwendige Personen; bei Austritt Admin um Entzug/Rotation bitten  
 - Öffentliche/geteilte Rechner: nach Nutzung **Logout** und Browser schließen  
 - Phishing: nur die bekannte Firmen-URL verwenden; Extension Fill/Copy nur bei Host-Match  
-- Export-Dateien enthalten Klartext — sicher ablegen und zeitnah löschen  
+- Klartext-Export (JSON/CSV) sicher ablegen und zeitnah löschen  
+- `.tvbak` und Backup-Passwort getrennt vom Unlock-Key und Master-Passwort aufbewahren  
 
 ## 10. Hilfe
 
@@ -244,6 +248,7 @@ Nur `read` → keine Admin- oder Schreibaktionen. Cookie-Login ohne API-Key ist 
 | Passkey fehlt | Neu registrieren; Gerät/OS-Support prüfen |
 | Secret „kein Zugriff“ | Noch nicht geteilt oder Rechte entzogen |
 | Fill/Copy blockiert | Secret-URL passt nicht zum Tab-Host |
+| Import leer / Format? | Vorschau prüfen; KeePass nur XML (kein `.kdbx`); `.tvbak` braucht Backup-Passwort |
 | CLI/Extension-Install | `/help/cli` bzw. `/help/extension`; Admin muss `/downloads/` befüllen |
 
-Technische API: [openapi.yaml](openapi.yaml) · Admin: [admin-guide.md](admin-guide.md)
+Technische API: [openapi.yaml](openapi.yaml) · Installation: [install-guide.md](install-guide.md) · Admin: [admin-guide.md](admin-guide.md)

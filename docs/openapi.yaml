@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: TeamVault API
-  version: 0.9.0
+  version: 0.9.1
   description: |
     Zero-Knowledge Passwortmanager REST-API.
     Der Server speichert nur Ciphertext + Envelopes; Ver-/Entschlüsselung
@@ -9,6 +9,8 @@ info:
 
     API-Key-Scopes (mind. einer): `read` (GET-Allowlist), `vault` (Secret-/Vault-Mutationen),
     `admin` (`/api/admin/*`, plus User-Rollen). Cookie-Sessions ohne Scope-Limit.
+
+    Instanz-Backup: `GET /api/admin/backup`, `POST /api/admin/backup/restore` (platform_admin, Ciphertext only).
 servers:
   - url: http://127.0.0.1:8080
     description: Local default

@@ -4,7 +4,8 @@
 **Weiter deferred (bewusst):** Bitwarden-Send / Einmal-Links, PWA/native Mobile, SCIM/IdP-Provisioning, Postgres-Driver.  
 React-Frontend: **abgesagt** (Vanilla bleibt) — siehe OQ-01 / `docs/phase9-13-security-self-check.md`.  
 Client-Export (JSON/CSV) und Self-Service Passwort-Wechsel: umgesetzt (Findings-Stufenplan Stufe 5).  
-**Post-Stufenplan (2026-08):** atomare `RotateSecret`, API-Key-Scopes `read`/`vault`/`admin`, `GET /api/groups`, Secret-List-Batching, Trivy in CI, Extension Copy Host-Gate, Audit fail-hard auf kritischen Mutationen.
+**Post-Stufenplan (2026-08):** atomare `RotateSecret`, API-Key-Scopes `read`/`vault`/`admin`, `GET /api/groups`, Secret-List-Batching, Trivy in CI, Extension Copy Host-Gate, Audit fail-hard auf kritischen Mutationen.  
+**v1.1.x (2026-08):** selektiver Import/Export, verschlüsselte User-`.tvbak`, Instanz-Backup/Restore (Ciphertext), Install-One-Liner (Docker/Go), Compose → GHCR-Images.
 
 **Canvas:** interaktive Scorecard/Findings neben dem Chat (Cursor Canvas)  
 **Ziel:** Notwendige vs. optionale Anpassungen in umsetzbare Phasen gliedern.
@@ -110,12 +111,13 @@ Vanilla-JS refactor in Module ok; **kein** Pflicht-React in Phase 10.
 
 | # | Arbeitspaket | Abhängigkeit |
 |---|--------------|--------------|
-| 12.1 | Payload-Felder: URL, TOTP-Seed (clientverschlüsselt), Tags | Phase 10.2 |
-| 12.2 | Ordner / Favoriten (Metadaten ciphertext oder client-index) | 11.1 |
-| 12.3 | Gruppen-Share: UI wählt Gruppe → Envelopes für alle Member | Prinzip 5 einhalten |
+| 12.1 | Payload-Felder: URL, TOTP-Seed (clientverschlüsselt), Tags | **umgesetzt** |
+| 12.2 | Ordner / Favoriten (Metadaten ciphertext oder client-index) | **umgesetzt** |
+| 12.3 | Gruppen-Share: UI wählt Gruppe → Envelopes für alle Member | **umgesetzt** |
 | 12.4 | Recovery-Moduswechsel + Pflicht-Re-Onboarding (OQ-03) | Audit + Bestätigung |
-| 12.5 | Rolle `auditor` (read-only Audit) | OQ-08 |
+| 12.5 | Rolle `auditor` (read-only Audit) | OQ-08 / teilweise |
 | 12.6 | SMTP-Templates produktiv (Invite, Disable-Hinweis) | MVP-Gaps |
+| 12.7 | Import weiterer Formate + Export Auswahl + `.tvbak` / Instanz-Backup | **umgesetzt** (v1.1+) |
 
 ---
 

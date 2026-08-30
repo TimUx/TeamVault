@@ -32,10 +32,10 @@ Details: [`.cursor/rules/security-principles.mdc`](.cursor/rules/security-princi
 | Guide | Zielgruppe |
 |-------|------------|
 | [**Installationsanleitung**](docs/install-guide.md) | One-Liner Docker / Go, `.env`, Unlock-Key |
-| [**User Guide**](docs/user-guide.md) | Alltag: Login, Onboarding, Vault, Sharing, Export, Passwort-Wechsel |
+| [**User Guide**](docs/user-guide.md) | Alltag: Login, Onboarding, Vault, Sharing, Import/Export, Sicherung |
 | [**CLI Guide**](docs/cli-guide.md) | tvcli installieren & nutzen (auch in der App: `/help/cli`) |
 | [**Extension Guide**](docs/extension-guide.md) | Browser-Extension (auch: `/help/extension`) |
-| [**Admin Guide**](docs/admin-guide.md) | Betrieb: Setup-Wizard, User/LDAP/SMTP, Escrow, Proxy/TLS, Backup, CI |
+| [**Admin Guide**](docs/admin-guide.md) | Betrieb: Setup, LDAP/SMTP, Escrow, Proxy/TLS, Instanz-Backup, CI |
 | [**Roadmap**](docs/planning/roadmap-phase9plus.md) | Weitere Ausbaupfade (Hardening, UX, Perf, Features) |
 | [**Vergleich Password Manager**](docs/planning/competitive-comparison.md) | TeamVault vs. Bitwarden, Vaultwarden, Passbolt, … |
 | [Clients](clients/README.md) | CLI-Binaries & Extension |
@@ -112,7 +112,7 @@ cp .env.example .env
 mkdir -p secrets
 openssl rand -out secrets/teamvault_unlock 48
 docker compose pull && docker compose up -d
-# Image: ghcr.io/timux/teamvault:latest  (oder z. B. :1.1.0 in .env)
+# Image: ghcr.io/timux/teamvault:latest  (Prod: :1.1.1 in .env pinnen)
 # → http://127.0.0.1:8080/setup
 
 # Nur bei Bedarf lokal bauen:
@@ -133,11 +133,19 @@ Extension: Ordner `clients/extension` in Chrome/Edge (Entwicklermodus) laden —
 
 ## CI (GitHub Actions)
 
-Workflow [`.github/workflows/docker.yml`](.github/workflows/docker.yml): Unit-Tests im Docker-Target `test`, danach Image-Build. Auf `main` und Tags `v*` wird nach **GHCR** gepusht.
+Workflow [`.github/workflows/docker.yml`](.github/workflows/docker.yml): Unit-Tests im Docker-Target `test`, danach Image-Build und Push nach **GHCR**.
+
+| Trigger | Tags (Auszug) |
+|---------|----------------|
+| `main` | `latest`, `main`, `sha-…` |
+| `v1.1.1` | `1.1.1`, `1.1` |
 
 ```bash
 docker pull ghcr.io/timux/teamvault:latest
+docker pull ghcr.io/timux/teamvault:1.1.1
 ```
+
+Compose nutzt diese Images standardmäßig (`TEAMVAULT_IMAGE` in `.env`).
 
 ## Bootstrap-Unlock
 
@@ -150,8 +158,8 @@ Vorlage: [`.env.example`](.env.example). Der Key entsperrt nur die **verschlüss
 
 ## Überblick
 
-TeamVault umfasst Setup-Wizard, Zero-Knowledge-Vault, Sharing mit Envelope-Rotation, Admin (User/LDAP/SMTP/Policy/Escrow/API-Keys), Passkeys (nur Login), OpenAPI, CLI und Browser-Extension.
+TeamVault umfasst Setup-Wizard, Zero-Knowledge-Vault, Sharing mit Envelope-Rotation, Import/Export und verschlüsselte Sicherung, Admin (User/LDAP/SMTP/Policy/Escrow/API-Keys/Instanz-Backup), Passkeys (nur Login), OpenAPI, CLI und Browser-Extension.
 
-Betriebs-Checkliste: [`SECURITY-REVIEW-CHECKLIST.md`](SECURITY-REVIEW-CHECKLIST.md)
+Betriebs-Checkliste: [`SECURITY-REVIEW-CHECKLIST.md`](SECURITY-REVIEW-CHECKLIST.md) · Installation: [`docs/install-guide.md`](docs/install-guide.md)
 
 ![Dark Theme](docs/images/theme-dark.png)

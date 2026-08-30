@@ -1,6 +1,7 @@
 # TeamVault Clients
 
-**Endnutzer-Anleitungen:** [CLI](../docs/cli-guide.md) · [Extension](../docs/extension-guide.md)  
+**Endnutzer-Anleitungen:** [CLI](../docs/cli-guide.md) · [Extension](../docs/extension-guide.md) · [User Guide](../docs/user-guide.md)  
+**Server-Installation:** [Installationsanleitung](../docs/install-guide.md)  
 Auf der laufenden Instanz: **`/help`**, **`/help/cli`**, **`/help/extension`**.
 
 ## Crypto (geteilt)

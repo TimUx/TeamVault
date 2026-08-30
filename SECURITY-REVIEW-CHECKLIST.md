@@ -26,23 +26,25 @@ Vor dem Betrieb mit echten Zugangsdaten: externes Audit + internes Walkthrough g
 
 ## Config & Bootstrap
 
-- [x] Genau ein externes Secret: `MASTER_UNLOCK_KEY` (Keyfile/Secret-Mount in Prod)
+- [x] Genau ein externes Secret: `MASTER_UNLOCK_KEY` (Keyfile/Secret-Mount in Prod; `.env` nur Pfad)
 - [x] Unlock-Key nie in Logs/Traces; Mindestentropie ≥32 Byte
 - [x] LDAP/SMTP/API-Key-Material nur in sealed Config-DB
 - [x] API-Key-Klartext nur einmal angezeigt; Speicherung gehasht
 - [x] Storage-Migration: Bestätigungspflicht; Rollback-Plan dokumentiert
 - [x] Postgres-Backend bis Implementierung abgelehnt (sqlite/json)
+- [x] Compose nutzt CI/GHCR-Images; Unlock-Keyfile per Mount (kein Key im Image)
 
 ## Ops & Hardening
 
 - [x] TLS terminiert vor App (oder TLS am Listener); HSTS wo sinnvoll
 - [x] Keine Telemetrie/CDN (Air-Gap, OQ-19)
-- [x] Backup: sealed Config + Vault-Store; Restore-Test ohne Klartext-Exposition
-- [x] Audit-Log-Review-Prozess; kritische Actions (migrate, recovery-mode, share/rotate) sichtbar
+- [x] Backup: sealed Config + Vault-Store; Admin-UI Snapshot + Restore (`RESTORE`); User-`.tvbak`
+- [x] Audit-Log-Review-Prozess; kritische Actions (migrate, recovery-mode, share/rotate, backup) sichtbar
 - [x] Rate-Limits / Lockout für Login (falls nicht vorhanden: nachziehen)
 - [x] Dependency- und Container-Image-Scan
 - [x] Server `ReadHeaderTimeout` / Read/Write/Idle-Timeouts gesetzt
 - [x] Reverse-Proxy: Origin durchreichen; `TEAMVAULT_TRUST_FORWARDED` Default aus; Startup-WARN bei Aktivierung
+- [x] Install-Runbook: One-Liner Docker/Go, `.env.example` (`docs/install-guide.md`)
 
 ## UI / Client
 
@@ -56,7 +58,8 @@ Vor dem Betrieb mit echten Zugangsdaten: externes Audit + internes Walkthrough g
 ## Dokumentation
 
 - [x] Runbook: Unlock-Key-Rotation, Escrow-Recovery-Ritual, Storage-Migration
+- [x] Installationsanleitung (Docker/Go One-Liner, GHCR, `.env`) — `docs/install-guide.md`
 - [x] Threat-Model aktualisiert (Admin-Escrow vs User-Kit Trade-offs)
 - [ ] Live-Pentest / externes Audit (Prozess, nicht Code)
 
-**Referenz:** `.cursor/rules/security-principles.mdc`, `docs/phase*-security-self-check.md`, `docs/phase9-13-security-self-check.md`
+**Referenz:** `.cursor/rules/security-principles.mdc`, `docs/phase*-security-self-check.md`, `docs/phase9-13-security-self-check.md`, `docs/install-guide.md`
