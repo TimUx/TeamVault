@@ -31,6 +31,7 @@ Details: [`.cursor/rules/security-principles.mdc`](.cursor/rules/security-princi
 
 | Guide | Zielgruppe |
 |-------|------------|
+| [**Installationsanleitung**](docs/install-guide.md) | One-Liner Docker / Go, `.env`, Unlock-Key |
 | [**User Guide**](docs/user-guide.md) | Alltag: Login, Onboarding, Vault, Sharing, Export, Passwort-Wechsel |
 | [**CLI Guide**](docs/cli-guide.md) | tvcli installieren & nutzen (auch in der App: `/help/cli`) |
 | [**Extension Guide**](docs/extension-guide.md) | Browser-Extension (auch: `/help/extension`) |
@@ -57,32 +58,68 @@ Die laufende Version liefert `GET /api/version` bzw. `teamvault -version` (Build
 | Storage | SQLite (Default) oder JSON-File |
 | Clients | `tvcli` (standalone Win/Linux), Browser-Extension |
 
-## Schnellstart (Entwicklung)
+## Schnellstart
+
+### One-Liner (empfohlen)
+
+**Docker** (Linux/macOS):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/TimUx/TeamVault/main/scripts/install-docker.sh | bash
+```
+
+**Docker** (Windows PowerShell):
 
 ```powershell
-$env:Path = "C:\Program Files\Go\bin;" + $env:Path
-# Unlock-Keyfile ≥32 Byte Zufall
-$env:TEAMVAULT_MASTER_UNLOCK_KEY_FILE = ".\unlock.key"
-go test ./...
-go run ./cmd/teamvault -addr :8080
+irm https://raw.githubusercontent.com/TimUx/TeamVault/main/scripts/install-docker.ps1 | iex
 ```
+
+**Go** ohne Container (Go 1.23+):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/TimUx/TeamVault/main/scripts/install-go.sh | bash
+```
+
+```powershell
+irm https://raw.githubusercontent.com/TimUx/TeamVault/main/scripts/install-go.ps1 | iex
+```
+
+Die Skripte klonen nach `~/teamvault`, erzeugen Unlock-Keyfile + `.env` und starten die App. Details: [Installationsanleitung](docs/install-guide.md).
 
 Danach im Browser: **http://127.0.0.1:8080/setup** → Wizard → Login → Onboarding → Vault.
 
 ![Setup: Tenant & Admin](docs/images/setup-tenant.png)
 
-## Docker
+### Manuell (Entwicklung)
 
-Unlock-Key **nicht** ins Image legen — als Datei mounten:
-
-```powershell
-New-Item -ItemType Directory -Force secrets | Out-Null
-# openssl rand -out secrets/teamvault_unlock 48
-docker compose up -d --build
-# → http://127.0.0.1:8080/setup
+```bash
+cp .env.example .env
+mkdir -p secrets data
+openssl rand -out secrets/teamvault_unlock 48
+set -a; source .env; set +a
+go test ./...
+go run ./cmd/teamvault
 ```
 
-Dateien: `Dockerfile`, `docker-compose.yml`, `.dockerignore`. Persistenz: Volume `teamvault_data`.
+## Docker
+
+Compose zieht standardmäßig die von CI nach **GHCR** gepushten Images (`main` → `:latest`, Tags `v*` → SemVer), kein lokaler Build.
+
+Unlock-Key **nicht** ins Image legen — als Keyfile mounten. Compose liest `.env` (Vorlage: `.env.example`):
+
+```bash
+cp .env.example .env
+mkdir -p secrets
+openssl rand -out secrets/teamvault_unlock 48
+docker compose pull && docker compose up -d
+# Image: ghcr.io/timux/teamvault:latest  (oder z. B. :1.1.0 in .env)
+# → http://127.0.0.1:8080/setup
+
+# Nur bei Bedarf lokal bauen:
+# docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
+```
+
+Dateien: `Dockerfile`, `docker-compose.yml`, `docker-compose.build.yml`, `.env.example`, `.dockerignore`. Persistenz: Volume `teamvault_data`.
 
 ## CLI & Extension
 
@@ -106,10 +143,10 @@ docker pull ghcr.io/timux/teamvault:latest
 
 | Umgebung | Variable |
 |----------|----------|
-| Prod | `TEAMVAULT_MASTER_UNLOCK_KEY_FILE` (Keyfile/Secret-Mount) |
-| Dev | `TEAMVAULT_MASTER_UNLOCK_KEY` (Fallback) |
+| Prod | `TEAMVAULT_MASTER_UNLOCK_KEY_FILE` (Keyfile; bei Docker Pfad in `.env` → Compose-Mount) |
+| Dev | `TEAMVAULT_MASTER_UNLOCK_KEY` (Fallback, Key-Bytes in Env — nicht in Install-Skripten) |
 
-Der Key entsperrt nur die **verschlüsselte Config** — keine Vault-Klartexte.
+Vorlage: [`.env.example`](.env.example). Der Key entsperrt nur die **verschlüsselte Config** — keine Vault-Klartexte.
 
 ## Überblick
 

@@ -16,33 +16,73 @@ Der erste User aus dem Setup-Wizard erhält **beide** Admin-Rollen.
 
 ## 2. Erstinstallation
 
+Ausführlich inkl. One-Liner: [**Installationsanleitung**](install-guide.md).
+
 ### 2.1 Voraussetzungen
 
-- Go 1.23+ **oder** Docker
-- Persistentes Datenverzeichnis
+- **Docker** + Compose v2 **oder** Go 1.23+
+- Persistentes Datenverzeichnis / Volume
 - Unlock-Keyfile ≥ **32 Byte** hohe Entropie (kein Passwort)
 
-### 2.2 Unlock-Key
+### 2.2 One-Liner
 
-```powershell
-# Beispiel
-openssl rand -out unlock.key 48
-$env:TEAMVAULT_MASTER_UNLOCK_KEY_FILE = ".\unlock.key"
+```bash
+# Docker (empfohlen)
+curl -fsSL https://raw.githubusercontent.com/TimUx/TeamVault/main/scripts/install-docker.sh | bash
+
+# Go (ohne Container)
+curl -fsSL https://raw.githubusercontent.com/TimUx/TeamVault/main/scripts/install-go.sh | bash
 ```
 
-Der Key entsperrt nur die Config-DB. Vault-Secrets bleiben Zero-Knowledge.
+```powershell
+# Docker
+irm https://raw.githubusercontent.com/TimUx/TeamVault/main/scripts/install-docker.ps1 | iex
 
-### 2.3 Start
+# Go
+irm https://raw.githubusercontent.com/TimUx/TeamVault/main/scripts/install-go.ps1 | iex
+```
+
+### 2.3 Unlock-Key und `.env`
+
+Der Unlock-Key entsperrt nur die Config-DB. Vault-Secrets bleiben Zero-Knowledge.
+
+**Empfohlen:** Keyfile + `.env` (Compose lädt `.env` automatisch; Key-Bytes nie in die `.env` schreiben).
+
+```bash
+cp .env.example .env
+mkdir -p secrets
+openssl rand -out secrets/teamvault_unlock 48
+chmod 600 secrets/teamvault_unlock
+# .env enthält z. B.:
+#   TEAMVAULT_UNLOCK_KEY_HOST=./secrets/teamvault_unlock
+#   TEAMVAULT_PUBLISH_PORT=8080
+#   TEAMVAULT_IMAGE=ghcr.io/timux/teamvault:latest
+```
 
 ```powershell
-go run ./cmd/teamvault -addr :8080
-# oder
-docker compose up -d --build
+Copy-Item .env.example .env
+New-Item -ItemType Directory -Force secrets | Out-Null
+# openssl rand -out secrets/teamvault_unlock 48
+```
+
+| Variable | Verwendung |
+|----------|------------|
+| `TEAMVAULT_MASTER_UNLOCK_KEY_FILE` | Pfad zum Keyfile (Prod) |
+| `TEAMVAULT_MASTER_UNLOCK_KEY` | Nur Dev/Test-Fallback (Key-Bytes in Env) |
+| `TEAMVAULT_PUBLISH_PORT` / `TEAMVAULT_UNLOCK_KEY_HOST` | Docker Compose via `.env` |
+
+### 2.4 Start
+
+```bash
+docker compose up -d
+# oder mit gesourcter .env:
+set -a; source .env; set +a
+go run ./cmd/teamvault
 ```
 
 Browser: `/setup` — solange `initialized=false`.
 
-### 2.4 Setup-Wizard
+### 2.5 Setup-Wizard
 
 | Schritt | Inhalt |
 |---------|--------|
@@ -159,12 +199,17 @@ Der private Escrow-Key darf nie in Logs oder dauerhaft auf dem Server landen.
 
 ## 4. Docker & Package
 
-Siehe Root-[README](../README.md#docker). Compose mountet:
+Siehe [Installationsanleitung](install-guide.md) und Root-[README](../README.md#docker). Compose nutzt `.env` und mountet:
 
 - Volume `/data` — Vault/Config
-- Unlock-Datei → `/run/secrets/teamvault_unlock` (read-only)
+- Unlock-Datei → `/run/secrets/teamvault_unlock` (read-only), Host-Pfad über `TEAMVAULT_UNLOCK_KEY_HOST`
 
-CI (GitHub Actions) baut Images und pusht sie nach GHCR, z. B. `ghcr.io/timux/teamvault:latest`. Unlock-Key nie ins Image legen.
+Default-Image: `ghcr.io/timux/teamvault:latest` (`TEAMVAULT_IMAGE`) — von CI nach Push auf `main` / Tags `v*` veröffentlicht. Compose hat **keinen** lokalen `build:`-Schritt; nur Pull.
+
+Pin auf Release: `TEAMVAULT_IMAGE=ghcr.io/timux/teamvault:1.1.0` in `.env`.  
+Lokaler Build nur bei Bedarf: `docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build`.
+
+Unlock-Key nie ins Image legen.
 
 ### 4.1 Client-Downloads (CLI & Extension)
 

@@ -1,23 +1,24 @@
 # TeamVault — self-hosted Zero-Knowledge password manager
 #
-# 1) Create unlock key (≥32 random bytes), never commit it:
-#      openssl rand -out secrets/teamvault_unlock 48
-#    or:  New-Item -ItemType Directory -Force secrets; [IO.File]::WriteAllBytes("secrets/teamvault_unlock", (1..48 | %{Get-Random -Max 256}))
+# Uses images published by CI to GHCR (push to main / tags v*):
+#   ghcr.io/timux/teamvault:latest
+#   ghcr.io/timux/teamvault:1.1.0   (semver from release tags)
 #
-# 2) Start:
-#      docker compose up -d --build
+# Quick start:
+#   curl -fsSL https://raw.githubusercontent.com/TimUx/TeamVault/main/scripts/install-docker.sh | bash
 #
-# 3) Open http://127.0.0.1:8080/setup
+# Manual:
+#   cp .env.example .env
+#   mkdir -p secrets && openssl rand -out secrets/teamvault_unlock 48
+#   docker compose pull && docker compose up -d
+#   → http://127.0.0.1:8080/setup
+#
+# Local image build (dev only): docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
 
 services:
   teamvault:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        GOPROXY: ${GOPROXY:-https://proxy.golang.org,direct}
-        GOSUMDB: ${GOSUMDB:-sum.golang.org}
-    image: teamvault:local
+    image: ${TEAMVAULT_IMAGE:-ghcr.io/timux/teamvault:latest}
+    pull_policy: ${TEAMVAULT_PULL_POLICY:-always}
     container_name: teamvault
     ports:
       - "${TEAMVAULT_PUBLISH_PORT:-8080}:8080"
@@ -29,8 +30,6 @@ services:
       - teamvault_data:/data
       - ${TEAMVAULT_UNLOCK_KEY_HOST:-./secrets/teamvault_unlock}:/run/secrets/teamvault_unlock:ro
     restart: unless-stopped
-    # Distroless has no shell; healthcheck via published HTTP from the host if needed.
-    # healthcheck optional with a sidecar or compose profiles.
 
 volumes:
   teamvault_data:
