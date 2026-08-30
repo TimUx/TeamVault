@@ -2,7 +2,6 @@
 # Pure Go / CGO_ENABLED=0 — no libc or Go toolchain needed at runtime.
 #
 # Usage (from repo root):
-#   . .\scripts\go-env.ps1   # optional corp GOPROXY
 #   .\scripts\build-tvcli.ps1
 #
 # Output: dist/tvcli-windows-amd64.exe, dist/tvcli-linux-amd64

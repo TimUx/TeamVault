@@ -164,7 +164,7 @@ Siehe Root-[README](../README.md#docker). Compose mountet:
 - Volume `/data` — Vault/Config
 - Unlock-Datei → `/run/secrets/teamvault_unlock` (read-only)
 
-CI baut Images auf dem Ubuntu-Runner und pusht sie ins Gitea-Package-Registry. Base-Images und optional die Go-Toolchain werden **vom Laptop** mit Windows-Proxy-Credentials nach Gitea gespiegelt (`scripts/mirror-oci-to-gitea.ps1`, `scripts/publish-go-toolchain.ps1`); Module liegen in `vendor/`. Details: [`.gitea/README.md`](../.gitea/README.md).
+CI (GitHub Actions) baut Images und pusht sie nach GHCR, z. B. `ghcr.io/timux/teamvault:latest`. Unlock-Key nie ins Image legen.
 
 ### 4.1 Client-Downloads (CLI & Extension)
 

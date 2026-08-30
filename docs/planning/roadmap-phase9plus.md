@@ -34,7 +34,7 @@ Client-Export (JSON/CSV) und Self-Service Passwort-Wechsel: umgesetzt (Findings-
 2. Sharing: Envelope pro User; Entzug ⇒ Rotation (Prinzip 7)
 3. Hybrid-Auth: LDAP nur Login-Bind; Rechte lokal
 4. Bootstrap: genau ein Unlock-Key; sealed Config
-5. Testabdeckung über Phasen; Docker + Gitea-CI + standalone `tvcli`
+5. Testabdeckung über Phasen; Docker + CI + standalone `tvcli`
 
 ---
 

@@ -59,12 +59,8 @@ Die laufende Version liefert `GET /api/version` bzw. `teamvault -version` (Build
 
 ## Schnellstart (Entwicklung)
 
-Firmennetz / Module: [`docs/dev-proxy.md`](docs/dev-proxy.md).
-
 ```powershell
 $env:Path = "C:\Program Files\Go\bin;" + $env:Path
-$env:GOPROXY = "http://127.0.0.1:18080"   # Corp-Proxy; sonst proxy.golang.org
-$env:GOSUMDB = "off"
 # Unlock-Keyfile ≥32 Byte Zufall
 $env:TEAMVAULT_MASTER_UNLOCK_KEY_FILE = ".\unlock.key"
 go test ./...
@@ -98,13 +94,13 @@ Dateien: `Dockerfile`, `docker-compose.yml`, `.dockerignore`. Persistenz: Volume
 
 Extension: Ordner `clients/extension` in Chrome/Edge (Entwicklermodus) laden — siehe [clients/README.md](clients/README.md).
 
-## CI (Gitea Actions)
+## CI (GitHub Actions)
 
-Ubuntu-Runner: Tests, `govulncheck`, Docker-Build, **Trivy-Image-Scan** (HIGH/CRITICAL), dann Package-Push.
+Workflow [`.github/workflows/docker.yml`](.github/workflows/docker.yml): Unit-Tests im Docker-Target `test`, danach Image-Build. Auf `main` und Tags `v*` wird nach **GHCR** gepusht.
 
-- Workflow: [`.gitea/workflows/ci.yml`](.gitea/workflows/ci.yml)  
-- Image z. B. `git.example.internal/cc-3.3/teamvault:latest`  
-- Optional: Secret `REGISTRY_TOKEN`, Vars `REGISTRY` / `GOPROXY` / `GOSUMDB`
+```bash
+docker pull ghcr.io/timux/teamvault:latest
+```
 
 ## Bootstrap-Unlock
 

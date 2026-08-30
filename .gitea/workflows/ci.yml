@@ -112,7 +112,8 @@ jobs:
           docker build \
             --pull=false \
             --target test \
-            --build-arg "BASE_REGISTRY=${BASE_REGISTRY}" \
+            --build-arg "GO_IMAGE=${BASE_REGISTRY}/golang:1.23.3-bookworm" \
+            --build-arg "RUNTIME_IMAGE=${BASE_REGISTRY}/distroless-static:nonroot" \
             -f Dockerfile \
             .
 
@@ -222,7 +223,8 @@ jobs:
           docker pull "${BASE_REGISTRY}/distroless-static:nonroot"
           docker build \
             --pull=false \
-            --build-arg "BASE_REGISTRY=${BASE_REGISTRY}" \
+            --build-arg "GO_IMAGE=${BASE_REGISTRY}/golang:1.23.3-bookworm" \
+            --build-arg "RUNTIME_IMAGE=${BASE_REGISTRY}/distroless-static:nonroot" \
             --build-arg "VERSION=${VER}" \
             --build-arg "COMMIT=${COMMIT}" \
             -t "${PRIMARY}" \

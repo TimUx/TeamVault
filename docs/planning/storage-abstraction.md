@@ -81,7 +81,7 @@ type VaultStore interface {
 
 Implementierungen: `sqlite.Store` (Phase 1 Default, `modernc.org/sqlite`), `jsonfile.Store` (Fallback), später `PostgresStore`.
 
-Modul-Download im Firmennetz: [`docs/dev-proxy.md`](../dev-proxy.md).
+Go-Module: Standard-`GOPROXY` (`https://proxy.golang.org,direct`).
 
 ---
 

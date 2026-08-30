@@ -15,7 +15,6 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        # Corp networks: point at a reachable module proxy, or leave default.
         GOPROXY: ${GOPROXY:-https://proxy.golang.org,direct}
         GOSUMDB: ${GOSUMDB:-sum.golang.org}
     image: teamvault:local

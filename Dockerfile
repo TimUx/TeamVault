@@ -1,35 +1,44 @@
 # TeamVault server — multi-stage, static Go binary (CGO_ENABLED=0, modernc sqlite).
 # Unlock key is never baked into the image; mount via TEAMVAULT_MASTER_UNLOCK_KEY_FILE.
 #
-# Base images come from the internal Gitea registry
-# (laptop: .\scripts\mirror-oci-to-gitea.ps1 — Windows proxy credentials).
-# Modules are vendored (vendor/).
+# Defaults: public golang + distroless (GitHub Actions / local Docker).
+# Air-gapped: override GO_IMAGE and RUNTIME_IMAGE to mirrored registry tags.
 
-ARG BASE_REGISTRY=git.example.internal/cc-3.3
-ARG GO_VERSION=1.23.3
+ARG GO_IMAGE=golang:1.23.3-bookworm
+ARG RUNTIME_IMAGE=gcr.io/distroless/static-debian12:nonroot
 
-FROM ${BASE_REGISTRY}/golang:${GO_VERSION}-bookworm AS build
+FROM ${GO_IMAGE} AS build
 WORKDIR /src
 
-ENV CGO_ENABLED=0 GOFLAGS=-mod=vendor
+ENV CGO_ENABLED=0
+ARG GOPROXY=https://proxy.golang.org,direct
+ARG GOSUMDB=sum.golang.org
+ENV GOPROXY=${GOPROXY} GOSUMDB=${GOSUMDB}
 
 COPY go.mod go.sum ./
-COPY vendor/ vendor/
 COPY . .
 
-# CI target: unit tests + vet (build with: docker build --target test …)
+# vendor/ is optional: internal clones may vendor for air-gap; GitHub uses the module proxy.
+RUN if [ -f vendor/modules.txt ]; then \
+      printf '%s\n' '-mod=vendor' > /tmp/goflags; \
+    else \
+      go mod download; \
+      : > /tmp/goflags; \
+    fi
+
 FROM build AS test
-RUN go test ./... && go vet ./...
+RUN export GOFLAGS="$(cat /tmp/goflags)"; go test ./... && go vet ./...
 
 FROM build AS bin
 ARG VERSION=dev
 ARG COMMIT=none
-RUN go build -trimpath \
+RUN export GOFLAGS="$(cat /tmp/goflags)"; \
+    go build -trimpath \
     -ldflags="-s -w -X github.com/teamvault/teamvault/internal/buildinfo.Version=${VERSION} -X github.com/teamvault/teamvault/internal/buildinfo.Commit=${COMMIT}" \
     -o /out/teamvault ./cmd/teamvault
 
-ARG BASE_REGISTRY=git.example.internal/cc-3.3
-FROM ${BASE_REGISTRY}/distroless-static:nonroot
+ARG RUNTIME_IMAGE=gcr.io/distroless/static-debian12:nonroot
+FROM ${RUNTIME_IMAGE}
 WORKDIR /data
 
 COPY --from=bin /out/teamvault /usr/local/bin/teamvault

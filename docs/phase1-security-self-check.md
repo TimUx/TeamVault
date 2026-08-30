@@ -15,6 +15,6 @@ Against the non-negotiable principles:
 | 9 | Onboarding gate | Flag `Initialized` / user `onboarded_at` prepared; UX Phase 3/4 |
 | 10 | Key recovery | Tenant fields `recovery_mode`, `escrow_allowed` stored; flows later |
 
-**Abweichungen:** Keine offenen Phase-1-Blocker. Modul-Download über lokalen Corp-GoProxy (`scripts/goproxy-corp.ps1`).
+**Abweichungen:** Keine offenen Phase-1-Blocker.
 
 **Betrieb:** `TEAMVAULT_MASTER_UNLOCK_KEY_FILE` bevorzugt; Env nur Dev.
