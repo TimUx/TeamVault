@@ -677,6 +677,7 @@ const vault = {
   })(),
   groups: [],
   totpTimer: null,
+  selectedIds: new Set(),
 };
 
 function isAdmin() {
@@ -876,6 +877,7 @@ function renderApp(app) {
           ${navLink("vault:shared", "share", "Geteilt mit mir")}
           ${navLink("vault:create", "plus", "Neu anlegen")}
           ${navLink("vault:import", "upload", "Import")}
+          ${navLink("vault:backup", "download", "Sicherung")}
         </div>
         <div class="sidebar-section">
           <div class="sidebar-section-title">Konto</div>
@@ -954,12 +956,21 @@ function renderApp(app) {
                   </div>
                 </div>
                 <div id="slist" class="list secrets-list"></div>
+                <div class="selection-bar" id="selBar">
+                  <label class="inline"><input type="checkbox" id="selAllVisible" /> Sichtbare</label>
+                  <span class="hint" id="selCount">0 ausgewählt</span>
+                  <button class="btn-ghost btn-sm" type="button" id="selClear">Auswahl aufheben</button>
+                  <button class="btn-ghost btn-sm" type="button" id="selAllLoaded">Alle geladenen</button>
+                </div>
                 <div class="row">
                   <button class="btn-ghost btn-with-ico" type="button" id="sMore" hidden>${btnLabel("chevron", "Mehr laden")}</button>
-                  <button class="btn-ghost btn-with-ico" type="button" id="sExportJson">${btnLabel("download", "Export JSON")}</button>
+                  <button class="btn-ghost btn-with-ico" type="button" id="sExportTv">${btnLabel("download", "Export TeamVault")}</button>
+                  <button class="btn-ghost btn-with-ico" type="button" id="sExportJson">${btnLabel("download", "Export Bitwarden")}</button>
                   <button class="btn-ghost btn-with-ico" type="button" id="sExportCsv">${btnLabel("download", "Export CSV")}</button>
+                  <button class="btn-ghost btn-with-ico" type="button" id="sExportBak">${btnLabel("lock", "Export verschlüsselt")}</button>
                   <span class="hint" id="sCount"></span>
                 </div>
+                <p class="hint">Export gilt für die Auswahl; ohne Auswahl die sichtbaren Einträge. Nur Secrets, die Sie entschlüsseln können.</p>
               </div>
               <div class="panel" id="sdetail" hidden>
                 <h1 id="dtitle">Secret</h1>
@@ -976,6 +987,7 @@ function renderApp(app) {
                   <button class="btn-ghost btn-with-ico" type="button" id="shareGroup" hidden>${btnLabel("users", "Gruppe teilen")}</button>
                   <button class="btn-ghost btn-with-ico" type="button" id="revoke">${btnLabel("rotate", "Zugriff entziehen + rotieren")}</button>
                   <button class="btn-danger btn-with-ico" type="button" id="sdel">${btnLabel("trash", "Löschen")}</button>
+                  <button class="btn-ghost btn-with-ico" type="button" id="sExportOne">${btnLabel("download", "Dieses Secret exportieren")}</button>
                 </div>
                 <div class="error" id="derr" hidden></div>
               </div>
@@ -1026,14 +1038,56 @@ function renderApp(app) {
 
             <div class="vault-section" data-vault="import">
               <div class="panel">
-                <p class="hint">Bitwarden-JSON, CSV oder KeePass-XML — Parsing und Verschlüsselung nur im Browser (Zero-Knowledge).</p>
-                <input id="simport" type="file" accept=".json,.csv,.xml,text/csv,application/json,text/xml" />
+                <p class="hint">Unterstützt: TeamVault JSON/.tvbak, Bitwarden JSON, KeePass XML, KeePassXC/Chrome/Firefox/LastPass/1Password-CSV, Proton Pass JSON, 1Password 1PUX (<code>export.data</code>). Parsing und Verschlüsselung nur im Browser.</p>
+                <input id="simport" type="file" accept=".json,.csv,.xml,.tvbak,text/csv,application/json,text/xml" />
+                <div id="simportPwWrap" hidden>
+                  <label>Backup-Passwort</label>
+                  <input id="simportPw" type="password" autocomplete="off" />
+                  <div class="row">
+                    <button class="btn-accent btn-with-ico" type="button" id="simportUnlock">${btnLabel("unlock", "Sicherung entsperren")}</button>
+                  </div>
+                </div>
+                <div id="simportPreviewWrap" hidden>
+                  <label class="inline"><input type="checkbox" id="simportAll" checked /> Alle Einträge</label>
+                  <span class="hint" id="simportCount"></span>
+                  <div class="import-preview-wrap">
+                    <table class="secrets-table" id="simportPreview">
+                      <thead><tr><th></th><th>Titel</th><th>Benutzer</th><th>URL</th><th>Ordner</th></tr></thead>
+                      <tbody></tbody>
+                    </table>
+                  </div>
+                </div>
                 <div class="row">
-                  <button class="btn-ghost btn-with-ico" type="button" id="simportRun" disabled>${btnLabel("upload", "Import starten")}</button>
+                  <button class="btn-ghost btn-with-ico" type="button" id="simportRun" disabled>${btnLabel("upload", "Auswahl importieren")}</button>
                   <span class="hint" id="simportHint"></span>
                 </div>
                 <div class="error" id="ierr" hidden></div>
                 <div class="ok" id="iok" hidden></div>
+              </div>
+            </div>
+
+            <div class="vault-section" data-vault="backup">
+              <div class="panel">
+                <h2>Verschlüsselte Sicherung</h2>
+                <p class="hint">Alle Secrets, die Sie entschlüsseln können, als <code>.tvbak</code> (Argon2id + AES-GCM). Der Server sieht den Klartext nicht. Backup-Passwort mindestens 12 Zeichen — getrennt vom Master-Passwort wählen.</p>
+                <label>Backup-Passwort</label>
+                <input id="bak_pw" type="password" autocomplete="new-password" />
+                <label>Wiederholen</label>
+                <input id="bak_pw2" type="password" autocomplete="new-password" />
+                <div class="row">
+                  <button class="btn-accent btn-with-ico" type="button" id="bak_create">${btnLabel("download", "Sicherung herunterladen")}</button>
+                </div>
+                <h2>Wiederherstellen</h2>
+                <p class="hint">TeamVault-Sicherung (<code>.tvbak</code>) oder Klartext-Export. Einträge werden als neue Secrets angelegt (kein Überschreiben bestehender IDs).</p>
+                <input id="bak_file" type="file" accept=".tvbak,.json,application/json" />
+                <label>Backup-Passwort (bei .tvbak)</label>
+                <input id="bak_restore_pw" type="password" autocomplete="off" />
+                <div class="row">
+                  <button class="btn-ghost btn-with-ico" type="button" id="bak_restore">${btnLabel("upload", "Wiederherstellen")}</button>
+                  <span class="hint" id="bak_hint"></span>
+                </div>
+                <div class="error" id="bak_err" hidden></div>
+                <div class="ok" id="bak_ok" hidden></div>
               </div>
             </div>
           </div>
@@ -1178,6 +1232,19 @@ function renderApp(app) {
                   <label>DSN / Pfad</label><input id="mig_dsn" placeholder="leer = data/vault-migrated.*" />
                   <label>Bestätigung</label><input id="mig_confirm" placeholder="MIGRATE" />
                   <div class="row"><button class="btn-danger" type="button" id="mig_go">Migrieren</button></div>
+                  <h2>Instanz-Backup / Restore</h2>
+                  <p class="hint">Snapshot enthält nur Ciphertext + Metadaten (Tenants, User, Gruppen, Secrets, Passkeys). Unlock-Keyfile und Recovery-Kits <strong>nicht</strong> in dieser Datei — separat sichern. Restore mit <code>RESTORE</code> ersetzt den gesamten Vault-Store. Danach neu anmelden, falls User-IDs abweichen.</p>
+                  <div class="row">
+                    <button class="btn-accent btn-with-ico" type="button" id="inst_bak_dl">${btnLabel("download", "Snapshot herunterladen")}</button>
+                  </div>
+                  <label>Snapshot-Datei</label>
+                  <input id="inst_bak_file" type="file" accept=".json,application/json" />
+                  <label>Bestätigung</label>
+                  <input id="inst_bak_confirm" placeholder="RESTORE" autocomplete="off" />
+                  <div class="row">
+                    <button class="btn-danger" type="button" id="inst_bak_restore">Wiederherstellen</button>
+                  </div>
+                  <div class="ok" id="inst_bak_ok" hidden></div>
                 </div>
               </div>
               <div class="admin-section" data-admin-section="audit">
@@ -1204,6 +1271,7 @@ function renderApp(app) {
     "vault:shared": "Geteilt mit mir",
     "vault:create": "Neu anlegen",
     "vault:import": "Import",
+    "vault:backup": "Sicherung",
     account: "Konto",
     "admin:users": "Benutzer",
     "admin:groups": "Gruppen",
@@ -1446,9 +1514,17 @@ function renderApp(app) {
     } catch (e) { err.hidden = false; err.textContent = e.message; }
   };
 
-  async function collectDecryptedExportItems() {
+  async function ensureAllSecretsLoaded() {
+    while (vault.secretsCache.length < vault.secretsTotal) {
+      await refreshSecrets(false);
+    }
+  }
+
+  async function collectDecryptedExportItems(ids) {
+    const want = ids && ids.length ? new Set(ids) : null;
     const items = [];
     for (const it of vault.secretsCache) {
+      if (want && !want.has(it.id)) continue;
       if (!it.has_access || !it.envelope) continue;
       try {
         const dk = openDKFromEnvelope(it.envelope);
@@ -1460,12 +1536,13 @@ function renderApp(app) {
         );
         const det = await api("/api/secrets/" + it.id);
         const ddk = openDKFromEnvelope(det.envelope);
-        const payload = JSON.parse(await TVCrypto.decryptPayload(
+        const pt = await TVCrypto.decryptPayload(
           TVCrypto.b64dec(det.ciphertext_b64),
           TVCrypto.b64dec(det.nonce_b64),
           ddk, det.key_version || kv
-        ));
+        );
         ddk.fill(0); dk.fill(0);
+        const payload = normalizeSecretPayload(JSON.parse(new TextDecoder().decode(pt)));
         items.push({ title, payload, collection_id: it.collection_id || "" });
       } catch (_) { /* skip undecryptable */ }
     }
@@ -1481,40 +1558,98 @@ function renderApp(app) {
     URL.revokeObjectURL(a.href);
   }
 
-  n.querySelector("#sExportJson").onclick = async () => {
-    if (!confirm("Klartext-Export als JSON speichern? Die Datei enthält Passwörter im Klartext — sicher ablegen und danach löschen.")) return;
+  function selectedExportIds() {
+    const visible = filterVisibleSecrets();
+    if (vault.selectedIds.size) {
+      return visible.filter((it) => vault.selectedIds.has(it.id) && it.has_access).map((it) => it.id);
+    }
+    return visible.filter((it) => it.has_access).map((it) => it.id);
+  }
+
+  function confirmPlainExport(kind, count) {
+    const scope = vault.selectedIds.size ? `${count} ausgewählte` : `${count} sichtbare`;
+    return confirm(
+      `Klartext-Export (${kind}) von ${scope} Secrets speichern? Die Datei enthält Passwörter im Klartext — sicher ablegen und danach löschen.`
+    );
+  }
+
+  async function runPlainExport(format) {
     try {
-      const items = await collectDecryptedExportItems();
-      const bw = {
-        encrypted: false,
-        items: items.map((it) => ({
-          type: 1,
-          name: it.title,
-          folderId: it.collection_id || null,
-          login: {
-            username: it.payload.username || "",
-            password: it.payload.password || "",
-            totp: it.payload.totp || null,
-            uris: (it.payload.urls || (it.payload.url ? [it.payload.url] : [])).map((u) => ({ uri: u })),
-          },
-          notes: (it.payload.extra || []).filter((e) => e.type === "notes").map((e) => e.value).join("\n") || "",
-        })),
-      };
-      downloadBlob("teamvault-export.json", JSON.stringify(bw, null, 2), "application/json");
+      if (!window.TVVaultIO) throw new Error("Export-Modul nicht geladen");
+      const ids = selectedExportIds();
+      if (!ids.length) throw new Error("Keine Secrets zum Export");
+      const label = format === "csv" ? "CSV" : format === "bitwarden" ? "Bitwarden-JSON" : "TeamVault-JSON";
+      if (!confirmPlainExport(label, ids.length)) return;
+      const items = await collectDecryptedExportItems(ids);
+      if (format === "csv") {
+        downloadBlob("teamvault-export.csv", TVVaultIO.toCSV(items), "text/csv");
+      } else if (format === "bitwarden") {
+        downloadBlob("teamvault-export.json", JSON.stringify(TVVaultIO.toBitwardenJSON(items), null, 2), "application/json");
+      } else {
+        downloadBlob("teamvault-export.json", JSON.stringify(TVVaultIO.toTeamVaultJSON(items), null, 2), "application/json");
+      }
+    } catch (e) { alert(e.message); }
+  }
+
+  async function runEncryptedExport(ids) {
+    const pw = prompt("Backup-Passwort (mind. 12 Zeichen). Die Datei ist ohne dieses Passwort wertlos.");
+    if (pw == null) return;
+    if (pw.length < 12) throw new Error("Backup-Passwort mindestens 12 Zeichen");
+    const items = await collectDecryptedExportItems(ids);
+    if (!items.length) throw new Error("Keine Secrets zum Export");
+    const wrapped = await TVVaultIO.wrapBackup(TVVaultIO.toTeamVaultJSON(items), pw, vault.params || {});
+    downloadBlob("teamvault-backup.tvbak", JSON.stringify(wrapped, null, 2), "application/json");
+  }
+
+  n.querySelector("#sExportTv").onclick = () => runPlainExport("teamvault");
+  n.querySelector("#sExportJson").onclick = () => runPlainExport("bitwarden");
+  n.querySelector("#sExportCsv").onclick = () => runPlainExport("csv");
+  n.querySelector("#sExportBak").onclick = async () => {
+    try {
+      const ids = selectedExportIds();
+      if (!ids.length) throw new Error("Keine Secrets zum Export");
+      if (!confirm(`Verschlüsselte Sicherung von ${ids.length} Secrets erzeugen?`)) return;
+      await runEncryptedExport(ids);
     } catch (e) { alert(e.message); }
   };
-  n.querySelector("#sExportCsv").onclick = async () => {
-    if (!confirm("Klartext-Export als CSV speichern? Die Datei enthält Passwörter im Klartext — sicher ablegen und danach löschen.")) return;
+
+  function updateSelectionBar() {
+    const visible = filterVisibleSecrets();
+    const nSel = visible.filter((it) => vault.selectedIds.has(it.id)).length;
+    const countEl = n.querySelector("#selCount");
+    if (countEl) countEl.textContent = nSel + " ausgewählt";
+    const all = n.querySelector("#selAllVisible");
+    if (all) all.checked = visible.length > 0 && nSel === visible.length;
+  }
+
+  function bindSecretCheckbox(cb, id) {
+    cb.checked = vault.selectedIds.has(id);
+    cb.onchange = () => {
+      if (cb.checked) vault.selectedIds.add(id);
+      else vault.selectedIds.delete(id);
+      updateSelectionBar();
+    };
+  }
+
+  n.querySelector("#selAllVisible").onchange = () => {
+    const on = n.querySelector("#selAllVisible").checked;
+    for (const it of filterVisibleSecrets()) {
+      if (on) vault.selectedIds.add(it.id);
+      else vault.selectedIds.delete(it.id);
+    }
+    paintSecretList();
+  };
+  n.querySelector("#selClear").onclick = () => {
+    vault.selectedIds.clear();
+    paintSecretList();
+  };
+  n.querySelector("#selAllLoaded").onclick = async () => {
     try {
-      const items = await collectDecryptedExportItems();
-      const esc = (s) => `"${String(s ?? "").replace(/"/g, '""')}"`;
-      const lines = ["title,username,password,url,folder,notes"];
-      for (const it of items) {
-        const url = (it.payload.urls && it.payload.urls[0]) || it.payload.url || "";
-        const notes = (it.payload.extra || []).filter((e) => e.type === "notes").map((e) => e.value).join(" ");
-        lines.push([it.title, it.payload.username, it.payload.password, url, it.collection_id, notes].map(esc).join(","));
+      await ensureAllSecretsLoaded();
+      for (const it of vault.secretsCache) {
+        if (it.has_access) vault.selectedIds.add(it.id);
       }
-      downloadBlob("teamvault-export.csv", lines.join("\n"), "text/csv");
+      paintSecretList();
     } catch (e) { alert(e.message); }
   };
 
@@ -1789,21 +1924,79 @@ function renderApp(app) {
   };
 
   let importPending = [];
+  let importEncryptedRaw = null;
+
+  function resetImportUi() {
+    importPending = [];
+    importEncryptedRaw = null;
+    n.querySelector("#simportRun").disabled = true;
+    n.querySelector("#simportPreviewWrap").hidden = true;
+    n.querySelector("#simportPwWrap").hidden = true;
+    n.querySelector("#simportHint").textContent = "";
+    n.querySelector("#simportPreview tbody").innerHTML = "";
+  }
+
+  function renderImportPreview(items) {
+    const wrap = n.querySelector("#simportPreviewWrap");
+    const tbody = n.querySelector("#simportPreview tbody");
+    tbody.innerHTML = "";
+    items.forEach((it, i) => {
+      const tr = el(`<tr>
+        <td><input type="checkbox" class="imp-check" checked data-i="${i}" /></td>
+        <td></td><td></td><td class="muted"></td><td class="muted"></td>
+      </tr>`);
+      tr.children[1].textContent = it.title || "Import";
+      tr.children[2].textContent = it.username || "—";
+      tr.children[3].textContent = it.url || (it.urls && it.urls[0]) || "—";
+      tr.children[4].textContent = it.collection_id || "—";
+      tbody.appendChild(tr);
+    });
+    wrap.hidden = items.length === 0;
+    n.querySelector("#simportAll").checked = true;
+    n.querySelector("#simportCount").textContent = items.length + " Einträge";
+    n.querySelector("#simportRun").disabled = items.length === 0;
+  }
+
+  n.querySelector("#simportAll").onchange = () => {
+    const on = n.querySelector("#simportAll").checked;
+    n.querySelectorAll(".imp-check").forEach((cb) => { cb.checked = on; });
+  };
+
   n.querySelector("#simport").onchange = async () => {
     const err = n.querySelector("#ierr"); err.hidden = true;
     n.querySelector("#iok").hidden = true;
-    importPending = [];
-    n.querySelector("#simportRun").disabled = true;
+    resetImportUi();
     const file = n.querySelector("#simport").files?.[0];
     if (!file) return;
     try {
       if (!window.TVImport) throw new Error("Import-Modul nicht geladen");
       const text = await file.text();
       const parsed = TVImport.detectAndParse(file.name, text);
-      importPending = parsed.items;
+      if (parsed.encrypted) {
+        importEncryptedRaw = parsed.raw;
+        n.querySelector("#simportPwWrap").hidden = false;
+        n.querySelector("#simportHint").textContent = "Verschlüsselte Sicherung — Passwort eingeben";
+        return;
+      }
+      importPending = parsed.items || [];
       n.querySelector("#simportHint").textContent =
-        `${parsed.format}: ${importPending.length} Einträge bereit`;
-      n.querySelector("#simportRun").disabled = importPending.length === 0;
+        `${parsed.format}: ${importPending.length} Einträge erkannt`;
+      renderImportPreview(importPending);
+    } catch (e) {
+      err.hidden = false; err.textContent = e.message;
+    }
+  };
+
+  n.querySelector("#simportUnlock").onclick = async () => {
+    const err = n.querySelector("#ierr"); err.hidden = true;
+    try {
+      if (!importEncryptedRaw) throw new Error("Keine Sicherung geladen");
+      const pw = n.querySelector("#simportPw").value;
+      const data = await TVVaultIO.unwrapBackup(importEncryptedRaw, pw);
+      importPending = (data.items || []).map((it) => TVImport.normalizeItem(it));
+      n.querySelector("#simportPwWrap").hidden = true;
+      n.querySelector("#simportHint").textContent = `teamvault-backup: ${importPending.length} Einträge`;
+      renderImportPreview(importPending);
     } catch (e) {
       err.hidden = false; err.textContent = e.message;
     }
@@ -1833,56 +2026,111 @@ function renderApp(app) {
     await api("/api/secrets", { method: "POST", body: JSON.stringify(body) });
   }
 
+  async function importNormalizedItems(items, hintEl, okEl, errEl) {
+    errEl.hidden = true;
+    okEl.hidden = true;
+    if (!items.length) return;
+    let done = 0;
+    let failed = 0;
+    if (!vault.sk) throw new Error("Vault gesperrt");
+    for (const it of items) {
+      if (hintEl) hintEl.textContent = `Importiere ${done + 1}/${items.length}…`;
+      try {
+        await postEncryptedSecret(
+          it.title,
+          normalizeSecretPayload({
+            username: it.username || "",
+            password: it.password || "",
+            notes: it.notes || "",
+            url: it.url || "",
+            urls: it.urls || [],
+            totp_seed: it.totp_seed || "",
+            tags: it.tags || [],
+            favorite: !!it.favorite,
+            extra: it.extra || [],
+          }),
+          it.collection_id || ""
+        );
+        done++;
+      } catch {
+        failed++;
+      }
+      it.password = "";
+      it.totp_seed = "";
+      it.notes = "";
+    }
+    if (hintEl) hintEl.textContent = "";
+    okEl.hidden = false;
+    okEl.textContent = failed
+      ? `${done} importiert, ${failed} fehlgeschlagen`
+      : `${done} Einträge importiert`;
+    await refreshSecrets(true);
+  }
+
   n.querySelector("#simportRun").onclick = async () => {
     const err = n.querySelector("#ierr");
     const ok = n.querySelector("#iok");
-    err.hidden = true;
-    ok.hidden = true;
-    if (!importPending.length) return;
-    const items = importPending.slice();
-    importPending = [];
-    n.querySelector("#simportRun").disabled = true;
-    let done = 0;
-    let failed = 0;
-    const hint = n.querySelector("#simportHint");
     try {
-      if (!vault.sk) throw new Error("Vault gesperrt");
-      for (const it of items) {
-        hint.textContent = `Importiere ${done + 1}/${items.length}…`;
-        try {
-          await postEncryptedSecret(
-            it.title,
-            normalizeSecretPayload({
-              username: it.username || "",
-              password: it.password || "",
-              notes: it.notes || "",
-              url: it.url || "",
-              urls: it.urls || [],
-              totp_seed: it.totp_seed || "",
-              tags: it.tags || [],
-              favorite: !!it.favorite,
-              extra: it.extra || [],
-            }),
-            it.collection_id || ""
-          );
-          done++;
-        } catch {
-          failed++;
-        }
-        it.password = "";
-        it.totp_seed = "";
-        it.notes = "";
-      }
-      hint.textContent = "";
+      const checks = [...n.querySelectorAll(".imp-check")];
+      const items = checks.length
+        ? checks.filter((cb) => cb.checked).map((cb) => importPending[Number(cb.dataset.i)]).filter(Boolean)
+        : importPending.slice();
+      if (!items.length) throw new Error("Keine Einträge ausgewählt");
+      n.querySelector("#simportRun").disabled = true;
+      await importNormalizedItems(items, n.querySelector("#simportHint"), ok, err);
       n.querySelector("#simport").value = "";
-      ok.hidden = false;
-      ok.textContent = failed
-        ? `${done} importiert, ${failed} fehlgeschlagen`
-        : `${done} Einträge importiert`;
-      await refreshSecrets(true);
+      resetImportUi();
     } catch (e) {
       err.hidden = false;
       err.textContent = e.message;
+      n.querySelector("#simportRun").disabled = importPending.length === 0;
+    }
+  };
+
+  n.querySelector("#bak_create").onclick = async () => {
+    const err = n.querySelector("#bak_err");
+    const ok = n.querySelector("#bak_ok");
+    err.hidden = true; ok.hidden = true;
+    try {
+      const pw = n.querySelector("#bak_pw").value;
+      const pw2 = n.querySelector("#bak_pw2").value;
+      if (pw !== pw2) throw new Error("Passwörter stimmen nicht überein");
+      await ensureAllSecretsLoaded();
+      const ids = vault.secretsCache.filter((it) => it.has_access).map((it) => it.id);
+      if (!ids.length) throw new Error("Keine Secrets zum Sichern");
+      const items = await collectDecryptedExportItems(ids);
+      const wrapped = await TVVaultIO.wrapBackup(TVVaultIO.toTeamVaultJSON(items), pw, vault.params || {});
+      downloadBlob("teamvault-backup.tvbak", JSON.stringify(wrapped, null, 2), "application/json");
+      n.querySelector("#bak_pw").value = "";
+      n.querySelector("#bak_pw2").value = "";
+      ok.hidden = false;
+      ok.textContent = `${items.length} Secrets gesichert (verschlüsselt). Datei und Passwort getrennt aufbewahren.`;
+    } catch (e) {
+      err.hidden = false; err.textContent = e.message;
+    }
+  };
+
+  n.querySelector("#bak_restore").onclick = async () => {
+    const err = n.querySelector("#bak_err");
+    const ok = n.querySelector("#bak_ok");
+    const hint = n.querySelector("#bak_hint");
+    err.hidden = true; ok.hidden = true;
+    try {
+      const file = n.querySelector("#bak_file").files?.[0];
+      if (!file) throw new Error("Datei wählen");
+      const parsed = TVImport.detectAndParse(file.name, await file.text());
+      let items = parsed.items || [];
+      if (parsed.encrypted) {
+        const data = await TVVaultIO.unwrapBackup(parsed.raw, n.querySelector("#bak_restore_pw").value);
+        items = (data.items || []).map((it) => TVImport.normalizeItem(it));
+      }
+      if (!items.length) throw new Error("Keine Einträge in der Datei");
+      if (!confirm(`${items.length} Secrets wiederherstellen? Bestehende Einträge bleiben erhalten.`)) return;
+      await importNormalizedItems(items, hint, ok, err);
+      n.querySelector("#bak_file").value = "";
+      n.querySelector("#bak_restore_pw").value = "";
+    } catch (e) {
+      err.hidden = false; err.textContent = e.message;
     }
   };
 
@@ -1987,11 +2235,12 @@ function renderApp(app) {
       list.innerHTML = `<p class="hint">${empty}</p>`;
     } else if (vault.viewMode === "table") {
       const table = el(`<table class="secrets-table"><thead><tr>
-        <th>Titel</th><th>Ordner</th><th>Benutzer</th><th>Tags</th><th></th><th></th>
+        <th class="st-check"></th><th>Titel</th><th>Ordner</th><th>Benutzer</th><th>Tags</th><th></th><th></th>
       </tr></thead><tbody></tbody></table>`);
       const tbody = table.querySelector("tbody");
       for (const it of visible) {
         const tr = el(`<tr>
+          <td class="st-check"><input type="checkbox" class="sec-check" ${it.has_access ? "" : "disabled"} /></td>
           <td class="st-title"></td>
           <td class="st-folder muted">${escHtml(it.collection_id || "—")}</td>
           <td class="st-user">${escHtml(it._username || "—")}</td>
@@ -1999,6 +2248,7 @@ function renderApp(app) {
           <td class="st-fav">${it._favorite ? icon("star", "fav-ico") : ""}</td>
           <td class="st-act"><button type="button" class="btn-ghost btn-with-ico btn-sm">${btnLabel("open", "Öffnen")}</button></td>
         </tr>`);
+        bindSecretCheckbox(tr.querySelector(".sec-check"), it.id);
         const titleCell = tr.querySelector(".st-title");
         titleCell.appendChild(document.createTextNode(secretTitleLabel(it)));
         const tagsCell = tr.querySelector(".st-tags");
@@ -2016,6 +2266,7 @@ function renderApp(app) {
       for (const it of visible) {
         const tile = el(`<article class="secret-tile">
           <div class="secret-tile-head">
+            <input type="checkbox" class="sec-check" ${it.has_access ? "" : "disabled"} />
             <span class="list-row-ico" aria-hidden="true">${icon("key")}</span>
             ${it._favorite ? `<span class="fav-mark" title="Favorit">${icon("star", "fav-ico")}</span>` : ""}
           </div>
@@ -2024,6 +2275,7 @@ function renderApp(app) {
           <div class="secret-tile-tags"></div>
           <button type="button" class="btn-ghost btn-with-ico btn-sm">${btnLabel("open", "Öffnen")}</button>
         </article>`);
+        bindSecretCheckbox(tile.querySelector(".sec-check"), it.id);
         tile.querySelector(".secret-tile-title").textContent = secretTitleLabel(it);
         const bits = [];
         if (it.collection_id) bits.push(it.collection_id);
@@ -2040,8 +2292,13 @@ function renderApp(app) {
       list.appendChild(grid);
     } else {
       for (const it of visible) {
-        const row = el(`<div class="list-row"><span class="list-row-main"></span><button class="btn-ghost btn-with-ico" type="button">${btnLabel("open", "Öffnen")}</button></div>`);
-        const span = row.querySelector("span");
+        const row = el(`<div class="list-row">
+          <input type="checkbox" class="sec-check" ${it.has_access ? "" : "disabled"} />
+          <span class="list-row-main"></span>
+          <button class="btn-ghost btn-with-ico" type="button">${btnLabel("open", "Öffnen")}</button>
+        </div>`);
+        bindSecretCheckbox(row.querySelector(".sec-check"), it.id);
+        const span = row.querySelector(".list-row-main");
         const lead = `<span class="list-row-ico" aria-hidden="true">${icon(it.has_access ? "key" : "lock")}</span>`;
         span.innerHTML = lead;
         span.appendChild(document.createTextNode(
@@ -2056,6 +2313,7 @@ function renderApp(app) {
     n.querySelector("#sCount").textContent =
       `${visible.length} ${scopeLabel} · ${vault.secretsCache.length} geladen · ${vault.secretsTotal} gesamt`;
     n.querySelector("#sMore").hidden = vault.secretsCache.length >= vault.secretsTotal;
+    updateSelectionBar();
   }
 
   async function decryptListTitles(items) {
@@ -2361,6 +2619,30 @@ function renderApp(app) {
     } catch (e) {
       err.hidden = false; err.textContent = e.message;
     }
+  };
+
+  n.querySelector("#sExportOne").onclick = async () => {
+    if (!currentSecret) return;
+    try {
+      const fmt = (prompt("Format: json, bitwarden, csv oder backup", "json") || "").trim().toLowerCase();
+      if (!fmt) return;
+      const ids = [currentSecret.id];
+      if (fmt === "backup") {
+        await runEncryptedExport(ids);
+        return;
+      }
+      if (!["json", "bitwarden", "csv"].includes(fmt)) throw new Error("Unbekanntes Format");
+      if (!confirmPlainExport(fmt, 1)) return;
+      const items = await collectDecryptedExportItems(ids);
+      if (!items.length) throw new Error("Secret nicht entschlüsselbar");
+      if (fmt === "csv") {
+        downloadBlob("teamvault-secret.csv", TVVaultIO.toCSV(items), "text/csv");
+      } else if (fmt === "bitwarden") {
+        downloadBlob("teamvault-secret.json", JSON.stringify(TVVaultIO.toBitwardenJSON(items), null, 2), "application/json");
+      } else {
+        downloadBlob("teamvault-secret.json", JSON.stringify(TVVaultIO.toTeamVaultJSON(items), null, 2), "application/json");
+      }
+    } catch (e) { alert(e.message); }
   };
 
   n.querySelector("#sdel").onclick = async () => {
@@ -2736,6 +3018,38 @@ function renderApp(app) {
       err.hidden = false; err.style.color = "var(--color-ok)";
       err.textContent = "Migration OK → " + JSON.stringify(res.storage);
       await refreshAdmin();
+    } catch (e) { err.hidden = false; err.style.color = ""; err.textContent = e.message; }
+  };
+  n.querySelector("#inst_bak_dl").onclick = async () => {
+    const err = n.querySelector("#aerr"); err.hidden = true;
+    try {
+      const res = await fetch("/api/admin/backup", { credentials: "same-origin" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || res.statusText);
+      downloadBlob("teamvault-instance-backup.json", JSON.stringify(data, null, 2), "application/json");
+      const ok = n.querySelector("#inst_bak_ok");
+      ok.hidden = false;
+      ok.textContent = "Snapshot heruntergeladen (nur Ciphertext). Unlock-Keyfile separat sichern.";
+    } catch (e) { err.hidden = false; err.style.color = ""; err.textContent = e.message; }
+  };
+  n.querySelector("#inst_bak_restore").onclick = async () => {
+    const err = n.querySelector("#aerr"); err.hidden = true;
+    const ok = n.querySelector("#inst_bak_ok"); ok.hidden = true;
+    try {
+      const file = n.querySelector("#inst_bak_file").files?.[0];
+      if (!file) throw new Error("Snapshot-Datei wählen");
+      const confirm = n.querySelector("#inst_bak_confirm").value.trim();
+      const text = await file.text();
+      const res = await fetch("/api/admin/backup/restore?confirm=" + encodeURIComponent(confirm), {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: text,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || res.statusText);
+      ok.hidden = false;
+      ok.textContent = "Restore OK (" + (data.exported_at || "") + "). Bei Abweichungen neu anmelden.";
     } catch (e) { err.hidden = false; err.style.color = ""; err.textContent = e.message; }
   };
 }

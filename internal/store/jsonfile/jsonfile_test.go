@@ -131,6 +131,44 @@ func TestHealthAndAudit(t *testing.T) {
 	}
 }
 
+func TestFullInstanceSnapshotIncludesGroups(t *testing.T) {
+	s := openTestStore(t)
+	defer s.Close()
+	ctx := context.Background()
+	tid := store.TenantID("tenant-a")
+	if err := s.PutTenant(ctx, store.Tenant{
+		ID: tid, Name: "A", Slug: "a", RecoveryMode: "user_kit", Status: "active",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	uid := store.UserID("user-1")
+	if err := s.UpsertUser(ctx, store.UserRecord{
+		ID: uid, TenantID: tid, Username: "alice", AuthBackend: "local", Status: "active",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	gid := store.GroupID("grp-1")
+	if err := s.PutGroup(ctx, store.Group{ID: gid, TenantID: tid, Name: "ops"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.AddGroupMember(ctx, store.GroupMember{TenantID: tid, GroupID: gid, UserID: uid}); err != nil {
+		t.Fatal(err)
+	}
+	snap, err := s.ExportSnapshot(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dst := openTestStore(t)
+	defer dst.Close()
+	if err := dst.ImportSnapshot(ctx, *snap, store.ImportReplace); err != nil {
+		t.Fatal(err)
+	}
+	groups, err := dst.ListGroups(ctx, tid)
+	if err != nil || len(groups) != 1 || groups[0].Name != "ops" {
+		t.Fatalf("groups: %v %+v", err, groups)
+	}
+}
+
 func openTestStore(t *testing.T) *jsonfile.Store {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "vault.json")

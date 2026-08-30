@@ -192,6 +192,34 @@ button {
   display: flex; justify-content: space-between; align-items: center; gap: 0.75rem;
   padding: 0.55rem 0; border-bottom: 1px solid var(--color-border);
 }
+.list-row .sec-check,
+.secret-tile .sec-check,
+.secrets-table .sec-check {
+  width: auto;
+  min-height: 1.25rem;
+  flex: 0 0 auto;
+  margin: 0;
+}
+.list-row .list-row-main { flex: 1; min-width: 0; }
+.selection-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem 1rem;
+  margin: 0.65rem 0 0;
+  padding: 0.45rem 0;
+  border-top: 1px solid var(--color-border);
+}
+.selection-bar .inline { margin-top: 0; }
+.import-preview-wrap {
+  overflow: auto;
+  max-height: 22rem;
+  margin-top: 0.65rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+.import-preview-wrap .secrets-table { min-width: 28rem; margin-top: 0; }
+.secrets-table .st-check { width: 2rem; }
 .panel + .panel { margin-top: 1rem; }
 textarea { resize: vertical; min-height: 4rem; }
 

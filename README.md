@@ -9,11 +9,11 @@ Secrets und Titel werden nur im Browser entschlüsselt — Server und Storage se
 
 | Bereich | Funktionen |
 |---------|------------|
-| **Vault** | Secrets anlegen/öffnen (Titel, User, Passwort, Extra-Felder, TOTP), Suche/Ordner, Import/Export |
+| **Vault** | Secrets anlegen/öffnen (Titel, User, Passwort, Extra-Felder, TOTP), Suche/Ordner, Import aus anderen Tools, Export einzeln/mehrere/alle, verschlüsselte Sicherung |
 | **Sharing** | Pro berechtigtem User eigener Datenschlüssel (asymmetrisch); Entzug mit Pflicht-Rotation |
 | **Auth** | Lokales Login immer; optional LDAP/AD nur für Bind; TOTP; Passkeys (nur Login); Self-Service Passwort-Wechsel |
 | **Onboarding** | Erzwungenes Master-Passwort + Schlüsselpaar; Recovery-Kit oder Admin-Escrow (Shamir) |
-| **Admin** | User/Gruppen, LDAP, SMTP, Krypto/Policy, Audit, API-Keys (`read`/`vault`/`admin`), Tenants, Storage-Migration |
+| **Admin** | User/Gruppen, LDAP, SMTP, Krypto/Policy, Audit, API-Keys (`read`/`vault`/`admin`), Tenants, Storage-Migration, Instanz-Backup/Restore |
 | **Clients** | Web-UI, CLI (`tvcli`), Browser-Extension (Chrome/Edge/Firefox; Fill/Copy mit Host-Gate) |
 
 ![Vault mit Sidebar und Secrets](docs/images/vault-secrets.png)

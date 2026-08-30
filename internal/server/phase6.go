@@ -40,6 +40,8 @@ func (a *API) registerPhase6(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/admin/api-keys/{id}/revoke", a.requireAuth(a.requireAdmin(a.handleRevokeAPIKey)))
 	mux.HandleFunc("GET /api/admin/storage", a.requireAuth(a.requirePlatformAdmin(a.handleGetStorage)))
 	mux.HandleFunc("POST /api/admin/storage/migrate", a.requireAuth(a.requirePlatformAdmin(a.handleMigrateStorage)))
+	mux.HandleFunc("GET /api/admin/backup", a.requireAuth(a.requirePlatformAdmin(a.handleBackupExport)))
+	mux.HandleFunc("POST /api/admin/backup/restore", a.requireAuth(a.requirePlatformAdmin(a.handleBackupRestore)))
 	mux.HandleFunc("GET /api/admin/tenant/settings", a.requireAuth(a.requireAdmin(a.handleGetTenantSettings)))
 	mux.HandleFunc("GET /api/vault/escrow-pubkey", a.requireAuth(a.handleEscrowPubKeyGet))
 }

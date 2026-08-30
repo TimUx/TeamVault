@@ -67,7 +67,8 @@ Unterkante der Topbar: dezenter Accent-Streifen (2px), kein Multi-Color-Gradient
 - Linke Sidebar (~240px), Sektionen Vault (Meine Secrets / Geteilt mit mir / Neu / Import) / Konto / Administration  
 - Sticky Topbar mit Seitentitel, Theme-Toggle als Icon (Sonne/Mond)  
 - Flache Inline-SVG-Icons in Sidebar und Primäraktionen (kein Icon-CDN, Air-Gap)  
-- Secrets-Ansicht: Liste / Tabelle / Kacheln (`tv-secrets-view` in localStorage)  
+- Secrets-Ansicht: Liste / Tabelle / Kacheln (`tv-secrets-view` in localStorage); Mehrfachauswahl für Export  
+- Sidebar Vault: Meine Secrets / Geteilt mit mir / Neu / Import / Sicherung  
 - Mobile: Drawer + Backdrop  
 - Radius `--radius: 6px`; Font `"IBM Plex Sans", "Segoe UI", system-ui` (kein CDN, Air-Gap)  
 - Setup/Login bleiben zentrierte Panels ohne Sidebar  

@@ -191,14 +191,23 @@ $env:TEAMVAULT_URL='https://vault.example'; irm "$env:TEAMVAULT_URL/help/install
 
 | Was | Hinweis |
 |-----|---------|
-| Datenverzeichnis / Volume | Enthält nur Ciphertext + Metadaten |
+| **Instanz-Snapshot** (Admin-UI) | Platform-Admin: *Tenants & Migration* → Snapshot herunterladen. Nur Ciphertext + Metadaten. Restore mit Bestätigung `RESTORE` ersetzt den Vault-Store. |
+| Datenverzeichnis / Volume | Alternative: Datei-Kopie von SQLite/JSON + Config; enthält nur Ciphertext + Metadaten |
 | Unlock-Keyfile | Separat, streng schützen — ohne Key keine Config |
+| User-`.tvbak` | Clientseitige verschlüsselte Secrets-Sicherung (User-Guide); kein Ersatz für Instanz-Backup |
 | Escrow-Shares / User-Recovery-Kits | Offline, nie zusammen mit Unlock-Key lagern |
 
-### 5.1 Backup-/Restore-Drill (kurz)
+### 5.1 Backup über die Admin-UI
 
-1. Instanz stoppen; Volume/`TEAMVAULT_DATA_DIR` und Unlock-Keyfile sichern.
-2. Auf Testsystem wiederherstellen; gleichen Unlock-Key mounten; starten.
+1. Als `platform_admin` anmelden, Vault entsperren.
+2. **Tenants & Migration → Snapshot herunterladen** (`GET /api/admin/backup`).
+3. Unlock-Keyfile und User-Recovery-Kits **nicht** in derselben Ablage wie den Snapshot.
+4. Restore: Snapshot-Datei wählen, `RESTORE` tippen → **Wiederherstellen**. Danach Login prüfen.
+
+### 5.2 Backup-/Restore-Drill (kurz)
+
+1. Instanz stoppen; Volume/`TEAMVAULT_DATA_DIR` und Unlock-Keyfile sichern — **oder** Snapshot aus der Admin-UI plus Unlock-Keyfile.
+2. Auf Testsystem wiederherstellen; gleichen Unlock-Key mounten; starten (bei UI-Restore: laufende Instanz, Confirm `RESTORE`).
 3. Login + Vault-Unlock prüfen — Klartext nur clientseitig.
 4. Erfolg dokumentieren; Prod-Backup-Rhythmus festlegen.
 

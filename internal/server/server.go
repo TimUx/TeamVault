@@ -130,6 +130,7 @@ func (a *API) Handler() http.Handler {
 	mux.Handle("GET /styles.css", web.Handler())
 	mux.Handle("GET /app.js", web.Handler())
 	mux.Handle("GET /import-parse.js", web.Handler())
+	mux.Handle("GET /vault-io.js", web.Handler())
 	mux.Handle("GET /cryptocore.js", web.Handler())
 	mux.Handle("GET /index.html", web.Handler())
 	return a.withSecurity(mux)

@@ -91,6 +91,77 @@ func TestTenantIsolationAndOpaqueRoundTrip(t *testing.T) {
 	})
 }
 
+func TestFullInstanceSnapshotIncludesAllTenants(t *testing.T) {
+	s := open(t)
+	defer s.Close()
+	ctx := context.Background()
+	tid := store.TenantID("tenant-a")
+	if err := s.PutTenant(ctx, store.Tenant{
+		ID: tid, Name: "A", Slug: "a", RecoveryMode: "user_kit", Status: "active",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	uid := store.UserID("user-1")
+	if err := s.UpsertUser(ctx, store.UserRecord{
+		ID: uid, TenantID: tid, Username: "alice", AuthBackend: "local", Status: "active",
+		RolesJSON: `["member"]`,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	gid := store.GroupID("grp-1")
+	if err := s.PutGroup(ctx, store.Group{ID: gid, TenantID: tid, Name: "ops"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.AddGroupMember(ctx, store.GroupMember{TenantID: tid, GroupID: gid, UserID: uid}); err != nil {
+		t.Fatal(err)
+	}
+	sid := store.SecretID("sec-full")
+	if err := s.PutSecretMeta(ctx, store.SecretMeta{
+		ID: sid, TenantID: tid, TitleCiphertext: []byte{1}, TitleNonce: []byte{2}, CreatedBy: uid,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.PutSecretCiphertext(ctx, tid, sid, store.CiphertextBlob{
+		Ciphertext: []byte{3}, Nonce: []byte{4}, KeyVersion: 1,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.PutKeyEnvelope(ctx, store.KeyEnvelope{
+		SecretID: sid, TenantID: tid, UserID: uid, KeyVersion: 1, WrappedDK: []byte{5, 6},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	snap, err := s.ExportSnapshot(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snap.TenantFilter != nil {
+		t.Fatal("full snapshot must not set tenant_filter")
+	}
+	dst := open(t)
+	defer dst.Close()
+	if err := dst.ImportSnapshot(ctx, *snap, store.ImportReplace); err != nil {
+		t.Fatal(err)
+	}
+	u, err := dst.GetUser(ctx, tid, uid)
+	if err != nil || u.Username != "alice" {
+		t.Fatalf("user: %v %+v", err, u)
+	}
+	groups, err := dst.ListGroups(ctx, tid)
+	if err != nil || len(groups) != 1 || groups[0].Name != "ops" {
+		t.Fatalf("groups: %v %+v", err, groups)
+	}
+	members, err := dst.ListGroupMembers(ctx, tid, gid)
+	if err != nil || len(members) != 1 || members[0] != uid {
+		t.Fatalf("members: %v %+v", err, members)
+	}
+	meta, err := dst.GetSecretMeta(ctx, tid, sid)
+	if err != nil || !bytes.Equal(meta.TitleCiphertext, []byte{1}) {
+		t.Fatalf("secret: %v %+v", err, meta)
+	}
+}
+
 func open(t *testing.T) *sqlite.Store {
 	t.Helper()
 	s, err := sqlite.Open(filepath.Join(t.TempDir(), "t.db"))

@@ -754,55 +754,26 @@ func (s *Store) Health(_ context.Context) (store.Health, error) {
 	return store.Health{Backend: "json", OK: true, Detail: "ok"}, nil
 }
 
-type snapRecords struct {
-	Tenants []store.Tenant     `json:"tenants"`
-	Users   []store.UserRecord `json:"users"`
-	Secrets []struct {
-		Meta store.SecretMeta      `json:"meta"`
-		Blob *store.CiphertextBlob `json:"blob,omitempty"`
-		Envs []store.KeyEnvelope   `json:"envelopes"`
-	} `json:"secrets"`
-}
-
 func (s *Store) ExportSnapshot(_ context.Context, tenant *store.TenantID) (*store.StoreSnapshot, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	var rec snapRecords
+	var rec store.SnapshotRecords
+	var tids []store.TenantID
 	if tenant != nil {
 		if err := requireTenant(*tenant); err != nil {
 			return nil, err
 		}
-		t, ok := s.data.Tenants[string(*tenant)]
-		if !ok {
+		if _, ok := s.data.Tenants[string(*tenant)]; !ok {
 			return nil, store.ErrNotFound
 		}
-		rec.Tenants = []store.Tenant{t}
-		for _, u := range s.data.Users {
-			if u.TenantID == *tenant {
-				rec.Users = append(rec.Users, u)
-			}
+		tids = []store.TenantID{*tenant}
+	} else {
+		for id := range s.data.Tenants {
+			tids = append(tids, store.TenantID(id))
 		}
-		for _, meta := range s.data.Secrets {
-			if meta.TenantID != *tenant {
-				continue
-			}
-			var blobPtr *store.CiphertextBlob
-			if b, ok := s.data.Blobs[secretKey(meta.TenantID, meta.ID)]; ok {
-				bb := b
-				blobPtr = &bb
-			}
-			var envs []store.KeyEnvelope
-			for _, e := range s.data.Envelopes {
-				if e.TenantID == meta.TenantID && e.SecretID == meta.ID && !e.Revoked {
-					envs = append(envs, e.KeyEnvelope)
-				}
-			}
-			rec.Secrets = append(rec.Secrets, struct {
-				Meta store.SecretMeta      `json:"meta"`
-				Blob *store.CiphertextBlob `json:"blob,omitempty"`
-				Envs []store.KeyEnvelope   `json:"envelopes"`
-			}{Meta: meta, Blob: blobPtr, Envs: envs})
-		}
+	}
+	for _, tid := range tids {
+		s.appendTenantSnapshotLocked(&rec, tid)
 	}
 	raw, err := json.Marshal(rec)
 	if err != nil {
@@ -818,44 +789,128 @@ func (s *Store) ExportSnapshot(_ context.Context, tenant *store.TenantID) (*stor
 	}, nil
 }
 
+func (s *Store) appendTenantSnapshotLocked(rec *store.SnapshotRecords, tid store.TenantID) {
+	t := s.data.Tenants[string(tid)]
+	rec.Tenants = append(rec.Tenants, t)
+	for _, u := range s.data.Users {
+		if u.TenantID == tid {
+			rec.Users = append(rec.Users, u)
+		}
+	}
+	for _, g := range s.data.Groups {
+		if g.TenantID == tid {
+			rec.Groups = append(rec.Groups, g)
+		}
+	}
+	for _, m := range s.data.Members {
+		if m.TenantID == tid {
+			rec.Members = append(rec.Members, m)
+		}
+	}
+	for _, c := range s.data.WebAuthn {
+		if c.TenantID == tid {
+			rec.WebAuthn = append(rec.WebAuthn, c)
+		}
+	}
+	for _, meta := range s.data.Secrets {
+		if meta.TenantID != tid {
+			continue
+		}
+		var blobPtr *store.CiphertextBlob
+		if b, ok := s.data.Blobs[secretKey(meta.TenantID, meta.ID)]; ok {
+			bb := b
+			blobPtr = &bb
+		}
+		var envs []store.KeyEnvelope
+		for _, e := range s.data.Envelopes {
+			if e.TenantID == meta.TenantID && e.SecretID == meta.ID && !e.Revoked {
+				envs = append(envs, e.KeyEnvelope)
+			}
+		}
+		rec.Secrets = append(rec.Secrets, store.SnapshotSecret{Meta: meta, Blob: blobPtr, Envs: envs})
+	}
+}
+
+func (s *Store) wipeTenantLocked(tid store.TenantID) {
+	delete(s.data.Tenants, string(tid))
+	for k, u := range s.data.Users {
+		if u.TenantID == tid {
+			delete(s.data.Users, k)
+		}
+	}
+	for k, meta := range s.data.Secrets {
+		if meta.TenantID == tid {
+			delete(s.data.Secrets, k)
+			delete(s.data.Blobs, k)
+		}
+	}
+	var envs []envelopeRec
+	for _, e := range s.data.Envelopes {
+		if e.TenantID != tid {
+			envs = append(envs, e)
+		}
+	}
+	s.data.Envelopes = envs
+	for k, g := range s.data.Groups {
+		if g.TenantID == tid {
+			delete(s.data.Groups, k)
+		}
+	}
+	var mem []store.GroupMember
+	for _, m := range s.data.Members {
+		if m.TenantID != tid {
+			mem = append(mem, m)
+		}
+	}
+	s.data.Members = mem
+	var wa []store.WebAuthnCredential
+	for _, c := range s.data.WebAuthn {
+		if c.TenantID != tid {
+			wa = append(wa, c)
+		}
+	}
+	s.data.WebAuthn = wa
+	var audit []store.AuditEvent
+	for _, e := range s.data.Audit {
+		if e.TenantID != tid {
+			audit = append(audit, e)
+		}
+	}
+	s.data.Audit = audit
+}
+
 func (s *Store) ImportSnapshot(_ context.Context, snap store.StoreSnapshot, mode store.ImportMode) error {
 	sum := sha256.Sum256(snap.Records)
 	if hex.EncodeToString(sum[:]) != snap.ChecksumSHA256 {
 		return errors.New("snapshot checksum mismatch")
 	}
-	var rec snapRecords
+	var rec store.SnapshotRecords
 	if err := json.Unmarshal(snap.Records, &rec); err != nil {
 		return err
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if mode == store.ImportReplace && snap.TenantFilter != nil {
-		tid := *snap.TenantFilter
-		delete(s.data.Tenants, string(tid))
-		for k, u := range s.data.Users {
-			if u.TenantID == tid {
-				delete(s.data.Users, k)
-			}
+	if mode == store.ImportReplace {
+		if snap.TenantFilter != nil {
+			s.wipeTenantLocked(*snap.TenantFilter)
+		} else {
+			s.data = empty()
 		}
-		for k, meta := range s.data.Secrets {
-			if meta.TenantID == tid {
-				delete(s.data.Secrets, k)
-				delete(s.data.Blobs, k)
-			}
-		}
-		var envs []envelopeRec
-		for _, e := range s.data.Envelopes {
-			if e.TenantID != tid {
-				envs = append(envs, e)
-			}
-		}
-		s.data.Envelopes = envs
 	}
 	for _, t := range rec.Tenants {
 		s.data.Tenants[string(t.ID)] = t
 	}
 	for _, u := range rec.Users {
 		s.data.Users[userKey(u.TenantID, u.ID)] = u
+	}
+	for _, g := range rec.Groups {
+		s.data.Groups[groupKey(g.TenantID, g.ID)] = g
+	}
+	for _, m := range rec.Members {
+		s.data.Members = append(s.data.Members, m)
+	}
+	for _, c := range rec.WebAuthn {
+		s.data.WebAuthn = append(s.data.WebAuthn, c)
 	}
 	for _, sec := range rec.Secrets {
 		s.data.Secrets[secretKey(sec.Meta.TenantID, sec.Meta.ID)] = sec.Meta

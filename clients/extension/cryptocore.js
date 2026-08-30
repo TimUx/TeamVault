@@ -161,6 +161,28 @@
     };
   }
 
+  async function wrapWithPassword(plaintextU8, password, params) {
+    const salt = nacl.randomBytes(16);
+    const key = await argon2id(password, salt, params || {});
+    try {
+      const enc = await encryptPayload(plaintextU8, key, 1);
+      return { salt, nonce: enc.nonce, ciphertext: enc.ciphertext };
+    } finally {
+      key.fill(0);
+    }
+  }
+
+  async function unwrapWithPassword(ciphertextU8, nonce, salt, password, params) {
+    const key = await argon2id(password, salt, params || {});
+    try {
+      return await decryptPayload(ciphertextU8, nonce, key, 1);
+    } catch {
+      throw new Error("wrong backup password");
+    } finally {
+      key.fill(0);
+    }
+  }
+
   function generateBoxKeyPair() {
     return nacl.box.keyPair();
   }
@@ -183,5 +205,7 @@
     sealDataKeyForRecipient,
     openDataKeyEnvelope,
     envelopeToAPI,
+    wrapWithPassword,
+    unwrapWithPassword,
   };
 })(window);

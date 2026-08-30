@@ -126,15 +126,38 @@ Mehrfach **Website (URL)** hinzufügen. Import aus Bitwarden übernimmt alle `ur
 
 ### Import
 
-Sidebar **Import**: Bitwarden-JSON, CSV oder KeePass-XML wählen. Parsing und Verschlüsselung laufen nur im Browser; der Server sieht nur Ciphertext.
+Sidebar **Import**: Datei wählen. Unterstützte Formate:
+
+- TeamVault JSON / verschlüsselte `.tvbak`
+- Bitwarden JSON (Login-Einträge)
+- KeePass XML, KeePassXC-CSV
+- Chrome/Edge- und Firefox-CSV
+- LastPass-CSV, 1Password-CSV, 1Password 1PUX (`export.data`)
+- Proton Pass JSON
+- generisches CSV (`title,username,password,url,…`)
+
+Nach dem Parsen erscheint eine **Vorschau** — einzelne, mehrere oder alle Einträge anhaken, dann **Auswahl importieren**. Verschlüsselte `.tvbak` erst mit Backup-Passwort entsperren. Parsing und Verschlüsselung laufen nur im Browser; der Server sieht nur Ciphertext.
 
 ![Import](images/vault-import.png)
 
 ### Export
 
-Unter der Secrets-Liste: **Export JSON** (Bitwarden-Login-Subset, unverschlüsselt lokal) oder **Export CSV** — mit Bestätigung, weil Klartext auf Disk landet. Es werden nur Einträge exportiert, die Sie entschlüsseln können — der Server sieht den Klartext nicht.
+In der Secrets-Liste Einträge per Checkbox wählen (eines, mehrere, oder **Alle geladenen**). Ohne Auswahl gelten die **sichtbaren** Einträge (aktueller Ordner/Suche).
+
+- **Export TeamVault** — vollständiges JSON inkl. Extra-Felder
+- **Export Bitwarden** — Login-Subset, unverschlüsselt
+- **Export CSV** — Klartext
+- **Export verschlüsselt** — `.tvbak` mit eigenem Backup-Passwort (Argon2id)
+
+Im Secret-Detail: **Dieses Secret exportieren**. Bestätigung, weil Klartext auf Disk landet (außer `.tvbak`). Es werden nur Einträge exportiert, die Sie entschlüsseln können — der Server sieht den Klartext nicht.
 
 ![Export-Buttons](images/vault-export.png)
+
+### Sicherung (Backup / Restore)
+
+Sidebar **Sicherung**: alle für Sie entschlüsselbaren Secrets als verschlüsselte `.tvbak` herunterladen. Wiederherstellen legt die Einträge **neu** an (bestehende bleiben). Backup-Passwort mindestens 12 Zeichen, getrennt vom Master-Passwort und Unlock-Key aufbewahren.
+
+Instanz-weites Ciphertext-Backup (Tenants, User, Secrets): siehe [Admin Guide](admin-guide.md#5-backup).
 
 ### Zugriff entziehen
 

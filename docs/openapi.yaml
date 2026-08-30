@@ -375,6 +375,22 @@ paths:
       responses:
         '200':
           description: New storage config
+  /api/admin/backup:
+    get:
+      tags: [admin]
+      summary: Download ciphertext vault snapshot (platform_admin)
+      responses:
+        '200':
+          description: StoreSnapshot JSON (no plaintext secrets)
+  /api/admin/backup/restore:
+    post:
+      tags: [admin]
+      summary: Replace vault store from snapshot; confirm=RESTORE
+      responses:
+        '200':
+          description: Restore applied
+        '400':
+          description: confirm missing or snapshot invalid
   /api/webauthn/register/begin:
     post:
       tags: [auth]
