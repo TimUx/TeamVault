@@ -102,7 +102,7 @@ set -a; source .env; set +a
 | Pfad | Docker | Go |
 |------|--------|-----|
 | Installationsverzeichnis | `docker-compose.yml`, `.env`, `secrets/` | `bin/teamvault`, `.env`, `secrets/`, `data/` |
-| `secrets/teamvault_unlock` | Unlock-Keyfile (chmod 600) — **separat sichern** | gleich |
+| `secrets/teamvault_unlock` | Unlock-Keyfile — **separat sichern**. Docker: Datei `644`, Verzeichnis `700` (Container = nonroot). Go: `600` reicht |
 | `.env` | Ports, Image-Tag, Keyfile-Pfad | Ports, `TEAMVAULT_ADDR`, Data-Dir |
 | Persistenz | Docker-Volume `teamvault_data` | `./data/` |
 
@@ -114,9 +114,9 @@ Für Docker ist eine `.env` sinnvoll: Compose liest sie automatisch (Port, Image
 
 ```bash
 cp .env.example .env
-mkdir -p secrets
+mkdir -m 700 -p secrets
 openssl rand -out secrets/teamvault_unlock 48
-chmod 600 secrets/teamvault_unlock
+chmod 644 secrets/teamvault_unlock   # Container läuft als nonroot; secrets/ bleibt 700
 docker compose pull && docker compose up -d
 ```
 
@@ -159,7 +159,9 @@ CI-Tags (Workflow `.github/workflows/docker.yml`):
 git clone https://github.com/TimUx/TeamVault.git
 cd TeamVault
 cp .env.example .env
-mkdir -p secrets && openssl rand -out secrets/teamvault_unlock 48
+mkdir -p secrets
+openssl rand -out secrets/teamvault_unlock 48
+chmod 644 secrets/teamvault_unlock   # Docker nonroot; secrets/ auf 700 halten
 docker compose pull && docker compose up -d   # GHCR: ghcr.io/timux/teamvault:latest
 # optional SemVer: TEAMVAULT_IMAGE=ghcr.io/timux/teamvault:1.1.1
 # lokaler Build: docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
@@ -185,6 +187,7 @@ go build -o bin/teamvault ./cmd/teamvault
 |---------|--------|
 | `missing unlock key` | Keyfile existiert? Pfad in `.env` / Compose-Mount korrekt? |
 | Port belegt | One-Liner wählt automatisch den nächsten freien Port ab 8080; Pin: `TEAMVAULT_PORT=…` |
+| `permission denied` auf Unlock-Key | Container = nonroot: `chmod 700 secrets && chmod 644 secrets/teamvault_unlock` |
 | GHCR-Pull fehlgeschlagen | `docker login ghcr.io`; Package öffentlich/sichtbar? Sonst `TEAMVAULT_BUILD=1` / `docker-compose.build.yml` |
 | Go zu alt | Go 1.23+ von [go.dev/dl](https://go.dev/dl/) |
 | Setup erscheint erneut | Anderes Data-Dir oder anderes Unlock-Keyfile |

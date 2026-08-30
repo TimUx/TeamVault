@@ -179,6 +179,15 @@ if (-not (Test-Path $KeyFull)) {
 } else {
   Write-Host "==> Unlock-Keyfile vorhanden — belasse unverändert."
 }
+# Linux container UID 65532 must read the bind mount. On WSL paths, fix mode; on
+# native Windows mounts Docker Desktop usually maps the file as world-readable.
+if (Get-Command wsl -ErrorAction SilentlyContinue) {
+  $wslPath = (wsl wslpath -a $KeyFull 2>$null)
+  if ($wslPath) {
+    wsl chmod 700 (Split-Path $wslPath -Parent) 2>$null
+    wsl chmod 644 $wslPath 2>$null
+  }
+}
 
 if (-not (Test-Path ".env")) {
   Write-Host "==> Schreibe .env …"

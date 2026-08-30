@@ -52,9 +52,9 @@ Der Unlock-Key entsperrt nur die Config-DB. Vault-Secrets bleiben Zero-Knowledge
 
 ```bash
 cp .env.example .env
-mkdir -p secrets
+mkdir -m 700 -p secrets
 openssl rand -out secrets/teamvault_unlock 48
-chmod 600 secrets/teamvault_unlock
+chmod 644 secrets/teamvault_unlock   # Image = nonroot (UID 65532); Verzeichnis bleibt 700
 # .env enthält z. B.:
 #   TEAMVAULT_UNLOCK_KEY_HOST=./secrets/teamvault_unlock
 #   TEAMVAULT_PUBLISH_PORT=8080
@@ -293,6 +293,7 @@ Sessions, Login-Rate-Limits und Passkey-Challenges liegen **im Prozessspeicher**
 |---------|--------|
 | Start schlägt fehl „missing unlock key“ | `TEAMVAULT_MASTER_UNLOCK_KEY_FILE` / Compose-Mount `TEAMVAULT_UNLOCK_KEY_HOST` gesetzt und lesbar? |
 | Setup erscheint erneut | Falsches Data-Dir/Volume oder anderes Unlock-Keyfile? |
+| Start schlägt fehl „permission denied“ Unlock-Key | Datei von Container-UID lesbar? `chmod 700 secrets && chmod 644 secrets/teamvault_unlock` (Image = nonroot) |
 | GHCR-Pull fehlgeschlagen | `docker login ghcr.io`; Image `ghcr.io/timux/teamvault` sichtbar? Sonst lokal bauen (`docker-compose.build.yml`) |
 | LDAP-Login fehl | Test-Bind; Filter; User lokal nicht disabled |
 | Passkey funktioniert nicht | HTTPS, RP-ID, Browser-Support |

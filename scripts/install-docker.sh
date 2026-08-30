@@ -136,15 +136,29 @@ fetch_raw() {
   mv "${out}.tmp" "$out"
 }
 
+# Keyfile must be readable by container user (distroless nonroot = UID 65532).
+# Keep secrets/ at 700 so other host users cannot traverse to the file.
 rand_key() {
-  local out="$1"
-  mkdir -p "$(dirname "$out")"
+  local out="$1" dir
+  dir="$(dirname "$out")"
+  mkdir -m 700 -p "$dir"
+  chmod 700 "$dir"
   if command -v openssl >/dev/null 2>&1; then
     openssl rand -out "$out" 48
   else
     head -c 48 /dev/urandom >"$out"
   fi
-  chmod 600 "$out"
+  chmod 644 "$out"
+}
+
+# Repair perms if an older install left the key at 600 (restart loop).
+ensure_key_readable() {
+  local out="$1" dir
+  dir="$(dirname "$out")"
+  [[ -d "$dir" ]] && chmod 700 "$dir"
+  if [[ -f "$out" ]]; then
+    chmod 644 "$out"
+  fi
 }
 
 # Full source tree only when building the image locally.
@@ -209,7 +223,8 @@ if [[ ! -f "$KEY_HOST" ]]; then
   rand_key "$KEY_HOST"
   echo "    WICHTIG: Keyfile getrennt sichern — ohne Key keine Config."
 else
-  echo "==> Unlock-Keyfile vorhanden — belasse unverändert."
+  echo "==> Unlock-Keyfile vorhanden — stelle Container-Leserechte sicher."
+  ensure_key_readable "$KEY_HOST"
 fi
 
 if [[ ! -f .env ]]; then
