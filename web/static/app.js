@@ -131,10 +131,25 @@ function ensureHeaderControls() {
 
 function formatAboutLine(info) {
   const product = (info && info.product) || "TeamVault";
-  const version = (info && info.version) || "dev";
-  const commit = info && info.commit && info.commit !== "none" ? ` (${info.commit})` : "";
+  let version = String((info && info.version) || "dev");
+  const commit = info && info.commit && info.commit !== "none" ? String(info.commit) : "";
   const developer = (info && info.developer) || "Timo Braun";
-  return `${product} ${version}${commit} · Entwickler: ${developer}`;
+  const semver = version.match(/^v?(\d+\.\d+\.\d+)/);
+  if (semver) {
+    version = "v" + semver[1];
+  } else if (commit && version !== "dev") {
+    version = version + " (" + commit.slice(0, 7) + ")";
+  }
+  return `${product} ${version} · Entwickler: ${developer}`;
+}
+
+function formatSessionInfo(me) {
+  if (!me) return "";
+  const tenant = me.tenant_name || me.tenant_slug || me.tenant_id || "";
+  let line = `Angemeldet als ${me.username}`;
+  if (tenant) line += ` · ${tenant}`;
+  if (me.totp_enabled) line += " · TOTP aktiv";
+  return line;
 }
 
 let aboutCache = null;
@@ -452,9 +467,13 @@ function renderLogin(app) {
   const n = el(`<div class="panel">
     <h1>Login</h1>
     <p class="lead">Login-Passwort oder Passkey. Zum Entschlüsseln des Vaults brauchen Sie weiterhin Ihr Master-Passwort.</p>
-    <label>Tenant-Slug</label><input id="slug" />
-    <label>Username</label><input id="user" />
-    <label>Passwort</label><input id="pw" type="password" />
+    <label>Organisation</label>
+    <select id="slug" autocomplete="organization" disabled>
+      <option value="">Lade Organisationen…</option>
+    </select>
+    <p class="hint">Bestehende Mandanten — Auswahl für diesen Login.</p>
+    <label>Username</label><input id="user" autocomplete="username" />
+    <label>Passwort</label><input id="pw" type="password" autocomplete="current-password" />
     <label>TOTP (falls aktiv)</label><input id="totp" inputmode="numeric" autocomplete="one-time-code" />
     <div class="error" id="err" hidden></div>
     <div class="row">
@@ -462,19 +481,47 @@ function renderLogin(app) {
       <button class="btn-ghost" type="button" id="doPasskey">Passkey</button>
     </div>
   </div>`);
+  const slugSel = n.querySelector("#slug");
+  (async () => {
+    try {
+      const tenants = await api("/api/auth/tenants");
+      slugSel.innerHTML = "";
+      if (!tenants.length) {
+        slugSel.innerHTML = '<option value="">Keine Organisation vorhanden</option>';
+        return;
+      }
+      let saved = "";
+      try { saved = localStorage.getItem("tv-tenant-slug") || ""; } catch (_) {}
+      tenants.sort((a, b) => a.name.localeCompare(b.name, "de"));
+      for (const t of tenants) {
+        const o = document.createElement("option");
+        o.value = t.slug;
+        o.textContent = t.name === t.slug ? t.name : `${t.name} (${t.slug})`;
+        slugSel.appendChild(o);
+      }
+      slugSel.disabled = false;
+      if (saved && tenants.some((t) => t.slug === saved)) slugSel.value = saved;
+      else if (tenants.length === 1) slugSel.value = tenants[0].slug;
+    } catch (_) {
+      slugSel.innerHTML = '<option value="">Organisationen konnten nicht geladen werden</option>';
+    }
+  })();
   n.querySelector("#doLogin").onclick = async () => {
     const err = n.querySelector("#err");
     err.hidden = true;
     try {
+      const tenantSlug = slugSel.value.trim();
+      if (!tenantSlug) throw new Error("Bitte Organisation wählen");
       const res = await api("/api/auth/login", {
         method: "POST",
         body: JSON.stringify({
-          tenant_slug: n.querySelector("#slug").value.trim(),
+          tenant_slug: tenantSlug,
           username: n.querySelector("#user").value.trim(),
           password: n.querySelector("#pw").value,
           totp_code: n.querySelector("#totp").value.trim(),
         }),
       });
+      try { localStorage.setItem("tv-tenant-slug", tenantSlug); } catch (_) {}
       location.href = res.needs_vault_onboard ? "/onboard" : "/app";
     } catch (e) {
       err.hidden = false; err.textContent = e.message;
@@ -490,7 +537,8 @@ function renderLogin(app) {
     err.hidden = true;
     try {
       if (!window.PublicKeyCredential) throw new Error("Passkeys werden von diesem Browser nicht unterstützt");
-      const tenant = n.querySelector("#slug").value.trim();
+      const tenant = slugSel.value.trim();
+      if (!tenant) throw new Error("Bitte Organisation wählen");
       const username = n.querySelector("#user").value.trim();
       const begin = await api("/api/webauthn/login/begin", {
         method: "POST",
@@ -509,6 +557,7 @@ function renderLogin(app) {
           totp_code: n.querySelector("#totp").value.trim(),
         }),
       });
+      try { localStorage.setItem("tv-tenant-slug", tenant); } catch (_) {}
       location.href = res.needs_vault_onboard ? "/onboard" : "/app";
     } catch (e) {
       err.hidden = false; err.textContent = e.message;
@@ -673,7 +722,7 @@ const vault = {
       const v = localStorage.getItem("tv-secrets-view");
       if (v === "table" || v === "tiles" || v === "list") return v;
     } catch (_) {}
-    return "list";
+    return "table";
   })(),
   groups: [],
   totpTimer: null,
@@ -936,60 +985,86 @@ function renderApp(app) {
         <div id="vaultui" hidden>
           <div class="app-tab active" data-pane="vault">
             <div class="vault-section active" data-vault="secrets">
-              <div class="panel">
-                <div class="toolbar">
-                  <div>
-                    <label><span class="label-with-ico">${icon("search", "label-ico")} Suche</span></label>
-                    <input id="ssearch" type="search" placeholder="Titel, Ordner…" />
-                  </div>
-                  <div>
-                    <label><span class="label-with-ico">${icon("folder", "label-ico")} Ordner</span></label>
-                    <select id="sfolder"><option value="">Alle</option></select>
-                  </div>
-                  <div class="secrets-view-wrap">
-                    <label>Ansicht</label>
-                    <div class="secrets-view-toggle" role="group" aria-label="Ansicht">
-                      <button type="button" class="btn-icon" data-view="list" title="Liste" aria-label="Liste">${icon("layoutList")}</button>
-                      <button type="button" class="btn-icon" data-view="table" title="Tabelle" aria-label="Tabelle">${icon("layoutTable")}</button>
-                      <button type="button" class="btn-icon" data-view="tiles" title="Kacheln" aria-label="Kacheln">${icon("layoutGrid")}</button>
+              <div class="secrets-workspace">
+                <div class="panel vault-chrome">
+                  <div class="toolbar toolbar-compact">
+                    <div>
+                      <label><span class="label-with-ico">${icon("search", "label-ico")} Suche</span></label>
+                      <input id="ssearch" type="search" placeholder="Titel, Ordner, Benutzer, Tags…" />
+                    </div>
+                    <div>
+                      <label><span class="label-with-ico">${icon("folder", "label-ico")} Ordner</span></label>
+                      <select id="sfolder"><option value="">Alle</option></select>
+                    </div>
+                    <div class="secrets-view-wrap">
+                      <label>Ansicht</label>
+                      <div class="secrets-view-toggle" role="group" aria-label="Ansicht">
+                        <button type="button" class="btn-icon" data-view="list" title="Liste" aria-label="Liste">${icon("layoutList")}</button>
+                        <button type="button" class="btn-icon" data-view="table" title="Tabelle" aria-label="Tabelle">${icon("layoutTable")}</button>
+                        <button type="button" class="btn-icon" data-view="tiles" title="Kacheln" aria-label="Kacheln">${icon("layoutGrid")}</button>
+                      </div>
                     </div>
                   </div>
+                  <div class="selection-bar selection-bar-compact" id="selBar">
+                    <label class="inline"><input type="checkbox" id="selAllVisible" /> Sichtbare</label>
+                    <span class="hint" id="selCount">0 ausgewählt</span>
+                    <button class="btn-ghost btn-sm" type="button" id="selClear">Auswahl aufheben</button>
+                    <button class="btn-ghost btn-sm" type="button" id="selAllLoaded">Alle geladenen</button>
+                    <span class="hint" id="sCount"></span>
+                  </div>
+                  <div class="row row-compact">
+                    <button class="btn-ghost btn-sm btn-with-ico" type="button" id="sMore" hidden>${btnLabel("chevron", "Mehr laden")}</button>
+                    <button class="btn-ghost btn-sm btn-with-ico" type="button" id="sExportTv">${btnLabel("download", "Export TeamVault")}</button>
+                    <button class="btn-ghost btn-sm btn-with-ico" type="button" id="sExportJson">${btnLabel("download", "Export Bitwarden")}</button>
+                    <button class="btn-ghost btn-sm btn-with-ico" type="button" id="sExportCsv">${btnLabel("download", "Export CSV")}</button>
+                    <button class="btn-ghost btn-sm btn-with-ico" type="button" id="sExportBak">${btnLabel("lock", "Export verschlüsselt")}</button>
+                  </div>
                 </div>
-                <div id="slist" class="list secrets-list"></div>
-                <div class="selection-bar" id="selBar">
-                  <label class="inline"><input type="checkbox" id="selAllVisible" /> Sichtbare</label>
-                  <span class="hint" id="selCount">0 ausgewählt</span>
-                  <button class="btn-ghost btn-sm" type="button" id="selClear">Auswahl aufheben</button>
-                  <button class="btn-ghost btn-sm" type="button" id="selAllLoaded">Alle geladenen</button>
+                <div class="panel secrets-stage">
+                  <div id="slist" class="list secrets-list"></div>
                 </div>
-                <div class="row">
-                  <button class="btn-ghost btn-with-ico" type="button" id="sMore" hidden>${btnLabel("chevron", "Mehr laden")}</button>
-                  <button class="btn-ghost btn-with-ico" type="button" id="sExportTv">${btnLabel("download", "Export TeamVault")}</button>
-                  <button class="btn-ghost btn-with-ico" type="button" id="sExportJson">${btnLabel("download", "Export Bitwarden")}</button>
-                  <button class="btn-ghost btn-with-ico" type="button" id="sExportCsv">${btnLabel("download", "Export CSV")}</button>
-                  <button class="btn-ghost btn-with-ico" type="button" id="sExportBak">${btnLabel("lock", "Export verschlüsselt")}</button>
-                  <span class="hint" id="sCount"></span>
-                </div>
-                <p class="hint">Export gilt für die Auswahl; ohne Auswahl die sichtbaren Einträge. Nur Secrets, die Sie entschlüsseln können.</p>
               </div>
-              <div class="panel" id="sdetail" hidden>
-                <h1 id="dtitle">Secret</h1>
-                <div id="dfields" class="secret-fields"></div>
-                <p class="hint" id="drec"></p>
-                <label>Teilen mit User</label>
-                <select id="shareto"></select>
-                <div id="gshareWrap" hidden>
-                  <label>Gruppe teilen</label>
-                  <select id="sharegroup"><option value="">— Gruppe wählen —</option></select>
+              <div class="secret-modal" id="sdetail" hidden role="dialog" aria-modal="true" aria-labelledby="dtitle">
+                <div class="secret-modal-backdrop" id="sdetailBackdrop"></div>
+                <div class="secret-modal-panel panel">
+                  <div class="secret-modal-head">
+                    <h1 id="dtitle">Secret</h1>
+                    <div class="row row-compact">
+                      <button class="btn-accent btn-sm btn-with-ico" type="button" id="dedit">${btnLabel("save", "Bearbeiten")}</button>
+                      <button class="btn-ghost btn-sm" type="button" id="sdetailClose">Schließen</button>
+                    </div>
+                  </div>
+                  <div id="dview">
+                    <div id="dfields" class="secret-fields"></div>
+                    <p class="hint" id="drec"></p>
+                    <label>Teilen mit User</label>
+                    <select id="shareto"></select>
+                    <div id="gshareWrap" hidden>
+                      <label>Gruppe teilen</label>
+                      <select id="sharegroup"><option value="">— Gruppe wählen —</option></select>
+                    </div>
+                    <div class="row row-compact">
+                      <button class="btn-accent btn-sm btn-with-ico" type="button" id="share">${btnLabel("share", "Teilen")}</button>
+                      <button class="btn-ghost btn-sm btn-with-ico" type="button" id="shareGroup" hidden>${btnLabel("users", "Gruppe teilen")}</button>
+                      <button class="btn-ghost btn-sm btn-with-ico" type="button" id="revoke">${btnLabel("rotate", "Zugriff entziehen + rotieren")}</button>
+                      <button class="btn-danger btn-sm btn-with-ico" type="button" id="sdel">${btnLabel("trash", "Löschen")}</button>
+                      <button class="btn-ghost btn-sm btn-with-ico" type="button" id="sExportOne">${btnLabel("download", "Export")}</button>
+                    </div>
+                  </div>
+                  <div id="deditForm" hidden>
+                    <label>Titel</label><input id="edtitle" />
+                    <label>Ordner</label><input id="edfolder" list="folderList" />
+                    <label>Benutzername</label><input id="eduser" autocomplete="off" />
+                    <label>Passwort</label><input id="edpw" type="password" autocomplete="off" />
+                    <label>Tags (Komma)</label><input id="edtags" />
+                    <label>Notizen</label><textarea id="ednotes" rows="3"></textarea>
+                    <div class="row row-compact">
+                      <button class="btn-accent btn-sm" type="button" id="dsave">Speichern</button>
+                      <button class="btn-ghost btn-sm" type="button" id="dcancel">Abbrechen</button>
+                    </div>
+                  </div>
+                  <div class="error" id="derr" hidden></div>
                 </div>
-                <div class="row">
-                  <button class="btn-accent btn-with-ico" type="button" id="share">${btnLabel("share", "Teilen")}</button>
-                  <button class="btn-ghost btn-with-ico" type="button" id="shareGroup" hidden>${btnLabel("users", "Gruppe teilen")}</button>
-                  <button class="btn-ghost btn-with-ico" type="button" id="revoke">${btnLabel("rotate", "Zugriff entziehen + rotieren")}</button>
-                  <button class="btn-danger btn-with-ico" type="button" id="sdel">${btnLabel("trash", "Löschen")}</button>
-                  <button class="btn-ghost btn-with-ico" type="button" id="sExportOne">${btnLabel("download", "Dieses Secret exportieren")}</button>
-                </div>
-                <div class="error" id="derr" hidden></div>
               </div>
             </div>
 
@@ -1030,6 +1105,13 @@ function renderApp(app) {
                     </select>
                   </label>
                   <button class="btn-ghost" type="button" id="sextraAddBtn">Hinzufügen</button>
+                </div>
+                <label>Teilen mit Usern (optional)</label>
+                <select id="screateUsers" multiple size="4"></select>
+                <p class="hint">Strg/Cmd-Klick für Mehrfachauswahl. Nur onboardete User.</p>
+                <div id="screateGroupsWrap" hidden>
+                  <label>Gruppen teilen (optional)</label>
+                  <select id="screateGroups" multiple size="3"></select>
                 </div>
                 <div class="error" id="serr" hidden></div>
                 <div class="row"><button class="btn-accent btn-with-ico" type="button" id="screate">${btnLabel("save", "Speichern (clientseitig verschlüsselt)")}</button></div>
@@ -1141,18 +1223,55 @@ function renderApp(app) {
                 <div class="admin-section" data-admin-section="users">
                   <div id="ulist" class="list"></div>
                   <div class="hint" id="udisable_hint" hidden></div>
+                  <h3 class="admin-subhead">Neuer User</h3>
                   <label>Username</label><input id="nuser" />
+                  <label>Anzeigename</label><input id="ndisplay" />
+                  <label>E-Mail</label><input id="nemail" type="email" autocomplete="off" />
                   <label>Passwort (≥12)</label><input id="npw" type="password" />
                   <div class="row"><button class="btn-accent" type="button" id="ucreate">User anlegen</button></div>
                 </div>
                 <div class="admin-section" data-admin-section="groups">
-                  <div id="glist" class="list"></div>
-                  <label>Gruppenname</label><input id="gname" />
-                  <div class="row"><button class="btn-accent" type="button" id="gcreate">Gruppe anlegen</button></div>
-                  <label>Member hinzufügen (Group-ID)</label><input id="gmid" placeholder="grp_…" />
-                  <label>User-ID</label><input id="gmuid" placeholder="usr_…" />
-                  <div class="row"><button class="btn-ghost" type="button" id="gmadd">Member speichern</button></div>
+                  <div class="groups-workspace">
+                    <aside class="groups-pool panel-inset">
+                      <h3>User</h3>
+                      <p class="hint">Aktive User in eine Gruppe ziehen.</p>
+                      <div id="userPool" class="drag-pool"></div>
+                    </aside>
+                    <div class="groups-board">
+                      <div class="groups-toolbar row">
+                        <input id="gname" placeholder="Neue Gruppe…" />
+                        <button class="btn-accent" type="button" id="gcreate">Gruppe anlegen</button>
+                      </div>
+                      <div id="glist" class="groups-grid"></div>
+                    </div>
+                  </div>
                   <div class="row"><button class="btn-ghost" type="button" id="ldap_sync">LDAP-Sync (Disable fehlende)</button></div>
+                </div>
+                <div id="userEditModal" class="admin-modal" hidden role="dialog" aria-modal="true" aria-labelledby="userEditTitle">
+                  <div class="admin-modal-backdrop" id="userEditBackdrop"></div>
+                  <div class="admin-modal-panel panel">
+                    <div class="admin-modal-head">
+                      <h2 id="userEditTitle">User bearbeiten</h2>
+                      <button type="button" class="btn-ghost btn-sm" id="userEditClose">Schließen</button>
+                    </div>
+                    <p class="hint" id="userEditMeta"></p>
+                    <label>Anzeigename</label><input id="ue_display" />
+                    <label>E-Mail</label><input id="ue_email" type="email" autocomplete="off" />
+                    <div id="ue_local_block">
+                      <label>Neues Login-Passwort (optional, ≥12)</label><input id="ue_password" type="password" autocomplete="new-password" />
+                    </div>
+                    <fieldset class="role-fieldset">
+                      <legend>Rollen</legend>
+                      <label class="inline"><input type="checkbox" id="ue_role_member" value="member" /> member</label>
+                      <label class="inline"><input type="checkbox" id="ue_role_admin" value="tenant_admin" /> tenant_admin</label>
+                      <label class="inline"><input type="checkbox" id="ue_role_auditor" value="auditor" /> auditor</label>
+                      <label class="inline" id="ue_role_plat_wrap"><input type="checkbox" id="ue_role_plat" value="platform_admin" /> platform_admin</label>
+                    </fieldset>
+                    <div class="error" id="ue_err" hidden></div>
+                    <div class="row">
+                      <button class="btn-accent" type="button" id="ue_save">Speichern</button>
+                    </div>
+                  </div>
                 </div>
                 <div class="admin-section" data-admin-section="ldap">
                   <label class="inline"><input id="ldap_en" type="checkbox" /> Aktiv</label>
@@ -1264,6 +1383,8 @@ function renderApp(app) {
   live.setAttribute("aria-atomic", "true");
   app.appendChild(live);
   let currentSecret = null;
+  let currentSecretPayload = null;
+  let currentSecretTitle = "";
   let totpSecretPlain = "";
 
   const NAV_TITLES = {
@@ -1338,8 +1459,7 @@ function renderApp(app) {
   api("/api/me").then((me) => {
     if (me.needs_vault_onboard) { location.href = "/onboard"; return; }
     vault.me = me;
-    n.querySelector("#info").textContent = `Angemeldet als ${me.username} · Tenant ${me.tenant_id}` +
-      (me.totp_enabled ? " · TOTP aktiv" : "");
+    n.querySelector("#info").textContent = formatSessionInfo(me);
   }).catch(() => { location.href = "/login"; });
 
   n.querySelector("#out").onclick = async () => {
@@ -1656,8 +1776,7 @@ function renderApp(app) {
   async function afterUnlock() {
     try {
       vault.me = await api("/api/me");
-      n.querySelector("#info").textContent = `Angemeldet als ${vault.me.username} · Tenant ${vault.me.tenant_id}` +
-        (vault.me.totp_enabled ? " · TOTP aktiv" : "");
+      n.querySelector("#info").textContent = formatSessionInfo(vault.me);
     } catch (_) {}
     try {
       const pol = await api("/api/policy/client");
@@ -1716,11 +1835,103 @@ function renderApp(app) {
         }
       } catch (_) { vault.groups = []; }
     }
+    await refreshSharePickers();
     vault.secretsCache = [];
     vault.secretsOffset = 0;
     await refreshSecrets(true);
     navigateTo("vault:mine");
   }
+
+  async function refreshSharePickers() {
+    try {
+      const pks = await api("/api/users/public-keys");
+      const userSel = n.querySelector("#screateUsers");
+      if (userSel) {
+        userSel.innerHTML = pks
+          .filter((p) => p.user_id !== vault.me?.user_id && p.onboarded !== false)
+          .map((p) => `<option value="${p.user_id}" data-pk="${p.public_key_b64}">${p.username}</option>`)
+          .join("");
+      }
+    } catch (_) {}
+    const gWrap = n.querySelector("#screateGroupsWrap");
+    const gSel = n.querySelector("#screateGroups");
+    if (gWrap && gSel && vault.groups?.length) {
+      gWrap.hidden = false;
+      gSel.innerHTML = vault.groups.map((g) => `<option value="${g.id}">${g.name}</option>`).join("");
+    }
+  }
+
+  function closeSecretModal() {
+    const panel = n.querySelector("#sdetail");
+    if (panel) panel.hidden = true;
+    document.body.classList.remove("secret-modal-open");
+    const editForm = n.querySelector("#deditForm");
+    const dview = n.querySelector("#dview");
+    if (editForm) editForm.hidden = true;
+    if (dview) dview.hidden = false;
+    currentSecret = null;
+    currentSecretPayload = null;
+    currentSecretTitle = "";
+  }
+
+  n.querySelector("#sdetailClose").onclick = closeSecretModal;
+  n.querySelector("#sdetailBackdrop").onclick = closeSecretModal;
+  n.querySelector("#dcancel").onclick = () => {
+    n.querySelector("#deditForm").hidden = true;
+    n.querySelector("#dview").hidden = false;
+  };
+  n.querySelector("#dedit").onclick = () => {
+    if (!currentSecret || !currentSecretPayload) return;
+    n.querySelector("#edtitle").value = currentSecretTitle || "";
+    n.querySelector("#edfolder").value = currentSecret.collection_id || "";
+    n.querySelector("#eduser").value = currentSecretPayload.username || "";
+    n.querySelector("#edpw").value = currentSecretPayload.password || "";
+    n.querySelector("#edtags").value = (currentSecretPayload.tags || []).join(", ");
+    n.querySelector("#ednotes").value = currentSecretPayload.notes || "";
+    n.querySelector("#dview").hidden = true;
+    n.querySelector("#deditForm").hidden = false;
+  };
+  n.querySelector("#dsave").onclick = async () => {
+    const err = n.querySelector("#derr"); err.hidden = true;
+    try {
+      if (!currentSecret || !vault.sk) throw new Error("Kein Secret geladen");
+      const title = n.querySelector("#edtitle").value.trim();
+      if (!title) throw new Error("Titel erforderlich");
+      const payload = normalizeSecretPayload({
+        ...currentSecretPayload,
+        username: n.querySelector("#eduser").value,
+        password: n.querySelector("#edpw").value,
+        tags: n.querySelector("#edtags").value.split(",").map((t) => t.trim()).filter(Boolean),
+        notes: n.querySelector("#ednotes").value,
+      });
+      const collectionId = n.querySelector("#edfolder").value.trim();
+      const kv = currentSecret.key_version;
+      const dk = openDKFromEnvelope(currentSecret.envelope);
+      const titleEnc = await TVCrypto.encryptTitle(title, dk, kv);
+      const bodyEnc = await TVCrypto.encryptPayload(
+        new TextEncoder().encode(JSON.stringify(payload)),
+        dk, kv
+      );
+      dk.fill(0);
+      await api("/api/secrets/" + currentSecret.id, {
+        method: "PUT",
+        body: JSON.stringify({
+          title_ciphertext_b64: TVCrypto.b64enc(titleEnc.ciphertext),
+          title_nonce_b64: TVCrypto.b64enc(titleEnc.nonce),
+          ciphertext_b64: TVCrypto.b64enc(bodyEnc.ciphertext),
+          nonce_b64: TVCrypto.b64enc(bodyEnc.nonce),
+          key_version: kv,
+          collection_id: collectionId,
+        }),
+      });
+      n.querySelector("#deditForm").hidden = true;
+      n.querySelector("#dview").hidden = false;
+      await refreshSecrets(true);
+      await openSecret(currentSecret.id);
+    } catch (e) {
+      err.hidden = false; err.textContent = e.message;
+    }
+  };
 
   n.querySelector("#ulock").onclick = async () => {
     const err = n.querySelector("#uerr"); err.hidden = true;
@@ -2002,7 +2213,7 @@ function renderApp(app) {
     }
   };
 
-  async function postEncryptedSecret(title, payload, collectionId) {
+  async function postEncryptedSecret(title, payload, collectionId, shareOpts) {
     const kv = 1;
     const dk = TVCrypto.generateDataKey();
     const titleEnc = await TVCrypto.encryptTitle(title, dk, kv);
@@ -2012,7 +2223,30 @@ function renderApp(app) {
       kv
     );
     const meKeys = await api("/api/vault/keys");
-    const env = TVCrypto.sealDataKeyForRecipient(dk, TVCrypto.b64dec(meKeys.public_key_b64), kv);
+    const envelopes = [];
+    const seen = new Set();
+    const addEnv = (uid, pkB64) => {
+      if (!uid || seen.has(uid) || !pkB64) return;
+      envelopes.push(TVCrypto.envelopeToAPI(
+        uid,
+        TVCrypto.sealDataKeyForRecipient(dk, TVCrypto.b64dec(pkB64), kv)
+      ));
+      seen.add(uid);
+    };
+    addEnv(vault.me.user_id, meKeys.public_key_b64);
+    const userSel = n.querySelector("#screateUsers");
+    if (userSel && shareOpts !== false) {
+      for (const opt of userSel.selectedOptions) {
+        addEnv(opt.value, opt.dataset.pk);
+      }
+    }
+    const gSel = n.querySelector("#screateGroups");
+    if (gSel && shareOpts !== false) {
+      for (const opt of gSel.selectedOptions) {
+        const pks = await api("/api/groups/" + encodeURIComponent(opt.value) + "/member-keys");
+        for (const p of pks) addEnv(p.user_id, p.public_key_b64);
+      }
+    }
     dk.fill(0);
     const body = {
       title_ciphertext_b64: TVCrypto.b64enc(titleEnc.ciphertext),
@@ -2020,7 +2254,7 @@ function renderApp(app) {
       ciphertext_b64: TVCrypto.b64enc(bodyEnc.ciphertext),
       nonce_b64: TVCrypto.b64enc(bodyEnc.nonce),
       key_version: kv,
-      envelopes: [TVCrypto.envelopeToAPI(vault.me.user_id, env)],
+      envelopes,
     };
     if (collectionId) body.collection_id = collectionId;
     await api("/api/secrets", { method: "POST", body: JSON.stringify(body) });
@@ -2218,7 +2452,7 @@ function renderApp(app) {
     list.className = "list secrets-list secrets-view-" + vault.viewMode;
     const visible = filterVisibleSecrets();
 
-    const needsMeta = vault.viewMode === "table" || vault.viewMode === "tiles";
+    const needsMeta = true;
     if (needsMeta) {
       const pending = visible.filter((it) => !it._metaLoaded);
       if (pending.length) {
@@ -2302,7 +2536,9 @@ function renderApp(app) {
         const lead = `<span class="list-row-ico" aria-hidden="true">${icon(it.has_access ? "key" : "lock")}</span>`;
         span.innerHTML = lead;
         span.appendChild(document.createTextNode(
-          secretTitleLabel(it) + (it.collection_id ? ` · ${it.collection_id}` : "")
+          secretTitleLabel(it) + (it.collection_id ? ` · ${it.collection_id}` : "") +
+          (it._username ? ` · ${it._username}` : "") +
+          (it._tags && it._tags.length ? ` · #${it._tags.join(", #")}` : "")
         ));
         row.querySelector("button").onclick = () => openSecret(it.id);
         list.appendChild(row);
@@ -2361,8 +2597,11 @@ function renderApp(app) {
 
   async function openSecret(id) {
     const err = n.querySelector("#derr"); err.hidden = true;
-    const panel = n.querySelector("#sdetail"); panel.hidden = false;
-    navigateTo(vault.ownershipFilter === "shared" ? "vault:shared" : "vault:mine");
+    const panel = n.querySelector("#sdetail");
+    panel.hidden = false;
+    n.querySelector("#deditForm").hidden = true;
+    n.querySelector("#dview").hidden = false;
+    document.body.classList.add("secret-modal-open");
     if (vault.totpTimer) {
       clearInterval(vault.totpTimer);
       vault.totpTimer = null;
@@ -2384,6 +2623,8 @@ function renderApp(app) {
       );
       const payload = normalizeSecretPayload(JSON.parse(new TextDecoder().decode(pt)));
       dk.fill(0);
+      currentSecretPayload = payload;
+      currentSecretTitle = title;
       n.querySelector("#dtitle").textContent = (payload.favorite ? "★ " : "") + title;
       const tags = payload.tags;
       const fields = n.querySelector("#dfields");
@@ -2648,33 +2889,248 @@ function renderApp(app) {
   n.querySelector("#sdel").onclick = async () => {
     if (!confirm("Secret löschen?")) return;
     await api("/api/secrets/" + currentSecret.id, { method: "DELETE" });
-    n.querySelector("#sdetail").hidden = true;
+    closeSecretModal();
+    document.body.classList.remove("secret-modal-open");
     await refreshSecrets(true);
   };
 
-  async function refreshAdmin() {
-    if (isAuditorOnly()) {
-      try {
-        const auditRaw = await api("/api/admin/audit");
-        const audit = Array.isArray(auditRaw) ? auditRaw : (auditRaw.items || []);
-        n.querySelector("#alist").innerHTML = audit.slice(0, 50).map((e) =>
-          `<div>${e.created_at} · ${e.action} · ${e.actor_id} · ${e.resource_type}/${e.resource_id}</div>`
-        ).join("") || "<p>Keine Events</p>";
-        n.querySelector("#overview").textContent = "Auditor — nur Audit-Ansicht";
-      } catch (e) {
-        n.querySelector("#overview").textContent = e.message;
-      }
+  let editingUser = null;
+  let groupsDnDBusy = false;
+
+  function parseUserRoles(rolesJson) {
+    try {
+      const r = JSON.parse(rolesJson || "[]");
+      return Array.isArray(r) ? r : [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  function formatUserRoles(rolesJson) {
+    const r = parseUserRoles(rolesJson);
+    return r.length ? r.join(", ") : "member";
+  }
+
+  function closeUserEditor() {
+    editingUser = null;
+    const modal = n.querySelector("#userEditModal");
+    if (modal) modal.hidden = true;
+    document.body.classList.remove("admin-modal-open");
+  }
+
+  function openUserEditor(user) {
+    editingUser = user;
+    const modal = n.querySelector("#userEditModal");
+    if (!modal) return;
+    n.querySelector("#userEditTitle").textContent = `User: ${user.username}`;
+    n.querySelector("#userEditMeta").textContent =
+      `${user.status}${user.onboarded ? " · onboarded" : ""} · ${user.auth_backend}`;
+    n.querySelector("#ue_display").value = user.display_name || "";
+    n.querySelector("#ue_email").value = user.email || "";
+    n.querySelector("#ue_password").value = "";
+    const roles = parseUserRoles(user.roles);
+    n.querySelector("#ue_role_member").checked = roles.includes("member");
+    n.querySelector("#ue_role_admin").checked = roles.includes("tenant_admin");
+    n.querySelector("#ue_role_auditor").checked = roles.includes("auditor");
+    n.querySelector("#ue_role_plat").checked = roles.includes("platform_admin");
+    const platWrap = n.querySelector("#ue_role_plat_wrap");
+    if (platWrap) {
+      platWrap.hidden = !(vault.me?.roles || []).includes("platform_admin");
+    }
+    const localBlock = n.querySelector("#ue_local_block");
+    if (localBlock) localBlock.hidden = user.auth_backend !== "local";
+    n.querySelector("#ue_err").hidden = true;
+    modal.hidden = false;
+    document.body.classList.add("admin-modal-open");
+  }
+
+  function readDragPayload(ev) {
+    try {
+      return JSON.parse(ev.dataTransfer.getData("text/plain") || "{}");
+    } catch (_) {
+      return {};
+    }
+  }
+
+  function wireDragUser(el, uid, username, fromGid) {
+    el.draggable = true;
+    el.dataset.uid = uid;
+    el.dataset.username = username;
+    if (fromGid) el.dataset.gid = fromGid;
+    el.addEventListener("dragstart", (ev) => {
+      ev.dataTransfer.setData("text/plain", JSON.stringify({ uid, fromGid: fromGid || "" }));
+      ev.dataTransfer.effectAllowed = "move";
+      el.classList.add("dragging");
+    });
+    el.addEventListener("dragend", () => el.classList.remove("dragging"));
+  }
+
+  async function groupsMemberAdd(gid, uid) {
+    await api("/api/admin/groups/" + encodeURIComponent(gid) + "/members", {
+      method: "POST",
+      body: JSON.stringify({ user_id: uid }),
+    });
+  }
+
+  async function groupsMemberRemove(gid, uid) {
+    await api("/api/admin/groups/" + encodeURIComponent(gid) + "/members/" + encodeURIComponent(uid), {
+      method: "DELETE",
+    });
+  }
+
+  async function handleGroupDrop(gid, payload) {
+    if (groupsDnDBusy || !payload.uid) return;
+    groupsDnDBusy = true;
+    const errEl = n.querySelector("#aerr");
+    try {
+      if (payload.fromGid && payload.fromGid === gid) return;
+      await groupsMemberAdd(gid, payload.uid);
+      await refreshAdmin();
+      await refreshSharePickers();
+    } catch (e) {
+      if (errEl) { errEl.hidden = false; errEl.textContent = e.message; }
+    } finally {
+      groupsDnDBusy = false;
+    }
+  }
+
+  async function handlePoolDrop(payload) {
+    if (groupsDnDBusy || !payload.uid || !payload.fromGid) return;
+    groupsDnDBusy = true;
+    const errEl = n.querySelector("#aerr");
+    try {
+      await groupsMemberRemove(payload.fromGid, payload.uid);
+      await refreshAdmin();
+      await refreshSharePickers();
+    } catch (e) {
+      if (errEl) { errEl.hidden = false; errEl.textContent = e.message; }
+    } finally {
+      groupsDnDBusy = false;
+    }
+  }
+
+  function wireDropZone(zone, onDrop) {
+    zone.addEventListener("dragover", (ev) => {
+      ev.preventDefault();
+      ev.dataTransfer.dropEffect = "move";
+      zone.classList.add("drag-over");
+    });
+    zone.addEventListener("dragleave", (ev) => {
+      if (!zone.contains(ev.relatedTarget)) zone.classList.remove("drag-over");
+    });
+    zone.addEventListener("drop", async (ev) => {
+      ev.preventDefault();
+      zone.classList.remove("drag-over");
+      const payload = readDragPayload(ev);
+      await onDrop(payload);
+    });
+  }
+
+  function paintGroupsWorkspace(users, groups) {
+    const pool = n.querySelector("#userPool");
+    const glist = n.querySelector("#glist");
+    if (!pool || !glist) return;
+
+    pool.innerHTML = "";
+    users.filter((u) => u.status !== "disabled").forEach((u) => {
+      const chip = document.createElement("div");
+      chip.className = "drag-user";
+      chip.textContent = u.display_name || u.username;
+      wireDragUser(chip, u.id, u.username, "");
+      pool.appendChild(chip);
+    });
+    wireDropZone(pool, handlePoolDrop);
+
+    if (!groups.length) {
+      glist.innerHTML = "<p class='hint'>Noch keine Gruppen — oben anlegen.</p>";
       return;
     }
-    const ov = await api("/api/admin/overview");
-    n.querySelector("#overview").textContent =
-      `Storage ${ov.storage.backend} · Vault ${ov.vault_ok ? "OK" : "FAIL"} · LDAP ${ov.ldap_enabled ? ov.ldap_host : "aus"} · Tenants ${ov.tenant_count}`;
-    const users = await api("/api/admin/users");
+
+    glist.innerHTML = groups.map((g) => {
+      const members = (g.members || []).map((m) => {
+        const uid = typeof m === "string" ? m : m.user_id;
+        const un = typeof m === "string" ? m : (m.username || m.user_id);
+        return `<div class="drag-user in-group" data-uid="${escHtml(uid)}" data-gid="${escHtml(g.id)}" data-username="${escHtml(un)}">${escHtml(un)}</div>`;
+      }).join("");
+      return `<div class="group-card" data-gid="${escHtml(g.id)}">
+        <div class="group-card-head">
+          <input class="group-name" value="${escHtml(g.name)}" data-gid="${escHtml(g.id)}" aria-label="Gruppenname" />
+          <button type="button" class="btn-ghost btn-sm group-del" data-gid="${escHtml(g.id)}">Löschen</button>
+        </div>
+        <input class="group-desc" placeholder="Beschreibung (optional)" value="${escHtml(g.description || "")}" data-gid="${escHtml(g.id)}" aria-label="Beschreibung" />
+        <div class="group-drop" data-gid="${escHtml(g.id)}">
+          ${members || '<span class="hint group-drop-hint">User hierher ziehen</span>'}
+        </div>
+      </div>`;
+    }).join("");
+
+    glist.querySelectorAll(".drag-user.in-group").forEach((el) => {
+      wireDragUser(el, el.dataset.uid, el.dataset.username, el.dataset.gid);
+    });
+    glist.querySelectorAll(".group-drop").forEach((zone) => {
+      wireDropZone(zone, (payload) => handleGroupDrop(zone.dataset.gid, payload));
+    });
+    glist.querySelectorAll(".group-del").forEach((btn) => {
+      btn.onclick = async () => {
+        if (!confirm("Gruppe wirklich löschen? Mitglieder-Zuordnungen werden entfernt.")) return;
+        const errEl = n.querySelector("#aerr");
+        try {
+          await api("/api/admin/groups/" + encodeURIComponent(btn.dataset.gid), { method: "DELETE" });
+          await refreshAdmin();
+          await refreshSharePickers();
+        } catch (e) {
+          if (errEl) { errEl.hidden = false; errEl.textContent = e.message; }
+        }
+      };
+    });
+    const saveGroupField = async (gid, name, description) => {
+      const errEl = n.querySelector("#aerr");
+      try {
+        await api("/api/admin/groups/" + encodeURIComponent(gid), {
+          method: "PUT",
+          body: JSON.stringify({ name: name.trim(), description: description.trim() }),
+        });
+        await refreshAdmin();
+        await refreshSharePickers();
+      } catch (e) {
+        if (errEl) { errEl.hidden = false; errEl.textContent = e.message; }
+      }
+    };
+    glist.querySelectorAll(".group-name").forEach((inp) => {
+      inp.addEventListener("change", () => {
+        const card = inp.closest(".group-card");
+        const desc = card?.querySelector(".group-desc")?.value || "";
+        if (inp.value.trim()) saveGroupField(inp.dataset.gid, inp.value, desc);
+      });
+    });
+    glist.querySelectorAll(".group-desc").forEach((inp) => {
+      inp.addEventListener("change", () => {
+        const card = inp.closest(".group-card");
+        const name = card?.querySelector(".group-name")?.value || "";
+        if (name.trim()) saveGroupField(inp.dataset.gid, name, inp.value);
+      });
+    });
+  }
+
+  function paintUsersList(users) {
     n.querySelector("#ulist").innerHTML = users.map((u) =>
-      `<div class="list-row"><span>${u.username} · ${u.status}${u.onboarded ? " · onboarded" : ""} · ${u.auth_backend}</span>` +
-      (u.status !== "disabled" ? `<button class="btn-ghost" data-dis="${u.id}" type="button">Disable</button>` : "") +
-      `</div>`
-    ).join("");
+      `<div class="list-row user-row">
+        <div class="list-row-main">
+          <strong>${escHtml(u.username)}</strong>
+          <span class="hint">${escHtml(u.display_name || "—")} · ${escHtml(u.status)}${u.onboarded ? " · onboarded" : ""} · ${escHtml(u.auth_backend)} · ${escHtml(formatUserRoles(u.roles))}</span>
+        </div>
+        <div class="row user-row-actions">
+          <button class="btn-ghost btn-sm" data-edit-user="${escHtml(u.id)}" type="button">Bearbeiten</button>
+          ${u.status !== "disabled" ? `<button class="btn-ghost btn-sm" data-dis="${escHtml(u.id)}" type="button">Disable</button>` : ""}
+        </div>
+      </div>`
+    ).join("") || "<p class='hint'>Keine User</p>";
+    n.querySelector("#ulist").querySelectorAll("[data-edit-user]").forEach((btn) => {
+      btn.onclick = () => {
+        const u = users.find((x) => x.id === btn.dataset.editUser);
+        if (u) openUserEditor(u);
+      };
+    });
     n.querySelector("#ulist").querySelectorAll("[data-dis]").forEach((btn) => {
       btn.onclick = async () => {
         const uid = btn.dataset.dis;
@@ -2696,14 +3152,72 @@ function renderApp(app) {
         await refreshAdmin();
       };
     });
+  }
+
+  const userEditModal = n.querySelector("#userEditModal");
+  if (userEditModal) {
+    n.querySelector("#userEditClose").onclick = closeUserEditor;
+    n.querySelector("#userEditBackdrop").onclick = closeUserEditor;
+    n.querySelector("#ue_save").onclick = async () => {
+      if (!editingUser) return;
+      const errEl = n.querySelector("#ue_err");
+      errEl.hidden = true;
+      try {
+        const roles = [];
+        if (n.querySelector("#ue_role_member").checked) roles.push("member");
+        if (n.querySelector("#ue_role_admin").checked) roles.push("tenant_admin");
+        if (n.querySelector("#ue_role_auditor").checked) roles.push("auditor");
+        if (n.querySelector("#ue_role_plat").checked) roles.push("platform_admin");
+        if (!roles.length) throw new Error("Mindestens eine Rolle wählen");
+        const body = {
+          display_name: n.querySelector("#ue_display").value.trim(),
+          email: n.querySelector("#ue_email").value.trim(),
+          roles,
+        };
+        const pw = n.querySelector("#ue_password").value;
+        if (pw) {
+          if (editingUser.auth_backend !== "local") throw new Error("Login-Passwort nur für lokale User");
+          if (pw.length < 12) throw new Error("Passwort mindestens 12 Zeichen");
+          body.password = pw;
+        }
+        await api("/api/admin/users/" + encodeURIComponent(editingUser.id), {
+          method: "PUT",
+          body: JSON.stringify(body),
+        });
+        closeUserEditor();
+        await refreshAdmin();
+      } catch (e) {
+        errEl.hidden = false;
+        errEl.textContent = e.message;
+      }
+    };
+  }
+
+  async function refreshAdmin() {
+    if (isAuditorOnly()) {
+      try {
+        const auditRaw = await api("/api/admin/audit");
+        const audit = Array.isArray(auditRaw) ? auditRaw : (auditRaw.items || []);
+        n.querySelector("#alist").innerHTML = audit.slice(0, 50).map((e) =>
+          `<div>${e.created_at} · ${e.action} · ${e.actor_id} · ${e.resource_type}/${e.resource_id}</div>`
+        ).join("") || "<p>Keine Events</p>";
+        n.querySelector("#overview").textContent = "Auditor — nur Audit-Ansicht";
+      } catch (e) {
+        n.querySelector("#overview").textContent = e.message;
+      }
+      return;
+    }
+    const ov = await api("/api/admin/overview");
+    n.querySelector("#overview").textContent =
+      `Storage ${ov.storage.backend} · Vault ${ov.vault_ok ? "OK" : "FAIL"} · LDAP ${ov.ldap_enabled ? ov.ldap_host : "aus"} · Tenants ${ov.tenant_count}`;
+    const users = await api("/api/admin/users");
+    paintUsersList(users);
     const groups = await api("/api/admin/groups");
     vault.groups = groups;
-    n.querySelector("#glist").innerHTML = groups.map((g) =>
-      `<div class="list-row"><span>${g.name} · ${g.id} (${(g.members || []).length})</span></div>`
-    ).join("") || "<p class='hint'>Keine Gruppen</p>";
-    const gsel = n.querySelector("#sharegroup");
-    if (gsel) {
-      gsel.innerHTML = `<option value="">— Gruppe wählen —</option>` +
+    paintGroupsWorkspace(users, groups);
+    const shareGsel = n.querySelector("#sharegroup");
+    if (shareGsel) {
+      shareGsel.innerHTML = `<option value="">— Gruppe wählen —</option>` +
         groups.map((g) => `<option value="${g.id}">${g.name}</option>`).join("");
     }
     const ldap = await api("/api/admin/ldap");
@@ -2787,9 +3301,16 @@ function renderApp(app) {
     try {
       await api("/api/admin/users", {
         method: "POST",
-        body: JSON.stringify({ username: n.querySelector("#nuser").value.trim(), password: n.querySelector("#npw").value }),
+        body: JSON.stringify({
+          username: n.querySelector("#nuser").value.trim(),
+          display_name: n.querySelector("#ndisplay").value.trim(),
+          email: n.querySelector("#nemail").value.trim(),
+          password: n.querySelector("#npw").value,
+        }),
       });
       n.querySelector("#nuser").value = "";
+      n.querySelector("#ndisplay").value = "";
+      n.querySelector("#nemail").value = "";
       n.querySelector("#npw").value = "";
       await refreshAdmin();
     } catch (e) {
@@ -2952,16 +3473,6 @@ function renderApp(app) {
           URL.revokeObjectURL(a.href);
         };
       }
-    } catch (e) { err.hidden = false; err.textContent = e.message; }
-  };
-  n.querySelector("#gmadd").onclick = async () => {
-    const err = n.querySelector("#aerr"); err.hidden = true;
-    try {
-      await api("/api/admin/groups/" + n.querySelector("#gmid").value.trim() + "/members", {
-        method: "POST",
-        body: JSON.stringify({ user_id: n.querySelector("#gmuid").value.trim() }),
-      });
-      await refreshAdmin();
     } catch (e) { err.hidden = false; err.textContent = e.message; }
   };
   n.querySelector("#ldap_sync").onclick = async () => {

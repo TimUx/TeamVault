@@ -72,7 +72,7 @@ New-Item -ItemType Directory -Force secrets | Out-Null
 | `TEAMVAULT_MASTER_UNLOCK_KEY_FILE` | Pfad zum Keyfile (Prod / Go) |
 | `TEAMVAULT_MASTER_UNLOCK_KEY` | Nur Dev/Test-Fallback (Key-Bytes in Env) |
 | `TEAMVAULT_PUBLISH_PORT` / `TEAMVAULT_UNLOCK_KEY_HOST` | Docker Compose via `.env` |
-| `TEAMVAULT_IMAGE` | GHCR-Image, z. B. `ghcr.io/timux/teamvault:1.1.1` |
+| `TEAMVAULT_IMAGE` | GHCR-Image, z. B. `ghcr.io/timux/teamvault:1.2.0` |
 | `TEAMVAULT_PULL_POLICY` | Default `always` |
 
 ### 2.4 Start
@@ -130,7 +130,10 @@ In der **Sidebar** unter **Administration** (sichtbar für `tenant_admin` / `pla
 
 ![Benutzer](images/admin-users.png)
 
-- Lokale User anlegen (Username + Login-Passwort ≥12)
+![User bearbeiten](images/admin-user-edit.png)
+
+- Lokale User anlegen (Username, optional Anzeigename/E-Mail, Login-Passwort ≥12)
+- **Bearbeiten:** Anzeigename, E-Mail, Rollen (`member`, `tenant_admin`, `auditor`, optional `platform_admin`), für lokale User optional neues Login-Passwort
 - Status: active / disabled, Onboarding-Status, Auth-Backend (`local` / `ldap`)
 - Disable statt Löschen (LDAP-Sync deaktiviert fehlende Accounts)
 - Nach **Disable**: Hinweis, Secrets mit Envelope dieses Users zu **rotieren** (Zero-Knowledge — kein Auto-Rotate). Optional Liste der Secret-IDs (Meta only).
@@ -141,7 +144,9 @@ Kein Zugriff auf Master-Passwort, Private Keys oder Recovery-Kit-Klartext.
 
 ![Gruppen](images/admin-groups.png)
 
-- Gruppen anlegen, Members über Group-ID (`grp_…`) + User-ID (`usr_…`)
+- **Zwei Bereiche:** links aktive User (ziehbar), rechts Gruppen-Karten mit Drop-Zone
+- User per **Drag & Drop** in eine Gruppe ziehen; aus Gruppe zurück in den Pool ziehen = Mitgliedschaft entfernen; zwischen Gruppen ziehen = zusätzliche Mitgliedschaft
+- Gruppe anlegen; **Name** und **Beschreibung** in der Karte bearbeiten (Speichern beim Verlassen des Feldes); **Löschen** mit Bestätigung
 - Rechte/Sharing bleiben über lokale Zuordnung — **keine** LDAP-Gruppen-Autorisierung
 - Secrets können an Gruppen geteilt werden (pro Mitglied eigener Envelope) — siehe User Guide
 
@@ -218,7 +223,7 @@ Default-Image: `ghcr.io/timux/teamvault:latest` (`TEAMVAULT_IMAGE`) — von CI n
 docker compose pull && docker compose up -d
 ```
 
-Pin auf Release (empfohlen Prod): `TEAMVAULT_IMAGE=ghcr.io/timux/teamvault:1.1.1` in `.env`.  
+Pin auf Release (empfohlen Prod): `TEAMVAULT_IMAGE=ghcr.io/timux/teamvault:1.2.0` in `.env`.  
 Lokaler Build nur bei Bedarf: `docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build` bzw. Install-Skript mit `TEAMVAULT_BUILD=1`.
 
 Unlock-Key nie ins Image legen.
@@ -308,3 +313,13 @@ Sessions, Login-Rate-Limits und Passkey-Challenges liegen **im Prozessspeicher**
 - Admin-UI Scope (Planung): [planning/admin-ui-scope.md](planning/admin-ui-scope.md)
 - OpenAPI: [openapi.yaml](openapi.yaml)
 - Checkliste: [SECURITY-REVIEW-CHECKLIST.md](../SECURITY-REVIEW-CHECKLIST.md)
+
+### Screenshots aktualisieren (Maintainer)
+
+Dokumentations-Screenshots liegen unter `docs/images/`. Neu erzeugen (Playwright + lokaler Dev-Server mit aktuellem `web/static`):
+
+```bash
+./scripts/capture-docs-screenshots.sh
+```
+
+Voraussetzungen: Docker, Node.js/npm. Das Skript startet temporär `go run ./cmd/teamvault` in einem Container auf Port **8099**, führt Setup/Login/Onboarding durch und überschreibt die PNGs in `docs/images/`.

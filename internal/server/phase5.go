@@ -17,10 +17,13 @@ import (
 func (a *API) registerPhase5(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/admin/users", a.requireAuth(a.requireAdmin(a.handleListUsers)))
 	mux.HandleFunc("POST /api/admin/users", a.requireAuth(a.requireAdmin(a.handleCreateUser)))
+	mux.HandleFunc("PUT /api/admin/users/{id}", a.requireAuth(a.requireAdmin(a.handleUpdateUser)))
 	mux.HandleFunc("POST /api/admin/users/{id}/disable", a.requireAuth(a.requireAdmin(a.handleDisableUser)))
 	mux.HandleFunc("GET /api/admin/users/{id}/accessible-secrets", a.requireAuth(a.requireAdmin(a.handleUserAccessibleSecrets)))
 	mux.HandleFunc("GET /api/admin/groups", a.requireAuth(a.requireAdmin(a.handleListGroups)))
 	mux.HandleFunc("POST /api/admin/groups", a.requireAuth(a.requireAdmin(a.handleCreateGroup)))
+	mux.HandleFunc("PUT /api/admin/groups/{id}", a.requireAuth(a.requireAdmin(a.handleUpdateGroup)))
+	mux.HandleFunc("DELETE /api/admin/groups/{id}", a.requireAuth(a.requireAdmin(a.handleDeleteGroup)))
 	mux.HandleFunc("POST /api/admin/groups/{id}/members", a.requireAuth(a.requireAdmin(a.handleAddMember)))
 	mux.HandleFunc("DELETE /api/admin/groups/{id}/members/{userId}", a.requireAuth(a.requireAdmin(a.handleRemoveMember)))
 	mux.HandleFunc("GET /api/users/public-keys", a.requireAuth(a.handleListPublicKeys))
@@ -29,6 +32,7 @@ func (a *API) registerPhase5(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/secrets", a.requireAuth(a.requireOnboarded(a.handleListSecrets)))
 	mux.HandleFunc("POST /api/secrets", a.requireAuth(a.requireOnboarded(a.handleCreateSecret)))
 	mux.HandleFunc("GET /api/secrets/{id}", a.requireAuth(a.requireOnboarded(a.handleGetSecret)))
+	mux.HandleFunc("PUT /api/secrets/{id}", a.requireAuth(a.requireOnboarded(a.handleUpdateSecret)))
 	mux.HandleFunc("POST /api/secrets/{id}/share", a.requireAuth(a.requireOnboarded(a.handleShareSecret)))
 	mux.HandleFunc("POST /api/secrets/{id}/rotate", a.requireAuth(a.requireOnboarded(a.handleRotateSecret)))
 	mux.HandleFunc("DELETE /api/secrets/{id}", a.requireAuth(a.requireOnboarded(a.handleDeleteSecret)))
@@ -79,6 +83,7 @@ func (a *API) handleListUsers(w http.ResponseWriter, r *http.Request) {
 		ID          string `json:"id"`
 		Username    string `json:"username"`
 		DisplayName string `json:"display_name"`
+		Email       string `json:"email"`
 		AuthBackend string `json:"auth_backend"`
 		Status      string `json:"status"`
 		Onboarded   bool   `json:"onboarded"`
@@ -87,7 +92,7 @@ func (a *API) handleListUsers(w http.ResponseWriter, r *http.Request) {
 	out := make([]row, 0, len(users))
 	for _, u := range users {
 		out = append(out, row{
-			ID: string(u.ID), Username: u.Username, DisplayName: u.DisplayName,
+			ID: string(u.ID), Username: u.Username, DisplayName: u.DisplayName, Email: u.Email,
 			AuthBackend: u.AuthBackend, Status: u.Status, Onboarded: u.OnboardedAt != nil, Roles: u.RolesJSON,
 		})
 	}
@@ -163,6 +168,69 @@ func (a *API) handleDisableUser(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "disabled"})
 }
 
+func (a *API) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
+	sess, _ := a.sessionFrom(r)
+	id := store.UserID(r.PathValue("id"))
+	u, err := a.App.Vault.GetUser(r.Context(), sess.TenantID, id)
+	if err != nil {
+		writeErr(w, http.StatusNotFound, "user not found")
+		return
+	}
+	var body struct {
+		DisplayName string   `json:"display_name"`
+		Email       string   `json:"email"`
+		Password    string   `json:"password"`
+		Roles       []string `json:"roles"`
+	}
+	if err := readJSON(r, &body); err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	u.DisplayName = strings.TrimSpace(body.DisplayName)
+	u.Email = strings.TrimSpace(body.Email)
+	if body.Password != "" {
+		if u.AuthBackend != "local" {
+			writeErr(w, http.StatusBadRequest, "only local users can reset password here")
+			return
+		}
+		if len(body.Password) < 12 {
+			writeErr(w, http.StatusBadRequest, "password min 12 chars")
+			return
+		}
+		hash, err := password.Hash(body.Password, password.Default)
+		if err != nil {
+			writeErr(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		u.LocalPasswordHash = hash
+	}
+	if body.Roles != nil {
+		if len(body.Roles) == 0 {
+			writeErr(w, http.StatusBadRequest, "roles required")
+			return
+		}
+		for _, role := range body.Roles {
+			switch role {
+			case "member", "tenant_admin", "platform_admin", "auditor":
+			default:
+				writeErr(w, http.StatusBadRequest, "invalid role")
+				return
+			}
+			if role == "platform_admin" && !hasRole(sess.Roles, "platform_admin") {
+				writeErr(w, http.StatusForbidden, "cannot grant platform_admin")
+				return
+			}
+		}
+		raw, _ := json.Marshal(body.Roles)
+		u.RolesJSON = string(raw)
+	}
+	if err := a.App.Vault.UpsertUser(r.Context(), *u); err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
 // handleUserAccessibleSecrets lists secret IDs where the user still has a key envelope (meta only).
 // After disable, admins must rotate those secrets client-side (Zero-Knowledge — no auto-rotate).
 func (a *API) handleUserAccessibleSecrets(w http.ResponseWriter, r *http.Request) {
@@ -219,18 +287,26 @@ func (a *API) handleListGroups(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	type memberRow struct {
+		UserID   string `json:"user_id"`
+		Username string `json:"username"`
+	}
 	type g struct {
-		ID          string   `json:"id"`
-		Name        string   `json:"name"`
-		Description string   `json:"description"`
-		Members     []string `json:"members"`
+		ID          string      `json:"id"`
+		Name        string      `json:"name"`
+		Description string      `json:"description"`
+		Members     []memberRow `json:"members"`
 	}
 	out := make([]g, 0, len(groups))
 	for _, gr := range groups {
 		mem, _ := a.App.Vault.ListGroupMembers(r.Context(), sess.TenantID, gr.ID)
-		ms := make([]string, len(mem))
-		for i, m := range mem {
-			ms[i] = string(m)
+		ms := make([]memberRow, 0, len(mem))
+		for _, uid := range mem {
+			row := memberRow{UserID: string(uid), Username: string(uid)}
+			if u, err := a.App.Vault.GetUser(r.Context(), sess.TenantID, uid); err == nil {
+				row.Username = u.Username
+			}
+			ms = append(ms, row)
 		}
 		out = append(out, g{ID: string(gr.ID), Name: gr.Name, Description: gr.Description, Members: ms})
 	}
@@ -283,6 +359,56 @@ func (a *API) handleCreateGroup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"id": string(g.ID)})
+}
+
+func (a *API) handleUpdateGroup(w http.ResponseWriter, r *http.Request) {
+	sess, _ := a.sessionFrom(r)
+	gid := store.GroupID(r.PathValue("id"))
+	groups, err := a.App.Vault.ListGroups(r.Context(), sess.TenantID)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	var g *store.Group
+	for i := range groups {
+		if groups[i].ID == gid {
+			g = &groups[i]
+			break
+		}
+	}
+	if g == nil {
+		writeErr(w, http.StatusNotFound, "group not found")
+		return
+	}
+	var body struct {
+		Name        string `json:"name"`
+		Description string `json:"description"`
+	}
+	if err := readJSON(r, &body); err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if strings.TrimSpace(body.Name) == "" {
+		writeErr(w, http.StatusBadRequest, "name required")
+		return
+	}
+	g.Name = strings.TrimSpace(body.Name)
+	g.Description = strings.TrimSpace(body.Description)
+	if err := a.App.Vault.PutGroup(r.Context(), *g); err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"id": string(g.ID)})
+}
+
+func (a *API) handleDeleteGroup(w http.ResponseWriter, r *http.Request) {
+	sess, _ := a.sessionFrom(r)
+	gid := store.GroupID(r.PathValue("id"))
+	if err := a.App.Vault.DeleteGroup(r.Context(), sess.TenantID, gid); err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
 
 func (a *API) handleAddMember(w http.ResponseWriter, r *http.Request) {
@@ -650,6 +776,84 @@ func (a *API) recipientShareable(r *http.Request, tenant store.TenantID, uid sto
 		return false
 	}
 	return true
+}
+
+func (a *API) handleUpdateSecret(w http.ResponseWriter, r *http.Request) {
+	sess, _ := a.sessionFrom(r)
+	id := store.SecretID(r.PathValue("id"))
+	if !a.callerHasEnvelope(r, sess.TenantID, id, sess.UserID) {
+		writeErr(w, http.StatusForbidden, "no access envelope")
+		return
+	}
+	var req struct {
+		TitleCiphertextB64 string `json:"title_ciphertext_b64"`
+		TitleNonceB64      string `json:"title_nonce_b64"`
+		CiphertextB64      string `json:"ciphertext_b64"`
+		NonceB64           string `json:"nonce_b64"`
+		KeyVersion         uint32 `json:"key_version"`
+		CollectionID       string `json:"collection_id"`
+	}
+	if err := readJSON(r, &req); err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	oldBlob, err := a.App.Vault.GetSecretCiphertext(r.Context(), sess.TenantID, id)
+	if err != nil {
+		writeErr(w, http.StatusNotFound, "secret not found")
+		return
+	}
+	if req.KeyVersion == 0 {
+		req.KeyVersion = oldBlob.KeyVersion
+	}
+	if req.KeyVersion != oldBlob.KeyVersion {
+		writeErr(w, http.StatusBadRequest, "key_version must match current secret version")
+		return
+	}
+	titleCT, err := base64.StdEncoding.DecodeString(req.TitleCiphertextB64)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid title ciphertext")
+		return
+	}
+	titleN, err := base64.StdEncoding.DecodeString(req.TitleNonceB64)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid title nonce")
+		return
+	}
+	ct, err := base64.StdEncoding.DecodeString(req.CiphertextB64)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid ciphertext")
+		return
+	}
+	nonce, err := base64.StdEncoding.DecodeString(req.NonceB64)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid nonce")
+		return
+	}
+	meta, err := a.App.Vault.GetSecretMeta(r.Context(), sess.TenantID, id)
+	if err != nil {
+		writeErr(w, http.StatusNotFound, "meta missing")
+		return
+	}
+	meta.TitleCiphertext, meta.TitleNonce = titleCT, titleN
+	meta.CollectionID = req.CollectionID
+	if err := a.App.Vault.PutSecretMeta(r.Context(), *meta); err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if err := a.App.Vault.PutSecretCiphertext(r.Context(), sess.TenantID, id, store.CiphertextBlob{
+		Ciphertext: ct, Nonce: nonce, KeyVersion: req.KeyVersion, ContentType: "application/octet-stream",
+	}); err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if err := a.App.Vault.AppendAudit(r.Context(), store.AuditEvent{
+		ID: newID("aud"), TenantID: sess.TenantID, ActorID: string(sess.UserID),
+		Action: "secret.update", ResourceType: "secret", ResourceID: string(id), CreatedAt: time.Now().UTC(),
+	}); err != nil {
+		writeErr(w, http.StatusInternalServerError, "audit: "+err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"id": id, "key_version": req.KeyVersion})
 }
 
 func (a *API) handleRotateSecret(w http.ResponseWriter, r *http.Request) {

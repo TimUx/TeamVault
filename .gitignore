@@ -1,8 +1,10 @@
 # Binaries / local data
 /data/
 /data-docs/
-/data-docs-setup/
-/data-docs-shot/
+/docs-screenshot-data/
+.screenshot-data/
+.screenshot-secrets/
+/scripts/node_modules/
 *.db
 *.sealed
 *.exe

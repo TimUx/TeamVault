@@ -19,8 +19,10 @@ Der Server sieht niemals Ihr Master-Passwort und niemals Klartext-Secrets (Zero-
 ## 2. Erste Anmeldung
 
 1. URL Ihrer Instanz öffnen → **Login**
-2. **Tenant-Slug**, Username, Login-Passwort (TOTP falls aktiv)
+2. **Organisation** (Dropdown der Mandanten), Username, Login-Passwort (TOTP falls aktiv)
 3. Optional **Passkey** statt Passwort (wenn registriert)
+
+Die zuletzt gewählte Organisation wird im Browser gemerkt. Bei genau einem Mandanten ist dieser vorausgewählt.
 
 Oben rechts: **Hilfe** (ohne Login) öffnet die Client-Anleitungen unter `/help`. Hinweis unter dem Formular: Version und Entwickler. Passkeys betreffen nur den Login — der Vault braucht weiterhin das Master-Passwort.
 
@@ -68,11 +70,11 @@ Nach dem Entsperren: linke **Sidebar** mit Icons. Unter Vault getrennt:
 
 Kein vermischter „Alle“-Eintrag. Clientseitige **Suche** und **Ordner**-Filter gelten jeweils für die aktive Ansicht. In der Liste können Sie Einträge per Checkbox für den Export auswählen.
 
-**Ansicht:** Umschalter Liste / Tabelle / Kacheln (Preference lokal im Browser). Liste zeigt Titel und Ordner; Tabelle und Kacheln laden zusätzlich Benutzer, Tags und Favorit (clientseitig entschlüsselt).
+**Ansicht:** Standard ist **Tabelle**; Umschalter Liste / Tabelle / Kacheln (Preference lokal im Browser). Tabelle und Kacheln laden zusätzlich Benutzer, Tags und Favorit (clientseitig entschlüsselt); Liste zeigt Titel und Ordner.
+
+![Meine Secrets – Tabelle (Standard)](images/vault-secrets-table.png)
 
 ![Meine Secrets – Liste](images/vault-secrets.png)
-
-![Meine Secrets – Tabelle](images/vault-secrets-table.png)
 
 ![Meine Secrets – Kacheln](images/vault-secrets-tiles.png)
 
@@ -96,15 +98,19 @@ Sidebar **Neu anlegen**: Titel, Ordner, Benutzername und Passwort sind immer sic
 
 Titel und Payload werden vor dem Upload verschlüsselt; der Server speichert nur Ciphertext.
 
+Optional direkt beim Anlegen **User** und **Gruppen** zum Teilen auswählen (nur onboardete Ziele).
+
 **Generator:** Länge und Symbole einstellen → **Generator** füllt das Passwortfeld (CSPRNG im Browser).
 
 ![Secret anlegen](images/vault-create.png)
 
-### Öffnen
+### Öffnen & Bearbeiten
 
-In der Liste **Öffnen** — Klartext erscheint nur bei Ihnen im Browser. Felder mit **Kopieren** / **Anzeigen**; Key/Zertifikat zusätzlich **Download**. Live-**TOTP** erscheint, wenn ein Seed hinterlegt ist. Mehrere Websites werden einzeln angezeigt.
+In der Liste **Öffnen** — Detail erscheint als **Modal** über der Liste (Schließen mit Button, Backdrop oder **Escape**). Klartext nur im Browser. Felder mit **Kopieren** / **Anzeigen**; Key/Zertifikat zusätzlich **Download**. Live-**TOTP** erscheint, wenn ein Seed hinterlegt ist. Mehrere Websites werden einzeln angezeigt.
 
-![Secret-Detail](images/vault-secret-detail.png)
+**Bearbeiten** im Modal: Titel, Ordner, Benutzername, Passwort, Tags, Notizen — Speichern verschlüsselt clientseitig (`PUT /api/secrets/{id}`).
+
+![Secret-Detail (Modal)](images/vault-secret-detail.png)
 
 ### Teilen
 

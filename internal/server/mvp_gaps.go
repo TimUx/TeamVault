@@ -225,7 +225,7 @@ func (a *API) handleSetRoles(w http.ResponseWriter, r *http.Request) {
 	}
 	for _, role := range body.Roles {
 		switch role {
-		case "member", "tenant_admin", "platform_admin":
+		case "member", "tenant_admin", "platform_admin", "auditor":
 		default:
 			writeErr(w, http.StatusBadRequest, "invalid role")
 			return

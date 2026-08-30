@@ -103,6 +103,16 @@ paths:
       responses:
         '200':
           description: initialized flag and storage info
+  /api/auth/tenants:
+    get:
+      tags: [auth]
+      security: []
+      summary: Active tenants for login selection
+      responses:
+        '200':
+          description: slug and name per active tenant
+        '409':
+          description: Setup not completed
   /api/auth/login:
     post:
       tags: [auth]

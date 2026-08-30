@@ -15,6 +15,7 @@ import (
 func (a *API) registerPhase12(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/crypto/presets", a.requireAuth(a.handleCryptoPresets))
 	mux.HandleFunc("GET /api/admin/groups/{id}/members/public-keys", a.requireAuth(a.requireTenantAdminOrAuditor(a.handleGroupMemberPublicKeys)))
+	mux.HandleFunc("GET /api/groups/{id}/member-keys", a.requireAuth(a.requireOnboarded(a.handleGroupMemberKeysForShare)))
 	mux.HandleFunc("GET /api/secrets/{id}/group-member-keys", a.requireAuth(a.requireOnboarded(a.handleSecretGroupMemberKeys)))
 	mux.HandleFunc("POST /api/secrets/{id}/share-group", a.requireAuth(a.requireOnboarded(a.handleShareGroup)))
 }
@@ -65,6 +66,30 @@ func (a *API) handleCryptoPresets(w http.ResponseWriter, r *http.Request) {
 func (a *API) handleGroupMemberPublicKeys(w http.ResponseWriter, r *http.Request) {
 	sess, _ := a.sessionFrom(r)
 	a.writeGroupMemberPublicKeys(w, r, sess.TenantID, store.GroupID(r.PathValue("id")))
+}
+
+func (a *API) handleGroupMemberKeysForShare(w http.ResponseWriter, r *http.Request) {
+	sess, _ := a.sessionFrom(r)
+	gid := store.GroupID(r.PathValue("id"))
+	if isAdmin := hasRole(sess.Roles, "tenant_admin") || hasRole(sess.Roles, "platform_admin"); !isAdmin {
+		memberOf, err := a.App.Vault.ListUserGroups(r.Context(), sess.TenantID, sess.UserID)
+		if err != nil {
+			writeErr(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		allowed := false
+		for _, id := range memberOf {
+			if id == gid {
+				allowed = true
+				break
+			}
+		}
+		if !allowed {
+			writeErr(w, http.StatusForbidden, "not a group member")
+			return
+		}
+	}
+	a.writeGroupMemberPublicKeys(w, r, sess.TenantID, gid)
 }
 
 // handleSecretGroupMemberKeys returns onboarded group member public keys for sharing.

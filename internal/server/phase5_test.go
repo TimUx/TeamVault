@@ -243,3 +243,91 @@ func getJSONListCookie(t *testing.T, url string, jar *cookieJar) []map[string]an
 	}
 	return page.Items
 }
+
+func TestAdminUserGroupEdit(t *testing.T) {
+	dir := t.TempDir()
+	key := bytes.Repeat([]byte("s"), 32)
+	app, err := bootstrap.Run(bootstrap.Options{DataDir: dir, UnlockKey: key})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = app.Vault.Close() })
+	api := server.New(app)
+	ts := httptest.NewServer(api.Handler())
+	t.Cleanup(ts.Close)
+
+	argon := cryptocore.Argon2Params{Time: 1, Memory: 8192, Threads: 1, KeyLen: 32}
+	postJSON(t, ts.URL+"/api/setup/commit", map[string]any{
+		"storage": map[string]string{"backend": "sqlite", "dsn": filepath.Join(dir, "v.db")},
+		"tenant":  map[string]any{"name": "T", "slug": "t1", "recovery_mode": "user_kit"},
+		"admin":   map[string]string{"username": "admin", "password": "password1234"},
+		"argon2":  argon,
+	}, nil)
+
+	jar := &cookieJar{m: map[string]string{}}
+	postJSON(t, ts.URL+"/api/auth/login", map[string]string{
+		"tenant_slug": "t1", "username": "admin", "password": "password1234",
+	}, jar)
+
+	created := postJSONCookie(t, ts.URL+"/api/admin/users", map[string]string{
+		"username": "bob", "password": "password1234", "display_name": "Bob",
+	}, jar)
+	bobID, _ := created["id"].(string)
+
+	grp := postJSONCookie(t, ts.URL+"/api/admin/groups", map[string]string{"name": "dev", "description": "old"}, jar)
+	gid, _ := grp["id"].(string)
+
+	putJSONCookie(t, ts.URL+"/api/admin/users/"+bobID, map[string]any{
+		"display_name": "Robert",
+		"email":        "bob@example.com",
+		"roles":        []string{"member", "auditor"},
+	}, jar)
+
+	putJSONCookie(t, ts.URL+"/api/admin/groups/"+gid, map[string]string{
+		"name": "developers", "description": "Dev team",
+	}, jar)
+
+	users := getJSONListCookie(t, ts.URL+"/api/admin/users", jar)
+	var bob map[string]any
+	for _, u := range users {
+		if u["id"] == bobID {
+			bob = u
+			break
+		}
+	}
+	if bob == nil || bob["display_name"] != "Robert" || bob["email"] != "bob@example.com" {
+		t.Fatalf("user update: %#v", bob)
+	}
+
+	groups := getJSONListCookie(t, ts.URL+"/api/admin/groups", jar)
+	var g map[string]any
+	for _, row := range groups {
+		if row["id"] == gid {
+			g = row
+			break
+		}
+	}
+	if g == nil || g["name"] != "developers" || g["description"] != "Dev team" {
+		t.Fatalf("group update: %#v", g)
+	}
+
+	postJSONCookie(t, ts.URL+"/api/admin/groups/"+gid+"/members", map[string]string{"user_id": bobID}, jar)
+
+	req, _ := http.NewRequest(http.MethodDelete, ts.URL+"/api/admin/groups/"+gid, nil)
+	setTestOrigin(req)
+	req.AddCookie(&http.Cookie{Name: "tv_session", Value: jar.m["tv_session"]})
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("delete group %d", res.StatusCode)
+	}
+	groups = getJSONListCookie(t, ts.URL+"/api/admin/groups", jar)
+	for _, row := range groups {
+		if row["id"] == gid {
+			t.Fatal("group still listed")
+		}
+	}
+}

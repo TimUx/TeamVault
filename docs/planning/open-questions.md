@@ -253,6 +253,21 @@ Antwort: Nein, nicht für den ersten Prod-Release nötig – ihr hattet 2FA/Pass
 
 ---
 
+## OQ-21 – Multi-Tenant-Membership & Tenant-Wechsel
+
+**Anfrage (2026-08):** User sollen mehreren Tenants zugeordnet werden können; nach Login alle Secrets sehen oder zwischen Tenants wechseln; Login ohne Tenant-Slug.
+
+**Ist-Zustand:** Ein User-Record gehört genau einem Tenant (`users.tenant_id`). Login erfordert `tenant_slug`. Session ist single-tenant. Crypto-Keys sind pro Tenant/User getrennt — aggregierte Vault-Ansicht über Tenants ist nicht trivial.
+
+**Optionen:**
+- (a) Membership-Tabelle + Tenant-Switcher (Session wechselt `tenant_id`, Vault pro Tenant separat entsperren)
+- (b) Plattform-weite Identität + Federation (größerer Eingriff)
+- (c) Status quo: Tenant-Slug pro Login, gleicher Username in mehreren Tenants = getrennte Konten
+
+**Vorläufig:** (c) mit UX-Verbesserungen (Organisation-Dropdown am Login, Tenant-Name in UI/Footer, zuletzt gewählte Organisation im Browser). (a) für Phase 10+ planen.
+
+---
+
 ## Review-Checkliste für euch
 
 - [X] OQ-01 Stack
