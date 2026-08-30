@@ -1,6 +1,6 @@
 # TeamVault – Installationsanleitung
 
-Schnelle Erstinstallation mit allen Vorbereitungen (Repo, Unlock-Keyfile, `.env`, Start).  
+Schnelle Erstinstallation (Unlock-Keyfile, `.env`, Start).  
 Betrieb und Admin-Themen danach: [Admin Guide](admin-guide.md).
 
 **Entwickler:** Timo Braun · Repo: [github.com/TimUx/TeamVault](https://github.com/TimUx/TeamVault) · aktuelle Release-Tags: `v1.1.1` und neuer
@@ -12,9 +12,8 @@ Betrieb und Admin-Themen danach: [Admin Guide](admin-guide.md).
 | **Docker** (empfohlen) | Docker + Compose v2 | Produktion / einfacher Betrieb |
 | **Go** | Go 1.23+ | Entwicklung / ohne Container |
 
-Beide One-Liner klonen das Repo nach `~/teamvault` (überschreibbar), erzeugen ein Unlock-Keyfile (≥48 Zufallsbytes) und legen eine `.env` an. Der Unlock-Key selbst liegt **nur** in der Keyfile — nicht als Klartext in der `.env`.
-
-Docker zieht standardmäßig das von CI nach **GHCR** gepushte Image (`ghcr.io/timux/teamvault:latest` bzw. SemVer-Tags wie `:1.1.1`).
+**Docker-One-Liner** fragt nach dem Installationspfad (Enter = `~/teamvault`) und legt dort nur Betriebdateien an (`docker-compose.yml`, `.env`, Unlock-Keyfile) — **kein** vollständiger Git-Clone. Das Image kommt von **GHCR**.  
+**Go-One-Liner** nutzt dieselben Prinzipien: Pfad-Abfrage, freier Port, schlanke Installation (`bin/teamvault`, `.env`, `secrets/`, `data/`) — **kein** Repo-Clone. Binary von GitHub Release (Fallback: einmaliger Build aus Quell-Archiv). Unlock-Key nur in der Keyfile.
 
 ## One-Liner: Docker
 
@@ -30,18 +29,24 @@ curl -fsSL https://raw.githubusercontent.com/TimUx/TeamVault/main/scripts/instal
 irm https://raw.githubusercontent.com/TimUx/TeamVault/main/scripts/install-docker.ps1 | iex
 ```
 
-Danach: **http://127.0.0.1:8080/setup**
+Der Installer fragt nach dem **Installationspfad** (Enter = `~/teamvault`), lädt nur Compose/Env von GitHub Raw, wählt den **ersten freien Host-Port ab 8080** und schreibt ihn in `.env` (`TEAMVAULT_PUBLISH_PORT`). Setup-URL steht am Ende der Ausgabe, z. B. `http://127.0.0.1:8081/setup`.
 
 Optional:
 
 | Variable | Bedeutung | Default |
 |----------|-----------|---------|
-| `TEAMVAULT_DIR` | Installationsverzeichnis | `$HOME/teamvault` |
-| `TEAMVAULT_PORT` | Host-Port | `8080` |
-| `TEAMVAULT_REF` | Branch/Tag beim Clone | `main` |
-| `TEAMVAULT_BUILD=1` | Lokal bauen (`docker-compose.build.yml`) statt GHCR-Pull | aus |
+| `TEAMVAULT_DIR` | Installationsverzeichnis (überspringt die Abfrage) | Prompt, Vorschlag `~/teamvault` |
+| `TEAMVAULT_PORT` | Host-Port festsetzen (muss frei sein) | erster freier Port ab `8080` |
+| `TEAMVAULT_REF` | Branch/Tag für Raw-Dateien | `main` |
+| `TEAMVAULT_BUILD=1` | Lokal bauen (braucht Quellcode / Clone) statt GHCR-Pull | aus |
 
-Beispiel anderer Port:
+Ohne Prompt (Automation):
+
+```bash
+TEAMVAULT_DIR=/opt/teamvault bash -c 'curl -fsSL https://raw.githubusercontent.com/TimUx/TeamVault/main/scripts/install-docker.sh | bash'
+```
+
+Beispiel Port festsetzen:
 
 ```bash
 TEAMVAULT_PORT=9090 bash -c 'curl -fsSL https://raw.githubusercontent.com/TimUx/TeamVault/main/scripts/install-docker.sh | bash'
@@ -51,7 +56,8 @@ Stoppen / Logs / Update:
 
 ```bash
 cd ~/teamvault
-docker compose pull && docker compose up -d   # neues :latest / gepinntes Tag
+# Update Compose-Datei + Image: One-Liner erneut, oder:
+docker compose pull && docker compose up -d
 docker compose logs -f
 docker compose down
 ```
@@ -70,7 +76,17 @@ curl -fsSL https://raw.githubusercontent.com/TimUx/TeamVault/main/scripts/instal
 irm https://raw.githubusercontent.com/TimUx/TeamVault/main/scripts/install-go.ps1 | iex
 ```
 
-Das Skript prüft Go ≥ 1.23, klont das Repo, erzeugt Keyfile + `.env`, baut `bin/teamvault` und startet den Server (Stopp: Ctrl+C).
+Der Installer fragt nach dem **Installationspfad**, lädt `.env.example`, holt `bin/teamvault` vom **neuesten GitHub-Release** (oder baut einmalig aus einem Quell-Archiv — ohne Git-Clone) und wählt den **ersten freien Port ab 8080**. Go ≥ 1.23 nur nötig, wenn kein passendes Release-Binary existiert.
+
+Optional:
+
+| Variable | Bedeutung | Default |
+|----------|-----------|---------|
+| `TEAMVAULT_DIR` | Installationsverzeichnis (überspringt die Abfrage) | Prompt, Vorschlag `~/teamvault` |
+| `TEAMVAULT_REF` | Release-Tag oder Branch | neuester Release-Tag, sonst `main` |
+| `TEAMVAULT_PORT` | Listen-Port festsetzen | erster freier Port ab `8080` |
+| `TEAMVAULT_BUILD=1` | Vollständiger Quell-Checkout im Installationsverzeichnis (Dev) | aus |
+| `TEAMVAULT_SKIP_RUN=1` | Nur vorbereiten, nicht starten | aus |
 
 Nur vorbereiten, nicht starten:
 
@@ -83,12 +99,14 @@ set -a; source .env; set +a
 
 ## Was die Skripte anlegen
 
-| Pfad | Inhalt |
-|------|--------|
-| `~/teamvault/` | Git-Checkout |
-| `secrets/teamvault_unlock` | Unlock-Keyfile (chmod 600) — **separat sichern** |
-| `.env` | Ports, Pfade, Image-Tag (aus `.env.example`) — **kein** Key-Inhalt |
-| `data/` (Go) bzw. Volume `teamvault_data` (Docker) | Persistente Config + Vault-Store (nur Ciphertext) |
+| Pfad | Docker | Go |
+|------|--------|-----|
+| Installationsverzeichnis | `docker-compose.yml`, `.env`, `secrets/` | `bin/teamvault`, `.env`, `secrets/`, `data/` |
+| `secrets/teamvault_unlock` | Unlock-Keyfile (chmod 600) — **separat sichern** | gleich |
+| `.env` | Ports, Image-Tag, Keyfile-Pfad | Ports, `TEAMVAULT_ADDR`, Data-Dir |
+| Persistenz | Docker-Volume `teamvault_data` | `./data/` |
+
+Kein vollständiger Git-Clone in der Standard-Installation. `TEAMVAULT_BUILD=1` lädt den Quellcode für lokale Builds (Docker-Image bzw. Go-Entwicklung).
 
 ## `.env` und Unlock-Key
 
@@ -166,7 +184,7 @@ go build -o bin/teamvault ./cmd/teamvault
 | Symptom | Check |
 |---------|--------|
 | `missing unlock key` | Keyfile existiert? Pfad in `.env` / Compose-Mount korrekt? |
-| Port belegt | `TEAMVAULT_PORT=9090` bzw. `TEAMVAULT_PUBLISH_PORT` |
+| Port belegt | One-Liner wählt automatisch den nächsten freien Port ab 8080; Pin: `TEAMVAULT_PORT=…` |
 | GHCR-Pull fehlgeschlagen | `docker login ghcr.io`; Package öffentlich/sichtbar? Sonst `TEAMVAULT_BUILD=1` / `docker-compose.build.yml` |
 | Go zu alt | Go 1.23+ von [go.dev/dl](https://go.dev/dl/) |
 | Setup erscheint erneut | Anderes Data-Dir oder anderes Unlock-Keyfile |

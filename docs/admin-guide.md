@@ -26,6 +26,8 @@ Ausführlich inkl. One-Liner: [**Installationsanleitung**](install-guide.md).
 
 ### 2.2 One-Liner
 
+Docker: nur Compose/Env + Unlock-Keyfile (kein Repo-Clone). Go: schlanke Installation mit Release-Binary (kein Repo-Clone). Details: [Installationsanleitung](install-guide.md).
+
 ```bash
 # Docker (empfohlen)
 curl -fsSL https://raw.githubusercontent.com/TimUx/TeamVault/main/scripts/install-docker.sh | bash

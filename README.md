@@ -84,9 +84,9 @@ curl -fsSL https://raw.githubusercontent.com/TimUx/TeamVault/main/scripts/instal
 irm https://raw.githubusercontent.com/TimUx/TeamVault/main/scripts/install-go.ps1 | iex
 ```
 
-Die Skripte klonen nach `~/teamvault`, erzeugen Unlock-Keyfile + `.env` und starten die App. Details: [Installationsanleitung](docs/install-guide.md).
+Die **Docker**-Skripte fragen nach dem Installationspfad, legen dort nur Compose/Env + Unlock-Keyfile an (kein Git-Clone), wählen den **ersten freien Port ab 8080** und starten das GHCR-Image. **Go** nutzt dieselben Prinzipien (schlanke Installation, Release-Binary). Setup-URL steht in der Installer-Ausgabe. Details: [Installationsanleitung](docs/install-guide.md).
 
-Danach im Browser: **http://127.0.0.1:8080/setup** → Wizard → Login → Onboarding → Vault.
+Danach: Wizard → Login → Onboarding → Vault.
 
 ![Setup: Tenant & Admin](docs/images/setup-tenant.png)
 
