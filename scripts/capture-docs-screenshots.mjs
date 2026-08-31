@@ -252,6 +252,12 @@ async function main() {
   await page.click('[data-nav="account"]');
   await page.waitForSelector("#passkey", { timeout: 15000 });
   await shot(page, "account.png", { fullPage: true });
+  const offlineOpt = page.locator("#offline_optin");
+  if (await offlineOpt.count()) {
+    await offlineOpt.check();
+    await page.waitForTimeout(300);
+    await shot(page, "account-offline.png", { fullPage: true });
+  }
 
   console.log("Admin…");
   await page.waitForSelector("#navAdminSection:not([hidden])", { timeout: 15000 });
@@ -314,6 +320,22 @@ async function main() {
   await page.fill("#mail_user", "teamvault");
   await page.waitForTimeout(400);
   await shot(page, "admin-smtp.png", { fullPage: true });
+
+  await page.click('[data-nav="admin:crypto"]');
+  await page.waitForSelector('[data-admin-section="crypto"] #offline_cache');
+  await page.waitForTimeout(400);
+  await shot(page, "admin-crypto.png", { fullPage: true });
+
+  await page.click('[data-nav="admin:access"]');
+  await page.waitForSelector('[data-admin-section="access"] #pa_base');
+  await page.fill("#pa_base", "/vault");
+  await page.fill("#pa_url", "https://storage.demo.local/vault");
+  await page.check("#pa_trust");
+  await page.waitForTimeout(400);
+  await shot(page, "admin-access.png", { fullPage: true });
+  await page.fill("#pa_base", "");
+  await page.fill("#pa_url", "");
+  await page.uncheck("#pa_trust");
 
   await page.click('[data-nav="vault:mine"]');
   await page.waitForSelector("button:has-text('Öffnen')", { timeout: 20000 });

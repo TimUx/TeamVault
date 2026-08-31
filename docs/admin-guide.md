@@ -124,7 +124,7 @@ Nach dem Commit: Login → **Vault-Onboarding** (Master-Passwort) → App.
 
 ## 3. Admin-UI (nach Vault-Entsperren)
 
-In der **Sidebar** unter **Administration** (sichtbar für `tenant_admin` / `platform_admin`; Auditoren nur **Audit**). Menüpunkte und Topbar-Theme nutzen flache Inline-SVG-Icons (kein externes Icon-CDN). Jeder Unterpunkt öffnet den jeweiligen Abschnitt.
+In der **Sidebar** unter **Administration** (sichtbar für `tenant_admin` / `platform_admin`; Auditoren nur **Audit**). Menüpunkte: Benutzer, Gruppen, Firmen-CA, **Zugriff & Proxy**, LDAP, SMTP, Krypto & Policy, Recovery & Escrow, API-Keys, ggf. Tenants & Migration. Topbar-Theme nutzt flache Inline-SVG-Icons (kein externes Icon-CDN). Jeder Unterpunkt öffnet den jeweiligen Abschnitt.
 
 ### 3.1 Benutzer
 
@@ -150,7 +150,24 @@ Kein Zugriff auf Master-Passwort, Private Keys oder Recovery-Kit-Klartext.
 - Rechte/Sharing bleiben über lokale Zuordnung — **keine** LDAP-Gruppen-Autorisierung
 - Secrets können an Gruppen geteilt werden (pro Mitglied eigener Envelope) — siehe User Guide
 
-### 3.3 Firmen-CA
+### 3.3 Zugriff & Proxy
+
+Sidebar **Administration → Zugriff & Proxy**:
+
+![Zugriff & Proxy](images/admin-access.png)
+
+Instanzweite Einstellungen für öffentliche URL und Reverse Proxy — unabhängig von Domain, Subdomain oder Unterpfad:
+
+| Feld | Standalone (`:8080`) | Hinter TLS-Proxy |
+|------|----------------------|------------------|
+| URL-Pfad-Präfix | leer | z. B. `/vault` |
+| Öffentliche URL | optional | z. B. `https://storage.firma.de/vault` |
+| Proxy-Header vertrauen | aus | **an** |
+| X-Forwarded-Prefix | aus | optional |
+
+Änderungen wirken sofort. Env-Variablen `TEAMVAULT_BASE_PATH` / `TEAMVAULT_TRUST_FORWARDED` überschreiben die Admin-Werte (Hinweis in der UI). Details: [§6.3](#63-unterpfad-domain--reverse-proxy).
+
+### 3.4 Firmen-CA
 
 Sidebar **Administration → Firmen-CA**:
 
@@ -161,7 +178,7 @@ Sidebar **Administration → Firmen-CA**:
 - Behebt `certificate signed by unknown authority` bei eigener PKI, ohne die Prüfung zu deaktivieren
 - PEM-Datei hochladen oder einfügen; **CA speichern** / **Zertifikat entfernen**
 
-### 3.4 LDAP / AD
+### 3.5 LDAP / AD
 
 Sidebar **Administration → LDAP**:
 
@@ -175,7 +192,7 @@ Sidebar **Administration → LDAP**:
 - Test-Bind (nutzt die aktuellen Formularwerte, auch ungespeicherte), Speichern, LDAP-Sync (fehlende → lokal disabled)
 - Just-in-Time: erster erfolgreicher LDAP-Login legt lokalen User an (`auth_backend=ldap`)
 
-### 3.5 SMTP
+### 3.6 SMTP
 
 Sidebar **Administration → SMTP**:
 
@@ -185,14 +202,19 @@ Sidebar **Administration → SMTP**:
 - Host, Port, From, Credentials; Test-Button
 - SMTP-TLS nutzt dieselbe Firmen-CA
 
-### 3.6 Krypto & Policy
+### 3.7 Krypto & Policy
+
+Sidebar **Administration → Krypto & Policy**:
+
+![Krypto & Policy](images/admin-crypto.png)
 
 - Argon2-Defaults / Presets für neue Onboardings
 - TOTP-Pflicht (Hinweis/Policy nach Login)
+- **Offline-Vault-Cache erlauben:** Mandantenweit Opt-in für clientseitige Ciphertext-Kopie (IndexedDB, 30 Tage TTL). Aus = Nutzer können keine Offline-Kopie anlegen; bestehende Kopien auf Geräten werden beim nächsten Online-Besuch nicht mehr aktualisiert.
 - Idle-Lock der Vault-Session (Default 15 min) — nur Client-Unlock
 - **Admins: Secret-Liste nur mit Envelope** (`admin_secrets_envelope_only`): Wenn aktiv, sehen Tenant-Admins in der Secret-Liste nur Einträge, für die sie selbst ein Envelope haben (Inventar-Metadaten anderer Secrets ausgeblendet). Default: aus — Admins sehen alle Secret-Metadaten (IDs, Title-Ciphertext), Klartext bleibt Zero-Knowledge-geschützt.
 
-### 3.7 Escrow & Shamir
+### 3.8 Escrow & Shamir
 
 Wenn Recovery-Modus Escrow erlaubt (Wizard-Schritt Recovery bzw. später umschalten mit Bestätigung `REONBOARD`):
 
@@ -207,7 +229,7 @@ Wenn Recovery-Modus Escrow erlaubt (Wizard-Schritt Recovery bzw. später umschal
 
 Der private Escrow-Key darf nie in Logs oder dauerhaft auf dem Server landen.
 
-### 3.8 Audit & API-Keys
+### 3.9 Audit & API-Keys
 
 ![API-Keys](images/admin-apikeys.png)
 
@@ -225,7 +247,7 @@ Der private Escrow-Key darf nie in Logs oder dauerhaft auf dem Server landen.
 - Nach User-Disable: Secrets mit Envelope dieses Users rotieren (Hinweis + Liste `accessible-secrets` in Admin-UI; kein Auto-Rotate wegen ZK)
 - Tenant-Admins sehen standardmäßig in der Secret-Liste **Metadaten** (IDs, Title-Ciphertext) auch ohne eigenen Envelope — optional einschränkbar über Policy (siehe §3.6)
 
-### 3.9 Tenants, Storage-Migration & Instanz-Backup (`platform_admin`)
+### 3.10 Tenants, Storage-Migration & Instanz-Backup (`platform_admin`)
 
 - Weitere Tenants anlegen
 - Migration SQLite ↔ JSON: nur Ciphertext; Bestätigung `MIGRATE`
@@ -309,6 +331,49 @@ $env:TEAMVAULT_URL='https://vault.example'; irm "$env:TEAMVAULT_URL/help/install
 - [ ] HSTS am Proxy oder App (bei HTTPS)
 - [ ] WebAuthn RP-ID/Origin passen zur öffentlichen URL
 
+### 6.3 Unterpfad, Domain & Reverse Proxy
+
+TeamVault passt sich pro Installation an — **Standalone** (direkt auf `:8080`), **Subdomain** (`https://vault.firma.de/`) oder **Unterpfad** (`https://storage.firma.de/vault/`). Domain und Subdomain erfordern keine Sonderkonfiguration; nur ein URL-Pfad-Präfix und ggf. Proxy-Header.
+
+**Wichtig:** Am Proxy **kein** `uri strip_prefix` — der volle Pfad muss bei TeamVault ankommen.
+
+#### Konfiguration (Admin-UI, empfohlen)
+
+Administration → **Zugriff & Proxy**:
+
+| Feld | Standalone | Hinter Proxy (HTTPS) |
+|------|------------|----------------------|
+| URL-Pfad-Präfix | leer | z. B. `/vault` |
+| Öffentliche URL | optional | z. B. `https://git.example.internal/vault` (für E-Mails/CLI-Hinweise) |
+| Proxy-Header vertrauen | aus | **an** (X-Forwarded-Proto/Host) |
+| X-Forwarded-Prefix | aus | optional, wenn der Proxy den Pfad per Header meldet |
+
+Änderungen wirken **sofort** (ohne Neustart). Env-Variablen überschreiben die Admin-Werte (siehe unten).
+
+#### Container-Bootstrap (optional, überschreibt Admin)
+
+```env
+TEAMVAULT_BASE_PATH=/vault
+TEAMVAULT_TRUST_FORWARDED=1
+```
+
+Nützlich, wenn die Einstellung schon vor dem ersten Setup per Compose gesetzt werden soll.
+
+**Caddy (Beispiel Unterpfad):**
+
+```caddy
+git.example.internal {
+    handle /vault/* {
+        reverse_proxy teamvault:8080 {
+            header_up X-Forwarded-Proto {scheme}
+            header_up X-Forwarded-Host {host}
+        }
+    }
+}
+```
+
+Öffentliche URLs: Setup `https://…/vault/setup`, Login `…/vault/login`, App `…/vault/app`. Session-Cookie `Path=/vault`. PWA/Offline-Cache nutzen dasselbe Präfix automatisch.
+
 ### 6.2 Single-Node / Sessions
 
 Sessions, Login-Rate-Limits und Passkey-Challenges liegen **im Prozessspeicher** (Sessions zusätzlich optional in `sessions.json` unter Data-Dir). Mehrere Replicas ohne Sticky Sessions / gemeinsames Challenge-Store: Login und Passkeys können fehlschlagen. Empfehlung: **eine Replica** oder Sticky Sessions am Load-Balancer.
@@ -327,6 +392,8 @@ Sessions, Login-Rate-Limits und Passkey-Challenges liegen **im Prozessspeicher**
 | Vault „Idle gesperrt“ | Erneut Master-Passwort; Idle-Minuten in Policy |
 | Cookie-POST „origin check failed“ | Proxy leitet Origin durch? |
 | Restore `checksum mismatch` | Snapshot-Datei unverändert hochladen (Roh-JSON, nicht umgeschrieben) |
+| 404 unter `/vault/…` | Administration → **Zugriff & Proxy**: Pfad `/vault`? Proxy **ohne** `strip_prefix`? Oder `TEAMVAULT_BASE_PATH=/vault` |
+| Offline-Sync schlägt fehl | Policy „Offline-Vault-Cache erlauben“ aktiv? HTTPS/localhost? Browser erlaubt IndexedDB |
 
 ## 8. Weiterführend
 
@@ -344,6 +411,20 @@ Dokumentations-Screenshots liegen unter `docs/images/`. Neu erzeugen (Playwright
 ./scripts/capture-docs-screenshots.sh
 ```
 
+Windows (ohne Docker):
+
+```powershell
+./scripts/capture-docs-screenshots.ps1
+```
+
 Voraussetzungen: Docker, Node.js/npm. Das Skript startet temporär `go run ./cmd/teamvault` in einem Container auf Port **8099**, führt Setup/Login/Onboarding durch und überschreibt die PNGs in `docs/images/`.
 
-Ohne Docker (Windows): Dev-Server lokal auf `:8099` starten, dann `TV_URL=http://127.0.0.1:8099 TV_BROWSER_CHANNEL=msedge node scripts/capture-docs-screenshots.mjs` (falls Playwright-Chromium nicht geladen werden kann, z. B. hinter Firmenproxy).
+Ohne Docker (Windows): Dev-Server lokal auf `:8099` starten (`go run ./cmd/teamvault` mit `TEAMVAULT_ADDR=:8099`), dann:
+
+```powershell
+$env:TV_URL = "http://127.0.0.1:8099"
+$env:TV_BROWSER_CHANNEL = "msedge"
+node scripts/capture-docs-screenshots.mjs
+```
+
+Neu seit Offline/Proxy-Update: `admin-access.png`, `admin-crypto.png`, `account-offline.png` (siehe Skript). Falls Playwright-Chromium nicht geladen werden kann (z. B. hinter Firmenproxy), `msedge` oder `TV_BROWSER_EXECUTABLE` setzen.

@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/teamvault/teamvault/internal/bootstrap"
@@ -42,6 +43,9 @@ func main() {
 		IdleTimeout:       120 * time.Second,
 	}
 	fmt.Printf("%s %s listening on %s (initialized=%v)\n", buildinfo.Product, buildinfo.Version, *addr, app.Config.Initialized)
+	if bp := os.Getenv("TEAMVAULT_BASE_PATH"); strings.TrimSpace(bp) != "" && strings.TrimSpace(bp) != "/" {
+		fmt.Printf("public base path: %s (set behind reverse proxy without URI strip)\n", strings.TrimSuffix(strings.TrimSpace(bp), "/"))
+	}
 	if server.TrustForwardedEnabled() {
 		log.Println("WARN: TEAMVAULT_TRUST_FORWARDED is enabled — only use behind a trusted reverse proxy")
 	}

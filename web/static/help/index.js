@@ -1,9 +1,9 @@
 (() => {
   const hint = document.getElementById("originHint");
-  if (hint) hint.textContent = location.origin;
+  if (hint) hint.textContent = tvHelpOrigin();
   const foot = document.getElementById("aboutFoot");
   if (!foot) return;
-  fetch("/api/version")
+  fetch(tvHelpPath("/api/version"))
     .then((r) => r.json())
     .then((v) => {
       let version = String(v.version || "dev");

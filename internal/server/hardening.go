@@ -12,11 +12,11 @@ import (
 
 // requestSecure reports whether the client connection should be treated as HTTPS
 // (direct TLS or reverse-proxy X-Forwarded-Proto).
-func requestSecure(r *http.Request) bool {
+func requestSecure(r *http.Request, trustForwarded bool) bool {
 	if r.TLS != nil {
 		return true
 	}
-	if !trustForwarded() {
+	if !trustForwarded {
 		return false
 	}
 	proto := strings.ToLower(strings.TrimSpace(r.Header.Get("X-Forwarded-Proto")))
@@ -25,7 +25,16 @@ func requestSecure(r *http.Request) bool {
 
 func trustForwarded() bool {
 	v := strings.ToLower(strings.TrimSpace(os.Getenv("TEAMVAULT_TRUST_FORWARDED")))
-	return v == "1" || v == "true" || v == "yes"
+	return trustForwardedValue(v)
+}
+
+func trustForwardedValue(v string) bool {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "1", "true", "yes":
+		return true
+	default:
+		return false
+	}
 }
 
 // TrustForwardedEnabled reports whether forwarded headers are trusted (for startup warnings).
@@ -33,13 +42,20 @@ func TrustForwardedEnabled() bool {
 	return trustForwarded()
 }
 
+func (a *API) cookiePath(r *http.Request) string {
+	if bp := a.resolveBasePath(r); bp != "" {
+		return bp
+	}
+	return "/"
+}
+
 func (a *API) setSessionCookie(w http.ResponseWriter, r *http.Request, sess session.Session) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     "tv_session",
 		Value:    sess.ID,
-		Path:     "/",
+		Path:     a.cookiePath(r),
 		HttpOnly: true,
-		Secure:   requestSecure(r),
+		Secure:   a.requestSecure(r),
 		SameSite: http.SameSiteLaxMode,
 		Expires:  sess.ExpiresAt,
 	})
@@ -47,8 +63,8 @@ func (a *API) setSessionCookie(w http.ResponseWriter, r *http.Request, sess sess
 
 func (a *API) clearSessionCookie(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{
-		Name: "tv_session", Value: "", Path: "/", MaxAge: -1,
-		HttpOnly: true, Secure: requestSecure(r), SameSite: http.SameSiteLaxMode,
+		Name: "tv_session", Value: "", Path: a.cookiePath(r), MaxAge: -1,
+		HttpOnly: true, Secure: a.requestSecure(r), SameSite: http.SameSiteLaxMode,
 	})
 }
 
@@ -67,8 +83,8 @@ func (a *API) withSecurity(next http.Handler) http.Handler {
 		w.Header().Set("Referrer-Policy", "no-referrer")
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("Content-Security-Policy",
-			"default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'")
-		if requestSecure(r) {
+			"default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; worker-src 'self'; manifest-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'")
+		if a.requestSecure(r) {
 			w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
 		}
 
@@ -104,22 +120,15 @@ func (a *API) originOK(r *http.Request) bool {
 		if ref == "" {
 			return false // cookie + mutating without Origin/Referer
 		}
-		return sameHost(r, ref)
+		return a.sameHost(r, ref)
 	}
-	return sameHost(r, origin)
+	return a.sameHost(r, origin)
 }
 
-func sameHost(r *http.Request, raw string) bool {
+func (a *API) sameHost(r *http.Request, raw string) bool {
 	u, err := url.Parse(raw)
 	if err != nil || u.Host == "" {
 		return false
 	}
-	host := r.Host
-	if trustForwarded() {
-		if fh := r.Header.Get("X-Forwarded-Host"); fh != "" {
-			host = strings.Split(fh, ",")[0]
-			host = strings.TrimSpace(host)
-		}
-	}
-	return strings.EqualFold(u.Host, host)
+	return strings.EqualFold(u.Host, a.requestHost(r))
 }

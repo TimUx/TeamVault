@@ -8,8 +8,51 @@ const state = {
   },
 };
 
+function tvBaseFromPath() {
+  const p = location.pathname;
+  const routes = ["/app", "/login", "/setup", "/onboard"];
+  for (const s of routes) {
+    if (p === s) return "";
+    if (p.endsWith(s) && p.length > s.length) return p.slice(0, p.length - s.length);
+  }
+  const hm = p.match(/^(.*)\/help(?:\/|$)/);
+  return hm ? hm[1] : "";
+}
+
+function tvBase() {
+  if (typeof window.__TV_BASE__ === "string") {
+    const v = window.__TV_BASE__.replace(/\/$/, "");
+    if (v) return v;
+  }
+  try {
+    const meta = (document.querySelector('meta[name="tv-base"]')?.content || "").replace(/\/$/, "");
+    if (meta) return meta;
+  } catch (_) {}
+  return tvBaseFromPath();
+}
+
+function tvPath(path) {
+  if (!path || path.startsWith("http://") || path.startsWith("https://")) return path;
+  const p = path.startsWith("/") ? path : "/" + path;
+  const b = tvBase();
+  return b ? b + p : p;
+}
+
+function tvRelPath() {
+  const p = location.pathname;
+  const b = tvBase();
+  if (!b) return p;
+  if (p === b) return "/";
+  if (p.startsWith(b + "/")) return p.slice(b.length) || "/";
+  return p;
+}
+
+function tvGo(path) {
+  location.href = tvPath(path);
+}
+
 async function api(path, opts = {}) {
-  const res = await fetch(path, {
+  const res = await fetch(tvPath(path), {
     headers: { "Content-Type": "application/json", ...(opts.headers || {}) },
     credentials: "same-origin",
     ...opts,
@@ -118,7 +161,7 @@ function ensureHeaderControls() {
   };
   actions.appendChild(btn);
   const help = document.createElement("a");
-  help.href = "/help";
+  help.href = tvPath("/help");
   help.className = "btn-ghost";
   help.textContent = "Hilfe";
   help.style.textDecoration = "none";
@@ -455,7 +498,7 @@ function stepView(repaint) {
       const res = await api("/api/setup/commit", { method: "POST", body: JSON.stringify(body) });
       ok.hidden = false;
       ok.textContent = `OK — Tenant ${res.tenant_id}. Weiter zum Login…`;
-      setTimeout(() => { location.href = "/login"; }, 800);
+      setTimeout(() => { tvGo("/login"); }, 800);
     } catch (e) {
       err.hidden = false;
       err.textContent = e.message;
@@ -484,6 +527,7 @@ function renderLogin(app) {
     <div id="offlineLogin" class="offline-login" hidden>
       <hr />
       <p class="hint">Ohne Netzwerk: gespeicherte verschlüsselte Kopie mit Master-Passwort entsperren (kein Login, kein TOTP).</p>
+      <p class="error" id="offlineExpired" hidden role="alert"></p>
       <button class="btn-ghost btn-with-ico" type="button" id="doOffline">${btnLabel("unlock", "Offline entsperren")}</button>
     </div>
   </div>`);
@@ -528,7 +572,7 @@ function renderLogin(app) {
         }),
       });
       try { localStorage.setItem("tv-tenant-slug", tenantSlug); } catch (_) {}
-      location.href = res.needs_vault_onboard ? "/onboard" : "/app";
+      tvGo(res.needs_vault_onboard ? "/onboard" : "/app");
     } catch (e) {
       err.hidden = false; err.textContent = e.message;
     }
@@ -564,7 +608,7 @@ function renderLogin(app) {
         }),
       });
       try { localStorage.setItem("tv-tenant-slug", tenant); } catch (_) {}
-      location.href = res.needs_vault_onboard ? "/onboard" : "/app";
+      tvGo(res.needs_vault_onboard ? "/onboard" : "/app");
     } catch (e) {
       err.hidden = false; err.textContent = e.message;
     }
@@ -572,12 +616,27 @@ function renderLogin(app) {
   (async () => {
     if (!global.TVOfflineStore?.isAvailable()) return;
     try {
-      const snaps = await TVOfflineStore.listSnapshots({ validOnly: true });
-      if (snaps.length) n.querySelector("#offlineLogin").hidden = false;
+      const valid = await TVOfflineStore.listSnapshots({ validOnly: true });
+      const all = await TVOfflineStore.listSnapshots({ validOnly: false });
+      const expired = all.filter((s) => s.expired);
+      const box = n.querySelector("#offlineLogin");
+      const expiredEl = n.querySelector("#offlineExpired");
+      if (valid.length) {
+        box.hidden = false;
+        if (expiredEl) expiredEl.hidden = true;
+      } else if (expired.length) {
+        box.hidden = false;
+        if (expiredEl) {
+          expiredEl.hidden = false;
+          expiredEl.textContent =
+            "Offline-Kopie abgelaufen (max. 30 Tage). Bitte online anmelden und unter Konto neu synchronisieren.";
+        }
+        n.querySelector("#doOffline").disabled = true;
+      }
     } catch (_) {}
   })();
   n.querySelector("#doOffline").onclick = () => {
-    location.href = "/app?offline=1";
+    tvGo("/app?offline=1");
   };
   app.appendChild(n);
 }
@@ -710,7 +769,7 @@ function renderOnboard(app) {
       const go = document.createElement("div");
       go.className = "row";
       go.innerHTML = `<button class="btn-accent" type="button">Weiter zur App</button>`;
-      go.querySelector("button").onclick = () => { location.href = "/app"; };
+      go.querySelector("button").onclick = () => { tvGo("/app"); };
       n.appendChild(go);
     } catch (e) {
       err.hidden = false; err.textContent = e.message;
@@ -747,6 +806,7 @@ const vault = {
   groups: [],
   totpTimer: null,
   selectedIds: new Set(),
+  offlineSyncRunning: false,
 };
 
 function isAdmin() {
@@ -1009,13 +1069,14 @@ function renderApp(app) {
         <div class="sidebar-section">
           <div class="sidebar-section-title">Konto</div>
           ${navLink("account", "user", "Konto")}
-          <a class="sidebar-link" href="/help" target="_blank" rel="noopener"><span class="nav-ico">${icon("book")}</span><span>Hilfe</span></a>
+          <a class="sidebar-link" href="${tvPath("/help")}" target="_blank" rel="noopener"><span class="nav-ico">${icon("book")}</span><span>Hilfe</span></a>
         </div>
         <div class="sidebar-section" id="navAdminSection" hidden>
           <div class="sidebar-section-title">Administration</div>
           ${navLink("admin:users", "users", "Benutzer", "admin-link", 'data-admin-only')}
           ${navLink("admin:groups", "group", "Gruppen", "admin-link", 'data-admin-only')}
           ${navLink("admin:trust", "cert", "Firmen-CA", "admin-link", 'data-admin-only')}
+          ${navLink("admin:access", "network", "Zugriff &amp; Proxy", "admin-link", 'data-admin-only')}
           ${navLink("admin:ldap", "network", "LDAP", "admin-link", 'data-admin-only')}
           ${navLink("admin:smtp", "mail", "SMTP", "admin-link", 'data-admin-only')}
           ${navLink("admin:crypto", "shield", "Krypto &amp; Policy", "admin-link", 'data-admin-only')}
@@ -1026,6 +1087,7 @@ function renderApp(app) {
         </div>
       </nav>
       <div class="app-sidebar-foot">
+        <p class="offline-sync-bar hint" id="offlineSyncBar" hidden role="status"></p>
         <p class="hint" id="info">Lade…</p>
         <p class="hint about-line" id="about"></p>
         <button class="btn-ghost btn-with-ico" type="button" id="out">${btnLabel("logout", "Logout")}</button>
@@ -1377,6 +1439,20 @@ function renderApp(app) {
                     <button class="btn-ghost btn-sm" type="button" id="trust_ca_clear">Zertifikat entfernen</button>
                   </div>
                 </div>
+                <div class="admin-section" data-admin-section="access">
+                  <p class="hint">Öffentlicher Zugriff: Domain, Subdomain oder Unterpfad. Standalone ohne Proxy: Felder leer lassen, „Proxy-Header vertrauen“ aus.</p>
+                  <p class="hint" id="pa_env_hint" hidden>Einige Werte werden durch Umgebungsvariablen überschrieben (Container-Bootstrap).</p>
+                  <label>URL-Pfad-Präfix</label>
+                  <input id="pa_base" placeholder="/vault (leer = Domain-Root)" />
+                  <label>Öffentliche URL (optional)</label>
+                  <input id="pa_url" placeholder="https://storage.example.com/vault" />
+                  <label class="inline"><input id="pa_trust" type="checkbox" /> Proxy-Header vertrauen (X-Forwarded-Proto/Host)</label>
+                  <label class="inline"><input id="pa_prefix" type="checkbox" /> Pfad aus X-Forwarded-Prefix ableiten (wenn Präfix leer)</label>
+                  <p class="hint" id="pa_effective"></p>
+                  <div class="row">
+                    <button class="btn-accent" type="button" id="pa_save">Zugriff speichern</button>
+                  </div>
+                </div>
                 <div class="admin-section" data-admin-section="ldap">
                   <p class="hint">LDAP/AD nur für Login-Bind. Host muss zum Zertifikatsnamen (CN/SAN) passen. Die Firmen-CA liegt unter Administration → Firmen-CA.</p>
                   <label class="inline"><input id="ldap_en" type="checkbox" /> Aktiv</label>
@@ -1508,6 +1584,7 @@ function renderApp(app) {
     "admin:users": "Benutzer",
     "admin:groups": "Gruppen",
     "admin:trust": "Firmen-CA",
+    "admin:access": "Zugriff & Proxy",
     "admin:ldap": "LDAP",
     "admin:smtp": "SMTP",
     "admin:crypto": "Krypto & Policy",
@@ -1661,25 +1738,43 @@ function renderApp(app) {
     n.querySelector("#info").textContent = formatOfflineSessionInfo(vault.offlineSnapshot);
   }
 
+  async function showOfflineExpiredMessage() {
+    const err = n.querySelector("#uerr");
+    const unlock = n.querySelector("#unlock");
+    if (unlock) unlock.hidden = false;
+    if (err) {
+      err.hidden = false;
+      err.textContent =
+        "Offline-Kopie abgelaufen (max. 30 Tage). Bitte online anmelden und unter Konto → Offline-Vault neu synchronisieren.";
+    }
+    n.querySelector("#info").textContent = "Offline-Kopie abgelaufen";
+  }
+
   async function initAppSession() {
     if (offlineUrlParam) {
       try {
         const snaps = await TVOfflineStore.listSnapshots({ validOnly: true });
         if (!snaps.length) {
-          location.href = "/login";
+          const all = await TVOfflineStore.listSnapshots({ validOnly: false });
+          if (all.some((s) => s.expired)) {
+            await showOfflineExpiredMessage();
+            history.replaceState(null, "", tvPath("/app"));
+            return;
+          }
+          tvGo("/login");
           return;
         }
         await populateOfflinePicker(snaps);
-        if (offlineUrlParam) history.replaceState(null, "", "/app");
+        history.replaceState(null, "", tvPath("/app"));
         return;
       } catch (_) {
-        location.href = "/login";
+        tvGo("/login");
         return;
       }
     }
     try {
       const me = await api("/api/me");
-      if (me.needs_vault_onboard) { location.href = "/onboard"; return; }
+      if (me.needs_vault_onboard) { tvGo("/onboard"); return; }
       vault.me = me;
       n.querySelector("#info").textContent = formatSessionInfo(me);
       try {
@@ -1690,12 +1785,17 @@ function renderApp(app) {
       try {
         const snaps = await TVOfflineStore.listSnapshots({ validOnly: true });
         if (!snaps.length) {
-          location.href = "/login";
+          const all = await TVOfflineStore.listSnapshots({ validOnly: false });
+          if (all.some((s) => s.expired)) {
+            await showOfflineExpiredMessage();
+            return;
+          }
+          tvGo("/login");
           return;
         }
         await populateOfflinePicker(snaps);
       } catch (e2) {
-        location.href = "/login";
+        tvGo("/login");
       }
     }
   }
@@ -1710,7 +1810,7 @@ function renderApp(app) {
     vault.offlineMode = false;
     vault.offlineSnapshot = null;
     vault.offlinePicker = false;
-    location.href = "/login";
+    tvGo("/login");
   };
 
   n.querySelectorAll(".sidebar-link[data-nav]").forEach((btn) => {
@@ -1750,6 +1850,7 @@ function renderApp(app) {
       await syncOfflineSnapshot();
       ok.hidden = false;
       ok.textContent = "Offline-Kopie aktualisiert.";
+      setOfflineSyncProgress("", false);
     } catch (e) {
       err.hidden = false;
       err.textContent = e.message;
@@ -1771,7 +1872,7 @@ function renderApp(app) {
       ok.textContent = "Offline-Kopie gelöscht.";
       if (vault.offlineMode) {
         clearVaultKey();
-        location.href = "/login";
+        tvGo("/login");
       }
     } catch (e) {
       err.hidden = false;
@@ -2065,39 +2166,83 @@ function renderApp(app) {
     } catch (e) { alert(e.message); }
   };
 
-  async function syncOfflineSnapshot() {
+  async function fetchSecretDetailWithRetry(id, retries = 2) {
+    let lastErr;
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      try {
+        return await api("/api/secrets/" + id);
+      } catch (e) {
+        lastErr = e;
+        if (attempt < retries) {
+          await new Promise((r) => setTimeout(r, 250 * (attempt + 1)));
+        }
+      }
+    }
+    throw lastErr || new Error("Secret-Detail nicht ladbar");
+  }
+
+  function setOfflineSyncProgress(text, show) {
+    const bar = n.querySelector("#offlineSyncBar");
+    if (!bar) return;
+    bar.hidden = !show;
+    bar.textContent = text || "";
+  }
+
+  async function syncOfflineSnapshot(opts = {}) {
+    const silent = !!opts.silent;
     if (!global.TVOfflineStore?.isAvailable()) return;
     if (vault.offlineMode || !vault.sk || !vault.me) return;
     if (!offlinePolicyAllowed()) return;
     if (!TVOfflineStore.getOptIn()) return;
-    const keys = await api("/api/vault/keys");
-    const params = vault.params || (await api("/api/vault/crypto-params"));
-    await ensureAllSecretsLoaded();
-    const secrets = [];
-    for (const it of vault.secretsCache) {
-      if (!it.has_access || !it.envelope) continue;
-      try {
-        const det = await api("/api/secrets/" + it.id);
-        secrets.push({
-          id: it.id,
-          title_ciphertext_b64: det.title_ciphertext_b64,
-          title_nonce_b64: det.title_nonce_b64,
-          ciphertext_b64: det.ciphertext_b64,
-          nonce_b64: det.nonce_b64,
-          key_version: det.key_version,
-          envelope: det.envelope,
-          created_by: it.created_by,
-          created_by_username: det.created_by_username,
-          shared_groups: det.shared_groups || it.shared_groups,
-          recipients: det.recipients,
-          has_access: true,
-        });
-      } catch (_) { /* skip */ }
+    if (vault.offlineSyncRunning) return;
+
+    vault.offlineSyncRunning = true;
+    try {
+      if (!silent) setOfflineSyncProgress("Offline-Kopie: vorbereiten…", true);
+      const keys = await api("/api/vault/keys");
+      const params = vault.params || (await api("/api/vault/crypto-params"));
+      await ensureAllSecretsLoaded();
+
+      const prev = await TVOfflineStore.getSnapshotRaw(vault.me.tenant_id, vault.me.user_id);
+      const plan = TVOfflineStore.planSync(vault.secretsCache, prev?.secrets || []);
+      const total = plan.expectedCount;
+      let done = plan.reuse.length;
+      if (!silent) setOfflineSyncProgress(`Offline-Kopie: ${done}/${total}`, true);
+
+      const fetched = [];
+      for (const it of plan.toFetch) {
+        const det = await fetchSecretDetailWithRetry(it.id);
+        fetched.push(TVOfflineStore.buildSecretEntry(it, det));
+        done += 1;
+        if (!silent) setOfflineSyncProgress(`Offline-Kopie: ${done}/${total}`, true);
+      }
+
+      const secrets = TVOfflineStore.assembleSecrets(plan.reuse, fetched, plan.expectedIds);
+      if (!secrets) {
+        throw new Error("Snapshot unvollständig — bisherige Offline-Kopie bleibt erhalten");
+      }
+
+      const snap = TVOfflineStore.buildSnapshot({ me: vault.me, keys, params, secrets });
+      await TVOfflineStore.putSnapshot(snap);
+      vault.offlineSnapshot = snap;
+      updateOfflineAccountUI(snap);
+      if (!silent) {
+        const skipped = plan.reuse.length;
+        const msg = skipped
+          ? `Offline-Kopie aktualisiert (${fetched.length} neu, ${skipped} unverändert).`
+          : `Offline-Kopie aktualisiert (${secrets.length} Secrets).`;
+        setOfflineSyncProgress(msg, true);
+        setTimeout(() => setOfflineSyncProgress("", false), 4000);
+      }
+    } catch (e) {
+      if (!silent) {
+        setOfflineSyncProgress(e.message || "Offline-Sync fehlgeschlagen", true);
+        setTimeout(() => setOfflineSyncProgress("", false), 6000);
+      }
+      throw e;
+    } finally {
+      vault.offlineSyncRunning = false;
     }
-    const snap = TVOfflineStore.buildSnapshot({ me: vault.me, keys, params, secrets });
-    await TVOfflineStore.putSnapshot(snap);
-    vault.offlineSnapshot = snap;
-    updateOfflineAccountUI(snap);
   }
 
   async function maybePromptOfflineOptIn() {
@@ -3685,6 +3830,20 @@ function renderApp(app) {
     n.querySelector("#trust_ca_pem").value = trust.ca_cert_pem || "";
     n.querySelector("#trust_ca_file").value = "";
     paintTrustCAStatus();
+    try {
+      const pa = await api("/api/admin/public-access");
+      n.querySelector("#pa_base").value = pa.configured_base_path || "";
+      n.querySelector("#pa_url").value = pa.configured_public_url || "";
+      n.querySelector("#pa_trust").checked = !!(pa.configured_trust_fwd ?? pa.trust_forwarded);
+      n.querySelector("#pa_prefix").checked = !!pa.use_forwarded_prefix;
+      const ov = pa.env_overrides || {};
+      const hint = n.querySelector("#pa_env_hint");
+      if (hint) hint.hidden = !(ov.base_path || ov.trust_forwarded);
+      const eff = n.querySelector("#pa_effective");
+      if (eff) {
+        eff.textContent = `Aktiv: ${pa.public_url || "—"} · Pfad ${pa.base_path || "/"} · Proxy-Header ${pa.trust_forwarded ? "ja" : "nein"}`;
+      }
+    } catch (_) {}
     const th = n.querySelector("#ldap_trust_hint");
     if (th) {
       th.textContent = trust.present
@@ -3843,6 +4002,23 @@ function renderApp(app) {
       });
       await refreshAdmin();
       err.hidden = false; err.style.color = "var(--color-ok)"; err.textContent = "Firmen-CA gespeichert";
+    } catch (e) { err.hidden = false; err.style.color = ""; err.textContent = e.message; }
+  };
+  n.querySelector("#pa_save").onclick = async () => {
+    const err = n.querySelector("#aerr"); err.hidden = true;
+    try {
+      await api("/api/admin/public-access", {
+        method: "PUT",
+        body: JSON.stringify({
+          base_path: n.querySelector("#pa_base").value.trim(),
+          public_url: n.querySelector("#pa_url").value.trim(),
+          trust_forwarded: n.querySelector("#pa_trust").checked,
+          use_forwarded_prefix: n.querySelector("#pa_prefix").checked,
+        }),
+      });
+      err.hidden = false; err.style.color = "var(--color-ok)";
+      err.textContent = "Zugriffseinstellungen gespeichert — bei Pfadänderung ggf. Seite neu laden.";
+      await refreshAdmin();
     } catch (e) { err.hidden = false; err.style.color = ""; err.textContent = e.message; }
   };
   n.querySelector("#ldap_save").onclick = async () => {
@@ -4044,7 +4220,7 @@ function renderApp(app) {
   n.querySelector("#inst_bak_dl").onclick = async () => {
     const err = n.querySelector("#aerr"); err.hidden = true;
     try {
-      const res = await fetch("/api/admin/backup", { credentials: "same-origin" });
+      const res = await fetch(tvPath("/api/admin/backup"), { credentials: "same-origin" });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || res.statusText);
       downloadBlob("teamvault-instance-backup.json", JSON.stringify(data, null, 2), "application/json");
@@ -4061,7 +4237,7 @@ function renderApp(app) {
       if (!file) throw new Error("Snapshot-Datei wählen");
       const confirm = n.querySelector("#inst_bak_confirm").value.trim();
       const text = await file.text();
-      const res = await fetch("/api/admin/backup/restore?confirm=" + encodeURIComponent(confirm), {
+      const res = await fetch(tvPath("/api/admin/backup/restore?confirm=" + encodeURIComponent(confirm)), {
         method: "POST",
         credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
@@ -4082,15 +4258,15 @@ async function boot() {
   const status = await api("/api/setup/status");
   const app = document.getElementById("app");
   app.innerHTML = "";
-  const path = location.pathname;
+  const path = tvRelPath();
   if (!status.initialized) {
-    if (path !== "/setup" && path !== "/") location.href = "/setup";
+    if (path !== "/setup" && path !== "/") tvGo("/setup");
     renderWizard(app);
     paintAbout();
     return;
   }
   if (path === "/setup") {
-    app.appendChild(el(`<div class="panel"><h1>Bereits eingerichtet</h1><a class="btn-accent" href="/login" style="display:inline-block;text-decoration:none;padding:.6rem 1rem;">Zum Login</a></div>`));
+    app.appendChild(el(`<div class="panel"><h1>Bereits eingerichtet</h1><a class="btn-accent" href="${tvPath("/login")}" style="display:inline-block;text-decoration:none;padding:.6rem 1rem;">Zum Login</a></div>`));
     paintAbout();
     return;
   }

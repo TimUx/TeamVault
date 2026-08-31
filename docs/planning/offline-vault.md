@@ -1,6 +1,6 @@
 # TeamVault – Offline-Vault (Ciphertext-Cache + PWA)
 
-**Status:** Schnitt 1 umgesetzt (Branch `feature/offline-vault-cache`)  
+**Status:** Schnitt 1–3 umgesetzt (Branch `feature/offline-vault-cache`)  
 **Bezug:** Sicherheitsprinzipien 1–5, 7–9; OQ-04, OQ-12, OQ-17, OQ-19; [`crypto-design.md`](crypto-design.md)  
 **Nicht Ziel:** Native Mobile-Apps, Bitwarden-Protokoll, Write-Queue v1
 
@@ -181,11 +181,11 @@ Nicht alles in einem PR.
 
 | Schnitt | Lieferobjekt |
 |---------|----------------|
-| **A – Cache-Kern** | Modul `web/static/offline-store.js`: IndexedDB schema v1, put/get/wipe, TTL. Kein SW. Tests (Node/jsdom oder kleines Fixture). Nach Online-Unlock Snapshot schreiben; Offline-Unlock-Pfad wenn API tot. Read-only UI-Banner |
-| **B – Vollständiger Snapshot** | Hintergrund-Paging bis alle Envelopes da; Secret-Detail-Ciphertext im Snapshot (Liste allein reicht nicht für Passwort-Felder) |
-| **C – PWA** | Manifest, SW, CSP, Icons, HTTPS-Hinweis Install-Guide |
-| **D – Policy** | Tenant-Settings `offline_cache_allowed` / `offline_max_age_days`, Admin-UI, Audit `vault.offline_enabled` / Wipe |
-| **E – Docs** | User-Guide (Opt-in, Grenzen), Admin-Guide (Policy, Laptop-Disk-Crypto), Security-Self-Check |
+| **A – Cache-Kern** | **umgesetzt** |
+| **B – Vollständiger Snapshot** | **umgesetzt** (Delta-Sync, Fortschritt, atomarer Commit, TTL-Hinweise) |
+| **C – PWA** | **umgesetzt** (`manifest.webmanifest`, `sw.js`, CSP `worker-src`/`manifest-src`, lokales Icon) |
+| **D – Policy** | **umgesetzt** (`offline_cache_allowed`, Admin-UI) |
+| **E – Docs** | teilweise (Plan + Install-Hinweis HTTPS) |
 
 Akzeptanz Schnitt A+B (Minimum sinnvolles Feature):
 

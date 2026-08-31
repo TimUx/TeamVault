@@ -128,6 +128,7 @@ docker compose pull && docker compose up -d
 | `TEAMVAULT_PULL_POLICY` | Compose-Pull, Default `always` |
 | `TEAMVAULT_MASTER_UNLOCK_KEY_FILE` | Pfad für den Go-Prozess (`.env` sourcen) |
 | `TEAMVAULT_ADDR` / `TEAMVAULT_DATA_DIR` | Bind-Adresse / Datenverzeichnis (Go) |
+| `TEAMVAULT_BASE_PATH` / `TEAMVAULT_TRUST_FORWARDED` | Optional: Unterpfad / Proxy-Header (überschreibt Admin-UI); siehe [Admin Guide §6.3](admin-guide.md#63-unterpfad-domain--reverse-proxy) |
 
 **Image pinnen (empfohlen für Prod):**
 
@@ -149,7 +150,8 @@ CI-Tags (Workflow `.github/workflows/docker.yml`):
 
 1. Browser: `/setup` — Storage, Tenant, Admin, Argon2, Recovery → Commit  
 2. Login → Vault-Onboarding (Master-Passwort + Recovery-Kit)  
-3. Weiter: [User Guide](user-guide.md) · [Admin Guide](admin-guide.md)
+3. Hinter Reverse Proxy: Administration → **Zugriff & Proxy** (oder Env, siehe Admin Guide §6.3)  
+4. Weiter: [User Guide](user-guide.md) · [Admin Guide](admin-guide.md)
 
 ## Manuell (ohne One-Liner)
 
@@ -180,6 +182,15 @@ set -a; source .env; set +a
 go build -o bin/teamvault ./cmd/teamvault
 ./bin/teamvault
 ```
+
+## Offline-Vault / PWA (optional)
+
+Für **Offline-Lesen** im Browser (verschlüsselte lokale Kopie, 30 Tage) und **App-Shell ohne Netz** nach einmaligem Besuch:
+
+- **HTTPS** oder `localhost` (Secure Context) — reines HTTP ohne TLS lädt keinen Service Worker
+- Nach Online-Login: Vault entsperren → Opt-in „Offline vorhalten“ → Sync unter **Konto** oder automatisch im Hintergrund
+- Ohne Netz: Login-Seite **Offline entsperren** oder `/app` mit gespeicherter Kopie
+- Details: [`docs/planning/offline-vault.md`](planning/offline-vault.md)
 
 ## Troubleshooting
 

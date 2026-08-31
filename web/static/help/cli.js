@@ -1,5 +1,5 @@
 (() => {
-  const base = location.origin;
+  const base = tvHelpOrigin();
   const set = (id, text) => {
     const el = document.getElementById(id);
     if (el) el.textContent = text;

@@ -419,6 +419,13 @@ h1 .heading-ico,
   flex-direction: column;
   background: var(--color-bg);
 }
+.offline-sync-bar {
+  margin: 0 0 0.35rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--color-accent) 10%, transparent);
+  font-size: 0.75rem;
+}
 .offline-banner {
   margin: 0;
   padding: 0.5rem 1rem;

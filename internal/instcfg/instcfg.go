@@ -41,6 +41,15 @@ type Policy struct {
 	OfflineCacheAllowed      *bool `json:"offline_cache_allowed,omitempty"` // nil = enabled (default)
 }
 
+// PublicAccess configures how clients reach this instance (reverse proxy, subpath, canonical URL).
+// Env vars TEAMVAULT_BASE_PATH / TEAMVAULT_TRUST_FORWARDED override these when set (container bootstrap).
+type PublicAccess struct {
+	BasePath             string `json:"base_path,omitempty"`              // e.g. "/vault" when mounted under a directory
+	PublicURL            string `json:"public_url,omitempty"`             // optional canonical URL (scheme+host+path)
+	TrustForwarded       *bool  `json:"trust_forwarded,omitempty"`        // trust X-Forwarded-* from reverse proxy
+	UseForwardedPrefix   bool   `json:"use_forwarded_prefix,omitempty"`   // derive base_path from X-Forwarded-Prefix when BasePath empty
+}
+
 // OfflineCacheEnabled reports whether tenant policy allows client-side offline ciphertext cache.
 func (p Policy) OfflineCacheEnabled() bool {
 	if p.OfflineCacheAllowed == nil {
@@ -76,6 +85,7 @@ type Bundle struct {
 	Mail              MailConfig              `json:"mail"`
 	MailTemplates     MailTemplates           `json:"mail_templates"`
 	Policy            Policy                  `json:"policy"`
+	PublicAccess      PublicAccess            `json:"public_access"`
 	APIKeys           []APIKeyRecord          `json:"api_keys"`
 	PrimaryTenantID   string                  `json:"primary_tenant_id"`
 	PrimaryTenantSlug string                  `json:"primary_tenant_slug"`
