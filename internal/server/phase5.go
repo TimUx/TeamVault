@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/teamvault/teamvault/internal/auth/ldapauth"
 	"github.com/teamvault/teamvault/internal/auth/password"
 	"github.com/teamvault/teamvault/internal/store"
 )
@@ -199,10 +200,33 @@ func (a *API) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	username := strings.TrimSpace(body.Username)
+	display := strings.TrimSpace(body.DisplayName)
+	email := strings.TrimSpace(body.Email)
+	userID := store.UserID(newID("usr"))
+	if backend == "ldap" {
+		cfg, err := a.ldapConfigReady(sess.TenantID)
+		if err != nil {
+			writeErr(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		du, err := ldapauth.LookupUser(cfg, username)
+		if err != nil {
+			writeErr(w, http.StatusBadRequest, "ldap user not found: "+err.Error())
+			return
+		}
+		userID = store.UserID(ldapauth.UserIDFromDN(du.DN))
+		if display == "" {
+			display = du.DisplayName
+		}
+		if email == "" {
+			email = du.Email
+		}
+	}
 	roles, _ := json.Marshal([]string{"member"})
 	u := store.UserRecord{
-		ID: store.UserID(newID("usr")), TenantID: sess.TenantID,
-		Username: strings.TrimSpace(body.Username), DisplayName: body.DisplayName, Email: body.Email,
+		ID: userID, TenantID: sess.TenantID,
+		Username: username, DisplayName: display, Email: email,
 		AuthBackend: backend, LocalPasswordHash: hash, Status: "pending_onboarding", RolesJSON: string(roles),
 	}
 	if err := a.App.Vault.UpsertUser(r.Context(), u); err != nil {

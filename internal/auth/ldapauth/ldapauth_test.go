@@ -17,6 +17,22 @@ import (
 	"github.com/teamvault/teamvault/internal/tlsutil"
 )
 
+func TestUserIDFromDNStable(t *testing.T) {
+	dn := "uid=alice,ou=users,dc=example,dc=com"
+	id1 := UserIDFromDN(dn)
+	id2 := UserIDFromDN(dn)
+	if id1 != id2 || !strings.HasPrefix(id1, "usr_") {
+		t.Fatalf("id=%q", id1)
+	}
+}
+
+func TestSearchUsersQueryTooShort(t *testing.T) {
+	_, err := SearchUsers(Config{Host: "x", BaseDN: "dc=ex"}, "a", 10)
+	if err == nil {
+		t.Fatal("expected min length error")
+	}
+}
+
 func TestTLSConfigInvalidPEM(t *testing.T) {
 	_, err := TLSConfig(Config{Host: "ldap.example", CACertPEM: "not-a-certificate"})
 	if err == nil {

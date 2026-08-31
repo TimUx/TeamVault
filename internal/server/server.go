@@ -369,7 +369,7 @@ func (a *API) handleLogin(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, http.StatusUnauthorized, "invalid credentials")
 			return
 		}
-		uid := store.UserID("usr_" + strings.ReplaceAll(base64.RawURLEncoding.EncodeToString([]byte(dn))[:12], "/", "_"))
+		uid := store.UserID(ldapauth.UserIDFromDN(dn))
 		roles, _ := json.Marshal([]string{"member"})
 		u := store.UserRecord{
 			ID: uid, TenantID: tenant.ID, Username: req.Username, DisplayName: req.Username,

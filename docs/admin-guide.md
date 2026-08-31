@@ -6,13 +6,14 @@ Betrieb und Verwaltung der Instanz. Für den Alltag der Endanwender: [User Guide
 
 ## 1. Rollen
 
-| Rolle | Rechte (Auszug) |
-|-------|-----------------|
-| `platform_admin` | Tenants, Storage-Migration, plattformweite Übersicht |
-| `tenant_admin` | User, Gruppen, LDAP, SMTP, Policy, Audit, API-Keys, Escrow-Pubkey |
-| `member` | Vault nur für eigene/geteilte Secrets |
+| Rolle (technisch) | Anzeige in der UI | Rechte (Auszug) |
+|-------------------|-------------------|-----------------|
+| `member` | Mitglied | Vault nur für eigene/geteilte Secrets |
+| `tenant_admin` | Organisations-Administrator | User, Gruppen, LDAP, SMTP, Policy, Audit, API-Keys, Escrow-Pubkey |
+| `platform_admin` | Plattform-Administrator | Tenants, Storage-Migration, plattformweite Übersicht |
+| `auditor` | Auditor (nur Lesen) | Audit-Log einsehen, keine Schreibaktionen |
 
-Der erste User aus dem Setup-Wizard erhält **beide** Admin-Rollen.
+Der erste User aus dem Setup-Wizard erhält **beide** Admin-Rollen (`tenant_admin` + `platform_admin`).
 
 ## 2. Erstinstallation
 
@@ -124,23 +125,48 @@ Nach dem Commit: Login → **Vault-Onboarding** (Master-Passwort) → App.
 
 ## 3. Admin-UI (nach Vault-Entsperren)
 
-In der **Sidebar** unter **Administration** (sichtbar für `tenant_admin` / `platform_admin`; Auditoren nur **Audit**). Menüpunkte: Benutzer, Gruppen, Firmen-CA, **Zugriff & Proxy**, LDAP, SMTP, Krypto & Policy, Recovery & Escrow, API-Keys, ggf. Tenants & Migration. Topbar-Theme nutzt flache Inline-SVG-Icons (kein externes Icon-CDN). Jeder Unterpunkt öffnet den jeweiligen Abschnitt.
+In der **Sidebar** unter **Administration** (sichtbar für `tenant_admin` / `platform_admin`; Auditoren nur **Audit**). Die Bereiche **Vault**, **Konto** und **Administration** sind einklappbar; unter Administration gibt es vier Untergruppen:
+
+| Untergruppe | Menüpunkte |
+|-------------|------------|
+| **Benutzer & Gruppen** | Benutzer, Gruppen |
+| **Verbindungen** | Firmen-CA, Zugriff & Proxy, LDAP, SMTP |
+| **Sicherheit** | Krypto & Policy, Recovery & Escrow, API-Keys |
+| **Plattform** | Tenants & Migration (nur Plattform-Admin), **System**, Audit |
+
+Topbar-Theme nutzt flache Inline-SVG-Icons (kein externes Icon-CDN). Jeder Unterpunkt öffnet den jeweiligen Abschnitt. Storage-Übersicht und Versionsinfo stehen unter **Plattform → System** (nicht mehr oben in jedem Admin-Panel).
 
 ### 3.1 Benutzer
 
-![Benutzer](images/admin-users.png)
+![Benutzer (Tabelle)](images/admin-users.png)
 
 ![User bearbeiten](images/admin-user-edit.png)
 
-- Lokale User anlegen (Username, optional Anzeigename/E-Mail, Login-Passwort ≥12)
-- **Bearbeiten:** Anzeigename, E-Mail, Rollen (`member`, `tenant_admin`, `auditor`, optional `platform_admin`), für lokale User optional neues Login-Passwort
-- Status: active / disabled, Onboarding-Status, Auth-Backend (`local` / `ldap`)
+- **User anlegen** öffnet ein **Modal** (nicht mehr am Seitenende): Auth-Backend (lokal / LDAP), Username, Anzeigename, E-Mail, ggf. Login-Passwort
+- **Ansicht:** Tabelle (Standard), Liste oder Kacheln — Umschalter in der Toolbar
+- **Bearbeiten:** Anzeigename, E-Mail, Rollen (deutsche Bezeichnungen in der UI), für lokale User optional neues Login-Passwort
+- Status und Auth-Backend mit **deutschen Labels** (z. B. *Aktiv*, *Lokal*, *LDAP/AD*)
+- **LDAP-Verzeichnis** (wenn LDAP aktiv): Verzeichnis durchsuchen und User **vor der ersten Anmeldung importieren** — danach Gruppen zuweisen ohne JIT-Login
+
+![LDAP-User importieren](images/admin-ldap-import.png)
+
 - Disable statt Löschen (LDAP-Sync deaktiviert fehlende Accounts)
 - Nach **Disable**: Hinweis, Secrets mit Envelope dieses Users zu **rotieren** (Zero-Knowledge — kein Auto-Rotate). Optional Liste der Secret-IDs (Meta only).
 
 Kein Zugriff auf Master-Passwort, Private Keys oder Recovery-Kit-Klartext.
 
-### 3.2 Gruppen
+### 3.2 System
+
+Sidebar **Administration → Plattform → System**:
+
+![System & Instanz](images/admin-system.png)
+
+- Storage-Backend, Vault-Gesundheit, LDAP/SMTP-Status
+- Produktversion und Commit (SemVer) — ergänzend zu `GET /api/version`
+
+### 3.3 Gruppen
+
+Sidebar **Administration → Benutzer & Gruppen → Gruppen**:
 
 ![Gruppen](images/admin-groups.png)
 
@@ -150,7 +176,7 @@ Kein Zugriff auf Master-Passwort, Private Keys oder Recovery-Kit-Klartext.
 - Rechte/Sharing bleiben über lokale Zuordnung — **keine** LDAP-Gruppen-Autorisierung
 - Secrets können an Gruppen geteilt werden (pro Mitglied eigener Envelope) — siehe User Guide
 
-### 3.3 Zugriff & Proxy
+### 3.4 Zugriff & Proxy
 
 Sidebar **Administration → Zugriff & Proxy**:
 
@@ -167,7 +193,7 @@ Instanzweite Einstellungen für öffentliche URL und Reverse Proxy — unabhäng
 
 Änderungen wirken sofort. Env-Variablen `TEAMVAULT_BASE_PATH` / `TEAMVAULT_TRUST_FORWARDED` überschreiben die Admin-Werte (Hinweis in der UI). Details: [§6.3](#63-unterpfad-domain--reverse-proxy).
 
-### 3.4 Firmen-CA
+### 3.5 Firmen-CA
 
 Sidebar **Administration → Firmen-CA**:
 
@@ -178,7 +204,7 @@ Sidebar **Administration → Firmen-CA**:
 - Behebt `certificate signed by unknown authority` bei eigener PKI, ohne die Prüfung zu deaktivieren
 - PEM-Datei hochladen oder einfügen; **CA speichern** / **Zertifikat entfernen**
 
-### 3.5 LDAP / AD
+### 3.6 LDAP / AD
 
 Sidebar **Administration → LDAP**:
 
@@ -190,9 +216,10 @@ Sidebar **Administration → LDAP**:
 - TLS-Vertrauen über die zentrale Firmen-CA (nicht hier hochladen); Hinweis zeigt, ob eine CA hinterlegt ist
 - **TLS-Zertifikatsfehler ignorieren:** unsichere Notlösung, wenn keine CA hinterlegt werden kann (Hostname und Signatur werden nicht geprüft).
 - Test-Bind (nutzt die aktuellen Formularwerte, auch ungespeicherte), Speichern, LDAP-Sync (fehlende → lokal disabled)
-- Just-in-Time: erster erfolgreicher LDAP-Login legt lokalen User an (`auth_backend=ldap`)
+- **Vorab-Import:** Unter **Benutzer** → Block *LDAP-Verzeichnis* Verzeichnis durchsuchen (`GET /api/admin/ldap/users`) und ausgewählte Accounts importieren (`POST /api/admin/ldap/users/import`) — Gruppenzuweisung ohne vorherigen JIT-Login
+- Just-in-Time bleibt möglich: erster erfolgreicher LDAP-Login legt lokalen User an (`auth_backend=ldap`), falls noch nicht importiert
 
-### 3.6 SMTP
+### 3.7 SMTP
 
 Sidebar **Administration → SMTP**:
 
@@ -202,7 +229,7 @@ Sidebar **Administration → SMTP**:
 - Host, Port, From, Credentials; Test-Button
 - SMTP-TLS nutzt dieselbe Firmen-CA
 
-### 3.7 Krypto & Policy
+### 3.8 Krypto & Policy
 
 Sidebar **Administration → Krypto & Policy**:
 
@@ -214,7 +241,7 @@ Sidebar **Administration → Krypto & Policy**:
 - Idle-Lock der Vault-Session (Default 15 min) — nur Client-Unlock
 - **Admins: Secret-Liste nur mit Envelope** (`admin_secrets_envelope_only`): Wenn aktiv, sehen Tenant-Admins in der Secret-Liste nur Einträge, für die sie selbst ein Envelope haben (Inventar-Metadaten anderer Secrets ausgeblendet). Default: aus — Admins sehen alle Secret-Metadaten (IDs, Title-Ciphertext), Klartext bleibt Zero-Knowledge-geschützt.
 
-### 3.8 Escrow & Shamir
+### 3.9 Escrow & Shamir
 
 Wenn Recovery-Modus Escrow erlaubt (Wizard-Schritt Recovery bzw. später umschalten mit Bestätigung `REONBOARD`):
 
@@ -229,7 +256,7 @@ Wenn Recovery-Modus Escrow erlaubt (Wizard-Schritt Recovery bzw. später umschal
 
 Der private Escrow-Key darf nie in Logs oder dauerhaft auf dem Server landen.
 
-### 3.9 Audit & API-Keys
+### 3.10 Audit & API-Keys
 
 ![API-Keys](images/admin-apikeys.png)
 
@@ -245,9 +272,9 @@ Der private Escrow-Key darf nie in Logs oder dauerhaft auf dem Server landen.
 
 - Cookie-Sessions ohne Scope-Einschränkung. **Legacy-Keys ohne Scopes** (`legacy_no_scopes` in der Key-Liste): nur **read-only** GET-Allowlist — keine Schreib- oder Admin-Aktionen. Key mit expliziten Scopes neu ausstellen und alten Key widerrufen.
 - Nach User-Disable: Secrets mit Envelope dieses Users rotieren (Hinweis + Liste `accessible-secrets` in Admin-UI; kein Auto-Rotate wegen ZK)
-- Tenant-Admins sehen standardmäßig in der Secret-Liste **Metadaten** (IDs, Title-Ciphertext) auch ohne eigenen Envelope — optional einschränkbar über Policy (siehe §3.6)
+- Tenant-Admins sehen standardmäßig in der Secret-Liste **Metadaten** (IDs, Title-Ciphertext) auch ohne eigenen Envelope — optional einschränkbar über Policy (siehe §3.8)
 
-### 3.10 Tenants, Storage-Migration & Instanz-Backup (`platform_admin`)
+### 3.11 Tenants, Storage-Migration & Instanz-Backup (`platform_admin`)
 
 - Weitere Tenants anlegen
 - Migration SQLite ↔ JSON: nur Ciphertext; Bestätigung `MIGRATE`
@@ -427,4 +454,4 @@ $env:TV_BROWSER_CHANNEL = "msedge"
 node scripts/capture-docs-screenshots.mjs
 ```
 
-Neu seit Offline/Proxy-Update: `admin-access.png`, `admin-crypto.png`, `account-offline.png` (siehe Skript). Falls Playwright-Chromium nicht geladen werden kann (z. B. hinter Firmenproxy), `msedge` oder `TV_BROWSER_EXECUTABLE` setzen.
+Neu seit Offline/Proxy-Update: `admin-access.png`, `admin-crypto.png`, `account-offline.png`. Neu seit Admin-UX-Update: `admin-system.png`, `admin-ldap-import.png`, `help-vault.png` (siehe Skript). Falls Playwright-Chromium nicht geladen werden kann (z. B. hinter Firmenproxy), `msedge` oder `TV_BROWSER_EXECUTABLE` setzen.

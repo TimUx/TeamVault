@@ -5,12 +5,20 @@ $Root = Split-Path -Parent $PSScriptRoot
 $Port = if ($env:TV_CAPTURE_PORT) { $env:TV_CAPTURE_PORT } else { "8099" }
 $Data = if ($env:TV_CAPTURE_DATA) { $env:TV_CAPTURE_DATA } else { Join-Path $env:TEMP "tv-screenshot-data" }
 $Secrets = Join-Path $Data "secrets"
+if (-not $env:TV_CAPTURE_DATA -and (Test-Path $Data)) {
+  Remove-Item -Recurse -Force $Data
+}
 New-Item -ItemType Directory -Force -Path $Data, $Secrets | Out-Null
 if (-not (Test-Path (Join-Path $Secrets "unlock"))) {
   $bytes = New-Object byte[] 48
   [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
   [IO.File]::WriteAllBytes((Join-Path $Secrets "unlock"), $bytes)
 }
+
+$node = $env:TV_NODE
+if (-not $node) { $node = (Get-Command node -ErrorAction SilentlyContinue).Source }
+if (-not $node -and (Test-Path "C:\Program Files\nodejs\node.exe")) { $node = "C:\Program Files\nodejs\node.exe" }
+if (-not $node) { throw "Node.js nicht gefunden. Bitte Node installieren oder TV_NODE setzen." }
 
 $env:TEAMVAULT_ADDR = ":$Port"
 $env:TEAMVAULT_DATA_DIR = $Data
@@ -37,7 +45,7 @@ try {
   $env:TV_URL = "http://127.0.0.1:$Port"
   $env:TV_CAPTURE_DATA = $Data
   if (-not $env:TV_BROWSER_CHANNEL) { $env:TV_BROWSER_CHANNEL = "msedge" }
-  node (Join-Path $Root "scripts\capture-docs-screenshots.mjs")
+  & $node (Join-Path $Root "scripts\capture-docs-screenshots.mjs")
   Write-Host "Screenshots written to docs/images/"
 } finally {
   if ($server -and -not $server.HasExited) { Stop-Process -Id $server.Id -Force -ErrorAction SilentlyContinue }

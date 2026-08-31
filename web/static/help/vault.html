@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Vault – TeamVault Hilfe</title>
+  <link rel="stylesheet" href="/styles.css" />
+  <link rel="stylesheet" href="/help/help.css" />
+</head>
+<body>
+  <a class="skip-link" href="#main">Zum Inhalt springen</a>
+  <header class="top">
+    <div class="brand"><a href="/help" style="color:inherit;text-decoration:none">TeamVault Hilfe</a></div>
+    <div class="top-actions">
+      <a class="btn-ghost" href="/help" style="text-decoration:none;padding:.4rem .75rem">Übersicht</a>
+      <a class="btn-ghost" href="/app" style="text-decoration:none;padding:.4rem .75rem">Zur App</a>
+    </div>
+  </header>
+  <main id="main" class="help-wrap">
+    <h1>Vault – Kurzanleitungen</h1>
+    <p class="lead">Secrets anlegen, mit Kollegen teilen und Einträge aus anderen Passwortmanagern übernehmen — alles verschlüsselt im Browser (Zero-Knowledge).</p>
+
+    <nav class="help-nav" aria-label="Themen">
+      <a href="/help">Hilfe</a>
+      <a class="primary" href="#anlegen">Anlegen</a>
+      <a class="primary" href="#teilen">Teilen</a>
+      <a class="primary" href="#import">Import</a>
+      <a href="/help/cli">CLI</a>
+      <a href="/help/extension">Extension</a>
+    </nav>
+
+    <h2 id="anlegen">Secret anlegen</h2>
+    <div class="help-step">
+      <h3>Schritte</h3>
+      <ol>
+        <li>Anmelden und Vault mit dem <strong>Master-Passwort</strong> entsperren.</li>
+        <li>Sidebar <strong>Neu anlegen</strong> öffnen.</li>
+        <li><strong>Titel</strong>, optional <strong>Tags</strong> (Komma-getrennt), <strong>Benutzername</strong> und <strong>Passwort</strong> eintragen.</li>
+        <li>Passwort per <strong>Generator</strong> erzeugen (Länge/Symbole einstellbar) oder manuell setzen.</li>
+        <li>Weitere Felder über <strong>Feld hinzufügen</strong>: Website (URL), TOTP-Seed, Notizen, SSH-Keys, S3-Keys, Zertifikat, Freitext.</li>
+        <li>Optional direkt <strong>User</strong> oder <strong>Gruppen</strong> zum Teilen auswählen (nur onboardete Ziele).</li>
+        <li>Speichern — Titel und Inhalt werden im Browser verschlüsselt; der Server speichert nur Ciphertext.</li>
+      </ol>
+    </div>
+    <div class="help-step">
+      <h3>Beispiel (VPN-Zugang)</h3>
+      <table class="help-kv">
+        <tr><th>Titel</th><td><code>VPN Firmenzugang</code></td></tr>
+        <tr><th>Tags</th><td><code>vpn, remote, prod</code></td></tr>
+        <tr><th>Benutzername</th><td><code>max.mustermann@firma.de</code></td></tr>
+        <tr><th>Passwort</th><td>per Generator (z.&nbsp;B. 20 Zeichen, Symbole an)</td></tr>
+        <tr><th>Website (URL)</th><td><code>https://vpn.firma.de</code></td></tr>
+        <tr><th>Notizen</th><td><code>Portal-2FA über Authenticator-App</code></td></tr>
+      </table>
+      <p class="help-note">TOTP: Seed als base32 oder <code>otpauth://totp/…</code> unter <em>Feld hinzufügen → TOTP-Seed</em>. Mehrere URLs sind möglich (wichtig für die Browser-Extension).</p>
+    </div>
+
+    <h2 id="teilen">Secrets teilen</h2>
+    <p>Teilen erfolgt <strong>pro Person oder Gruppe</strong> mit eigenem Verschlüsselungsumschlag — es gibt kein gemeinsames Gruppenpasswort.</p>
+
+    <div class="help-step">
+      <h3>Mit einem Benutzer teilen</h3>
+      <ol>
+        <li>Secret in der Liste <strong>Öffnen</strong> (Detail-Modal).</li>
+        <li>Unter <strong>Teilen mit User</strong> den Empfänger wählen (nur onboardete User mit Public Key).</li>
+        <li><strong>Teilen</strong> klicken — der Datenschlüssel wird für diesen User neu verpackt.</li>
+        <li>Der Empfänger sieht den Eintrag unter <strong>Geteilt mit mir</strong>.</li>
+      </ol>
+      <p class="help-note">Beispiel: Sie legen <em>„Datenbank Staging“</em> an und teilen mit <code>dba.team</code> — nur dieser User kann entschlüsseln.</p>
+    </div>
+
+    <div class="help-step">
+      <h3>Mit einer Gruppe teilen</h3>
+      <ol>
+        <li>Secret öffnen → Bereich <strong>Teilen mit Gruppe</strong>.</li>
+        <li>Gruppe wählen (z.&nbsp;B. <code>Team Infrastruktur</code>) → <strong>Gruppe teilen</strong>.</li>
+        <li>Jedes Gruppenmitglied erhält einen eigenen Umschlag; neue Mitglieder brauchen ggf. erneutes Teilen durch einen Admin.</li>
+      </ol>
+      <p class="help-note">Gruppen werden in der Administration gepflegt. Zugriff entziehen: <strong>Zugriff entziehen + rotieren</strong> im Secret-Detail (alter Schlüssel wird ungültig).</p>
+    </div>
+
+    <div class="help-step">
+      <h3>Beim Anlegen direkt teilen</h3>
+      <p>Unter <strong>Neu anlegen</strong> können Sie vor dem ersten Speichern User und Gruppen auswählen — praktisch für Einträge, die von Anfang an im Team liegen sollen.</p>
+    </div>
+
+    <h2 id="import">Import aus Fremdtools</h2>
+    <p>Sidebar <strong>Import</strong> → Datei wählen → <strong>Vorschau</strong> prüfen → gewünschte Zeilen anhaken → <strong>Auswahl importieren</strong>. Parsing und Verschlüsselung laufen nur im Browser.</p>
+
+    <div class="help-step">
+      <h3>Unterstützte Formate</h3>
+      <ul>
+        <li><strong>Bitwarden</strong> — JSON-Export (Login-Einträge, <code>type: 1</code>)</li>
+        <li><strong>KeePass</strong> — XML-Export (nicht <code>.kdbx</code> direkt)</li>
+        <li><strong>KeePassXC</strong> — CSV</li>
+        <li><strong>Chrome / Edge</strong> — Passwort-CSV</li>
+        <li><strong>Firefox</strong> — CSV</li>
+        <li><strong>LastPass</strong> — CSV</li>
+        <li><strong>1Password</strong> — CSV oder 1PUX (<code>export.data</code> im JSON)</li>
+        <li><strong>Proton Pass</strong> — JSON</li>
+        <li><strong>TeamVault</strong> — JSON oder verschlüsselte <code>.tvbak</code> (Backup-Passwort nötig)</li>
+        <li><strong>Generisches CSV</strong> — Spalten <code>title, username, password, url, notes, tags</code></li>
+      </ul>
+    </div>
+
+    <div class="help-step">
+      <h3>Beispiel: Bitwarden JSON (Auszug)</h3>
+      <p>In Bitwarden: Werkzeuge → Export → Dateiformat <em>.json</em>. Mindestens ein Login-Eintrag:</p>
+      <code class="onedliner">{
+  "items": [
+    {
+      "type": 1,
+      "name": "Beispiel Weblogin",
+      "login": {
+        "username": "user@example.com",
+        "password": "AltesPasswort123!",
+        "uris": [{ "uri": "https://app.example.com/login" }]
+      },
+      "notes": "Optional"
+    }
+  ]
+}</code>
+    </div>
+
+    <div class="help-step">
+      <h3>Beispiel: KeePassXC CSV</h3>
+      <p>Export als CSV; erste Zeile mit Spaltenüberschriften:</p>
+      <code class="onedliner">"Group","Title","Username","Password","URL","Notes","TOTP"
+"Arbeit","Intranet","max","geheim42","https://intranet.firma.de","",
+"Arbeit","VPN","vpn-user","***","https://vpn.firma.de","nur Büro"</code>
+    </div>
+
+    <div class="help-step">
+      <h3>Beispiel: Chrome / Edge CSV</h3>
+      <p>Einstellungen → Passwörter → Export. Typische Spalten:</p>
+      <code class="onedliner">name,url,username,password
+Beispiel Portal,https://portal.firma.de/,max.mustermann,Geheim123
+Altes Tool,https://legacy.app/,admin,legacy-pass</code>
+    </div>
+
+    <div class="help-step">
+      <h3>Beispiel: Generisches CSV</h3>
+      <p>Für eigene Tabellen oder konvertierte Listen — Header in Kleinbuchstaben:</p>
+      <code class="onedliner">title,username,password,url,notes,tags
+Staging DB,dbadmin,Db-Secret-2024,,nur intern,db,staging
+API Schlüssel,,sk_live_xxx,,Rotieren Q2,api</code>
+    </div>
+
+    <div class="help-step">
+      <h3>Beispiel: 1Password 1PUX</h3>
+      <p>Export als <code>.1pux</code> oder JSON mit verschachteltem <code>export.data</code>. TeamVault liest die Login-Items aus der 1Password-Struktur — kein manuelles Umbauen nötig, sofern der offizielle Export verwendet wird.</p>
+    </div>
+
+    <div class="help-step">
+      <h3>Tipps nach dem Import</h3>
+      <ul>
+        <li>Vorschau nutzen: nur benötigte Einträge importieren (Häkchen setzen).</li>
+        <li><code>.tvbak</code> ist verschlüsselt — zuerst Backup-Passwort eingeben und <strong>Sicherung entsperren</strong>.</li>
+        <li>Tags aus dem Quellformat werden übernommen, wo vorhanden.</li>
+        <li>Mehrere URLs aus Bitwarden landen als Website-Felder (Extension-Fill).</li>
+        <li>Klartext-Exporte aus dem Quell-Tool sicher löschen, wenn nicht mehr nötig.</li>
+      </ul>
+    </div>
+
+    <p class="help-note">Ausführliche Beschreibung: <code>docs/user-guide.md</code> im Repository. Server-Installation: <code>docs/install-guide.md</code>.</p>
+    <footer class="help-foot" id="aboutFoot"></footer>
+  </main>
+  <script src="/help/tv-base.js"></script>
+  <script src="/help/vault.js"></script>
+</body>
+</html>

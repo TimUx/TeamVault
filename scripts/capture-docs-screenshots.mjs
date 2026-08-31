@@ -118,11 +118,12 @@ async function onboardIfNeeded(page) {
   await page.fill("#mpw2", MASTER_PW);
   await shot(page, "onboard.png");
   await page.click("#doOnboard");
-  await page.waitForSelector("#kit, button:has-text('Weiter zur App')", { timeout: 120000 });
-  if (await page.locator("#kit").isVisible()) {
+  await page.waitForSelector("#goApp", { timeout: 120000 });
+  if (await page.locator("#kitSaved").isVisible().catch(() => false)) {
     await shot(page, "onboard-recovery-kit.png");
+    await page.check("#kitSaved");
   }
-  await page.click("button:has-text('Weiter zur App')");
+  await page.click("#goApp");
   await page.waitForURL("**/app**");
 }
 
@@ -262,7 +263,7 @@ async function main() {
   console.log("Admin…");
   await page.waitForSelector("#navAdminSection:not([hidden])", { timeout: 15000 });
   await page.click('[data-nav="admin:users"]');
-  await page.waitForSelector("#ulist .list-row");
+  await page.waitForSelector("#ulist .users-table tbody tr, #ulist .list-row", { timeout: 15000 });
   await page.waitForTimeout(500);
   await shot(page, "admin-users.png", { fullPage: true });
 
@@ -279,12 +280,35 @@ async function main() {
   await page.fill("#gname", "Ops");
   await page.click("#gcreate");
   await page.waitForSelector(".group-card", { timeout: 15000 });
+
+  await page.click('[data-nav="admin:ldap"]');
+  await page.waitForSelector('[data-admin-section="ldap"] #ldap_host');
+  await page.check("#ldap_en");
+  await page.fill("#ldap_host", "ldap.demo.local");
+  await page.fill("#ldap_port", "636");
+  await page.check("#ldap_tls");
+  await page.fill("#ldap_base", "dc=demo,dc=local");
+  await page.fill("#ldap_bind", "cn=teamvault,ou=svc,dc=demo,dc=local");
+  await page.fill("#ldap_filter", "(uid=%s)");
+  await page.check("#ldap_skip_tls");
+  await page.click("#ldap_save");
+  await page.waitForTimeout(600);
+  await shot(page, "admin-ldap.png", { fullPage: true });
+
   await page.click('[data-nav="admin:users"]');
+  await page.waitForSelector("#ldapUserImport:not([hidden])", { timeout: 10000 });
+  await page.fill("#ldap_user_q", "demo");
+  await shot(page, "admin-ldap-import.png", { fullPage: true });
+
+  await page.click("#uopenCreate");
+  await page.waitForSelector("#userCreateModal:not([hidden])");
   await page.fill("#nuser", "alice");
   await page.fill("#ndisplay", "Alice");
   await page.fill("#npw", "password1234!");
   await page.click("#ucreate");
   await page.waitForTimeout(800);
+  await page.click("#userCreateClose").catch(() => {});
+
   await page.click('[data-nav="admin:groups"]');
   await page.waitForTimeout(500);
   await shot(page, "admin-groups.png", { fullPage: true });
@@ -298,18 +322,6 @@ async function main() {
   await page.waitForTimeout(400);
   await shot(page, "admin-trust.png", { fullPage: true });
   await page.fill("#trust_ca_pem", "");
-
-  await page.click('[data-nav="admin:ldap"]');
-  await page.waitForSelector('[data-admin-section="ldap"] #ldap_host');
-  await page.check("#ldap_en");
-  await page.fill("#ldap_host", "ldap.demo.local");
-  await page.fill("#ldap_port", "636");
-  await page.check("#ldap_tls");
-  await page.fill("#ldap_base", "dc=demo,dc=local");
-  await page.fill("#ldap_bind", "cn=teamvault,ou=svc,dc=demo,dc=local");
-  await page.fill("#ldap_filter", "(uid=%s)");
-  await page.waitForTimeout(400);
-  await shot(page, "admin-ldap.png", { fullPage: true });
 
   await page.click('[data-nav="admin:smtp"]');
   await page.waitForSelector('[data-admin-section="smtp"] #mail_host');
@@ -356,9 +368,16 @@ async function main() {
   await page.click('[data-nav="admin:apikeys"]');
   await shot(page, "admin-apikeys.png", { fullPage: true });
 
+  await page.click('[data-nav="admin:system"]');
+  await page.waitForSelector("#sysOverview", { timeout: 15000 });
+  await page.waitForTimeout(400);
+  await shot(page, "admin-system.png", { fullPage: true });
+
   console.log("Help & theme…");
   await page.goto(`${BASE}/help`);
   await shot(page, "help.png", { fullPage: true });
+  await page.goto(`${BASE}/help/vault`);
+  await shot(page, "help-vault.png", { fullPage: true });
   await page.goto(`${BASE}/help/extension`);
   await shot(page, "help-extension.png", { fullPage: true });
   await page.goto(`${BASE}/help/cli`);

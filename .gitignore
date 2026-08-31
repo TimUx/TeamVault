@@ -1,6 +1,7 @@
 # Binaries / local data
 /data/
 /data-docs/
+/data-docs-shot/
 /docs-screenshot-data/
 .screenshot-data/
 .screenshot-secrets/

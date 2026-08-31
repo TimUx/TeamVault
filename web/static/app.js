@@ -8,6 +8,30 @@ const state = {
   },
 };
 
+const ROLE_LABELS = {
+  member: "Mitglied",
+  tenant_admin: "Organisations-Administrator",
+  platform_admin: "Plattform-Administrator",
+  auditor: "Auditor (nur Lesen)",
+};
+function roleLabel(role) {
+  return ROLE_LABELS[role] || role;
+}
+
+function formatUserStatus(status) {
+  const labels = {
+    active: "Aktiv",
+    disabled: "Deaktiviert",
+    pending_onboarding: "Onboarding ausstehend",
+  };
+  return labels[status] || status;
+}
+
+function formatAuthBackend(backend) {
+  const labels = { local: "Lokal", ldap: "LDAP" };
+  return labels[backend] || backend;
+}
+
 function tvBaseFromPath() {
   const p = location.pathname;
   const routes = ["/app", "/login", "/setup", "/onboard"];
@@ -105,6 +129,7 @@ const ICO = {
   layoutGrid: '<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>',
   book: '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>',
   cert: '<rect x="6" y="3" width="12" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h3"/>',
+  info: '<circle cx="12" cy="12" r="9"/><path d="M12 10v6M12 7h.01"/>',
 };
 
 function icon(name, cls) {
@@ -116,6 +141,84 @@ function navLink(nav, icoName, label, extraClass, attrs) {
   const cls = ["sidebar-link", extraClass].filter(Boolean).join(" ");
   const extra = attrs ? " " + attrs : "";
   return `<button type="button" class="${cls}" data-nav="${nav}"${extra}><span class="nav-ico">${icon(icoName)}</span><span>${label}</span></button>`;
+}
+
+function navSection(sectionId, title, bodyHtml, sectionAttrs) {
+  const extra = sectionAttrs ? ` ${sectionAttrs}` : "";
+  return `<div class="sidebar-section" data-nav-section="${sectionId}"${extra}>
+    <button type="button" class="sidebar-section-toggle" aria-expanded="true" aria-controls="navSec-${sectionId}">
+      <span class="sidebar-section-chevron" aria-hidden="true">${icon("chevron")}</span>
+      <span class="sidebar-section-title-text">${title}</span>
+    </button>
+    <div class="sidebar-section-body" id="navSec-${sectionId}">
+      ${bodyHtml}
+    </div>
+  </div>`;
+}
+
+function navSubSection(subId, title, bodyHtml) {
+  return `<div class="sidebar-subsection" data-nav-subsection="${subId}">
+    <button type="button" class="sidebar-subsection-toggle" aria-expanded="true" aria-controls="navSub-${subId}">
+      <span class="sidebar-section-chevron" aria-hidden="true">${icon("chevron")}</span>
+      <span>${title}</span>
+    </button>
+    <div class="sidebar-subsection-body" id="navSub-${subId}">
+      ${bodyHtml}
+    </div>
+  </div>`;
+}
+
+const NAV_SECTIONS_KEY = "tv-nav-sections";
+const NAV_SUBSECTIONS_KEY = "tv-nav-subsections";
+
+function loadNavSectionsState() {
+  try {
+    const raw = localStorage.getItem(NAV_SECTIONS_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch (_) {
+    return {};
+  }
+}
+
+function saveNavSectionState(sectionId, collapsed) {
+  try {
+    const state = loadNavSectionsState();
+    state[sectionId] = collapsed;
+    localStorage.setItem(NAV_SECTIONS_KEY, JSON.stringify(state));
+  } catch (_) {}
+}
+
+function loadNavSubsectionsState() {
+  try {
+    const raw = localStorage.getItem(NAV_SUBSECTIONS_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch (_) {
+    return {};
+  }
+}
+
+function saveNavSubsectionState(subId, collapsed) {
+  try {
+    const state = loadNavSubsectionsState();
+    state[subId] = collapsed;
+    localStorage.setItem(NAV_SUBSECTIONS_KEY, JSON.stringify(state));
+  } catch (_) {}
+}
+
+function navSectionIdForRoute(nav) {
+  if (nav === "account") return "account";
+  if (nav && nav.startsWith("admin:")) return "admin";
+  return "vault";
+}
+
+function navSubsectionIdForRoute(nav) {
+  if (!nav || !nav.startsWith("admin:")) return null;
+  const key = nav.slice("admin:".length);
+  if (key === "users" || key === "groups") return "admin-org";
+  if (key === "trust" || key === "access" || key === "ldap" || key === "smtp") return "admin-connect";
+  if (key === "crypto" || key === "recovery" || key === "apikeys") return "admin-security";
+  if (key === "platform" || key === "system" || key === "audit") return "admin-platform";
+  return null;
 }
 
 function btnLabel(icoName, label) {
@@ -700,22 +803,58 @@ function credentialToJSON(cred) {
 }
 
 function renderOnboard(app) {
-  const n = el(`<div class="panel">
-    <h1>Vault-Onboarding</h1>
-    <p class="lead">Master-Passwort wird nur im Browser verwendet (Zero-Knowledge). Server sieht es nie.</p>
-    <label>Master-Passwort (≥12)</label><input id="mpw" type="password" autocomplete="new-password" />
-    <label>Wiederholen</label><input id="mpw2" type="password" autocomplete="new-password" />
-    <div class="error" id="err" hidden></div>
-    <div class="ok" id="kit" hidden></div>
-    <div class="row"><button class="btn-accent" type="button" id="doOnboard">Schlüssel erzeugen</button></div>
+  const wrap = el(`<div class="onboard-wrap">
+    <div class="steps" id="obStepper">
+      <span class="on" data-ob-step="1">1. Master-Passwort</span>
+      <span data-ob-step="2">2. Recovery-Kit</span>
+      <span data-ob-step="3">3. Fertig</span>
+    </div>
+    <div class="panel" id="obPanel"></div>
   </div>`);
-  n.querySelector("#doOnboard").onclick = async () => {
-    const err = n.querySelector("#err"); const kitBox = n.querySelector("#kit");
-    err.hidden = true; kitBox.hidden = true;
-    const mpw = n.querySelector("#mpw").value;
-    if (mpw.length < 12 || mpw !== n.querySelector("#mpw2").value) {
-      err.hidden = false; err.textContent = "Master-Passwort ungültig / stimmt nicht überein"; return;
+  const panel = wrap.querySelector("#obPanel");
+  const stepper = wrap.querySelector("#obStepper");
+
+  function setStepper(active, escrowMode) {
+    const labels = escrowMode
+      ? ["1. Master-Passwort", "2. Fertig"]
+      : ["1. Master-Passwort", "2. Recovery-Kit", "3. Fertig"];
+    stepper.innerHTML = labels.map((label, i) => {
+      const n = i + 1;
+      return `<span class="${n === active ? "on" : ""}" data-ob-step="${n}">${label}</span>`;
+    }).join("");
+  }
+
+  function renderPasswordStep() {
+    setStepper(1, false);
+    panel.innerHTML = `
+      <h1>Vault-Onboarding</h1>
+      <p class="lead">Legen Sie Ihr persönliches Master-Passwort fest. Es wird nur im Browser verwendet (Zero-Knowledge) — der Server sieht es nie.</p>
+      <label>Master-Passwort (≥12 Zeichen)</label>
+      <input id="mpw" type="password" autocomplete="new-password" />
+      <label>Wiederholen</label>
+      <input id="mpw2" type="password" autocomplete="new-password" />
+      <div class="error" id="err" hidden></div>
+      <div class="row onboard-actions">
+        <button class="btn-accent" type="button" id="doOnboard">Schlüssel erzeugen</button>
+      </div>`;
+    panel.querySelector("#doOnboard").onclick = runOnboard;
+    panel.querySelector("#mpw2").addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter") panel.querySelector("#doOnboard").click();
+    });
+  }
+
+  async function runOnboard() {
+    const err = panel.querySelector("#err");
+    err.hidden = true;
+    const btn = panel.querySelector("#doOnboard");
+    const mpw = panel.querySelector("#mpw").value;
+    if (mpw.length < 12 || mpw !== panel.querySelector("#mpw2").value) {
+      err.hidden = false;
+      err.textContent = "Master-Passwort ungültig oder stimmt nicht überein (mindestens 12 Zeichen).";
+      return;
     }
+    btn.disabled = true;
+    btn.textContent = "Wird erzeugt…";
     try {
       const me = await api("/api/me");
       const params = await api("/api/vault/crypto-params");
@@ -727,7 +866,10 @@ function renderOnboard(app) {
         salt_b64: TVCrypto.b64enc(id.salt),
         argon2: params,
       };
-      if (me.recovery_mode === "admin_escrow") {
+      let kitB64 = "";
+      let kitText = "";
+      const escrowMode = me.recovery_mode === "admin_escrow";
+      if (escrowMode) {
         const st = await api("/api/vault/status");
         if (!st.has_escrow_pubkey) throw new Error("Admin muss zuerst Escrow-Public-Key setzen");
         const ep = await api("/api/vault/escrow-pubkey");
@@ -739,43 +881,73 @@ function renderOnboard(app) {
         body.encrypted_private_key_recovery_b64 = TVCrypto.b64enc(sealed.sealed);
         body.recovery_nonce_b64 = TVCrypto.b64enc(sealed.nonce);
         body.recovery_salt_b64 = TVCrypto.b64enc(sealed.salt);
-        const kitB64 = TVCrypto.b64enc(kit);
-        kit.fill(0);
-        const kitText =
+        kitB64 = TVCrypto.b64enc(kit);
+        kitText =
           "TeamVault Recovery-Kit\n" +
           "Bewahren Sie diese Datei sicher auf.\n" +
           "Ohne Kit und ohne Master-Passwort sind Secrets verloren.\n\n" +
           kitB64 + "\n";
-        kitBox.hidden = false;
-        kitBox.innerHTML =
-          "<strong>Recovery-Kit (einmalig sichern):</strong>" +
-          "<p class='hint'>Ohne dieses Kit und ohne Master-Passwort sind Secrets verloren.</p>" +
-          "<code class='mono' id='kitval'></code>" +
-          "<div class='row'>" +
-          "<button class='btn-accent' type='button' id='kitCopy'>Kopieren</button>" +
-          "<button class='btn-ghost' type='button' id='kitDl'>Download .txt</button>" +
-          "</div>";
-        kitBox.querySelector("#kitval").textContent = kitB64;
-        kitBox.querySelector("#kitCopy").onclick = async (ev) => {
-          await copyText(kitB64);
-          flashCopy(ev.currentTarget);
-        };
-        kitBox.querySelector("#kitDl").onclick = () => downloadText("TeamVault-recovery-kit.txt", kitText);
+        kit.fill(0);
       }
       id.secretKey.fill(0);
       await api("/api/vault/onboard", { method: "POST", body: JSON.stringify(body) });
-      n.querySelector("#mpw").value = "";
-      n.querySelector("#mpw2").value = "";
-      const go = document.createElement("div");
-      go.className = "row";
-      go.innerHTML = `<button class="btn-accent" type="button">Weiter zur App</button>`;
-      go.querySelector("button").onclick = () => { tvGo("/app"); };
-      n.appendChild(go);
+      renderDoneStep({ escrowMode, kitB64, kitText });
     } catch (e) {
-      err.hidden = false; err.textContent = e.message;
+      btn.disabled = false;
+      btn.textContent = "Schlüssel erzeugen";
+      err.hidden = false;
+      err.textContent = e.message;
     }
-  };
-  app.appendChild(n);
+  }
+
+  function renderDoneStep({ escrowMode, kitB64, kitText }) {
+    setStepper(2, escrowMode);
+    const kitSection = escrowMode ? "" : `
+      <h2>Recovery-Kit sichern</h2>
+      <p class="hint">Dieses Kit wird nur einmal angezeigt. Ohne Kit und ohne Master-Passwort sind Ihre Secrets nicht wiederherstellbar.</p>
+      <ol class="onboard-checklist">
+        <li>Recovery-Kit <strong>kopieren</strong> oder als Datei <strong>herunterladen</strong></li>
+        <li>An einem sicheren Ort aufbewahren (Passwort-Manager, Tresor, …)</li>
+        <li>Unten bestätigen und zur App wechseln</li>
+      </ol>
+      <code class="mono onboard-kit" id="kitval"></code>
+      <div class="row onboard-kit-actions">
+        <button class="btn-ghost" type="button" id="kitCopy">In Zwischenablage kopieren</button>
+        <button class="btn-ghost" type="button" id="kitDl">Als .txt herunterladen</button>
+      </div>
+      <label class="inline onboard-confirm"><input id="kitSaved" type="checkbox" /> Ich habe das Recovery-Kit gesichert</label>`;
+    panel.innerHTML = `
+      <h1>Vault eingerichtet</h1>
+      <div class="onboard-success">
+        <strong>Schlüssel wurden erfolgreich erzeugt.</strong>
+        ${escrowMode
+          ? "<p class='hint'>Ihr privater Schlüssel liegt verschlüsselt auf dem Server. Wiederherstellung erfolgt über den Admin-Escrow.</p>"
+          : "<p class='hint'>Bevor Sie fortfahren, sichern Sie bitte Ihr Recovery-Kit.</p>"}
+      </div>
+      ${kitSection}
+      <div class="error" id="err" hidden></div>
+      <div class="row onboard-actions">
+        <button class="btn-accent" type="button" id="goApp" ${escrowMode ? "" : "disabled"}>Weiter zur App</button>
+      </div>`;
+    if (!escrowMode) {
+      panel.querySelector("#kitval").textContent = kitB64;
+      panel.querySelector("#kitCopy").onclick = async (ev) => {
+        await copyText(kitB64);
+        flashCopy(ev.currentTarget);
+      };
+      panel.querySelector("#kitDl").onclick = () => downloadText("TeamVault-recovery-kit.txt", kitText);
+      const goBtn = panel.querySelector("#goApp");
+      const saved = panel.querySelector("#kitSaved");
+      saved.onchange = () => {
+        goBtn.disabled = !saved.checked;
+        if (saved.checked) setStepper(3, false);
+      };
+    }
+    panel.querySelector("#goApp").onclick = () => tvGo("/app");
+  }
+
+  renderPasswordStep();
+  app.appendChild(wrap);
 }
 
 const vault = {
@@ -803,6 +975,15 @@ const vault = {
     } catch (_) {}
     return "table";
   })(),
+  usersViewMode: (function () {
+    try {
+      const v = localStorage.getItem("tv-users-view");
+      if (v === "table" || v === "tiles" || v === "list") return v;
+    } catch (_) {}
+    return "table";
+  })(),
+  adminUsers: [],
+  adminOverview: null,
   groups: [],
   totpTimer: null,
   selectedIds: new Set(),
@@ -1058,33 +1239,39 @@ function renderApp(app) {
     <aside class="app-sidebar" id="appSidebar" hidden>
       <div class="app-sidebar-brand">${icon("shield", "brand-ico")} <span>TeamVault</span></div>
       <nav class="app-sidebar-nav" id="appSidebarNav">
-        <div class="sidebar-section">
-          <div class="sidebar-section-title">Vault</div>
+        ${navSection("vault", "Vault", `
           ${navLink("vault:mine", "key", "Meine Secrets", "active")}
           ${navLink("vault:shared", "share", "Geteilt mit mir")}
           ${navLink("vault:create", "plus", "Neu anlegen")}
           ${navLink("vault:import", "upload", "Import")}
           ${navLink("vault:backup", "download", "Sicherung")}
-        </div>
-        <div class="sidebar-section">
-          <div class="sidebar-section-title">Konto</div>
+        `)}
+        ${navSection("account", "Konto", `
           ${navLink("account", "user", "Konto")}
           <a class="sidebar-link" href="${tvPath("/help")}" target="_blank" rel="noopener"><span class="nav-ico">${icon("book")}</span><span>Hilfe</span></a>
-        </div>
-        <div class="sidebar-section" id="navAdminSection" hidden>
-          <div class="sidebar-section-title">Administration</div>
-          ${navLink("admin:users", "users", "Benutzer", "admin-link", 'data-admin-only')}
-          ${navLink("admin:groups", "group", "Gruppen", "admin-link", 'data-admin-only')}
-          ${navLink("admin:trust", "cert", "Firmen-CA", "admin-link", 'data-admin-only')}
-          ${navLink("admin:access", "network", "Zugriff &amp; Proxy", "admin-link", 'data-admin-only')}
-          ${navLink("admin:ldap", "network", "LDAP", "admin-link", 'data-admin-only')}
-          ${navLink("admin:smtp", "mail", "SMTP", "admin-link", 'data-admin-only')}
-          ${navLink("admin:crypto", "shield", "Krypto &amp; Policy", "admin-link", 'data-admin-only')}
-          ${navLink("admin:recovery", "lock", "Recovery &amp; Escrow", "admin-link", 'data-admin-only')}
-          ${navLink("admin:apikeys", "key", "API-Keys", "admin-link", 'data-admin-only')}
-          ${navLink("admin:platform", "building", "Tenants &amp; Migration", "admin-link platform-link", 'data-admin-only hidden')}
-          ${navLink("admin:audit", "clipboard", "Audit", "admin-link")}
-        </div>
+        `)}
+        ${navSection("admin", "Administration", `
+          ${navSubSection("admin-org", "Benutzer &amp; Gruppen", `
+            ${navLink("admin:users", "users", "Benutzer", "admin-link", 'data-admin-only')}
+            ${navLink("admin:groups", "group", "Gruppen", "admin-link", 'data-admin-only')}
+          `)}
+          ${navSubSection("admin-connect", "Verbindungen", `
+            ${navLink("admin:trust", "cert", "Firmen-CA", "admin-link", 'data-admin-only')}
+            ${navLink("admin:access", "network", "Zugriff &amp; Proxy", "admin-link", 'data-admin-only')}
+            ${navLink("admin:ldap", "network", "LDAP", "admin-link", 'data-admin-only')}
+            ${navLink("admin:smtp", "mail", "SMTP", "admin-link", 'data-admin-only')}
+          `)}
+          ${navSubSection("admin-security", "Sicherheit", `
+            ${navLink("admin:crypto", "shield", "Krypto &amp; Policy", "admin-link", 'data-admin-only')}
+            ${navLink("admin:recovery", "lock", "Recovery &amp; Escrow", "admin-link", 'data-admin-only')}
+            ${navLink("admin:apikeys", "key", "API-Keys", "admin-link", 'data-admin-only')}
+          `)}
+          ${navSubSection("admin-platform", "Plattform", `
+            ${navLink("admin:platform", "building", "Tenants &amp; Migration", "admin-link platform-link", 'data-admin-only hidden')}
+            ${navLink("admin:system", "info", "System", "admin-link")}
+            ${navLink("admin:audit", "clipboard", "Audit", "admin-link")}
+          `)}
+        `, 'id="navAdminSection" hidden')}
       </nav>
       <div class="app-sidebar-foot">
         <p class="offline-sync-bar hint" id="offlineSyncBar" hidden role="status"></p>
@@ -1373,17 +1560,30 @@ function renderApp(app) {
           <div class="app-tab" data-pane="admin" id="adminPane" hidden>
             <div class="panel" id="admin">
               <div class="error" id="aerr" hidden></div>
-              <p class="hint" id="overview"></p>
               <div id="adminFull">
                 <div class="admin-section" data-admin-section="users">
-                  <div id="ulist" class="list"></div>
+                  <div class="users-toolbar row">
+                    <button class="btn-accent" type="button" id="uopenCreate">User anlegen</button>
+                    <div class="secrets-view-toggle" role="group" aria-label="User-Ansicht">
+                      <button type="button" class="btn-icon" data-users-view="list" title="Liste" aria-label="Liste">${icon("layoutList")}</button>
+                      <button type="button" class="btn-icon" data-users-view="table" title="Tabelle" aria-label="Tabelle">${icon("layoutTable")}</button>
+                      <button type="button" class="btn-icon" data-users-view="tiles" title="Kacheln" aria-label="Kacheln">${icon("layoutGrid")}</button>
+                    </div>
+                  </div>
+                  <div id="ulist" class="list users-list"></div>
                   <div class="hint" id="udisable_hint" hidden></div>
-                  <h3 class="admin-subhead">Neuer User</h3>
-                  <label>Username</label><input id="nuser" />
-                  <label>Anzeigename</label><input id="ndisplay" />
-                  <label>E-Mail</label><input id="nemail" type="email" autocomplete="off" />
-                  <label>Passwort (≥12)</label><input id="npw" type="password" />
-                  <div class="row"><button class="btn-accent" type="button" id="ucreate">User anlegen</button></div>
+                  <div id="ldapUserImport" class="panel-inset" hidden>
+                    <h3 class="admin-subhead">LDAP-Verzeichnis</h3>
+                    <p class="hint">User vor der ersten Anmeldung importieren — danach in Gruppen zuweisen.</p>
+                    <div class="row">
+                      <input id="ldap_user_q" placeholder="Suche (mind. 2 Zeichen)…" />
+                      <button class="btn-ghost" type="button" id="ldap_user_search">Suchen</button>
+                    </div>
+                    <div id="ldap_user_results" class="list"></div>
+                    <div class="row">
+                      <button class="btn-accent" type="button" id="ldap_user_import" hidden>Auswahl importieren</button>
+                    </div>
+                  </div>
                 </div>
                 <div class="admin-section" data-admin-section="groups">
                   <div class="groups-workspace">
@@ -1402,6 +1602,30 @@ function renderApp(app) {
                   </div>
                   <div class="row"><button class="btn-ghost" type="button" id="ldap_sync">LDAP-Sync (Disable fehlende)</button></div>
                 </div>
+                <div id="userCreateModal" class="admin-modal" hidden role="dialog" aria-modal="true" aria-labelledby="userCreateTitle">
+                  <div class="admin-modal-backdrop" id="userCreateBackdrop"></div>
+                  <div class="admin-modal-panel panel">
+                    <div class="admin-modal-head">
+                      <h2 id="userCreateTitle">Neuer User</h2>
+                      <button type="button" class="btn-ghost btn-sm" id="userCreateClose">Schließen</button>
+                    </div>
+                    <label>Auth-Backend</label>
+                    <select id="nauth">
+                      <option value="local">Lokal (Passwort)</option>
+                      <option value="ldap">LDAP / AD</option>
+                    </select>
+                    <label>Username</label><input id="nuser" autocomplete="off" />
+                    <label>Anzeigename</label><input id="ndisplay" />
+                    <label>E-Mail</label><input id="nemail" type="email" autocomplete="off" />
+                    <div id="npw_block">
+                      <label>Passwort (≥12)</label><input id="npw" type="password" autocomplete="new-password" />
+                    </div>
+                    <div class="error" id="uc_err" hidden></div>
+                    <div class="row">
+                      <button class="btn-accent" type="button" id="ucreate">User anlegen</button>
+                    </div>
+                  </div>
+                </div>
                 <div id="userEditModal" class="admin-modal" hidden role="dialog" aria-modal="true" aria-labelledby="userEditTitle">
                   <div class="admin-modal-backdrop" id="userEditBackdrop"></div>
                   <div class="admin-modal-panel panel">
@@ -1417,10 +1641,10 @@ function renderApp(app) {
                     </div>
                     <fieldset class="role-fieldset">
                       <legend>Rollen</legend>
-                      <label class="inline"><input type="checkbox" id="ue_role_member" value="member" /> member</label>
-                      <label class="inline"><input type="checkbox" id="ue_role_admin" value="tenant_admin" /> tenant_admin</label>
-                      <label class="inline"><input type="checkbox" id="ue_role_auditor" value="auditor" /> auditor</label>
-                      <label class="inline" id="ue_role_plat_wrap"><input type="checkbox" id="ue_role_plat" value="platform_admin" /> platform_admin</label>
+                      <label class="inline" title="Vault nutzen, Secrets lesen und bearbeiten (Standard)"><input type="checkbox" id="ue_role_member" value="member" /> Mitglied</label>
+                      <label class="inline" title="Benutzer, Gruppen, LDAP, Policy, Audit, API-Keys"><input type="checkbox" id="ue_role_admin" value="tenant_admin" /> Organisations-Administrator</label>
+                      <label class="inline" title="Audit-Log einsehen (ohne Schreibrechte)"><input type="checkbox" id="ue_role_auditor" value="auditor" /> Auditor (nur Lesen)</label>
+                      <label class="inline" id="ue_role_plat_wrap" title="Tenants, Storage-Migration, plattformweite Übersicht"><input type="checkbox" id="ue_role_plat" value="platform_admin" /> Plattform-Administrator</label>
                     </fieldset>
                     <div class="error" id="ue_err" hidden></div>
                     <div class="row">
@@ -1526,7 +1750,7 @@ function renderApp(app) {
                   <div class="ok" id="ktoken" hidden></div>
                 </div>
                 <div class="admin-section" data-admin-section="platform" id="plat" hidden>
-                  <h2>Tenants (platform_admin)</h2>
+                  <h2>Tenants (Plattform-Administrator)</h2>
                   <div id="tlist" class="list"></div>
                   <label>Name</label><input id="tname" />
                   <label>Slug</label><input id="tslug" />
@@ -1555,6 +1779,14 @@ function renderApp(app) {
               </div>
               <div class="admin-section" data-admin-section="audit">
                 <div id="alist" class="list hint"></div>
+              </div>
+              </div>
+              <div class="admin-section" data-admin-section="system">
+                <h2>System &amp; Instanz</h2>
+                <p class="hint">Storage, Vault-Gesundheit und angebundene Dienste.</p>
+                <dl class="system-overview" id="sysOverview"></dl>
+                <h3 class="admin-subhead">Version</h3>
+                <p class="hint" id="sysVersion">—</p>
               </div>
             </div>
           </div>
@@ -1591,8 +1823,61 @@ function renderApp(app) {
     "admin:recovery": "Recovery & Escrow",
     "admin:apikeys": "API-Keys",
     "admin:platform": "Tenants & Migration",
+    "admin:system": "System",
     "admin:audit": "Audit",
   };
+
+  function setNavSectionCollapsed(sectionEl, collapsed, persist) {
+    if (!sectionEl) return;
+    sectionEl.classList.toggle("collapsed", collapsed);
+    const btn = sectionEl.querySelector(".sidebar-section-toggle");
+    if (btn) btn.setAttribute("aria-expanded", collapsed ? "false" : "true");
+    if (persist) saveNavSectionState(sectionEl.dataset.navSection, collapsed);
+  }
+
+  function expandNavSectionForRoute(nav) {
+    const id = navSectionIdForRoute(nav);
+    const sec = n.querySelector(`[data-nav-section="${id}"]`);
+    if (sec) setNavSectionCollapsed(sec, false, true);
+    const subId = navSubsectionIdForRoute(nav);
+    if (subId) {
+      const sub = n.querySelector(`[data-nav-subsection="${subId}"]`);
+      if (sub) setNavSubsectionCollapsed(sub, false, true);
+    }
+  }
+
+  function setNavSubsectionCollapsed(subEl, collapsed, persist) {
+    if (!subEl) return;
+    subEl.classList.toggle("collapsed", collapsed);
+    const btn = subEl.querySelector(".sidebar-subsection-toggle");
+    if (btn) btn.setAttribute("aria-expanded", collapsed ? "false" : "true");
+    if (persist) saveNavSubsectionState(subEl.dataset.navSubsection, collapsed);
+  }
+
+  function initSidebarSections() {
+    const saved = loadNavSectionsState();
+    n.querySelectorAll(".sidebar-section[data-nav-section]").forEach((sec) => {
+      const id = sec.dataset.navSection;
+      const collapsed = saved[id] === true;
+      setNavSectionCollapsed(sec, collapsed, false);
+      const btn = sec.querySelector(".sidebar-section-toggle");
+      if (!btn) return;
+      btn.onclick = () => {
+        setNavSectionCollapsed(sec, !sec.classList.contains("collapsed"), true);
+      };
+    });
+    const savedSub = loadNavSubsectionsState();
+    n.querySelectorAll(".sidebar-subsection[data-nav-subsection]").forEach((sub) => {
+      const id = sub.dataset.navSubsection;
+      const collapsed = savedSub[id] === true;
+      setNavSubsectionCollapsed(sub, collapsed, false);
+      const btn = sub.querySelector(".sidebar-subsection-toggle");
+      if (!btn) return;
+      btn.onclick = () => {
+        setNavSubsectionCollapsed(sub, !sub.classList.contains("collapsed"), true);
+      };
+    });
+  }
 
   function closeMobileNav() {
     n.querySelector("#appSidebar").classList.remove("open");
@@ -1666,6 +1951,7 @@ function renderApp(app) {
       announceA11y("Nur online verfügbar");
       return;
     }
+    expandNavSectionForRoute(nav);
     n.querySelectorAll(".sidebar-link").forEach((b) => {
       const on = b.dataset.nav === nav;
       b.classList.toggle("active", on);
@@ -1816,6 +2102,7 @@ function renderApp(app) {
   n.querySelectorAll(".sidebar-link[data-nav]").forEach((btn) => {
     btn.onclick = () => navigateTo(btn.dataset.nav);
   });
+  initSidebarSections();
   n.querySelector("#menuToggle").onclick = () => {
     n.querySelector("#appSidebar").classList.add("open");
     n.querySelector("#sidebarBackdrop").classList.add("open");
@@ -3508,7 +3795,8 @@ function renderApp(app) {
 
   function formatUserRoles(rolesJson) {
     const r = parseUserRoles(rolesJson);
-    return r.length ? r.join(", ") : "member";
+    if (!r.length) return roleLabel("member");
+    return r.map(roleLabel).join(", ");
   }
 
   function closeUserEditor() {
@@ -3524,7 +3812,7 @@ function renderApp(app) {
     if (!modal) return;
     n.querySelector("#userEditTitle").textContent = `User: ${user.username}`;
     n.querySelector("#userEditMeta").textContent =
-      `${user.status}${user.onboarded ? " · onboarded" : ""} · ${user.auth_backend}`;
+      `${formatUserStatus(user.status)}${user.onboarded ? " · Vault eingerichtet" : ""} · ${formatAuthBackend(user.auth_backend)}`;
     n.querySelector("#ue_display").value = user.display_name || "";
     n.querySelector("#ue_email").value = user.email || "";
     n.querySelector("#ue_password").value = "";
@@ -3712,26 +4000,21 @@ function renderApp(app) {
     });
   }
 
-  function paintUsersList(users) {
-    n.querySelector("#ulist").innerHTML = users.map((u) =>
-      `<div class="list-row user-row">
-        <div class="list-row-main">
-          <strong>${escHtml(u.username)}</strong>
-          <span class="hint">${escHtml(u.display_name || "—")} · ${escHtml(u.status)}${u.onboarded ? " · onboarded" : ""} · ${escHtml(u.auth_backend)} · ${escHtml(formatUserRoles(u.roles))}</span>
-        </div>
-        <div class="row user-row-actions">
-          <button class="btn-ghost btn-sm" data-edit-user="${escHtml(u.id)}" type="button">Bearbeiten</button>
-          ${u.status !== "disabled" ? `<button class="btn-ghost btn-sm" data-dis="${escHtml(u.id)}" type="button">Disable</button>` : ""}
-        </div>
-      </div>`
-    ).join("") || "<p class='hint'>Keine User</p>";
-    n.querySelector("#ulist").querySelectorAll("[data-edit-user]").forEach((btn) => {
+  function userActionButtons(u) {
+    return `<div class="row user-row-actions">
+      <button class="btn-ghost btn-sm" data-edit-user="${escHtml(u.id)}" type="button">Bearbeiten</button>
+      ${u.status !== "disabled" ? `<button class="btn-ghost btn-sm" data-dis="${escHtml(u.id)}" type="button">Deaktivieren</button>` : ""}
+    </div>`;
+  }
+
+  function bindUserRowActions(container, users) {
+    container.querySelectorAll("[data-edit-user]").forEach((btn) => {
       btn.onclick = () => {
         const u = users.find((x) => x.id === btn.dataset.editUser);
         if (u) openUserEditor(u);
       };
     });
-    n.querySelector("#ulist").querySelectorAll("[data-dis]").forEach((btn) => {
+    container.querySelectorAll("[data-dis]").forEach((btn) => {
       btn.onclick = async () => {
         const uid = btn.dataset.dis;
         await api("/api/admin/users/" + uid + "/disable", { method: "POST", body: "{}" });
@@ -3753,6 +4036,114 @@ function renderApp(app) {
       };
     });
   }
+
+  function syncUsersViewToggle() {
+    n.querySelectorAll("[data-users-view]").forEach((btn) => {
+      const on = btn.dataset.usersView === vault.usersViewMode;
+      btn.classList.toggle("active", on);
+      btn.setAttribute("aria-pressed", on ? "true" : "false");
+    });
+  }
+
+  function setUsersViewMode(mode) {
+    if (mode !== "list" && mode !== "table" && mode !== "tiles") return;
+    vault.usersViewMode = mode;
+    try { localStorage.setItem("tv-users-view", mode); } catch (_) {}
+    syncUsersViewToggle();
+    paintUsersList(vault.adminUsers);
+  }
+
+  function paintUsersList(users) {
+    vault.adminUsers = users || [];
+    const list = n.querySelector("#ulist");
+    if (!list) return;
+    list.innerHTML = "";
+    list.className = "list users-list users-view-" + vault.usersViewMode;
+    if (!vault.adminUsers.length) {
+      list.innerHTML = "<p class='hint'>Keine User</p>";
+      return;
+    }
+    if (vault.usersViewMode === "table") {
+      const table = el(`<table class="secrets-table users-table"><thead><tr>
+        <th>Benutzername</th><th>Anzeigename</th><th>E-Mail</th><th>Status</th><th>Auth</th><th>Rollen</th><th></th>
+      </tr></thead><tbody></tbody></table>`);
+      const tbody = table.querySelector("tbody");
+      for (const u of vault.adminUsers) {
+        const tr = el(`<tr>
+          <td class="st-title">${escHtml(u.username)}</td>
+          <td>${escHtml(u.display_name || "—")}</td>
+          <td class="muted">${escHtml(u.email || "—")}</td>
+          <td>${escHtml(formatUserStatus(u.status))}${u.onboarded ? " · Vault" : ""}</td>
+          <td>${escHtml(formatAuthBackend(u.auth_backend))}</td>
+          <td>${escHtml(formatUserRoles(u.roles))}</td>
+          <td class="st-act"></td>
+        </tr>`);
+        tr.querySelector(".st-act").innerHTML = userActionButtons(u);
+        tbody.appendChild(tr);
+      }
+      list.appendChild(table);
+    } else if (vault.usersViewMode === "tiles") {
+      const grid = el(`<div class="users-tiles"></div>`);
+      for (const u of vault.adminUsers) {
+        const tile = el(`<article class="user-tile">
+          <h3 class="user-tile-title">${escHtml(u.username)}</h3>
+          <p class="hint user-tile-meta"></p>
+          <div class="user-tile-actions"></div>
+        </article>`);
+        const meta = [
+          u.display_name || "—",
+          formatUserStatus(u.status) + (u.onboarded ? " · Vault" : ""),
+          formatAuthBackend(u.auth_backend),
+          formatUserRoles(u.roles),
+        ];
+        tile.querySelector(".user-tile-meta").textContent = meta.join(" · ");
+        tile.querySelector(".user-tile-actions").innerHTML = userActionButtons(u);
+        grid.appendChild(tile);
+      }
+      list.appendChild(grid);
+    } else {
+      list.innerHTML = vault.adminUsers.map((u) =>
+        `<div class="list-row user-row">
+          <div class="list-row-main">
+            <strong>${escHtml(u.username)}</strong>
+            <span class="hint">${escHtml(u.display_name || "—")} · ${escHtml(formatUserStatus(u.status))}${u.onboarded ? " · Vault" : ""} · ${escHtml(formatAuthBackend(u.auth_backend))} · ${escHtml(formatUserRoles(u.roles))}</span>
+          </div>
+          ${userActionButtons(u)}
+        </div>`
+      ).join("");
+    }
+    bindUserRowActions(list, vault.adminUsers);
+  }
+
+  function closeUserCreateModal() {
+    const modal = n.querySelector("#userCreateModal");
+    if (modal) modal.hidden = true;
+    document.body.classList.remove("admin-modal-open");
+  }
+
+  function openUserCreateModal() {
+    const modal = n.querySelector("#userCreateModal");
+    if (!modal) return;
+    n.querySelector("#nuser").value = "";
+    n.querySelector("#ndisplay").value = "";
+    n.querySelector("#nemail").value = "";
+    n.querySelector("#npw").value = "";
+    n.querySelector("#nauth").value = "local";
+    const err = n.querySelector("#uc_err");
+    if (err) err.hidden = true;
+    syncNewUserAuthUI();
+    modal.hidden = false;
+    document.body.classList.add("admin-modal-open");
+    n.querySelector("#nuser").focus();
+  }
+
+  n.querySelector("#uopenCreate")?.addEventListener("click", openUserCreateModal);
+  n.querySelector("#userCreateClose")?.addEventListener("click", closeUserCreateModal);
+  n.querySelector("#userCreateBackdrop")?.addEventListener("click", closeUserCreateModal);
+  n.querySelectorAll("[data-users-view]").forEach((btn) => {
+    btn.onclick = () => setUsersViewMode(btn.dataset.usersView);
+  });
+  syncUsersViewToggle();
 
   const userEditModal = n.querySelector("#userEditModal");
   if (userEditModal) {
@@ -3793,6 +4184,40 @@ function renderApp(app) {
     };
   }
 
+  async function paintAdminSystem(ov) {
+    const box = n.querySelector("#sysOverview");
+    const verEl = n.querySelector("#sysVersion");
+    if (!box) return;
+    try {
+      const about = await loadAboutInfo();
+      if (verEl) verEl.textContent = formatAboutLine(about);
+    } catch (_) {
+      if (verEl) verEl.textContent = "—";
+    }
+    if (isAuditorOnly()) {
+      box.innerHTML = "<p class=\"hint\">Als Auditor haben Sie nur Lesezugriff auf das Audit-Log.</p>";
+      return;
+    }
+    if (!ov) {
+      box.innerHTML = "<p class=\"hint\">Keine Systemdaten geladen.</p>";
+      return;
+    }
+    const storage = ov.storage || {};
+    const rows = [
+      ["Storage-Backend", storage.backend || "—", null],
+      ["Vault", ov.vault_ok ? "OK" : "Fehler", ov.vault_ok],
+      ["Vault-Detail", ov.vault_detail || "—", null],
+      ["LDAP", ov.ldap_enabled ? `aktiv (${ov.ldap_host})` : "aus", ov.ldap_enabled ? true : null],
+      ["SMTP", ov.mail_enabled ? "aktiv" : "aus", ov.mail_enabled ? true : null],
+      ["Tenants", String(ov.tenant_count ?? "—"), null],
+      ["Initialisiert", ov.initialized ? "ja" : "nein", ov.initialized ? true : null],
+    ];
+    box.innerHTML = rows.map(([label, value, ok]) => {
+      const valCls = ok === true ? "dd-ok" : ok === false ? "dd-err" : "";
+      return `<div class="system-row"><dt>${escHtml(label)}</dt><dd class="${valCls}">${escHtml(value)}</dd></div>`;
+    }).join("");
+  }
+
   async function refreshAdmin() {
     if (isAuditorOnly()) {
       try {
@@ -3801,15 +4226,15 @@ function renderApp(app) {
         n.querySelector("#alist").innerHTML = audit.slice(0, 50).map((e) =>
           `<div>${e.created_at} · ${e.action} · ${e.actor_id} · ${e.resource_type}/${e.resource_id}</div>`
         ).join("") || "<p>Keine Events</p>";
-        n.querySelector("#overview").textContent = "Auditor — nur Audit-Ansicht";
       } catch (e) {
-        n.querySelector("#overview").textContent = e.message;
+        n.querySelector("#alist").innerHTML = `<p class="hint">${escHtml(e.message)}</p>`;
       }
+      await paintAdminSystem(null);
       return;
     }
     const ov = await api("/api/admin/overview");
-    n.querySelector("#overview").textContent =
-      `Storage ${ov.storage.backend} · Vault ${ov.vault_ok ? "OK" : "FAIL"} · LDAP ${ov.ldap_enabled ? ov.ldap_host : "aus"} · Tenants ${ov.tenant_count}`;
+    vault.adminOverview = ov;
+    await paintAdminSystem(ov);
     const users = await api("/api/admin/users");
     paintUsersList(users);
     const groups = await api("/api/admin/groups");
@@ -3818,6 +4243,8 @@ function renderApp(app) {
     await refreshGroupShareUI();
     const ldap = await api("/api/admin/ldap");
     n.querySelector("#ldap_en").checked = !!ldap.enabled;
+    const ldapImport = n.querySelector("#ldapUserImport");
+    if (ldapImport) ldapImport.hidden = !ldap.enabled;
     n.querySelector("#ldap_host").value = ldap.host || "";
     n.querySelector("#ldap_port").value = ldap.port || "";
     const ldapPort = Number(ldap.port) || 0;
@@ -3921,22 +4348,101 @@ function renderApp(app) {
     }
   }
 
-  n.querySelector("#ucreate").onclick = async () => {
+  let ldapSearchHits = [];
+
+  function paintLDAPSearchResults(users) {
+    ldapSearchHits = users || [];
+    const box = n.querySelector("#ldap_user_results");
+    const importBtn = n.querySelector("#ldap_user_import");
+    if (!box) return;
+    if (!ldapSearchHits.length) {
+      box.innerHTML = "<p class='hint'>Keine Treffer</p>";
+      if (importBtn) importBtn.hidden = true;
+      return;
+    }
+    const importable = ldapSearchHits.filter((u) => !u.provisioned);
+    box.innerHTML = ldapSearchHits.map((u, i) =>
+      `<label class="list-row ldap-hit-row">
+        <input type="checkbox" data-ldap-hit="${i}" ${u.provisioned ? "disabled" : "checked"} />
+        <span><strong>${escHtml(u.username)}</strong>
+          <span class="hint">${escHtml(u.display_name || "—")}${u.email ? " · " + escHtml(u.email) : ""}${u.provisioned ? " · bereits angelegt" : ""}</span>
+        </span>
+      </label>`
+    ).join("");
+    if (importBtn) importBtn.hidden = importable.length === 0;
+  }
+
+  function syncNewUserAuthUI() {
+    const ldap = n.querySelector("#nauth")?.value === "ldap";
+    const pwBlock = n.querySelector("#npw_block");
+    if (pwBlock) pwBlock.hidden = !!ldap;
+  }
+  n.querySelector("#nauth")?.addEventListener("change", syncNewUserAuthUI);
+  syncNewUserAuthUI();
+
+  n.querySelector("#ldap_user_search")?.addEventListener("click", async () => {
     const err = n.querySelector("#aerr"); err.hidden = true;
+    const q = (n.querySelector("#ldap_user_q")?.value || "").trim();
+    if (q.length < 2) {
+      err.hidden = false; err.textContent = "Suchbegriff mindestens 2 Zeichen";
+      return;
+    }
     try {
-      await api("/api/admin/users", {
+      const res = await api("/api/admin/ldap/users?q=" + encodeURIComponent(q));
+      paintLDAPSearchResults(res.users || []);
+    } catch (e) {
+      err.hidden = false; err.textContent = e.message;
+    }
+  });
+  n.querySelector("#ldap_user_q")?.addEventListener("keydown", (ev) => {
+    if (ev.key === "Enter") {
+      ev.preventDefault();
+      n.querySelector("#ldap_user_search")?.click();
+    }
+  });
+  n.querySelector("#ldap_user_import")?.addEventListener("click", async () => {
+    const err = n.querySelector("#aerr"); err.hidden = true;
+    const names = [];
+    n.querySelectorAll("[data-ldap-hit]").forEach((cb) => {
+      if (!cb.checked || cb.disabled) return;
+      const hit = ldapSearchHits[Number(cb.dataset.ldapHit)];
+      if (hit?.username) names.push(hit.username);
+    });
+    if (!names.length) return;
+    try {
+      const res = await api("/api/admin/ldap/users/import", {
         method: "POST",
-        body: JSON.stringify({
-          username: n.querySelector("#nuser").value.trim(),
-          display_name: n.querySelector("#ndisplay").value.trim(),
-          email: n.querySelector("#nemail").value.trim(),
-          password: n.querySelector("#npw").value,
-        }),
+        body: JSON.stringify({ usernames: names }),
       });
-      n.querySelector("#nuser").value = "";
-      n.querySelector("#ndisplay").value = "";
-      n.querySelector("#nemail").value = "";
-      n.querySelector("#npw").value = "";
+      const failed = (res.failed || []).length;
+      err.hidden = false;
+      err.style.color = failed ? "" : "var(--color-ok)";
+      err.textContent = `Import: ${res.created || 0} neu, ${res.skipped || 0} bereits vorhanden` +
+        (failed ? `, ${failed} fehlgeschlagen` : "");
+      await refreshAdmin();
+      if (n.querySelector("#ldap_user_q")?.value.trim().length >= 2) {
+        n.querySelector("#ldap_user_search")?.click();
+      }
+    } catch (e) {
+      err.hidden = false; err.style.color = "";
+      err.textContent = e.message;
+    }
+  });
+
+  n.querySelector("#ucreate").onclick = async () => {
+    const err = n.querySelector("#uc_err");
+    err.hidden = true;
+    try {
+      const authBackend = n.querySelector("#nauth")?.value || "local";
+      const body = {
+        username: n.querySelector("#nuser").value.trim(),
+        display_name: n.querySelector("#ndisplay").value.trim(),
+        email: n.querySelector("#nemail").value.trim(),
+        auth_backend: authBackend,
+      };
+      if (authBackend === "local") body.password = n.querySelector("#npw").value;
+      await api("/api/admin/users", { method: "POST", body: JSON.stringify(body) });
+      closeUserCreateModal();
       await refreshAdmin();
     } catch (e) {
       err.hidden = false; err.textContent = e.message;

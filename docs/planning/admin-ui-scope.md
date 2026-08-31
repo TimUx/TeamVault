@@ -72,7 +72,8 @@ Setup-User erhält `platform_admin` **und** `tenant_admin`.
 2. Beim **ersten erfolgreichen LDAP-Login**: Just-in-Time-Provisionierung → User-Datensatz lokal mit `auth_backend=ldap`.
 3. Danach erscheint der User in derselben User-Liste wie lokale User.
 4. Zuordnung zu **lokalen** Gruppen über dieselbe UI.
-5. Optional: manueller/geplanter LDAP-User-Import (Preview + Select) über Admin-UI – erzeugt `pending`-User ohne Onboarding bis erster Login.
+5. **Vorab-Import (implementiert):** Admin → Benutzer → *LDAP-Verzeichnis* — Verzeichnis durchsuchen, Accounts importieren (ohne vorherigen Login); danach Gruppenzuweisung wie bei lokalen Usern.
+6. Optional: geplanter Sync (fehlende Accounts → `disabled`).
 
 ```mermaid
 flowchart LR

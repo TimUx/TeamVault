@@ -24,6 +24,8 @@ func (a *API) registerPhase6(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/admin/ldap", a.requireAuth(a.requireAdmin(a.handleGetLDAP)))
 	mux.HandleFunc("PUT /api/admin/ldap", a.requireAuth(a.requireAdmin(a.handlePutLDAP)))
 	mux.HandleFunc("POST /api/admin/ldap/test", a.requireAuth(a.requireAdmin(a.handleTestLDAP)))
+	mux.HandleFunc("GET /api/admin/ldap/users", a.requireAuth(a.requireAdmin(a.handleLDAPSearchUsers)))
+	mux.HandleFunc("POST /api/admin/ldap/users/import", a.requireAuth(a.requireAdmin(a.handleLDAPImportUsers)))
 	mux.HandleFunc("GET /api/admin/trust", a.requireAuth(a.requireAdmin(a.handleGetTrust)))
 	mux.HandleFunc("PUT /api/admin/trust", a.requireAuth(a.requireAdmin(a.handlePutTrust)))
 	mux.HandleFunc("GET /api/admin/mail", a.requireAuth(a.requireAdmin(a.handleGetMail)))

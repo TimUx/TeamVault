@@ -32,7 +32,7 @@ Details: [`.cursor/rules/security-principles.mdc`](.cursor/rules/security-princi
 | Guide | Zielgruppe |
 |-------|------------|
 | [**Installationsanleitung**](docs/install-guide.md) | One-Liner Docker / Go, `.env`, Unlock-Key |
-| [**User Guide**](docs/user-guide.md) | Alltag: Login, Onboarding, Vault, Sharing, Import/Export, Sicherung |
+| [**User Guide**](docs/user-guide.md) | Alltag: Login, Onboarding, Vault, Sharing, Import/Export, Hilfe (`/help`, `/help/vault`) |
 | [**CLI Guide**](docs/cli-guide.md) | tvcli installieren & nutzen (auch in der App: `/help/cli`) |
 | [**Extension Guide**](docs/extension-guide.md) | Browser-Extension (auch: `/help/extension`) |
 | [**Admin Guide**](docs/admin-guide.md) | Betrieb: Setup, LDAP/SMTP, Escrow, Proxy/TLS, Instanz-Backup, CI |

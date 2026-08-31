@@ -32,14 +32,13 @@ Nach dem Login (oder nach Onboarding) erscheint **Vault entsperren**:
 
 ## 3. Vault-Onboarding (einmalig)
 
-Beim ersten Vault-Zugriff:
+Beim ersten Vault-Zugriff führt ein **zweistufiger Assistent** durch die Einrichtung:
 
-1. Master-Passwort wählen (≥12 Zeichen) und wiederholen  
-2. **Schlüssel erzeugen** (läuft lokal im Browser)  
-3. **Recovery-Kit** einmalig sicher speichern (Passwortmanager offline, Tresor, …)  
-4. Weiter zur App
+1. **Schritt 1 — Master-Passwort:** ≥12 Zeichen wählen und wiederholen → **Schlüssel erzeugen** (läuft lokal im Browser)
+2. **Schritt 2 — Recovery-Kit** (bei Modus *User Recovery-Kit*): Kit **kopieren** oder **herunterladen**, Checkliste abarbeiten, Häkchen **Ich habe das Recovery-Kit gesichert** setzen → **Weiter zur App**
+3. Bei **Admin-Escrow** entfällt das Kit — nach der Schlüsselerzeugung direkt **Weiter zur App**
 
-![Onboarding](images/onboard.png)
+![Onboarding Schritt 1](images/onboard.png)
 
 ![Recovery-Kit](images/onboard-recovery-kit.png)
 
@@ -52,7 +51,7 @@ Nach dem Login erscheint **Vault entsperren**. Master-Passwort eingeben → **En
 - Bei Inaktivität (Default ca. 15 Minuten) sperrt die App den Vault erneut (opakes Overlay).
 - Logout beendet die Server-Session; der Schlüssel im Speicher wird gelöscht.
 
-Oben rechts: Theme-Umschalter als **Sonne/Mond-Icon** (wird lokal gespeichert). Die Sidebar nutzt flache Inline-Icons neben den Menüpunkten. Auf schmalen Viewports: Menü-Taste öffnet die Sidebar (Schließen mit Backdrop oder **Escape**).
+Oben rechts: Theme-Umschalter als **Sonne/Mond-Icon** (wird lokal gespeichert). Die Sidebar nutzt flache Inline-Icons; die Hauptbereiche **Vault**, **Konto** und **Administration** sind einklappbar (Zustand wird im Browser gemerkt). Auf schmalen Viewports: Menü-Taste öffnet die Sidebar (Schließen mit Backdrop oder **Escape**).
 
 ![Dark Theme](images/theme-dark.png)
 
@@ -257,9 +256,13 @@ Nur `read` → keine Admin- oder Schreibaktionen. Cookie-Login ohne API-Key ist 
 
 ## 10. Hilfe
 
-Übersicht Web-App / CLI / Extension auf der Instanz unter **`/help`** (auch Sidebar **Hilfe** oder Login-Header):
+Übersicht Web-App / Vault-Kurzanleitungen / CLI / Extension auf der Instanz unter **`/help`** (auch Sidebar **Hilfe** oder Login-Header):
 
 ![Hilfe Übersicht](images/help.png)
+
+**Vault im Browser** — Anlegen, Teilen, Import mit Beispielen unter **`/help/vault`**:
+
+![Vault-Kurzanleitungen](images/help-vault.png)
 
 | Problem | Tipp |
 |---------|------|
