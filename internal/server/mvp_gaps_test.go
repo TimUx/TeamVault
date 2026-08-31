@@ -63,6 +63,18 @@ func TestMVPGapsLDAPConnPolicyRateLimitShamir(t *testing.T) {
 	if int(pol["unlock_idle_minutes"].(float64)) != 15 {
 		t.Fatal(pol)
 	}
+	if pol["offline_cache_allowed"] != true {
+		t.Fatalf("offline default enabled, got %v", pol["offline_cache_allowed"])
+	}
+	putJSONCookie(t, ts.URL+"/api/admin/policy", map[string]any{
+		"totp_required": false, "session_hours": 8, "unlock_idle_minutes": 15,
+		"escrow_shamir_k": 3, "escrow_shamir_n": 5, "ldap_sync_hours": 24,
+		"offline_cache_allowed": false,
+	}, jar)
+	pol = getJSONCookie(t, ts.URL+"/api/policy/client", jar)
+	if pol["offline_cache_allowed"] != false {
+		t.Fatalf("offline disable, got %v", pol["offline_cache_allowed"])
+	}
 
 	putJSONCookie(t, ts.URL+"/api/admin/mail/templates", map[string]any{
 		"invite_subject": "Hi", "invite_body": "u={{username}} t={{tenant}}",

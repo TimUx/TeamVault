@@ -42,6 +42,7 @@ if ! curl -sf "http://127.0.0.1:${PORT}/api/health" >/dev/null; then
 fi
 
 export TV_URL="http://127.0.0.1:${PORT}"
+export TV_CAPTURE_DATA="/data"
 SCRIPTS_NM="$ROOT/scripts/node_modules"
 if [[ ! -d "$SCRIPTS_NM/playwright" ]]; then
   echo "Installing Playwright (scripts/package.json)…"

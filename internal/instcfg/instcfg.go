@@ -31,13 +31,31 @@ type MailTemplates struct {
 }
 
 type Policy struct {
-	TOTPRequired             bool `json:"totp_required"`
-	SessionHours             int  `json:"session_hours"`               // default 8 (OQ-17)
-	UnlockIdleMinutes        int  `json:"unlock_idle_minutes"`         // default 15 (OQ-17)
-	EscrowShamirK            int  `json:"escrow_shamir_k"`             // default 3
-	EscrowShamirN            int  `json:"escrow_shamir_n"`             // default 5
-	LDAPSyncHours            int  `json:"ldap_sync_hours"`             // default 24; 0 = manual only
-	AdminSecretsEnvelopeOnly bool `json:"admin_secrets_envelope_only"` // false = admins see all secret metadata in list (default)
+	TOTPRequired             bool  `json:"totp_required"`
+	SessionHours             int   `json:"session_hours"`               // default 8 (OQ-17)
+	UnlockIdleMinutes        int   `json:"unlock_idle_minutes"`         // default 15 (OQ-17)
+	EscrowShamirK            int   `json:"escrow_shamir_k"`             // default 3
+	EscrowShamirN            int   `json:"escrow_shamir_n"`             // default 5
+	LDAPSyncHours            int   `json:"ldap_sync_hours"`             // default 24; 0 = manual only
+	AdminSecretsEnvelopeOnly bool  `json:"admin_secrets_envelope_only"` // false = admins see all secret metadata in list (default)
+	OfflineCacheAllowed      *bool `json:"offline_cache_allowed,omitempty"` // nil = enabled (default)
+}
+
+// PublicAccess configures how clients reach this instance (reverse proxy, subpath, canonical URL).
+// Env vars TEAMVAULT_BASE_PATH / TEAMVAULT_TRUST_FORWARDED override these when set (container bootstrap).
+type PublicAccess struct {
+	BasePath             string `json:"base_path,omitempty"`              // e.g. "/vault" when mounted under a directory
+	PublicURL            string `json:"public_url,omitempty"`             // optional canonical URL (scheme+host+path)
+	TrustForwarded       *bool  `json:"trust_forwarded,omitempty"`        // trust X-Forwarded-* from reverse proxy
+	UseForwardedPrefix   bool   `json:"use_forwarded_prefix,omitempty"`   // derive base_path from X-Forwarded-Prefix when BasePath empty
+}
+
+// OfflineCacheEnabled reports whether tenant policy allows client-side offline ciphertext cache.
+func (p Policy) OfflineCacheEnabled() bool {
+	if p.OfflineCacheAllowed == nil {
+		return true
+	}
+	return *p.OfflineCacheAllowed
 }
 
 // LDAPConnection is a per-tenant LDAP bind config (OQ-09).
@@ -67,6 +85,7 @@ type Bundle struct {
 	Mail              MailConfig              `json:"mail"`
 	MailTemplates     MailTemplates           `json:"mail_templates"`
 	Policy            Policy                  `json:"policy"`
+	PublicAccess      PublicAccess            `json:"public_access"`
 	APIKeys           []APIKeyRecord          `json:"api_keys"`
 	PrimaryTenantID   string                  `json:"primary_tenant_id"`
 	PrimaryTenantSlug string                  `json:"primary_tenant_slug"`

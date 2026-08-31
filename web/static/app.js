@@ -8,8 +8,51 @@ const state = {
   },
 };
 
+function tvBaseFromPath() {
+  const p = location.pathname;
+  const routes = ["/app", "/login", "/setup", "/onboard"];
+  for (const s of routes) {
+    if (p === s) return "";
+    if (p.endsWith(s) && p.length > s.length) return p.slice(0, p.length - s.length);
+  }
+  const hm = p.match(/^(.*)\/help(?:\/|$)/);
+  return hm ? hm[1] : "";
+}
+
+function tvBase() {
+  if (typeof window.__TV_BASE__ === "string") {
+    const v = window.__TV_BASE__.replace(/\/$/, "");
+    if (v) return v;
+  }
+  try {
+    const meta = (document.querySelector('meta[name="tv-base"]')?.content || "").replace(/\/$/, "");
+    if (meta) return meta;
+  } catch (_) {}
+  return tvBaseFromPath();
+}
+
+function tvPath(path) {
+  if (!path || path.startsWith("http://") || path.startsWith("https://")) return path;
+  const p = path.startsWith("/") ? path : "/" + path;
+  const b = tvBase();
+  return b ? b + p : p;
+}
+
+function tvRelPath() {
+  const p = location.pathname;
+  const b = tvBase();
+  if (!b) return p;
+  if (p === b) return "/";
+  if (p.startsWith(b + "/")) return p.slice(b.length) || "/";
+  return p;
+}
+
+function tvGo(path) {
+  location.href = tvPath(path);
+}
+
 async function api(path, opts = {}) {
-  const res = await fetch(path, {
+  const res = await fetch(tvPath(path), {
     headers: { "Content-Type": "application/json", ...(opts.headers || {}) },
     credentials: "same-origin",
     ...opts,
@@ -118,7 +161,7 @@ function ensureHeaderControls() {
   };
   actions.appendChild(btn);
   const help = document.createElement("a");
-  help.href = "/help";
+  help.href = tvPath("/help");
   help.className = "btn-ghost";
   help.textContent = "Hilfe";
   help.style.textDecoration = "none";
@@ -455,7 +498,7 @@ function stepView(repaint) {
       const res = await api("/api/setup/commit", { method: "POST", body: JSON.stringify(body) });
       ok.hidden = false;
       ok.textContent = `OK — Tenant ${res.tenant_id}. Weiter zum Login…`;
-      setTimeout(() => { location.href = "/login"; }, 800);
+      setTimeout(() => { tvGo("/login"); }, 800);
     } catch (e) {
       err.hidden = false;
       err.textContent = e.message;
@@ -480,6 +523,12 @@ function renderLogin(app) {
     <div class="row">
       <button class="btn-accent" type="button" id="doLogin">Anmelden</button>
       <button class="btn-ghost" type="button" id="doPasskey">Passkey</button>
+    </div>
+    <div id="offlineLogin" class="offline-login" hidden>
+      <hr />
+      <p class="hint">Ohne Netzwerk: gespeicherte verschlüsselte Kopie mit Master-Passwort entsperren (kein Login, kein TOTP).</p>
+      <p class="error" id="offlineExpired" hidden role="alert"></p>
+      <button class="btn-ghost btn-with-ico" type="button" id="doOffline">${btnLabel("unlock", "Offline entsperren")}</button>
     </div>
   </div>`);
   const slugSel = n.querySelector("#slug");
@@ -523,7 +572,7 @@ function renderLogin(app) {
         }),
       });
       try { localStorage.setItem("tv-tenant-slug", tenantSlug); } catch (_) {}
-      location.href = res.needs_vault_onboard ? "/onboard" : "/app";
+      tvGo(res.needs_vault_onboard ? "/onboard" : "/app");
     } catch (e) {
       err.hidden = false; err.textContent = e.message;
     }
@@ -559,10 +608,35 @@ function renderLogin(app) {
         }),
       });
       try { localStorage.setItem("tv-tenant-slug", tenant); } catch (_) {}
-      location.href = res.needs_vault_onboard ? "/onboard" : "/app";
+      tvGo(res.needs_vault_onboard ? "/onboard" : "/app");
     } catch (e) {
       err.hidden = false; err.textContent = e.message;
     }
+  };
+  (async () => {
+    if (!global.TVOfflineStore?.isAvailable()) return;
+    try {
+      const valid = await TVOfflineStore.listSnapshots({ validOnly: true });
+      const all = await TVOfflineStore.listSnapshots({ validOnly: false });
+      const expired = all.filter((s) => s.expired);
+      const box = n.querySelector("#offlineLogin");
+      const expiredEl = n.querySelector("#offlineExpired");
+      if (valid.length) {
+        box.hidden = false;
+        if (expiredEl) expiredEl.hidden = true;
+      } else if (expired.length) {
+        box.hidden = false;
+        if (expiredEl) {
+          expiredEl.hidden = false;
+          expiredEl.textContent =
+            "Offline-Kopie abgelaufen (max. 30 Tage). Bitte online anmelden und unter Konto neu synchronisieren.";
+        }
+        n.querySelector("#doOffline").disabled = true;
+      }
+    } catch (_) {}
+  })();
+  n.querySelector("#doOffline").onclick = () => {
+    tvGo("/app?offline=1");
   };
   app.appendChild(n);
 }
@@ -695,7 +769,7 @@ function renderOnboard(app) {
       const go = document.createElement("div");
       go.className = "row";
       go.innerHTML = `<button class="btn-accent" type="button">Weiter zur App</button>`;
-      go.querySelector("button").onclick = () => { location.href = "/app"; };
+      go.querySelector("button").onclick = () => { tvGo("/app"); };
       n.appendChild(go);
     } catch (e) {
       err.hidden = false; err.textContent = e.message;
@@ -708,6 +782,10 @@ const vault = {
   sk: null,
   me: null,
   params: null,
+  policy: null,
+  offlineMode: false,
+  offlineSnapshot: null,
+  offlinePicker: false,
   idleMin: 15,
   idleTimer: null,
   idleBound: false,
@@ -728,6 +806,7 @@ const vault = {
   groups: [],
   totpTimer: null,
   selectedIds: new Set(),
+  offlineSyncRunning: false,
 };
 
 function isAdmin() {
@@ -804,7 +883,20 @@ function bindIdleListeners() {
   });
 }
 
-async function unlockVault(masterPassword) {
+async function unlockVault(masterPassword, opts = {}) {
+  const snapshot = opts.snapshot || (vault.offlineMode || vault.offlinePicker ? vault.offlineSnapshot : null);
+  if (snapshot) {
+    const sk = await TVCrypto.unlockPrivateKey(
+      masterPassword,
+      TVCrypto.b64dec(snapshot.keys.salt_b64),
+      TVCrypto.b64dec(snapshot.keys.encrypted_private_key_nonce_b64),
+      TVCrypto.b64dec(snapshot.keys.encrypted_private_key_b64),
+      snapshot.crypto_params
+    );
+    vault.sk = sk;
+    vault.params = snapshot.crypto_params;
+    return;
+  }
   const keys = await api("/api/vault/keys");
   const params = await api("/api/vault/crypto-params");
   const sk = await TVCrypto.unlockPrivateKey(
@@ -816,6 +908,20 @@ async function unlockVault(masterPassword) {
   );
   vault.sk = sk;
   vault.params = params;
+}
+
+function offlinePolicyAllowed() {
+  return vault.policy?.offline_cache_allowed !== false;
+}
+
+function formatOfflineSessionInfo(snapshot) {
+  if (!snapshot) return "Offline";
+  const tenant = snapshot.tenant_name || snapshot.tenant_slug || snapshot.tenant_id || "";
+  const synced = snapshot.synced_at ? new Date(snapshot.synced_at).toLocaleString("de-DE") : "—";
+  let line = `Offline · ${snapshot.username}`;
+  if (tenant) line += ` · ${tenant}`;
+  line += ` · Sync ${synced}`;
+  return line;
 }
 
 function openDKFromEnvelope(env) {
@@ -963,13 +1069,14 @@ function renderApp(app) {
         <div class="sidebar-section">
           <div class="sidebar-section-title">Konto</div>
           ${navLink("account", "user", "Konto")}
-          <a class="sidebar-link" href="/help" target="_blank" rel="noopener"><span class="nav-ico">${icon("book")}</span><span>Hilfe</span></a>
+          <a class="sidebar-link" href="${tvPath("/help")}" target="_blank" rel="noopener"><span class="nav-ico">${icon("book")}</span><span>Hilfe</span></a>
         </div>
         <div class="sidebar-section" id="navAdminSection" hidden>
           <div class="sidebar-section-title">Administration</div>
           ${navLink("admin:users", "users", "Benutzer", "admin-link", 'data-admin-only')}
           ${navLink("admin:groups", "group", "Gruppen", "admin-link", 'data-admin-only')}
           ${navLink("admin:trust", "cert", "Firmen-CA", "admin-link", 'data-admin-only')}
+          ${navLink("admin:access", "network", "Zugriff &amp; Proxy", "admin-link", 'data-admin-only')}
           ${navLink("admin:ldap", "network", "LDAP", "admin-link", 'data-admin-only')}
           ${navLink("admin:smtp", "mail", "SMTP", "admin-link", 'data-admin-only')}
           ${navLink("admin:crypto", "shield", "Krypto &amp; Policy", "admin-link", 'data-admin-only')}
@@ -980,6 +1087,7 @@ function renderApp(app) {
         </div>
       </nav>
       <div class="app-sidebar-foot">
+        <p class="offline-sync-bar hint" id="offlineSyncBar" hidden role="status"></p>
         <p class="hint" id="info">Lade…</p>
         <p class="hint about-line" id="about"></p>
         <button class="btn-ghost btn-with-ico" type="button" id="out">${btnLabel("logout", "Logout")}</button>
@@ -994,6 +1102,7 @@ function renderApp(app) {
           <button type="button" class="btn-icon" data-theme-toggle aria-label="Dunkelmodus" title="Dunkelmodus">${icon("moon")}</button>
         </div>
       </header>
+      <div class="offline-banner hint" id="offlineBanner" hidden role="status">Offline-Modus — nur Lesen. Änderungen sind erst nach Online-Anmeldung möglich.</div>
 
       <div class="app-content">
         <div id="lockOverlay" class="lock-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="lockTitle">
@@ -1009,7 +1118,10 @@ function renderApp(app) {
 
         <div class="panel app-unlock-panel" id="unlock">
           <h1>${icon("unlock", "heading-ico")} Vault entsperren</h1>
-          <p class="lead">Master-Passwort bleibt im Browser (Zero-Knowledge).</p>
+          <p class="lead" id="unlockLead">Master-Passwort bleibt im Browser (Zero-Knowledge).</p>
+          <p class="hint" id="offlineUnlockHint" hidden>Offline: nur Master-Passwort — kein Login und kein TOTP.</p>
+          <label id="offlineSnapLabel" hidden for="offlineSnap">Gespeicherte Offline-Kopie</label>
+          <select id="offlineSnap" hidden></select>
           <label>Master-Passwort</label><input id="mpw" type="password" autocomplete="current-password" />
           <div class="error" id="uerr" hidden></div>
           <div class="row"><button class="btn-accent btn-with-ico" type="button" id="ulock">${btnLabel("unlock", "Entsperren")}</button></div>
@@ -1245,6 +1357,14 @@ function renderApp(app) {
               <label>Neues Master-Passwort</label><input id="mpw_new" type="password" autocomplete="new-password" />
               <label>Recovery-Kit speichern (bei user_kit)</label><input id="mpw_kit" type="text" readonly placeholder="wird erzeugt…" />
               <div class="row"><button class="btn-accent" type="button" id="mpw_save">Master-Passwort speichern</button></div>
+              <h2>Offline-Vault auf diesem Gerät</h2>
+              <p class="hint" id="offlineAccHint">Verschlüsselte Kopie für Offline-Lesen (30 Tage, nur Ciphertext). Schreiben bleibt online.</p>
+              <p class="hint" id="offlineAccStatus">—</p>
+              <label class="inline"><input id="offline_optin" type="checkbox" /> Offline-Kopie nach Entsperren aktualisieren</label>
+              <div class="row">
+                <button class="btn-ghost btn-sm" type="button" id="offline_sync">Jetzt synchronisieren</button>
+                <button class="btn-ghost btn-sm" type="button" id="offline_wipe">Offline-Kopie löschen</button>
+              </div>
               <div class="error" id="acc_err" hidden></div>
               <div class="ok" id="acc_ok" hidden></div>
             </div>
@@ -1319,6 +1439,20 @@ function renderApp(app) {
                     <button class="btn-ghost btn-sm" type="button" id="trust_ca_clear">Zertifikat entfernen</button>
                   </div>
                 </div>
+                <div class="admin-section" data-admin-section="access">
+                  <p class="hint">Öffentlicher Zugriff: Domain, Subdomain oder Unterpfad. Standalone ohne Proxy: Felder leer lassen, „Proxy-Header vertrauen“ aus.</p>
+                  <p class="hint" id="pa_env_hint" hidden>Einige Werte werden durch Umgebungsvariablen überschrieben (Container-Bootstrap).</p>
+                  <label>URL-Pfad-Präfix</label>
+                  <input id="pa_base" placeholder="/vault (leer = Domain-Root)" />
+                  <label>Öffentliche URL (optional)</label>
+                  <input id="pa_url" placeholder="https://storage.example.com/vault" />
+                  <label class="inline"><input id="pa_trust" type="checkbox" /> Proxy-Header vertrauen (X-Forwarded-Proto/Host)</label>
+                  <label class="inline"><input id="pa_prefix" type="checkbox" /> Pfad aus X-Forwarded-Prefix ableiten (wenn Präfix leer)</label>
+                  <p class="hint" id="pa_effective"></p>
+                  <div class="row">
+                    <button class="btn-accent" type="button" id="pa_save">Zugriff speichern</button>
+                  </div>
+                </div>
                 <div class="admin-section" data-admin-section="ldap">
                   <p class="hint">LDAP/AD nur für Login-Bind. Host muss zum Zertifikatsnamen (CN/SAN) passen. Die Firmen-CA liegt unter Administration → Firmen-CA.</p>
                   <label class="inline"><input id="ldap_en" type="checkbox" /> Aktiv</label>
@@ -1358,6 +1492,7 @@ function renderApp(app) {
                   <label>Argon2 Threads</label><input id="arg_threads" type="number" value="1" />
                   <label class="inline"><input id="totp_req" type="checkbox" /> TOTP Pflicht (Hinweis nach Login)</label>
                   <label class="inline"><input id="admin_env_only" type="checkbox" /> Admins: Secret-Liste nur mit Envelope</label>
+                  <label class="inline"><input id="offline_cache" type="checkbox" checked /> Offline-Vault-Cache erlauben (Ciphertext auf Geräten)</label>
                   <div class="row">
                     <button class="btn-accent" type="button" id="crypto_save">Krypto speichern</button>
                     <button class="btn-ghost" type="button" id="policy_save">Policy speichern</button>
@@ -1449,6 +1584,7 @@ function renderApp(app) {
     "admin:users": "Benutzer",
     "admin:groups": "Gruppen",
     "admin:trust": "Firmen-CA",
+    "admin:access": "Zugriff & Proxy",
     "admin:ldap": "LDAP",
     "admin:smtp": "SMTP",
     "admin:crypto": "Krypto & Policy",
@@ -1465,8 +1601,71 @@ function renderApp(app) {
     if (mt) mt.setAttribute("aria-expanded", "false");
   }
 
+  function offlineWriteNav(nav) {
+    return nav === "vault:create" || nav === "vault:import" || nav === "vault:backup" || (nav && nav.startsWith("admin:"));
+  }
+
+  function applyOfflineReadOnlyUI() {
+    if (!vault.offlineMode) return;
+    const banner = n.querySelector("#offlineBanner");
+    if (banner) banner.hidden = false;
+    n.querySelectorAll(
+      '.sidebar-link[data-nav="vault:create"], .sidebar-link[data-nav="vault:import"], .sidebar-link[data-nav="vault:backup"]'
+    ).forEach((el) => {
+      el.disabled = true;
+      el.classList.add("disabled");
+      el.title = "Nur online verfügbar";
+    });
+    const adminSec = n.querySelector("#navAdminSection");
+    if (adminSec) adminSec.hidden = true;
+    n.querySelectorAll("#sExportTv, #sExportJson, #sExportCsv, #sExportBak, #sMore").forEach((el) => {
+      if (el) el.hidden = true;
+    });
+    const accHint = n.querySelector("#offlineAccHint");
+    if (accHint) {
+      accHint.textContent = "Im Offline-Modus nur Lesen. Online anmelden für Synchronisation und Einstellungen.";
+    }
+    const optIn = n.querySelector("#offline_optin");
+    const syncBtn = n.querySelector("#offline_sync");
+    const wipeBtn = n.querySelector("#offline_wipe");
+    if (optIn) optIn.disabled = true;
+    if (syncBtn) syncBtn.disabled = true;
+    if (wipeBtn) wipeBtn.disabled = false;
+  }
+
+  function updateOfflineAccountUI(snapshot) {
+    const status = n.querySelector("#offlineAccStatus");
+    const optIn = n.querySelector("#offline_optin");
+    const hint = n.querySelector("#offlineAccHint");
+    if (!status || !optIn) return;
+    if (!TVOfflineStore?.isAvailable()) {
+      status.textContent = "IndexedDB nicht verfügbar.";
+      optIn.disabled = true;
+      return;
+    }
+    if (!offlinePolicyAllowed()) {
+      status.textContent = "Vom Administrator deaktiviert.";
+      optIn.checked = false;
+      optIn.disabled = true;
+      if (hint) hint.textContent = "Offline-Cache ist für diesen Mandanten nicht erlaubt.";
+      return;
+    }
+    optIn.disabled = vault.offlineMode;
+    optIn.checked = TVOfflineStore.getOptIn();
+    if (snapshot && !TVOfflineStore.isExpired(snapshot)) {
+      const exp = snapshot.expires_at ? new Date(snapshot.expires_at).toLocaleString("de-DE") : "—";
+      status.textContent = `Zuletzt synchronisiert: ${new Date(snapshot.synced_at).toLocaleString("de-DE")} · gültig bis ${exp} · ${snapshot.secrets?.length || 0} Secrets`;
+    } else {
+      status.textContent = "Keine gültige Offline-Kopie auf diesem Gerät.";
+    }
+  }
+
   function navigateTo(nav) {
     if (!vault.sk) return;
+    if (vault.offlineMode && offlineWriteNav(nav)) {
+      announceA11y("Nur online verfügbar");
+      return;
+    }
     n.querySelectorAll(".sidebar-link").forEach((b) => {
       const on = b.dataset.nav === nav;
       b.classList.toggle("active", on);
@@ -1507,18 +1706,111 @@ function renderApp(app) {
       });
     }
     closeMobileNav();
+    if (nav === "account") updateOfflineAccountUI(vault.offlineSnapshot);
   }
 
-  api("/api/me").then((me) => {
-    if (me.needs_vault_onboard) { location.href = "/onboard"; return; }
-    vault.me = me;
-    n.querySelector("#info").textContent = formatSessionInfo(me);
-  }).catch(() => { location.href = "/login"; });
+  const offlineUrlParam = new URLSearchParams(location.search).get("offline") === "1";
+
+  async function populateOfflinePicker(snaps) {
+    const sel = n.querySelector("#offlineSnap");
+    const label = n.querySelector("#offlineSnapLabel");
+    const hint = n.querySelector("#offlineUnlockHint");
+    const lead = n.querySelector("#unlockLead");
+    if (!sel || !snaps.length) return;
+    vault.offlinePicker = true;
+    if (hint) hint.hidden = false;
+    if (lead) lead.hidden = true;
+    sel.hidden = snaps.length <= 1;
+    if (label) label.hidden = snaps.length <= 1;
+    sel.innerHTML = snaps
+      .map((s) => {
+        const tenant = s.tenant_name || s.tenant_slug || s.tenant_id;
+        const synced = s.synced_at ? new Date(s.synced_at).toLocaleString("de-DE") : "—";
+        return `<option value="${s.key}">${s.username} · ${tenant} · ${synced}</option>`;
+      })
+      .join("");
+    const pick = () => {
+      const key = sel.value || snaps[0].key;
+      vault.offlineSnapshot = snaps.find((s) => s.key === key) || snaps[0];
+    };
+    pick();
+    sel.onchange = pick;
+    n.querySelector("#info").textContent = formatOfflineSessionInfo(vault.offlineSnapshot);
+  }
+
+  async function showOfflineExpiredMessage() {
+    const err = n.querySelector("#uerr");
+    const unlock = n.querySelector("#unlock");
+    if (unlock) unlock.hidden = false;
+    if (err) {
+      err.hidden = false;
+      err.textContent =
+        "Offline-Kopie abgelaufen (max. 30 Tage). Bitte online anmelden und unter Konto → Offline-Vault neu synchronisieren.";
+    }
+    n.querySelector("#info").textContent = "Offline-Kopie abgelaufen";
+  }
+
+  async function initAppSession() {
+    if (offlineUrlParam) {
+      try {
+        const snaps = await TVOfflineStore.listSnapshots({ validOnly: true });
+        if (!snaps.length) {
+          const all = await TVOfflineStore.listSnapshots({ validOnly: false });
+          if (all.some((s) => s.expired)) {
+            await showOfflineExpiredMessage();
+            history.replaceState(null, "", tvPath("/app"));
+            return;
+          }
+          tvGo("/login");
+          return;
+        }
+        await populateOfflinePicker(snaps);
+        history.replaceState(null, "", tvPath("/app"));
+        return;
+      } catch (_) {
+        tvGo("/login");
+        return;
+      }
+    }
+    try {
+      const me = await api("/api/me");
+      if (me.needs_vault_onboard) { tvGo("/onboard"); return; }
+      vault.me = me;
+      n.querySelector("#info").textContent = formatSessionInfo(me);
+      try {
+        vault.policy = await api("/api/policy/client");
+        vault.idleMin = vault.policy.unlock_idle_minutes || 15;
+      } catch (_) {}
+    } catch (_) {
+      try {
+        const snaps = await TVOfflineStore.listSnapshots({ validOnly: true });
+        if (!snaps.length) {
+          const all = await TVOfflineStore.listSnapshots({ validOnly: false });
+          if (all.some((s) => s.expired)) {
+            await showOfflineExpiredMessage();
+            return;
+          }
+          tvGo("/login");
+          return;
+        }
+        await populateOfflinePicker(snaps);
+      } catch (e2) {
+        tvGo("/login");
+      }
+    }
+  }
+
+  initAppSession();
 
   n.querySelector("#out").onclick = async () => {
     clearVaultKey();
-    await api("/api/auth/logout", { method: "POST", body: "{}" });
-    location.href = "/login";
+    if (!vault.offlineMode) {
+      try { await api("/api/auth/logout", { method: "POST", body: "{}" }); } catch (_) {}
+    }
+    vault.offlineMode = false;
+    vault.offlineSnapshot = null;
+    vault.offlinePicker = false;
+    tvGo("/login");
   };
 
   n.querySelectorAll(".sidebar-link[data-nav]").forEach((btn) => {
@@ -1540,6 +1832,53 @@ function renderApp(app) {
   };
   syncThemeToggles(document.documentElement.getAttribute("data-theme") || "light");
 
+  n.querySelector("#offline_optin").onchange = () => {
+    if (!TVOfflineStore?.isAvailable()) return;
+    TVOfflineStore.setOptIn(n.querySelector("#offline_optin").checked);
+  };
+  n.querySelector("#offline_sync").onclick = async () => {
+    const err = n.querySelector("#acc_err");
+    const ok = n.querySelector("#acc_ok");
+    err.hidden = true;
+    ok.hidden = true;
+    try {
+      if (vault.offlineMode) throw new Error("Nur online verfügbar");
+      if (!vault.sk) throw new Error("Vault zuerst entsperren");
+      if (!offlinePolicyAllowed()) throw new Error("Offline-Cache vom Administrator deaktiviert");
+      TVOfflineStore.setOptIn(true);
+      n.querySelector("#offline_optin").checked = true;
+      await syncOfflineSnapshot();
+      ok.hidden = false;
+      ok.textContent = "Offline-Kopie aktualisiert.";
+      setOfflineSyncProgress("", false);
+    } catch (e) {
+      err.hidden = false;
+      err.textContent = e.message;
+    }
+  };
+  n.querySelector("#offline_wipe").onclick = async () => {
+    const err = n.querySelector("#acc_err");
+    const ok = n.querySelector("#acc_ok");
+    err.hidden = true;
+    ok.hidden = true;
+    try {
+      if (!TVOfflineStore?.isAvailable()) throw new Error("IndexedDB nicht verfügbar");
+      const tid = vault.me?.tenant_id || vault.offlineSnapshot?.tenant_id;
+      const uid = vault.me?.user_id || vault.offlineSnapshot?.user_id;
+      if (tid && uid) await TVOfflineStore.deleteSnapshot(tid, uid);
+      vault.offlineSnapshot = null;
+      updateOfflineAccountUI(null);
+      ok.hidden = false;
+      ok.textContent = "Offline-Kopie gelöscht.";
+      if (vault.offlineMode) {
+        clearVaultKey();
+        tvGo("/login");
+      }
+    } catch (e) {
+      err.hidden = false;
+      err.textContent = e.message;
+    }
+  };
 
   n.querySelector("#totp").onclick = async () => {
     const box = n.querySelector("#totpbox"); box.hidden = false;
@@ -1688,6 +2027,7 @@ function renderApp(app) {
   };
 
   async function ensureAllSecretsLoaded() {
+    if (vault.offlineMode) return;
     while (vault.secretsCache.length < vault.secretsTotal) {
       await refreshSecrets(false);
     }
@@ -1826,6 +2166,135 @@ function renderApp(app) {
     } catch (e) { alert(e.message); }
   };
 
+  async function fetchSecretDetailWithRetry(id, retries = 2) {
+    let lastErr;
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      try {
+        return await api("/api/secrets/" + id);
+      } catch (e) {
+        lastErr = e;
+        if (attempt < retries) {
+          await new Promise((r) => setTimeout(r, 250 * (attempt + 1)));
+        }
+      }
+    }
+    throw lastErr || new Error("Secret-Detail nicht ladbar");
+  }
+
+  function setOfflineSyncProgress(text, show) {
+    const bar = n.querySelector("#offlineSyncBar");
+    if (!bar) return;
+    bar.hidden = !show;
+    bar.textContent = text || "";
+  }
+
+  async function syncOfflineSnapshot(opts = {}) {
+    const silent = !!opts.silent;
+    if (!global.TVOfflineStore?.isAvailable()) return;
+    if (vault.offlineMode || !vault.sk || !vault.me) return;
+    if (!offlinePolicyAllowed()) return;
+    if (!TVOfflineStore.getOptIn()) return;
+    if (vault.offlineSyncRunning) return;
+
+    vault.offlineSyncRunning = true;
+    try {
+      if (!silent) setOfflineSyncProgress("Offline-Kopie: vorbereiten…", true);
+      const keys = await api("/api/vault/keys");
+      const params = vault.params || (await api("/api/vault/crypto-params"));
+      await ensureAllSecretsLoaded();
+
+      const prev = await TVOfflineStore.getSnapshotRaw(vault.me.tenant_id, vault.me.user_id);
+      const plan = TVOfflineStore.planSync(vault.secretsCache, prev?.secrets || []);
+      const total = plan.expectedCount;
+      let done = plan.reuse.length;
+      if (!silent) setOfflineSyncProgress(`Offline-Kopie: ${done}/${total}`, true);
+
+      const fetched = [];
+      for (const it of plan.toFetch) {
+        const det = await fetchSecretDetailWithRetry(it.id);
+        fetched.push(TVOfflineStore.buildSecretEntry(it, det));
+        done += 1;
+        if (!silent) setOfflineSyncProgress(`Offline-Kopie: ${done}/${total}`, true);
+      }
+
+      const secrets = TVOfflineStore.assembleSecrets(plan.reuse, fetched, plan.expectedIds);
+      if (!secrets) {
+        throw new Error("Snapshot unvollständig — bisherige Offline-Kopie bleibt erhalten");
+      }
+
+      const snap = TVOfflineStore.buildSnapshot({ me: vault.me, keys, params, secrets });
+      await TVOfflineStore.putSnapshot(snap);
+      vault.offlineSnapshot = snap;
+      updateOfflineAccountUI(snap);
+      if (!silent) {
+        const skipped = plan.reuse.length;
+        const msg = skipped
+          ? `Offline-Kopie aktualisiert (${fetched.length} neu, ${skipped} unverändert).`
+          : `Offline-Kopie aktualisiert (${secrets.length} Secrets).`;
+        setOfflineSyncProgress(msg, true);
+        setTimeout(() => setOfflineSyncProgress("", false), 4000);
+      }
+    } catch (e) {
+      if (!silent) {
+        setOfflineSyncProgress(e.message || "Offline-Sync fehlgeschlagen", true);
+        setTimeout(() => setOfflineSyncProgress("", false), 6000);
+      }
+      throw e;
+    } finally {
+      vault.offlineSyncRunning = false;
+    }
+  }
+
+  async function maybePromptOfflineOptIn() {
+    if (!TVOfflineStore?.isAvailable() || !offlinePolicyAllowed()) return;
+    if (TVOfflineStore.hasOptInChoice()) return;
+    const ok = confirm(
+      "Vault auf diesem Gerät auch ohne Netzwerk vorhalten?\n\n" +
+        "Es werden nur verschlüsselte Daten lokal gespeichert (30 Tage). " +
+        "Schreiben und Teilen bleiben nur online möglich."
+    );
+    TVOfflineStore.setOptIn(ok);
+    if (ok) {
+      try {
+        await syncOfflineSnapshot();
+      } catch (e) {
+        console.warn("offline snapshot", e);
+      }
+    }
+  }
+
+  async function afterOfflineUnlock() {
+    const snap = vault.offlineSnapshot;
+    if (!snap) throw new Error("Keine Offline-Kopie");
+    vault.offlineMode = true;
+    vault.offlinePicker = false;
+    vault.me = {
+      user_id: snap.user_id,
+      username: snap.username,
+      tenant_id: snap.tenant_id,
+      tenant_slug: snap.tenant_slug,
+      tenant_name: snap.tenant_name,
+      roles: [],
+    };
+    vault.idleMin = 15;
+    bindIdleListeners();
+    touchIdle();
+    n.querySelector("#unlock").hidden = true;
+    n.querySelector("#lockOverlay").hidden = true;
+    n.querySelector("#vaultui").hidden = false;
+    n.querySelector("#appSidebar").hidden = false;
+    n.querySelector("#mpw").value = "";
+    n.querySelector("#info").textContent = formatOfflineSessionInfo(snap);
+    vault.secretsCache = (snap.secrets || []).map((it) => ({ ...it }));
+    vault.secretsTotal = vault.secretsCache.length;
+    vault.secretsOffset = vault.secretsCache.length;
+    await decryptListTitles(vault.secretsCache);
+    applyOfflineReadOnlyUI();
+    updateOfflineAccountUI(snap);
+    navigateTo("vault:mine");
+    announceA11y("Offline-Modus — nur Lesen");
+  }
+
   async function afterUnlock() {
     try {
       vault.me = await api("/api/me");
@@ -1833,6 +2302,7 @@ function renderApp(app) {
     } catch (_) {}
     try {
       const pol = await api("/api/policy/client");
+      vault.policy = pol;
       vault.idleMin = pol.unlock_idle_minutes || 15;
     } catch (_) {}
     bindIdleListeners();
@@ -1873,6 +2343,12 @@ function renderApp(app) {
     vault.secretsOffset = 0;
     await refreshSecrets(true);
     navigateTo("vault:mine");
+    updateOfflineAccountUI(await TVOfflineStore.getSnapshot(vault.me?.tenant_id, vault.me?.user_id));
+    maybePromptOfflineOptIn().then(() => {
+      if (TVOfflineStore.getOptIn()) {
+        syncOfflineSnapshot().catch((e) => console.warn("offline snapshot", e));
+      }
+    });
   }
 
   async function refreshGroupShareUI() {
@@ -1994,7 +2470,13 @@ function renderApp(app) {
   n.querySelector("#ulock").onclick = async () => {
     const err = n.querySelector("#uerr"); err.hidden = true;
     try {
-      await unlockVault(n.querySelector("#mpw").value);
+      const mpw = n.querySelector("#mpw").value;
+      if (vault.offlinePicker) {
+        await unlockVault(mpw, { snapshot: vault.offlineSnapshot });
+        await afterOfflineUnlock();
+        return;
+      }
+      await unlockVault(mpw);
       await afterUnlock();
     } catch (e) {
       err.hidden = false; err.textContent = e.message;
@@ -2007,8 +2489,15 @@ function renderApp(app) {
   n.querySelector("#lockUnlock").onclick = async () => {
     const err = n.querySelector("#lockErr"); err.hidden = true;
     try {
-      await unlockVault(n.querySelector("#lockMpw").value);
-      await afterUnlock();
+      const mpw = n.querySelector("#lockMpw").value;
+      if (vault.offlineMode && vault.offlineSnapshot) {
+        await unlockVault(mpw, { snapshot: vault.offlineSnapshot });
+      } else {
+        await unlockVault(mpw);
+      }
+      n.querySelector("#lockOverlay").hidden = true;
+      touchIdle();
+      n.querySelector("#lockMpw").value = "";
     } catch (e) {
       err.hidden = false; err.textContent = e.message;
     }
@@ -2646,6 +3135,16 @@ function renderApp(app) {
   }
 
   async function refreshSecrets(reset) {
+    if (vault.offlineMode) {
+      if (reset) {
+        vault.secretsCache = (vault.offlineSnapshot?.secrets || []).map((it) => ({ ...it }));
+        vault.secretsTotal = vault.secretsCache.length;
+        vault.secretsOffset = vault.secretsCache.length;
+        await decryptListTitles(vault.secretsCache);
+      }
+      paintSecretList();
+      return;
+    }
     if (reset) {
       vault.secretsCache = [];
       vault.secretsOffset = 0;
@@ -2677,8 +3176,20 @@ function renderApp(app) {
       clearInterval(vault.totpTimer);
       vault.totpTimer = null;
     }
+    ["#dedit", "#share", "#revoke", "#sdel", "#sExportOne"].forEach((sel) => {
+      const el = n.querySelector(sel);
+      if (el) el.hidden = false;
+    });
+    const shareRows = n.querySelectorAll(".share-row");
+    shareRows.forEach((row) => { row.hidden = false; });
     try {
-      const det = await api("/api/secrets/" + id);
+      let det;
+      if (vault.offlineMode && vault.offlineSnapshot) {
+        det = (vault.offlineSnapshot.secrets || []).find((s) => s.id === id);
+        if (!det) throw new Error("Secret nicht in Offline-Kopie");
+      } else {
+        det = await api("/api/secrets/" + id);
+      }
       currentSecret = det;
       const dk = openDKFromEnvelope(det.envelope);
       const kv = det.key_version;
@@ -2814,11 +3325,28 @@ function renderApp(app) {
         "Empfänger: " + (det.recipients || []).join(", ") +
         " · v" + kv +
         (groupHint ? " · Gruppen: " + groupHint : "");
-      const pks = await api("/api/users/public-keys");
-      const sel = n.querySelector("#shareto");
-      sel.innerHTML = pks.filter((p) => !(det.recipients || []).includes(p.user_id))
-        .map((p) => `<option value="${p.user_id}" data-pk="${p.public_key_b64}">${p.username}</option>`).join("");
-      await refreshGroupShareUI();
+      const editBtn = n.querySelector("#dedit");
+      const shareBtn = n.querySelector("#share");
+      const revokeBtn = n.querySelector("#revoke");
+      const delBtn = n.querySelector("#sdel");
+      const exportOne = n.querySelector("#sExportOne");
+      const shareRow = shareBtn?.closest(".share-row");
+      const groupBlock = n.querySelector("#groupShareBlock");
+      const offlineDetail = !!vault.offlineMode;
+      if (editBtn) editBtn.hidden = offlineDetail;
+      if (shareBtn) shareBtn.hidden = offlineDetail;
+      if (revokeBtn) revokeBtn.hidden = offlineDetail;
+      if (delBtn) delBtn.hidden = offlineDetail;
+      if (shareRow && offlineDetail) shareRow.hidden = true;
+      if (groupBlock && offlineDetail) groupBlock.hidden = true;
+      if (exportOne) exportOne.hidden = offlineDetail;
+      if (!offlineDetail) {
+        const pks = await api("/api/users/public-keys");
+        const sel = n.querySelector("#shareto");
+        sel.innerHTML = pks.filter((p) => !(det.recipients || []).includes(p.user_id))
+          .map((p) => `<option value="${p.user_id}" data-pk="${p.public_key_b64}">${p.username}</option>`).join("");
+        await refreshGroupShareUI();
+      }
     } catch (e) {
       err.hidden = false; err.textContent = e.message;
     }
@@ -3302,6 +3830,20 @@ function renderApp(app) {
     n.querySelector("#trust_ca_pem").value = trust.ca_cert_pem || "";
     n.querySelector("#trust_ca_file").value = "";
     paintTrustCAStatus();
+    try {
+      const pa = await api("/api/admin/public-access");
+      n.querySelector("#pa_base").value = pa.configured_base_path || "";
+      n.querySelector("#pa_url").value = pa.configured_public_url || "";
+      n.querySelector("#pa_trust").checked = !!(pa.configured_trust_fwd ?? pa.trust_forwarded);
+      n.querySelector("#pa_prefix").checked = !!pa.use_forwarded_prefix;
+      const ov = pa.env_overrides || {};
+      const hint = n.querySelector("#pa_env_hint");
+      if (hint) hint.hidden = !(ov.base_path || ov.trust_forwarded);
+      const eff = n.querySelector("#pa_effective");
+      if (eff) {
+        eff.textContent = `Aktiv: ${pa.public_url || "—"} · Pfad ${pa.base_path || "/"} · Proxy-Header ${pa.trust_forwarded ? "ja" : "nein"}`;
+      }
+    } catch (_) {}
     const th = n.querySelector("#ldap_trust_hint");
     if (th) {
       th.textContent = trust.present
@@ -3341,6 +3883,8 @@ function renderApp(app) {
     const pol = await api("/api/admin/policy");
     n.querySelector("#totp_req").checked = !!pol.totp_required;
     n.querySelector("#admin_env_only").checked = !!pol.admin_secrets_envelope_only;
+    const offlineCache = n.querySelector("#offline_cache");
+    if (offlineCache) offlineCache.checked = pol.offline_cache_allowed !== false;
     const auditRaw = await api("/api/admin/audit");
     const audit = Array.isArray(auditRaw) ? auditRaw : (auditRaw.items || []);
     n.querySelector("#alist").innerHTML = audit.slice(0, 30).map((e) =>
@@ -3460,6 +4004,23 @@ function renderApp(app) {
       err.hidden = false; err.style.color = "var(--color-ok)"; err.textContent = "Firmen-CA gespeichert";
     } catch (e) { err.hidden = false; err.style.color = ""; err.textContent = e.message; }
   };
+  n.querySelector("#pa_save").onclick = async () => {
+    const err = n.querySelector("#aerr"); err.hidden = true;
+    try {
+      await api("/api/admin/public-access", {
+        method: "PUT",
+        body: JSON.stringify({
+          base_path: n.querySelector("#pa_base").value.trim(),
+          public_url: n.querySelector("#pa_url").value.trim(),
+          trust_forwarded: n.querySelector("#pa_trust").checked,
+          use_forwarded_prefix: n.querySelector("#pa_prefix").checked,
+        }),
+      });
+      err.hidden = false; err.style.color = "var(--color-ok)";
+      err.textContent = "Zugriffseinstellungen gespeichert — bei Pfadänderung ggf. Seite neu laden.";
+      await refreshAdmin();
+    } catch (e) { err.hidden = false; err.style.color = ""; err.textContent = e.message; }
+  };
   n.querySelector("#ldap_save").onclick = async () => {
     const err = n.querySelector("#aerr"); err.hidden = true;
     try {
@@ -3529,6 +4090,7 @@ function renderApp(app) {
         body: JSON.stringify({
           totp_required: n.querySelector("#totp_req").checked,
           admin_secrets_envelope_only: n.querySelector("#admin_env_only").checked,
+          offline_cache_allowed: n.querySelector("#offline_cache").checked,
           session_hours: 8,
           unlock_idle_minutes: vault.idleMin || 15,
           escrow_shamir_k: Number(n.querySelector("#shamir_k").value) || 3,
@@ -3658,7 +4220,7 @@ function renderApp(app) {
   n.querySelector("#inst_bak_dl").onclick = async () => {
     const err = n.querySelector("#aerr"); err.hidden = true;
     try {
-      const res = await fetch("/api/admin/backup", { credentials: "same-origin" });
+      const res = await fetch(tvPath("/api/admin/backup"), { credentials: "same-origin" });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || res.statusText);
       downloadBlob("teamvault-instance-backup.json", JSON.stringify(data, null, 2), "application/json");
@@ -3675,7 +4237,7 @@ function renderApp(app) {
       if (!file) throw new Error("Snapshot-Datei wählen");
       const confirm = n.querySelector("#inst_bak_confirm").value.trim();
       const text = await file.text();
-      const res = await fetch("/api/admin/backup/restore?confirm=" + encodeURIComponent(confirm), {
+      const res = await fetch(tvPath("/api/admin/backup/restore?confirm=" + encodeURIComponent(confirm)), {
         method: "POST",
         credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
@@ -3696,15 +4258,15 @@ async function boot() {
   const status = await api("/api/setup/status");
   const app = document.getElementById("app");
   app.innerHTML = "";
-  const path = location.pathname;
+  const path = tvRelPath();
   if (!status.initialized) {
-    if (path !== "/setup" && path !== "/") location.href = "/setup";
+    if (path !== "/setup" && path !== "/") tvGo("/setup");
     renderWizard(app);
     paintAbout();
     return;
   }
   if (path === "/setup") {
-    app.appendChild(el(`<div class="panel"><h1>Bereits eingerichtet</h1><a class="btn-accent" href="/login" style="display:inline-block;text-decoration:none;padding:.6rem 1rem;">Zum Login</a></div>`));
+    app.appendChild(el(`<div class="panel"><h1>Bereits eingerichtet</h1><a class="btn-accent" href="${tvPath("/login")}" style="display:inline-block;text-decoration:none;padding:.6rem 1rem;">Zum Login</a></div>`));
     paintAbout();
     return;
   }

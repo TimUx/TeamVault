@@ -5,6 +5,7 @@
  */
 import { chromium } from "playwright";
 import fs from "fs";
+import os from "os";
 import path from "path";
 import { fileURLToPath } from "url";
 
@@ -44,10 +45,14 @@ async function api(pathname, opts = {}) {
 async function setupInstance() {
   const st = await api("/api/setup/status");
   if (st.initialized) return;
+  const dataDir = process.env.TV_CAPTURE_DATA
+    ?? (process.platform === "win32" ? path.join(os.tmpdir(), "tv-screenshot-data") : "/data");
+  fs.mkdirSync(dataDir, { recursive: true });
+  const dsn = path.join(dataDir, "vault-screenshots.db");
   await api("/api/setup/commit", {
     method: "POST",
     body: JSON.stringify({
-      storage: { backend: "sqlite", dsn: "/data/vault-screenshots.db" },
+      storage: { backend: "sqlite", dsn },
       tenant: { name: TENANT_NAME, slug: TENANT_SLUG, recovery_mode: "user_kit", escrow_allowed: false },
       admin: { username: LOGIN_USER, password: LOGIN_PW, display_name: "Admin", email: "admin@demo.local" },
       argon2: { Time: 1, Memory: 8192, Threads: 1, KeyLen: 32 },
@@ -179,7 +184,13 @@ async function captureSetup(page) {
 
 async function main() {
   const st0 = await api("/api/setup/status");
-  const browser = await chromium.launch({ headless: true });
+  const launchOpts = { headless: process.env.TV_BROWSER_HEADED !== "1" };
+  if (process.env.TV_BROWSER_CHANNEL) {
+    launchOpts.channel = process.env.TV_BROWSER_CHANNEL;
+  } else if (process.env.TV_BROWSER_EXECUTABLE) {
+    launchOpts.executablePath = process.env.TV_BROWSER_EXECUTABLE;
+  }
+  const browser = await chromium.launch(launchOpts);
   const context = await browser.newContext({
     viewport: VIEWPORT,
     locale: "de-DE",
@@ -241,6 +252,12 @@ async function main() {
   await page.click('[data-nav="account"]');
   await page.waitForSelector("#passkey", { timeout: 15000 });
   await shot(page, "account.png", { fullPage: true });
+  const offlineOpt = page.locator("#offline_optin");
+  if (await offlineOpt.count()) {
+    await offlineOpt.check();
+    await page.waitForTimeout(300);
+    await shot(page, "account-offline.png", { fullPage: true });
+  }
 
   console.log("Admin…");
   await page.waitForSelector("#navAdminSection:not([hidden])", { timeout: 15000 });
@@ -271,6 +288,54 @@ async function main() {
   await page.click('[data-nav="admin:groups"]');
   await page.waitForTimeout(500);
   await shot(page, "admin-groups.png", { fullPage: true });
+
+  await page.click('[data-nav="admin:trust"]');
+  await page.waitForSelector('[data-admin-section="trust"] #trust_ca_pem');
+  await page.fill(
+    "#trust_ca_pem",
+    "-----BEGIN CERTIFICATE-----\nMIIDXTCCAkWgAwIBAgIJAKExampleDemoCA0MA0GCSqGSIb3DQEBCwUAMEUxCzAJBgNV\nBAYTAkRFOQwwCgYDVQQIDAxIZXNzZW4xDDAKBgNVBAcMA0RybQ0YDVQQKDA1EZW1v\nIENvcnAgQ0ExGDAWBgNVBAMMD2xkYXAuZGVtby5sb2NhbDAeFw0yNDAxMDEwMDAw\nMDBaFw0zNDAxMDEwMDAwMDBaMEUxCzAJBgNVBAYTAkRFOQwwCgYDVQQIDAxIZXNz\nZW4xDDAKBgNVBAcMA0RybQ0YDVQQKDA1EZW1vIENvcnAgQ0ExGDAWBgNVBAMMD2xk\nYXAuZGVtby5sb2NhbDCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBALdemo\n-----END CERTIFICATE-----"
+  );
+  await page.waitForTimeout(400);
+  await shot(page, "admin-trust.png", { fullPage: true });
+  await page.fill("#trust_ca_pem", "");
+
+  await page.click('[data-nav="admin:ldap"]');
+  await page.waitForSelector('[data-admin-section="ldap"] #ldap_host');
+  await page.check("#ldap_en");
+  await page.fill("#ldap_host", "ldap.demo.local");
+  await page.fill("#ldap_port", "636");
+  await page.check("#ldap_tls");
+  await page.fill("#ldap_base", "dc=demo,dc=local");
+  await page.fill("#ldap_bind", "cn=teamvault,ou=svc,dc=demo,dc=local");
+  await page.fill("#ldap_filter", "(uid=%s)");
+  await page.waitForTimeout(400);
+  await shot(page, "admin-ldap.png", { fullPage: true });
+
+  await page.click('[data-nav="admin:smtp"]');
+  await page.waitForSelector('[data-admin-section="smtp"] #mail_host');
+  await page.check("#mail_en");
+  await page.fill("#mail_host", "smtp.demo.local");
+  await page.fill("#mail_port", "587");
+  await page.fill("#mail_from", "teamvault@demo.local");
+  await page.fill("#mail_user", "teamvault");
+  await page.waitForTimeout(400);
+  await shot(page, "admin-smtp.png", { fullPage: true });
+
+  await page.click('[data-nav="admin:crypto"]');
+  await page.waitForSelector('[data-admin-section="crypto"] #offline_cache');
+  await page.waitForTimeout(400);
+  await shot(page, "admin-crypto.png", { fullPage: true });
+
+  await page.click('[data-nav="admin:access"]');
+  await page.waitForSelector('[data-admin-section="access"] #pa_base');
+  await page.fill("#pa_base", "/vault");
+  await page.fill("#pa_url", "https://storage.demo.local/vault");
+  await page.check("#pa_trust");
+  await page.waitForTimeout(400);
+  await shot(page, "admin-access.png", { fullPage: true });
+  await page.fill("#pa_base", "");
+  await page.fill("#pa_url", "");
+  await page.uncheck("#pa_trust");
 
   await page.click('[data-nav="vault:mine"]');
   await page.waitForSelector("button:has-text('Öffnen')", { timeout: 20000 });

@@ -157,8 +157,9 @@ Admin
 ├── Tenants
 ├── Benutzer
 ├── Gruppen
+├── Firmen-CA
 ├── LDAP
-├── E-Mail
+├── SMTP
 ├── Storage
 ├── Krypto & Recovery
 ├── Audit

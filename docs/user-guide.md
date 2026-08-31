@@ -24,7 +24,7 @@ Der Server sieht niemals Ihr Master-Passwort und niemals Klartext-Secrets (Zero-
 
 Die zuletzt gewählte Organisation wird im Browser gemerkt. Bei genau einem Mandanten ist dieser vorausgewählt.
 
-Oben rechts: **Hilfe** (ohne Login) öffnet die Client-Anleitungen unter `/help`. Hinweis unter dem Formular: Version und Entwickler. Passkeys betreffen nur den Login — der Vault braucht weiterhin das Master-Passwort.
+Oben rechts: **Hilfe** (ohne Login) öffnet die Client-Anleitungen unter `/help`. Hinweis unter dem Formular: Version und Entwickler. Optional **Offline entsperren**, wenn bereits eine lokale Ciphertext-Kopie auf dem Gerät liegt (siehe §6). Passkeys betreffen nur den Login — der Vault braucht weiterhin das Master-Passwort.
 
 Nach dem Login (oder nach Onboarding) erscheint **Vault entsperren**:
 
@@ -205,6 +205,20 @@ Nur bei **lokalem** Auth-Backend: aktuelles + neues Login-Passwort (≥12) → *
 
 Aktuelles und neues Master-Passwort eingeben → **Master-Passwort speichern**. Der Private Key wird **nur im Browser** neu versiegelt; der Server speichert neue Ciphertexte. Bei Recovery-Modus `user_kit` erscheint ein neues Recovery-Kit (einmalig sichern).
 
+### Offline-Vault (optional)
+
+Wenn der Administrator den Offline-Cache erlaubt, können Sie unter **Konto** eine verschlüsselte lokale Kopie (nur Ciphertext, 30 Tage) vorhalten:
+
+![Konto – Offline-Kopie](images/account-offline.png)
+
+1. Online anmelden, Vault entsperren  
+2. **Offline-Kopie nach Entsperren aktualisieren** aktivieren → Sync läuft im Hintergrund (Fortschritt in der Sidebar)  
+3. Ohne Netz: Login-Seite **Offline entsperren** oder `/app?offline=1` — nur Master-Passwort, kein TOTP  
+
+Im Offline-Modus: **nur Lesen**; Admin-Bereich und Schreibaktionen sind ausgeblendet. **Logout** löscht die Offline-Kopie nicht — unter Konto **Offline-Kopie löschen** oder Opt-in deaktivieren.
+
+Voraussetzungen: HTTPS oder `localhost` (Service Worker / PWA). Details: [Installationsanleitung – Offline/PWA](install-guide.md#offline-vault--pwa-optional).
+
 ## 7. Browser-Extension
 
 Kurzanleitung in der App: Sidebar **Hilfe** bzw. Login **Hilfe** → **Browser-Extension**, oder direkt `/help/extension`. Markdown: [`docs/extension-guide.md`](extension-guide.md).
@@ -256,5 +270,7 @@ Nur `read` → keine Admin- oder Schreibaktionen. Cookie-Login ohne API-Key ist 
 | Fill/Copy blockiert | Secret-URL passt nicht zum Tab-Host |
 | Import leer / Format? | Vorschau prüfen; KeePass nur XML (kein `.kdbx`); `.tvbak` braucht Backup-Passwort |
 | CLI/Extension-Install | `/help/cli` bzw. `/help/extension`; Admin muss `/downloads/` befüllen |
+| Offline-Kopie abgelaufen | Erneut online anmelden und synchronisieren (TTL 30 Tage) |
+| „Offline vom Administrator deaktiviert“ | Admin → Krypto & Policy → Offline-Cache erlauben |
 
 Technische API: [openapi.yaml](openapi.yaml) · Installation: [install-guide.md](install-guide.md) · Admin: [admin-guide.md](admin-guide.md)

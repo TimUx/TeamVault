@@ -13,7 +13,7 @@ Secrets und Titel werden nur im Browser entschlüsselt — Server und Storage se
 | **Sharing** | Pro berechtigtem User eigener Datenschlüssel (asymmetrisch); Entzug mit Pflicht-Rotation |
 | **Auth** | Lokales Login immer; optional LDAP/AD nur für Bind; TOTP; Passkeys (nur Login); Self-Service Passwort-Wechsel |
 | **Onboarding** | Erzwungenes Master-Passwort + Schlüsselpaar; Recovery-Kit oder Admin-Escrow (Shamir) |
-| **Admin** | User/Gruppen, LDAP, SMTP, Krypto/Policy, Audit, API-Keys (`read`/`vault`/`admin`), Tenants, Storage-Migration, Instanz-Backup/Restore |
+| **Admin** | User/Gruppen, Firmen-CA, LDAP, SMTP, Krypto/Policy, Audit, API-Keys (`read`/`vault`/`admin`), Tenants, Storage-Migration, Instanz-Backup/Restore |
 | **Clients** | Web-UI, CLI (`tvcli`), Browser-Extension (Chrome/Edge/Firefox; Fill/Copy mit Host-Gate) |
 
 ![Vault mit Sidebar und Secrets](docs/images/vault-secrets.png)
