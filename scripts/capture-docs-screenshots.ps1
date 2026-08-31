@@ -44,7 +44,14 @@ try {
 
   $env:TV_URL = "http://127.0.0.1:$Port"
   $env:TV_CAPTURE_DATA = $Data
-  if (-not $env:TV_BROWSER_CHANNEL) { $env:TV_BROWSER_CHANNEL = "msedge" }
+  if (-not $env:TV_BROWSER_CHANNEL -and -not $env:TV_BROWSER_EXECUTABLE) {
+    # Default: Playwright Chromium (Edge headless often attaches to an existing session on Windows).
+    $pwChromium = Join-Path $env:LOCALAPPDATA "ms-playwright\chromium-*\chrome-win64\chrome.exe"
+    $pwMatch = Get-Item $pwChromium -ErrorAction SilentlyContinue | Select-Object -First 1
+    if (-not $pwMatch) {
+      $env:TV_BROWSER_CHANNEL = "msedge"
+    }
+  }
   & $node (Join-Path $Root "scripts\capture-docs-screenshots.mjs")
   Write-Host "Screenshots written to docs/images/"
 } finally {
