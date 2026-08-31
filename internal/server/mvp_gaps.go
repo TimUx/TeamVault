@@ -29,11 +29,12 @@ func (a *API) registerMVPGaps(mux *http.ServeMux) {
 func (a *API) handleClientPolicy(w http.ResponseWriter, r *http.Request) {
 	p := a.bundle().Policy
 	writeJSON(w, http.StatusOK, map[string]any{
-		"session_hours":       p.SessionHours,
-		"unlock_idle_minutes": p.UnlockIdleMinutes,
-		"totp_required":       p.TOTPRequired,
-		"escrow_shamir_k":     p.EscrowShamirK,
-		"escrow_shamir_n":     p.EscrowShamirN,
+		"session_hours":          p.SessionHours,
+		"unlock_idle_minutes":    p.UnlockIdleMinutes,
+		"totp_required":          p.TOTPRequired,
+		"escrow_shamir_k":        p.EscrowShamirK,
+		"escrow_shamir_n":        p.EscrowShamirN,
+		"offline_cache_allowed":  p.OfflineCacheEnabled(),
 	})
 }
 
