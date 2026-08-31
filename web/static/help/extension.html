@@ -7,91 +7,87 @@
   <link rel="stylesheet" href="/styles.css" />
   <link rel="stylesheet" href="/help/help.css" />
 </head>
-<body>
+<body class="help-body">
   <a class="skip-link" href="#main">Zum Inhalt springen</a>
-  <header class="top">
-    <div class="brand"><a href="/help" style="color:inherit;text-decoration:none">TeamVault Hilfe</a></div>
-    <div class="top-actions">
-      <a class="btn-ghost" href="/help" style="text-decoration:none;padding:.4rem .75rem">Übersicht</a>
+  <div class="help-backdrop" id="helpBackdrop"></div>
+  <div class="help-frame">
+    <aside class="help-sidebar" id="helpSidebar"></aside>
+    <div class="help-content">
+      <header class="help-top">
+        <button type="button" class="btn-ghost help-menu-toggle" id="helpMenuToggle" aria-expanded="false" aria-controls="helpSidebar">Menü</button>
+        <div class="brand">Browser-Extension</div>
+        <div class="help-top-actions">
+          <a class="btn-ghost" href="/app" style="text-decoration:none;padding:.4rem .75rem">Zur App</a>
+        </div>
+      </header>
+      <main id="main" class="help-main">
+        <h1>Browser-Extension</h1>
+        <p class="lead">Fill und Copy im Browser — Entschlüsselung nur in der Extension (Zero-Knowledge).</p>
+        <nav class="help-toc">
+          <a href="#install">Installation</a>
+          <a href="#nutzen">Nutzen</a>
+        </nav>
+        <figure class="help-figure">
+          <img src="/help/img/help-extension.png" alt="Extension-Hilfe" width="1100" height="720" loading="lazy" />
+          <figcaption>Installations-Einzeiler und Nutzungshinweise</figcaption>
+        </figure>
+
+        <h2 id="install">Installation</h2>
+        <div class="help-step">
+          <h3>Einzeiler (Windows PowerShell)</h3>
+          <code class="onedliner" id="cmdWin"></code>
+          <div class="help-actions">
+            <button type="button" class="btn-accent" data-copy="cmdWin">Kopieren</button>
+          </div>
+        </div>
+        <div class="help-step">
+          <h3>Einzeiler (Linux / macOS)</h3>
+          <code class="onedliner" id="cmdUnix"></code>
+          <div class="help-actions">
+            <button type="button" class="btn-accent" data-copy="cmdUnix">Kopieren</button>
+          </div>
+        </div>
+        <div class="help-step">
+          <h3>Chrome / Edge (manuell)</h3>
+          <ol>
+            <li>Extension-Ordner bereitlegen.</li>
+            <li><code>chrome://extensions</code> bzw. <code>edge://extensions</code> → Entwicklermodus → <strong>Entpackte Erweiterung laden</strong>.</li>
+          </ol>
+        </div>
+        <div class="help-step">
+          <h3>Firefox (manuell)</h3>
+          <ol>
+            <li><code>about:debugging#/runtime/this-firefox</code> → temporäres Add-on laden → <code>manifest.json</code>.</li>
+          </ol>
+        </div>
+
+        <h2 id="nutzen">Einrichten &amp; nutzen</h2>
+        <div class="help-step">
+          <h3>Schritt 1 · Server-URL</h3>
+          <p>Im Popup: <strong id="baseUrl"></strong></p>
+        </div>
+        <div class="help-step">
+          <h3>Schritt 2 · Login &amp; Unlock</h3>
+          <ol>
+            <li>Tenant, Benutzer, Login (Passwort/Passkey/TOTP wie in der Web-App).</li>
+            <li>Master-Passwort — nur lokal in der Extension.</li>
+          </ol>
+        </div>
+        <div class="help-step">
+          <h3>Schritt 3 · Fill &amp; Copy</h3>
+          <ol>
+            <li>Website öffnen, die zur Secret-URL passt.</li>
+            <li>Popup → Eintrag → <strong>Fill</strong> oder <strong>Copy</strong>.</li>
+          </ol>
+          <p class="help-note">Ohne Domain-Match werden Fill/Copy blockiert (Phishing-Schutz).</p>
+        </div>
+        <p class="help-note"><strong>Admin:</strong> ZIP nach <code>&lt;data-dir&gt;/downloads/teamvault-extension.zip</code> legen.</p>
+        <footer class="help-foot" id="aboutFoot"></footer>
+      </main>
     </div>
-  </header>
-  <main id="main" class="help-wrap">
-    <h1>Browser-Extension</h1>
-    <p class="lead">Fill und Copy im Browser — Entschlüsselung nur in der Extension (Zero-Knowledge).</p>
-
-    <nav class="help-nav">
-      <a href="/help">Hilfe</a>
-      <a href="/help/vault">Vault</a>
-      <a href="/help/cli">CLI</a>
-      <a class="primary" href="#install">Installation</a>
-      <a href="#nutzen">Nutzen</a>
-    </nav>
-
-    <h2 id="install">Installation</h2>
-
-    <div class="help-step">
-      <h3>Einzeiler (Windows PowerShell)</h3>
-      <p>Lädt das Extension-Paket (falls unter <code>/downloads/</code> bereitgestellt) und zeigt den Zielordner.</p>
-      <code class="onedliner" id="cmdWin"></code>
-      <div class="help-actions">
-        <button type="button" class="btn-accent" data-copy="cmdWin">Kopieren</button>
-      </div>
-    </div>
-
-    <div class="help-step">
-      <h3>Einzeiler (Linux / macOS)</h3>
-      <code class="onedliner" id="cmdUnix"></code>
-      <div class="help-actions">
-        <button type="button" class="btn-accent" data-copy="cmdUnix">Kopieren</button>
-      </div>
-    </div>
-
-    <div class="help-step">
-      <h3>Chrome / Edge (manuell)</h3>
-      <ol>
-        <li>Extension-Ordner bereitlegen (Einzeiler oben <strong>oder</strong> aus dem Git: <code>clients/extension</code>).</li>
-        <li><code>chrome://extensions</code> bzw. <code>edge://extensions</code> öffnen.</li>
-        <li><strong>Entwicklermodus</strong> einschalten → <strong>Entpackte Erweiterung laden</strong>.</li>
-        <li>Den Ordner wählen (der die <code>manifest.json</code> enthält).</li>
-      </ol>
-    </div>
-
-    <div class="help-step">
-      <h3>Firefox (manuell)</h3>
-      <ol>
-        <li><code>about:debugging#/runtime/this-firefox</code> öffnen.</li>
-        <li><strong>Temporäres Add-on laden</strong> → <code>manifest.json</code> im Extension-Ordner wählen.</li>
-        <li>Hinweis: temporäre Add-ons verschwinden nach Neustart von Firefox (für Dauerbetrieb signiertes XPI oder Entwickler-Profil nötig).</li>
-      </ol>
-    </div>
-
-    <h2 id="nutzen">Einrichten &amp; nutzen</h2>
-    <div class="help-step">
-      <h3>Schritt 1 · Server-URL</h3>
-      <p>Im Extension-Popup die URL Ihrer Instanz eintragen: <strong id="baseUrl"></strong></p>
-      <p class="help-note">Bei HTTPS-Server: in den Extension-Details die optionalen Host-Berechtigungen für Ihre Domain erlauben.</p>
-    </div>
-    <div class="help-step">
-      <h3>Schritt 2 · Login &amp; Unlock</h3>
-      <ol>
-        <li>Tenant, Benutzer, Login-Passwort (oder Passkey/TOTP wie in der Web-App).</li>
-        <li>Master-Passwort eingeben — nur lokal in der Extension.</li>
-      </ol>
-    </div>
-    <div class="help-step">
-      <h3>Schritt 3 · Fill &amp; Copy</h3>
-      <ol>
-        <li>Website öffnen, die zum Secret passt (URL im Eintrag hinterlegt).</li>
-        <li>Extension-Popup → Eintrag wählen → <strong>Fill</strong> oder <strong>Copy</strong>.</li>
-      </ol>
-      <p class="help-note">Ohne passende Domain: Fill/Copy werden blockiert (Phishing-Schutz).</p>
-    </div>
-
-    <p class="help-note"><strong>Admin:</strong> Extension-ZIP erzeugen und nach <code>&lt;data-dir&gt;/downloads/teamvault-extension.zip</code> legen — z. B. mit <code>scripts/pack-clients.ps1</code>.</p>
-
-    <footer class="help-foot"><a href="/help">← Zurück zur Hilfe</a></footer>
-  </main>
+  </div>
   <script src="/help/tv-base.js"></script>
+  <script src="/help/nav.js"></script>
   <script src="/help/extension.js"></script>
 </body>
 </html>

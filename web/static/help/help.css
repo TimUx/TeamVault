@@ -1,56 +1,154 @@
-/* Help pages — uses brand tokens from styles.css */
-.help-wrap {
-  max-width: 42rem;
-  margin: 0 auto;
-  padding: 1.5rem 1.25rem 3rem;
+/* Help pages — app-like shell, wider content */
+.help-body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--color-bg);
+  color: var(--color-text);
 }
-.help-wrap h1 {
+.help-frame {
+  display: flex;
+  min-height: calc(100vh - 0px);
+  width: 100%;
+}
+.help-sidebar {
+  width: 15.5rem;
+  flex-shrink: 0;
+  background: var(--color-surface);
+  border-right: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  z-index: 20;
+}
+.help-sidebar-brand {
+  padding: 1rem 1rem 0.75rem;
+  border-bottom: 1px solid var(--color-border);
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.help-sidebar-brand a {
+  color: inherit;
+  text-decoration: none;
+}
+.help-sidebar-nav {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.65rem 0.55rem 1rem;
+}
+.help-sec {
+  margin-bottom: 0.75rem;
+}
+.help-sec-title {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-hint);
+  padding: 0.4rem 0.55rem 0.25rem;
+}
+.help-side-link {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  width: 100%;
+  text-align: left;
+  padding: 0.45rem 0.65rem;
+  border: none;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--color-text);
+  text-decoration: none;
+  font: inherit;
+  font-size: 0.92rem;
+  cursor: pointer;
+}
+.help-side-link:hover {
+  background: var(--color-hover);
+}
+.help-side-link.active {
+  background: color-mix(in srgb, var(--color-accent) 14%, transparent);
+  color: var(--color-accent);
+  font-weight: 600;
+}
+.help-side-link.sub {
+  padding-left: 1.35rem;
+  font-size: 0.86rem;
+  color: var(--color-lead);
+}
+.help-side-link.sub.active {
+  color: var(--color-accent);
+}
+.help-sidebar-foot {
+  padding: 0.75rem 1rem 1rem;
+  border-top: 1px solid var(--color-border);
+  font-size: 0.75rem;
+  color: var(--color-hint);
+}
+.help-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.help-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.65rem 1.5rem;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+.help-top .brand {
+  font-weight: 700;
+}
+.help-top-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.help-menu-toggle {
+  display: none;
+}
+.help-main {
+  max-width: 56rem;
+  width: 100%;
+  margin: 0 auto;
+  padding: 1.5rem 1.75rem 3rem;
+  box-sizing: border-box;
+}
+.help-main h1 {
   font-size: 1.75rem;
   margin: 0 0 0.5rem;
 }
-.help-wrap h2 {
-  font-size: 1.15rem;
-  margin: 1.75rem 0 0.6rem;
+.help-main h2 {
+  font-size: 1.2rem;
+  margin: 1.85rem 0 0.65rem;
+  scroll-margin-top: 4rem;
 }
-.help-wrap ol,
-.help-wrap ul {
+.help-main ol,
+.help-main ul {
   padding-left: 1.25rem;
   line-height: 1.55;
 }
-.help-wrap li { margin: 0.35rem 0; }
-.help-wrap .lead {
+.help-main li { margin: 0.35rem 0; }
+.help-main .lead {
   color: var(--color-lead);
   margin: 0 0 1.25rem;
-}
-.help-nav {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  margin: 1rem 0 1.5rem;
-}
-.help-nav a {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  padding: 0.45rem 0.85rem;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius);
-  background: var(--color-surface);
-  color: var(--color-text);
-  text-decoration: none;
-  font-size: 0.9rem;
-}
-.help-nav a:hover { background: var(--color-hover); }
-.help-nav a.primary {
-  background: var(--color-accent);
-  border-color: var(--color-accent);
-  color: #fff;
+  font-size: 1.02rem;
+  max-width: 46rem;
 }
 .help-step {
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
   background: var(--color-surface);
-  padding: 1rem 1.1rem;
+  padding: 1rem 1.15rem;
   margin: 0.75rem 0;
 }
 .help-step h3 {
@@ -72,6 +170,7 @@
   white-space: pre-wrap;
   word-break: break-all;
   color: var(--color-text);
+  box-sizing: border-box;
 }
 .help-actions {
   display: flex;
@@ -109,3 +208,74 @@
   color: var(--color-hint);
   font-weight: 600;
 }
+.help-figure {
+  margin: 0.85rem 0 0.35rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--color-muted);
+}
+.help-figure img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-width: 100%;
+}
+.help-figure figcaption {
+  padding: 0.45rem 0.75rem;
+  font-size: 0.8rem;
+  color: var(--color-hint);
+  border-top: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+.help-toc {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin: 0.5rem 0 1.25rem;
+}
+.help-toc a {
+  display: inline-flex;
+  padding: 0.35rem 0.7rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: var(--color-text);
+  text-decoration: none;
+  font-size: 0.85rem;
+}
+.help-toc a:hover { background: var(--color-hover); }
+.help-demo-qr {
+  display: inline-block;
+  padding: 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: #fff;
+  margin: 0.5rem 0;
+}
+.help-backdrop {
+  display: none;
+}
+@media (max-width: 900px) {
+  .help-sidebar {
+    position: fixed;
+    left: 0;
+    top: 0;
+    transform: translateX(-105%);
+    transition: transform 0.18s ease;
+    box-shadow: 0 0 24px rgba(0, 0, 0, 0.18);
+  }
+  .help-sidebar.open { transform: translateX(0); }
+  .help-menu-toggle { display: inline-flex; }
+  .help-backdrop.open {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.35);
+    z-index: 15;
+  }
+  .help-main { padding: 1.15rem 1rem 2.5rem; }
+}
+/* legacy class still used by old markup during transition */
+.help-wrap { max-width: 56rem; margin: 0 auto; padding: 1.5rem 1.25rem 3rem; }
+.help-nav { display: none; }

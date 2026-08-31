@@ -141,6 +141,7 @@ func TestPhase5UsersGroupsSecretsShareRotate(t *testing.T) {
 		"nonce_b64":            base64.StdEncoding.EncodeToString(newBody.Nonce),
 		"key_version":          2,
 		"envelopes":            []map[string]any{envAPI(adminUID, newAdminEnv)},
+		"drop_user_ids":        []string{aliceID},
 	}, adminJar)
 
 	// Alice must lose access

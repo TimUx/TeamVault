@@ -139,6 +139,20 @@ type GroupMember struct {
 	UserID   UserID
 }
 
+// SecretDirectShare is an explicit per-user share (not inferred from envelopes).
+type SecretDirectShare struct {
+	TenantID TenantID `json:"tenant_id"`
+	SecretID SecretID `json:"secret_id"`
+	UserID   UserID   `json:"user_id"`
+}
+
+// SecretGroupShare is an explicit group share marker (envelopes still per member).
+type SecretGroupShare struct {
+	TenantID TenantID `json:"tenant_id"`
+	SecretID SecretID `json:"secret_id"`
+	GroupID  GroupID  `json:"group_id"`
+}
+
 type ImportMode string
 
 const (
@@ -208,6 +222,16 @@ type VaultStore interface {
 	RotateSecret(ctx context.Context, tenant TenantID, id SecretID, oldKeyVersion uint32, meta SecretMeta, blob CiphertextBlob, envelopes []KeyEnvelope) error
 	// CreateSecret atomically writes meta, ciphertext, and initial envelopes.
 	CreateSecret(ctx context.Context, meta SecretMeta, blob CiphertextBlob, envelopes []KeyEnvelope) error
+
+	PutSecretDirectShare(ctx context.Context, share SecretDirectShare) error
+	DeleteSecretDirectShare(ctx context.Context, tenant TenantID, secret SecretID, user UserID) error
+	ListSecretDirectShares(ctx context.Context, tenant TenantID, secret SecretID) ([]SecretDirectShare, error)
+	ListSecretDirectSharesByTenant(ctx context.Context, tenant TenantID) ([]SecretDirectShare, error)
+	PutSecretGroupShare(ctx context.Context, share SecretGroupShare) error
+	DeleteSecretGroupShare(ctx context.Context, tenant TenantID, secret SecretID, group GroupID) error
+	ListSecretGroupShares(ctx context.Context, tenant TenantID, secret SecretID) ([]SecretGroupShare, error)
+	ListSecretGroupSharesByTenant(ctx context.Context, tenant TenantID) ([]SecretGroupShare, error)
+	ListSecretGroupSharesByGroup(ctx context.Context, tenant TenantID, group GroupID) ([]SecretGroupShare, error)
 
 	AppendAudit(ctx context.Context, e AuditEvent) error
 	ListAudit(ctx context.Context, tenant TenantID, q AuditQuery) ([]AuditEvent, error)

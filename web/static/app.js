@@ -976,7 +976,7 @@ const vault = {
   secretsOffset: 0,
   pageLimit: 50,
   searchQuery: "",
-  tagFilter: "",
+  tagFilters: [],
   ownershipFilter: "mine", // mine | shared
   viewMode: (function () {
     try {
@@ -1334,9 +1334,17 @@ function renderApp(app) {
                       <label><span class="label-with-ico">${icon("search", "label-ico")} Suche</span></label>
                       <input id="ssearch" type="search" placeholder="Titel, Tags, Benutzer, Gruppen…" />
                     </div>
-                    <div>
-                      <label>Tag</label>
-                      <select id="stag"><option value="">Alle Tags</option></select>
+                    <div class="tag-filter-wrap">
+                      <label>Tags <span class="hint">(UND)</span></label>
+                      <div class="tag-filter" id="stagFilter">
+                        <button type="button" class="tag-filter-toggle btn-ghost btn-sm" id="stagToggle" aria-expanded="false" aria-controls="stagMenu">Tags wählen…</button>
+                        <div class="tag-filter-selected tags" id="stagSelected"></div>
+                        <div class="tag-filter-menu" id="stagMenu" hidden>
+                          <p class="hint tag-filter-hint">Mehrere Tags = alle müssen passen</p>
+                          <div id="stagOptions" class="tag-filter-options"></div>
+                          <button type="button" class="btn-ghost btn-sm" id="stagClear">Filter leeren</button>
+                        </div>
+                      </div>
                     </div>
                     <div class="secrets-view-wrap">
                       <label>Ansicht</label>
@@ -1379,21 +1387,22 @@ function renderApp(app) {
                   <div id="dview">
                     <div id="dfields" class="secret-fields"></div>
                     <p class="hint" id="drec"></p>
-                    <label>Teilen mit User</label>
-                    <div class="row row-compact share-row">
-                      <select id="shareto"></select>
-                      <button class="btn-accent btn-sm btn-with-ico" type="button" id="share">${btnLabel("share", "Teilen")}</button>
-                    </div>
-                    <div id="groupShareBlock" hidden>
-                      <label>Teilen mit Gruppe</label>
-                      <div class="row row-compact share-row">
-                        <select id="sharegroup"><option value="">— Gruppe wählen —</option></select>
-                        <button class="btn-ghost btn-sm btn-with-ico" type="button" id="shareGroup">${btnLabel("users", "Gruppe teilen")}</button>
+                    <div id="accessPanel" class="access-panel" hidden>
+                      <h3 class="access-panel-title">Zugriff</h3>
+                      <p class="hint">Klicken oder per Drag &amp; Drop hinzufügen. Entfernen rotiert den Datenschlüssel.</p>
+                      <div class="access-workspace">
+                        <div class="panel-inset access-col">
+                          <h3>Verfügbar</h3>
+                          <input id="accessAvailSearch" type="search" placeholder="Suchen…" autocomplete="off" />
+                          <div id="accessAvailable" class="access-list drag-pool" data-zone="available"></div>
+                        </div>
+                        <div class="panel-inset access-col">
+                          <h3>Aktueller Zugriff</h3>
+                          <div id="accessCurrent" class="access-list group-drop" data-zone="current"></div>
+                        </div>
                       </div>
-                      <p class="hint" id="groupShareHint" hidden></p>
                     </div>
                     <div class="row row-compact">
-                      <button class="btn-ghost btn-sm btn-with-ico" type="button" id="revoke">${btnLabel("rotate", "Zugriff entziehen + rotieren")}</button>
                       <button class="btn-danger btn-sm btn-with-ico" type="button" id="sdel">${btnLabel("trash", "Löschen")}</button>
                       <button class="btn-ghost btn-sm btn-with-ico" type="button" id="sExportOne">${btnLabel("download", "Export")}</button>
                     </div>
@@ -1410,6 +1419,29 @@ function renderApp(app) {
                     </div>
                   </div>
                   <div class="error" id="derr" hidden></div>
+                </div>
+              </div>
+              <div class="secret-modal" id="shareAccessModal" hidden role="dialog" aria-modal="true" aria-labelledby="shareAccessTitle">
+                <div class="secret-modal-backdrop" id="shareAccessBackdrop"></div>
+                <div class="secret-modal-panel panel share-access-panel">
+                  <div class="secret-modal-head">
+                    <h1 id="shareAccessTitle">Zugriff</h1>
+                    <button class="btn-ghost btn-sm" type="button" id="shareAccessClose">Schließen</button>
+                  </div>
+                  <p class="hint" id="shareAccessSubtitle"></p>
+                  <p class="hint">Klicken oder per Drag &amp; Drop hinzufügen. Entfernen rotiert den Datenschlüssel.</p>
+                  <div class="access-workspace">
+                    <div class="panel-inset access-col">
+                      <h3>Verfügbar</h3>
+                      <input id="smAccessSearch" type="search" placeholder="Suchen…" autocomplete="off" />
+                      <div id="smAccessAvailable" class="access-list drag-pool" data-zone="available"></div>
+                    </div>
+                    <div class="panel-inset access-col">
+                      <h3>Aktueller Zugriff</h3>
+                      <div id="smAccessCurrent" class="access-list group-drop" data-zone="current"></div>
+                    </div>
+                  </div>
+                  <div class="error" id="smAccessErr" hidden></div>
                 </div>
               </div>
             </div>
@@ -1526,18 +1558,25 @@ function renderApp(app) {
                 <button class="btn-ghost" type="button" id="passkey">Passkeys</button>
               </div>
               <div id="totpbox" hidden>
-                <p class="hint">otpauth-URL (kein externes QR/CDN):</p>
-                <pre class="mono" id="otpurl"></pre>
-                <div class="row">
-                  <button class="btn-ghost" type="button" id="otpCopy">otpauth kopieren</button>
-                  <button class="btn-ghost" type="button" id="otpReveal">Secret kurz anzeigen</button>
+                <p class="hint">QR lokal im Browser erzeugt (kein externes CDN). Alternative: otpauth-URL kopieren.</p>
+                <div class="totp-setup-grid">
+                  <div class="totp-qr-wrap" id="otpQr" aria-live="polite"></div>
+                  <div>
+                    <p class="hint">otpauth-URL:</p>
+                    <pre class="mono" id="otpurl"></pre>
+                    <div class="row">
+                      <button class="btn-ghost" type="button" id="otpCopy">otpauth kopieren</button>
+                      <button class="btn-ghost" type="button" id="otpReveal">Secret kurz anzeigen</button>
+                    </div>
+                    <p class="hint secret-reveal" id="otpSecret" hidden></p>
+                  </div>
                 </div>
-                <p class="hint secret-reveal" id="otpSecret" hidden></p>
                 <label>Code bestätigen</label><input id="code" inputmode="numeric" autocomplete="one-time-code" />
                 <div class="row"><button class="btn-accent" type="button" id="en">Aktivieren</button></div>
                 <div class="error" id="terr" hidden></div>
               </div>
               <div id="pkbox" hidden>
+                <p class="hint">Passkeys werden vom Browser bzw. Betriebssystem eingerichtet (Windows Hello, Face ID, Sicherheitsschlüssel). TeamVault erzeugt dafür keinen eigenen QR — bei Anmeldung von einem anderen Gerät zeigt ggf. der Browser selbst einen QR.</p>
                 <label>Name</label><input id="pkname" value="Mein Passkey" />
                 <div id="pklist" class="list"></div>
                 <div class="row"><button class="btn-accent" type="button" id="pkreg">Registrieren</button></div>
@@ -2183,9 +2222,17 @@ function renderApp(app) {
 
   n.querySelector("#totp").onclick = async () => {
     const box = n.querySelector("#totpbox"); box.hidden = false;
+    n.querySelector("#pkbox").hidden = true;
     const res = await api("/api/totp/setup", { method: "POST", body: "{}" });
     totpSecretPlain = res.secret || "";
-    n.querySelector("#otpurl").textContent = res.otpauth_url || "";
+    const otpUrl = res.otpauth_url || "";
+    n.querySelector("#otpurl").textContent = otpUrl;
+    const qr = n.querySelector("#otpQr");
+    if (otpUrl && globalThis.TVQR) TVQR.mount(qr, otpUrl, { size: 200 });
+    else if (qr) {
+      qr.innerHTML = `<p class="hint">QR nicht verfügbar — bitte otpauth-URL kopieren.</p>`;
+      qr.hidden = false;
+    }
     const sec = n.querySelector("#otpSecret");
     sec.hidden = true;
     sec.textContent = "";
@@ -2214,6 +2261,7 @@ function renderApp(app) {
   };
   n.querySelector("#passkey").onclick = async () => {
     n.querySelector("#pkbox").hidden = false;
+    n.querySelector("#totpbox").hidden = true;
     await refreshPasskeys();
   };
   async function refreshPasskeys() {
@@ -2643,6 +2691,7 @@ function renderApp(app) {
     vault.secretsCache = [];
     vault.secretsOffset = 0;
     await refreshSecrets(true);
+    sealGroupShareGaps().catch((e) => console.warn("group share gaps", e));
     navigateTo("vault:mine");
     updateOfflineAccountUI(await TVOfflineStore.getSnapshot(vault.me?.tenant_id, vault.me?.user_id));
     maybePromptOfflineOptIn().then(() => {
@@ -2652,30 +2701,56 @@ function renderApp(app) {
     });
   }
 
+  /** Zero-knowledge: seal missing envelopes for group-shared secrets the caller can open. */
+  async function sealGroupShareGaps(opts = {}) {
+    if (!vault.sk || vault.offlineMode) return { sealed: 0, failed: 0, skipped: 0 };
+    const q = new URLSearchParams();
+    if (opts.groupId) q.set("group_id", opts.groupId);
+    if (opts.userId) q.set("user_id", opts.userId);
+    const qs = q.toString();
+    const data = await api("/api/secrets/group-share-gaps" + (qs ? "?" + qs : ""));
+    const items = data.items || [];
+    let sealed = 0;
+    let failed = 0;
+    // Batch by secret+group so one share-group call can carry multiple users when needed.
+    const byKey = new Map();
+    for (const g of items) {
+      const key = g.secret_id + "\0" + g.group_id;
+      if (!byKey.has(key)) byKey.set(key, []);
+      byKey.get(key).push(g);
+    }
+    for (const group of byKey.values()) {
+      try {
+        const first = group[0];
+        const dk = openDKFromEnvelope(first.envelope);
+        const kv = first.key_version || first.envelope?.key_version || 1;
+        const envelopes = group.map((g) =>
+          TVCrypto.envelopeToAPI(
+            g.user_id,
+            TVCrypto.sealDataKeyForRecipient(dk, TVCrypto.b64dec(g.public_key_b64), kv)
+          )
+        );
+        dk.fill(0);
+        await api("/api/secrets/" + first.secret_id + "/share-group", {
+          method: "POST",
+          body: JSON.stringify({ group_id: first.group_id, envelopes }),
+        });
+        sealed += envelopes.length;
+      } catch (e) {
+        console.warn("reseal group gap", e);
+        failed += group.length;
+      }
+    }
+    return { sealed, failed, skipped: 0 };
+  }
+
   async function refreshGroupShareUI() {
-    const block = n.querySelector("#groupShareBlock");
-    const sel = n.querySelector("#sharegroup");
-    const hint = n.querySelector("#groupShareHint");
-    if (!block || !sel) return;
     try {
       vault.groups = await api("/api/groups");
     } catch (_) {
       vault.groups = [];
     }
     const groups = vault.groups || [];
-    sel.innerHTML = `<option value="">— Gruppe wählen —</option>` +
-      groups.map((g) => `<option value="${g.id}">${g.name}</option>`).join("");
-    const canShare = isAdmin() || groups.length > 0;
-    block.hidden = !canShare;
-    if (hint) {
-      if (canShare && !groups.length && isAdmin()) {
-        hint.hidden = false;
-        hint.textContent = "Noch keine Gruppen — unter Admin → Gruppen anlegen.";
-      } else {
-        hint.hidden = true;
-        hint.textContent = "";
-      }
-    }
     const gWrap = n.querySelector("#screateGroupsWrap");
     const gSel = n.querySelector("#screateGroups");
     if (gWrap && gSel) {
@@ -2702,14 +2777,16 @@ function renderApp(app) {
   function closeSecretModal() {
     const panel = n.querySelector("#sdetail");
     if (panel) panel.hidden = true;
-    document.body.classList.remove("secret-modal-open");
+    if (!shareEditorOpen) document.body.classList.remove("secret-modal-open");
     const editForm = n.querySelector("#deditForm");
     const dview = n.querySelector("#dview");
     if (editForm) editForm.hidden = true;
     if (dview) dview.hidden = false;
-    currentSecret = null;
-    currentSecretPayload = null;
-    currentSecretTitle = "";
+    if (!shareEditorOpen) {
+      currentSecret = null;
+      currentSecretPayload = null;
+      currentSecretTitle = "";
+    }
   }
 
   n.querySelector("#sdetailClose").onclick = closeSecretModal;
@@ -2832,10 +2909,85 @@ function renderApp(app) {
     vault.searchQuery = n.querySelector("#ssearch").value.trim().toLowerCase();
     paintSecretList();
   };
-  n.querySelector("#stag").onchange = () => {
-    vault.tagFilter = n.querySelector("#stag").value;
+
+  function setTagFilters(tags) {
+    vault.tagFilters = [...new Set((tags || []).map((t) => String(t).trim()).filter(Boolean))];
+    paintTagFilterUI();
     paintSecretList();
-  };
+  }
+
+  function paintTagFilterUI() {
+    const selected = n.querySelector("#stagSelected");
+    const toggle = n.querySelector("#stagToggle");
+    if (!selected || !toggle) return;
+    const cur = vault.tagFilters || [];
+    if (!cur.length) {
+      selected.innerHTML = "";
+      toggle.textContent = "Tags wählen…";
+      return;
+    }
+    selected.innerHTML = cur.map((t) =>
+      `<button type="button" class="tag tag-filter-chip" data-remove-tag="${escHtml(t)}" title="Entfernen">${escHtml(t)} ×</button>`
+    ).join("");
+    selected.querySelectorAll("[data-remove-tag]").forEach((btn) => {
+      btn.onclick = (ev) => {
+        ev.stopPropagation();
+        setTagFilters(vault.tagFilters.filter((x) => x !== btn.dataset.removeTag));
+      };
+    });
+    toggle.textContent = `${cur.length} Tag${cur.length === 1 ? "" : "s"} (UND)`;
+  }
+
+  function updateTagOptions() {
+    const box = n.querySelector("#stagOptions");
+    if (!box) return;
+    const tags = [...new Set(vault.secretsCache.flatMap((s) => s._tags || []).filter(Boolean))].sort();
+    const cur = new Set(vault.tagFilters || []);
+    const kept = (vault.tagFilters || []).filter((t) => tags.includes(t));
+    const pruned = kept.length !== (vault.tagFilters || []).length;
+    vault.tagFilters = kept;
+    box.innerHTML = tags.length
+      ? tags.map((t) => {
+          const id = "stag_" + encodeURIComponent(t).replace(/%/g, "_");
+          return `<label class="tag-filter-opt inline"><input type="checkbox" id="${id}" value="${escHtml(t)}" ${cur.has(t) && tags.includes(t) ? "checked" : ""}/> ${escHtml(t)}</label>`;
+        }).join("")
+      : `<p class="hint">Keine Tags in geladenen Secrets</p>`;
+    box.querySelectorAll('input[type="checkbox"]').forEach((inp) => {
+      inp.onchange = () => {
+        const next = [...box.querySelectorAll('input[type="checkbox"]:checked')].map((el) => el.value);
+        setTagFilters(next);
+      };
+    });
+    paintTagFilterUI();
+    if (pruned) paintSecretList();
+  }
+
+  const stagToggle = n.querySelector("#stagToggle");
+  const stagMenu = n.querySelector("#stagMenu");
+  if (stagToggle && stagMenu) {
+    stagToggle.onclick = (ev) => {
+      ev.stopPropagation();
+      const open = stagMenu.hidden;
+      stagMenu.hidden = !open;
+      stagToggle.setAttribute("aria-expanded", open ? "true" : "false");
+    };
+    document.addEventListener("click", (ev) => {
+      const wrap = n.querySelector("#stagFilter");
+      if (!wrap || !stagMenu || stagMenu.hidden) return;
+      if (!wrap.contains(ev.target)) {
+        stagMenu.hidden = true;
+        stagToggle.setAttribute("aria-expanded", "false");
+      }
+    });
+  }
+  const stagClear = n.querySelector("#stagClear");
+  if (stagClear) {
+    stagClear.onclick = () => {
+      setTagFilters([]);
+      const menu = n.querySelector("#stagMenu");
+      if (menu) menu.hidden = true;
+    };
+  }
   n.querySelector("#spwGen").onclick = () => {
     const len = Math.min(64, Math.max(12, parseInt(n.querySelector("#spwLen").value, 10) || 20));
     const symbols = n.querySelector("#spwSym").checked;
@@ -3071,6 +3223,8 @@ function renderApp(app) {
     const meKeys = await api("/api/vault/keys");
     const envelopes = [];
     const seen = new Set();
+    const shareUserIds = [];
+    const shareGroupIds = [];
     const addEnv = (uid, pkB64) => {
       if (!uid || seen.has(uid) || !pkB64) return;
       envelopes.push(TVCrypto.envelopeToAPI(
@@ -3080,15 +3234,18 @@ function renderApp(app) {
       seen.add(uid);
     };
     addEnv(vault.me.user_id, meKeys.public_key_b64);
+    const allowShare = shareOpts !== false;
     const userSel = n.querySelector("#screateUsers");
-    if (userSel && shareOpts !== false) {
+    if (userSel && allowShare) {
       for (const opt of userSel.selectedOptions) {
         addEnv(opt.value, opt.dataset.pk);
+        if (opt.value && opt.value !== vault.me.user_id) shareUserIds.push(opt.value);
       }
     }
     const gSel = n.querySelector("#screateGroups");
-    if (gSel && shareOpts !== false) {
+    if (gSel && allowShare) {
       for (const opt of gSel.selectedOptions) {
+        shareGroupIds.push(opt.value);
         const pks = await api("/api/groups/" + encodeURIComponent(opt.value) + "/member-keys");
         for (const p of pks) addEnv(p.user_id, p.public_key_b64);
       }
@@ -3102,6 +3259,8 @@ function renderApp(app) {
       key_version: kv,
       envelopes,
     };
+    if (shareUserIds.length) body.share_user_ids = shareUserIds;
+    if (shareGroupIds.length) body.share_group_ids = shareGroupIds;
     await api("/api/secrets", { method: "POST", body: JSON.stringify(body) });
   }
 
@@ -3127,7 +3286,8 @@ function renderApp(app) {
             tags: importItemTags(it),
             favorite: !!it.favorite,
             extra: it.extra || [],
-          })
+          }),
+          false
         );
         done++;
       } catch {
@@ -3212,18 +3372,6 @@ function renderApp(app) {
     }
   };
 
-  function updateTagOptions() {
-    const sel = n.querySelector("#stag");
-    if (!sel) return;
-    const cur = vault.tagFilter;
-    const tags = [...new Set(vault.secretsCache.flatMap((s) => s._tags || []).filter(Boolean))].sort();
-    sel.innerHTML = `<option value="">Alle Tags</option>` + tags.map((t) =>
-      `<option value="${escHtml(t).replace(/"/g, "&quot;")}">${escHtml(t)}</option>`
-    ).join("");
-    sel.value = tags.includes(cur) ? cur : "";
-    if (sel.value !== cur) vault.tagFilter = sel.value;
-  }
-
   function needsSecretMeta(it) {
     return !it._metaLoaded && it.has_access;
   }
@@ -3237,18 +3385,22 @@ function renderApp(app) {
 
   function filterVisibleSecrets() {
     const q = vault.searchQuery;
-    const tag = vault.tagFilter;
+    const wantTags = vault.tagFilters || [];
     return vault.secretsCache.filter((it) => {
       if (!matchesOwnership(it)) return false;
-      if (tag && !(it._tags || []).includes(tag)) return false;
+      if (wantTags.length) {
+        const have = it._tags || [];
+        if (!wantTags.every((t) => have.includes(t))) return false;
+      }
       if (!q) return true;
       const title = (it._title || "").toLowerCase();
       const user = (it._username || "").toLowerCase();
       const tags = (it._tags || []).join(" ").toLowerCase();
       const creator = (it.created_by_username || "").toLowerCase();
       const groups = (it.shared_groups || []).join(" ").toLowerCase();
+      const shareUsers = (it.shared_users || []).join(" ").toLowerCase();
       return title.includes(q) || user.includes(q) || tags.includes(q) ||
-        creator.includes(q) || groups.includes(q) ||
+        creator.includes(q) || groups.includes(q) || shareUsers.includes(q) ||
         (it.id || "").toLowerCase().includes(q);
     });
   }
@@ -3291,6 +3443,35 @@ function renderApp(app) {
     return it.id + (it.has_access ? " (Titel n.v.)" : " · kein Zugriff");
   }
 
+  function secretIsShared(it) {
+    return !!(it && ((it.shared_groups && it.shared_groups.length) || (it.shared_users && it.shared_users.length)));
+  }
+
+  function shareSummaryTitle(it) {
+    const bits = [];
+    if (it.shared_users && it.shared_users.length) bits.push("User: " + it.shared_users.join(", "));
+    if (it.shared_groups && it.shared_groups.length) bits.push("Gruppen: " + it.shared_groups.join(", "));
+    return bits.join(" · ") || "Zugriff bearbeiten";
+  }
+
+  function shareBadgeButton(it) {
+    if (!it.has_access || vault.offlineMode) return "";
+    const shared = secretIsShared(it);
+    const cls = shared ? "share-badge" : "share-badge share-badge-empty";
+    const title = shared ? shareSummaryTitle(it) : "Zugriff teilen / bearbeiten";
+    const label = shared ? "Geteilt — Zugriff anzeigen" : "Zugriff bearbeiten";
+    return `<button type="button" class="${cls}" data-share-edit="${escHtml(it.id)}" title="${escHtml(title)}" aria-label="${escHtml(label)}">${icon("share")}</button>`;
+  }
+
+  function bindShareBadge(root) {
+    root.querySelectorAll("[data-share-edit]").forEach((btn) => {
+      btn.onclick = (ev) => {
+        ev.stopPropagation();
+        openShareEditor(btn.dataset.shareEdit).catch((e) => alert(e.message));
+      };
+    });
+  }
+
   function paintSecretList() {
     const list = n.querySelector("#slist");
     if (!list) return;
@@ -3305,7 +3486,7 @@ function renderApp(app) {
       });
     };
 
-    if (vault.tagFilter || vault.searchQuery) {
+    if ((vault.tagFilters && vault.tagFilters.length) || vault.searchQuery) {
       const pending = vault.secretsCache.filter(needsSecretMeta);
       if (pending.length) {
         enrichThenRepaint(pending);
@@ -3328,7 +3509,7 @@ function renderApp(app) {
       list.innerHTML = `<p class="hint">${empty}</p>`;
     } else if (vault.viewMode === "table") {
       const table = el(`<table class="secrets-table"><thead><tr>
-        <th class="st-check"></th><th>Titel</th><th>Benutzer</th><th>Tags</th><th>Gruppen</th><th></th><th></th>
+        <th class="st-check"></th><th>Titel</th><th>Benutzer</th><th>Tags</th><th>Gruppen</th><th class="st-share" title="Freigabe"> </th><th></th><th></th>
       </tr></thead><tbody></tbody></table>`);
       const tbody = table.querySelector("tbody");
       for (const it of visible) {
@@ -3338,6 +3519,7 @@ function renderApp(app) {
           <td class="st-user">${escHtml(it._username || "—")}</td>
           <td class="st-tags"></td>
           <td class="st-groups muted">${escHtml((it.shared_groups || []).join(", ") || "—")}</td>
+          <td class="st-share">${shareBadgeButton(it)}</td>
           <td class="st-fav">${it._favorite ? icon("star", "fav-ico") : ""}</td>
           <td class="st-act"><button type="button" class="btn-ghost btn-with-ico btn-sm">${btnLabel("open", "Öffnen")}</button></td>
         </tr>`);
@@ -3350,9 +3532,10 @@ function renderApp(app) {
         } else {
           tagsCell.textContent = "—";
         }
-        tr.querySelector("button").onclick = () => openSecret(it.id);
+        tr.querySelector(".st-act button").onclick = () => openSecret(it.id);
         tbody.appendChild(tr);
       }
+      bindShareBadge(table);
       list.appendChild(table);
     } else if (vault.viewMode === "tiles") {
       const grid = el(`<div class="secrets-tiles"></div>`);
@@ -3362,6 +3545,7 @@ function renderApp(app) {
             <input type="checkbox" class="sec-check" ${it.has_access ? "" : "disabled"} />
             <span class="list-row-ico" aria-hidden="true">${icon("key")}</span>
             ${it._favorite ? `<span class="fav-mark" title="Favorit">${icon("star", "fav-ico")}</span>` : ""}
+            <span class="secret-tile-share">${shareBadgeButton(it)}</span>
           </div>
           <h3 class="secret-tile-title"></h3>
           <p class="secret-tile-meta hint"></p>
@@ -3379,15 +3563,17 @@ function renderApp(app) {
         if (it._tags && it._tags.length) {
           tagsEl.innerHTML = `<span class="tags">${it._tags.map((t) => `<span class="tag">${escHtml(t)}</span>`).join("")}</span>`;
         }
-        tile.querySelector("button").onclick = () => openSecret(it.id);
+        tile.querySelector("button.btn-ghost").onclick = () => openSecret(it.id);
         grid.appendChild(tile);
       }
+      bindShareBadge(grid);
       list.appendChild(grid);
     } else {
       for (const it of visible) {
         const row = el(`<div class="list-row">
           <input type="checkbox" class="sec-check" ${it.has_access ? "" : "disabled"} />
           <span class="list-row-main"></span>
+          ${shareBadgeButton(it)}
           <button class="btn-ghost btn-with-ico" type="button">${btnLabel("open", "Öffnen")}</button>
         </div>`);
         bindSecretCheckbox(row.querySelector(".sec-check"), it.id);
@@ -3400,9 +3586,13 @@ function renderApp(app) {
           (it.shared_groups && it.shared_groups.length ? ` · ${it.shared_groups.join(", ")}` : "") +
           (it._tags && it._tags.length ? ` · #${it._tags.join(", #")}` : "")
         ));
-        row.querySelector("button").onclick = () => openSecret(it.id);
+        row.querySelectorAll("button.btn-ghost.btn-with-ico").forEach((btn) => {
+          if (btn.dataset.shareEdit) return;
+          btn.onclick = () => openSecret(it.id);
+        });
         list.appendChild(row);
       }
+      bindShareBadge(list);
     }
 
     const scopeLabel = vault.ownershipFilter === "shared" ? "geteilt" : "eigene";
@@ -3477,12 +3667,12 @@ function renderApp(app) {
       clearInterval(vault.totpTimer);
       vault.totpTimer = null;
     }
-    ["#dedit", "#share", "#revoke", "#sdel", "#sExportOne"].forEach((sel) => {
+    ["#dedit", "#sdel", "#sExportOne"].forEach((sel) => {
       const el = n.querySelector(sel);
       if (el) el.hidden = false;
     });
-    const shareRows = n.querySelectorAll(".share-row");
-    shareRows.forEach((row) => { row.hidden = false; });
+    const accessPanel = n.querySelector("#accessPanel");
+    if (accessPanel) accessPanel.hidden = false;
     try {
       let det;
       if (vault.offlineMode && vault.offlineSnapshot) {
@@ -3621,32 +3811,24 @@ function renderApp(app) {
           };
         }
       }
-      const groupHint = (det.shared_groups || currentSecret?.shared_groups || []).join(", ");
+      const groupHint = (det.shared_groups || []).join(", ");
+      const userHint = (det.shared_users || []).join(", ");
       n.querySelector("#drec").textContent =
         "Empfänger: " + (det.recipients || []).join(", ") +
         " · v" + kv +
+        (userHint ? " · User: " + userHint : "") +
         (groupHint ? " · Gruppen: " + groupHint : "");
       const editBtn = n.querySelector("#dedit");
-      const shareBtn = n.querySelector("#share");
-      const revokeBtn = n.querySelector("#revoke");
       const delBtn = n.querySelector("#sdel");
       const exportOne = n.querySelector("#sExportOne");
-      const shareRow = shareBtn?.closest(".share-row");
-      const groupBlock = n.querySelector("#groupShareBlock");
+      const accessPanel = n.querySelector("#accessPanel");
       const offlineDetail = !!vault.offlineMode;
       if (editBtn) editBtn.hidden = offlineDetail;
-      if (shareBtn) shareBtn.hidden = offlineDetail;
-      if (revokeBtn) revokeBtn.hidden = offlineDetail;
       if (delBtn) delBtn.hidden = offlineDetail;
-      if (shareRow && offlineDetail) shareRow.hidden = true;
-      if (groupBlock && offlineDetail) groupBlock.hidden = true;
       if (exportOne) exportOne.hidden = offlineDetail;
+      if (accessPanel) accessPanel.hidden = offlineDetail;
       if (!offlineDetail) {
-        const pks = await api("/api/users/public-keys");
-        const sel = n.querySelector("#shareto");
-        sel.innerHTML = pks.filter((p) => !(det.recipients || []).includes(p.user_id))
-          .map((p) => `<option value="${p.user_id}" data-pk="${p.public_key_b64}">${p.username}</option>`).join("");
-        await refreshGroupShareUI();
+        await renderAccessPanel("detail");
       }
     } catch (e) {
       err.hidden = false; err.textContent = e.message;
@@ -3668,32 +3850,257 @@ function renderApp(app) {
     }
   };
 
-  n.querySelector("#share").onclick = async () => {
-    const err = n.querySelector("#derr"); err.hidden = true;
+  let accessDnDBusy = false;
+  let accessFilterDetail = "";
+  let accessFilterModal = "";
+  let shareEditorOpen = false;
+  let shareEditorPreserveDetail = false;
+
+  function accessPanelTargets(kind) {
+    if (kind === "modal") {
+      return {
+        kind,
+        availEl: n.querySelector("#smAccessAvailable"),
+        curEl: n.querySelector("#smAccessCurrent"),
+        errEl: n.querySelector("#smAccessErr"),
+        getFilter: () => accessFilterModal,
+      };
+    }
+    return {
+      kind,
+      availEl: n.querySelector("#accessAvailable"),
+      curEl: n.querySelector("#accessCurrent"),
+      errEl: n.querySelector("#derr"),
+      getFilter: () => accessFilterDetail,
+    };
+  }
+
+  function wireAccessChip(el, kind, id, label) {
+    el.draggable = true;
+    el.dataset.kind = kind;
+    el.dataset.id = id;
+    el.addEventListener("dragstart", (ev) => {
+      ev.dataTransfer.setData("text/plain", JSON.stringify({ kind, id, label }));
+      ev.dataTransfer.effectAllowed = "move";
+      el.classList.add("dragging");
+    });
+    el.addEventListener("dragend", () => el.classList.remove("dragging"));
+  }
+
+  function syncCacheShareMeta(secretId, access) {
+    const it = vault.secretsCache.find((s) => s.id === secretId);
+    if (!it || !access) return;
+    it.shared_users = (access.shared_users || []).map((u) => u.username).filter(Boolean);
+    it.shared_groups = (access.shared_groups || []).map((g) => g.name).filter(Boolean);
+  }
+
+  async function renderAccessPanel(kind) {
+    const targets = [];
+    if (!kind || kind === "detail") {
+      const detailOpen = n.querySelector("#sdetail") && !n.querySelector("#sdetail").hidden;
+      if (detailOpen || kind === "detail") targets.push(accessPanelTargets("detail"));
+    }
+    if (!kind || kind === "modal") {
+      if (shareEditorOpen || kind === "modal") targets.push(accessPanelTargets("modal"));
+    }
+    if (!currentSecret || !targets.length) return;
+
+    const access = await api("/api/secrets/" + currentSecret.id + "/access");
+    vault.secretAccess = access;
+    syncCacheShareMeta(currentSecret.id, access);
+
+    for (const t of targets) {
+      const { availEl, curEl, errEl, getFilter } = t;
+      if (!availEl || !curEl) continue;
+      if (errEl) { errEl.hidden = true; errEl.textContent = ""; }
+      const q = (getFilter() || "").trim().toLowerCase();
+      const match = (s) => !q || String(s || "").toLowerCase().includes(q);
+
+      const availParts = [];
+      (access.available_users || []).filter((u) => match(u.username)).forEach((u) => {
+        availParts.push(`<div class="access-chip" data-kind="user" data-id="${escHtml(u.id)}"><span>${escHtml(u.username)} <span class="chip-meta">User</span></span></div>`);
+      });
+      (access.available_groups || []).filter((g) => match(g.name)).forEach((g) => {
+        availParts.push(`<div class="access-chip" data-kind="group" data-id="${escHtml(g.id)}"><span>${escHtml(g.name)} <span class="chip-meta">Gruppe</span></span></div>`);
+      });
+      availEl.innerHTML = availParts.join("") || `<p class="hint group-drop-hint">Keine weiteren Ziele</p>`;
+
+      const curParts = [];
+      const owner = access.owner || {};
+      curParts.push(`<div class="access-chip owner"><span>${escHtml(owner.username || owner.id || "Eigentümer")} <span class="chip-meta">Eigentümer</span></span></div>`);
+      (access.shared_users || []).forEach((u) => {
+        curParts.push(`<div class="access-chip" data-kind="user" data-id="${escHtml(u.id)}"><span>${escHtml(u.username)} <span class="chip-meta">User</span></span><button type="button" class="btn-ghost btn-sm" data-drop-user="${escHtml(u.id)}">Entfernen</button></div>`);
+      });
+      (access.shared_groups || []).forEach((g) => {
+        curParts.push(`<div class="access-chip" data-kind="group" data-id="${escHtml(g.id)}"><span>${escHtml(g.name)} <span class="chip-meta">Gruppe</span></span><button type="button" class="btn-ghost btn-sm" data-drop-group="${escHtml(g.id)}">Entfernen</button></div>`);
+      });
+      curEl.innerHTML = curParts.join("");
+
+      availEl.querySelectorAll(".access-chip[data-kind]").forEach((el) => {
+        wireAccessChip(el, el.dataset.kind, el.dataset.id, el.textContent.trim());
+        el.addEventListener("click", async () => {
+          if (accessDnDBusy) return;
+          try {
+            if (el.dataset.kind === "user") await shareSecretWithUser(el.dataset.id);
+            else if (el.dataset.kind === "group") await shareSecretWithGroup(el.dataset.id);
+          } catch (e) {
+            if (errEl) { errEl.hidden = false; errEl.textContent = e.message; }
+          }
+        });
+      });
+      curEl.querySelectorAll(".access-chip[data-kind]").forEach((el) => {
+        wireAccessChip(el, el.dataset.kind, el.dataset.id, el.textContent.trim());
+      });
+      curEl.querySelectorAll("[data-drop-user]").forEach((btn) => {
+        btn.onclick = async (ev) => {
+          ev.stopPropagation();
+          try { await unshareSecret({ userIds: [btn.dataset.dropUser] }); }
+          catch (e) {
+            if (errEl) { errEl.hidden = false; errEl.textContent = e.message; }
+          }
+        };
+      });
+      curEl.querySelectorAll("[data-drop-group]").forEach((btn) => {
+        btn.onclick = async (ev) => {
+          ev.stopPropagation();
+          try { await unshareSecret({ groupIds: [btn.dataset.dropGroup] }); }
+          catch (e) {
+            if (errEl) { errEl.hidden = false; errEl.textContent = e.message; }
+          }
+        };
+      });
+
+      const wireZone = (zone, onDrop) => {
+        zone.ondragover = (ev) => {
+          ev.preventDefault();
+          zone.classList.add("drag-over");
+        };
+        zone.ondragleave = (ev) => {
+          if (!zone.contains(ev.relatedTarget)) zone.classList.remove("drag-over");
+        };
+        zone.ondrop = async (ev) => {
+          ev.preventDefault();
+          zone.classList.remove("drag-over");
+          let payload = {};
+          try { payload = JSON.parse(ev.dataTransfer.getData("text/plain") || "{}"); } catch (_) {}
+          if (!payload.kind || !payload.id) return;
+          try { await onDrop(payload); }
+          catch (e) {
+            if (errEl) { errEl.hidden = false; errEl.textContent = e.message; }
+          }
+        };
+      };
+      wireZone(curEl, async (p) => {
+        if (p.kind === "user") await shareSecretWithUser(p.id);
+        else if (p.kind === "group") await shareSecretWithGroup(p.id);
+      });
+      wireZone(availEl, async (p) => {
+        if (p.kind === "user") await unshareSecret({ userIds: [p.id] });
+        else if (p.kind === "group") await unshareSecret({ groupIds: [p.id] });
+      });
+    }
+
+    const sub = n.querySelector("#shareAccessSubtitle");
+    if (sub && shareEditorOpen) {
+      const users = (access.shared_users || []).map((u) => u.username).filter(Boolean);
+      const groups = (access.shared_groups || []).map((g) => g.name).filter(Boolean);
+      const bits = [];
+      if (users.length) bits.push("User: " + users.join(", "));
+      if (groups.length) bits.push("Gruppen: " + groups.join(", "));
+      sub.textContent = bits.length ? bits.join(" · ") : "Noch nicht geteilt — Ziele links hinzufügen.";
+    }
+  }
+
+  async function afterShareMutation() {
+    const sid = currentSecret?.id;
+    if (!sid) return;
+    currentSecret = await api("/api/secrets/" + sid);
+    const detailOpen = n.querySelector("#sdetail") && !n.querySelector("#sdetail").hidden;
+    if (detailOpen) {
+      const groupHint = (currentSecret.shared_groups || []).join(", ");
+      const userHint = (currentSecret.shared_users || []).join(", ");
+      const drec = n.querySelector("#drec");
+      if (drec) {
+        drec.textContent =
+          "Empfänger: " + (currentSecret.recipients || []).join(", ") +
+          " · v" + currentSecret.key_version +
+          (userHint ? " · User: " + userHint : "") +
+          (groupHint ? " · Gruppen: " + groupHint : "");
+      }
+      await renderAccessPanel("detail");
+    }
+    if (shareEditorOpen) await renderAccessPanel("modal");
+    await refreshSecrets(true);
+  }
+
+  async function openShareEditor(id) {
+    if (vault.offlineMode) throw new Error("Offline — Teilen nicht möglich");
+    const err = n.querySelector("#smAccessErr");
+    if (err) { err.hidden = true; err.textContent = ""; }
+    const detailOpen = n.querySelector("#sdetail") && !n.querySelector("#sdetail").hidden;
+    shareEditorPreserveDetail = detailOpen && currentSecret?.id === id;
+    const det = await api("/api/secrets/" + id);
+    currentSecret = det;
+    let title = id;
     try {
-      const sel = n.querySelector("#shareto");
-      const opt = sel.selectedOptions[0];
-      if (!opt) throw new Error("Kein Empfänger");
+      const dk = openDKFromEnvelope(det.envelope);
+      title = await TVCrypto.decryptTitle(
+        TVCrypto.b64dec(det.title_ciphertext_b64),
+        TVCrypto.b64dec(det.title_nonce_b64),
+        dk, det.key_version
+      );
+      dk.fill(0);
+    } catch (_) {}
+    n.querySelector("#shareAccessTitle").textContent = "Zugriff: " + title;
+    shareEditorOpen = true;
+    const modal = n.querySelector("#shareAccessModal");
+    modal.hidden = false;
+    document.body.classList.add("secret-modal-open");
+    await renderAccessPanel("modal");
+  }
+
+  function closeShareEditor() {
+    const modal = n.querySelector("#shareAccessModal");
+    if (modal) modal.hidden = true;
+    shareEditorOpen = false;
+    const detailOpen = n.querySelector("#sdetail") && !n.querySelector("#sdetail").hidden;
+    if (!detailOpen) {
+      document.body.classList.remove("secret-modal-open");
+      if (!shareEditorPreserveDetail) {
+        currentSecret = null;
+        currentSecretPayload = null;
+        currentSecretTitle = "";
+      }
+    }
+    shareEditorPreserveDetail = false;
+    paintSecretList();
+  }
+
+  async function shareSecretWithUser(userId) {
+    if (accessDnDBusy || !currentSecret || !userId) return;
+    accessDnDBusy = true;
+    try {
+      const pks = await api("/api/users/public-keys");
+      const pk = pks.find((p) => p.user_id === userId);
+      if (!pk) throw new Error("Pubkey fehlt");
       const dk = openDKFromEnvelope(currentSecret.envelope);
-      const env = TVCrypto.sealDataKeyForRecipient(dk, TVCrypto.b64dec(opt.dataset.pk), currentSecret.key_version);
+      const env = TVCrypto.sealDataKeyForRecipient(dk, TVCrypto.b64dec(pk.public_key_b64), currentSecret.key_version);
       dk.fill(0);
       await api("/api/secrets/" + currentSecret.id + "/share", {
         method: "POST",
-        body: JSON.stringify({ envelopes: [TVCrypto.envelopeToAPI(opt.value, env)] }),
+        body: JSON.stringify({ envelopes: [TVCrypto.envelopeToAPI(userId, env)] }),
       });
-      await openSecret(currentSecret.id);
-      await refreshSecrets(true);
-    } catch (e) {
-      err.hidden = false; err.textContent = e.message;
+      await afterShareMutation();
+    } finally {
+      accessDnDBusy = false;
     }
-  };
+  }
 
-  n.querySelector("#shareGroup").onclick = async () => {
-    const err = n.querySelector("#derr"); err.hidden = true;
+  async function shareSecretWithGroup(groupId) {
+    if (accessDnDBusy || !currentSecret || !groupId) return;
+    accessDnDBusy = true;
     try {
-      const gid = n.querySelector("#sharegroup").value;
-      if (!gid) throw new Error("Keine Gruppe gewählt");
-      const pks = await api("/api/secrets/" + currentSecret.id + "/group-member-keys?group_id=" + encodeURIComponent(gid));
+      const pks = await api("/api/secrets/" + currentSecret.id + "/group-member-keys?group_id=" + encodeURIComponent(groupId));
       if (!pks.length) throw new Error("Keine onboardeten Gruppenmitglieder");
       const dk = openDKFromEnvelope(currentSecret.envelope);
       const envelopes = pks.map((p) =>
@@ -3705,22 +4112,32 @@ function renderApp(app) {
       dk.fill(0);
       await api("/api/secrets/" + currentSecret.id + "/share-group", {
         method: "POST",
-        body: JSON.stringify({ group_id: gid, envelopes }),
+        body: JSON.stringify({ group_id: groupId, envelopes }),
       });
-      await openSecret(currentSecret.id);
-      await refreshSecrets(true);
-    } catch (e) {
-      err.hidden = false; err.textContent = e.message;
+      await afterShareMutation();
+    } finally {
+      accessDnDBusy = false;
     }
-  };
+  }
 
-  n.querySelector("#revoke").onclick = async () => {
-    const err = n.querySelector("#derr"); err.hidden = true;
+  async function unshareSecret({ userIds = [], groupIds = [] }) {
+    if (accessDnDBusy || !currentSecret) return;
+    if (!userIds.length && !groupIds.length) return;
+    accessDnDBusy = true;
     try {
-      const drop = prompt("User-ID entfernen (danach Pflicht-Rotation):");
-      if (!drop) return;
-      const keep = (currentSecret.recipients || []).filter((id) => id !== drop);
-      if (!keep.includes(vault.me.user_id)) keep.push(vault.me.user_id);
+      const access = vault.secretAccess || await api("/api/secrets/" + currentSecret.id + "/access");
+      const keepUsers = new Set();
+      const ownerId = access.owner?.id || currentSecret.created_by || vault.me.user_id;
+      keepUsers.add(ownerId);
+      keepUsers.add(vault.me.user_id);
+      (access.shared_users || []).forEach((u) => {
+        if (!userIds.includes(u.id)) keepUsers.add(u.id);
+      });
+      const remainingGroups = (access.shared_groups || []).filter((g) => !groupIds.includes(g.id));
+      for (const g of remainingGroups) {
+        const members = await api("/api/groups/" + encodeURIComponent(g.id) + "/member-keys");
+        members.forEach((m) => keepUsers.add(m.user_id));
+      }
       const oldDk = openDKFromEnvelope(currentSecret.envelope);
       const kv = currentSecret.key_version;
       const title = await TVCrypto.decryptTitle(
@@ -3740,7 +4157,7 @@ function renderApp(app) {
       const bodyEnc = await TVCrypto.encryptPayload(pt, newDk, newKv);
       const pks = await api("/api/users/public-keys");
       const byId = Object.fromEntries(pks.map((p) => [p.user_id, p.public_key_b64]));
-      const envelopes = keep.map((uid) => {
+      const envelopes = [...keepUsers].map((uid) => {
         if (!byId[uid]) throw new Error("Pubkey fehlt: " + uid);
         return TVCrypto.envelopeToAPI(uid, TVCrypto.sealDataKeyForRecipient(newDk, TVCrypto.b64dec(byId[uid]), newKv));
       });
@@ -3754,14 +4171,32 @@ function renderApp(app) {
           nonce_b64: TVCrypto.b64enc(bodyEnc.nonce),
           key_version: newKv,
           envelopes,
+          drop_user_ids: userIds,
+          drop_group_ids: groupIds,
         }),
       });
-      await openSecret(currentSecret.id);
-      await refreshSecrets(true);
-    } catch (e) {
-      err.hidden = false; err.textContent = e.message;
+      await afterShareMutation();
+    } finally {
+      accessDnDBusy = false;
     }
-  };
+  }
+
+  const accessSearch = n.querySelector("#accessAvailSearch");
+  if (accessSearch) {
+    accessSearch.oninput = () => {
+      accessFilterDetail = accessSearch.value || "";
+      if (currentSecret && !vault.offlineMode) renderAccessPanel("detail").catch(() => {});
+    };
+  }
+  const smAccessSearch = n.querySelector("#smAccessSearch");
+  if (smAccessSearch) {
+    smAccessSearch.oninput = () => {
+      accessFilterModal = smAccessSearch.value || "";
+      if (currentSecret && shareEditorOpen) renderAccessPanel("modal").catch(() => {});
+    };
+  }
+  n.querySelector("#shareAccessClose").onclick = closeShareEditor;
+  n.querySelector("#shareAccessBackdrop").onclick = closeShareEditor;
 
   n.querySelector("#sExportOne").onclick = async () => {
     if (!currentSecret) return;
@@ -3872,6 +4307,20 @@ function renderApp(app) {
       method: "POST",
       body: JSON.stringify({ user_id: uid }),
     });
+    if (vault.sk && !vault.offlineMode) {
+      try {
+        const r = await sealGroupShareGaps({ groupId: gid, userId: uid });
+        if (r.sealed || r.failed) {
+          announceA11y(
+            r.failed
+              ? `Gruppen-Freigaben: ${r.sealed} nachgeteilt, ${r.failed} fehlgeschlagen`
+              : `Gruppen-Freigaben: ${r.sealed} an neues Mitglied nachgeteilt`
+          );
+        }
+      } catch (e) {
+        console.warn("auto reseal after member add", e);
+      }
+    }
   }
 
   async function groupsMemberRemove(gid, uid) {

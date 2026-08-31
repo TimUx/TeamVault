@@ -67,9 +67,9 @@ Nach dem Entsperren: linke **Sidebar** mit Icons. Unter Vault getrennt:
 | **Import** | Dateien aus anderen Passwortmanagern übernehmen |
 | **Sicherung** | Verschlüsselte `.tvbak`-Backup / Wiederherstellen |
 
-Kein vermischter „Alle“-Eintrag. Clientseitige **Suche** (Titel, Tags, Benutzer, Gruppen) und **Tag**-Filter gelten jeweils für die aktive Ansicht. In der Liste können Sie Einträge per Checkbox für den Export auswählen.
+Kein vermischter „Alle“-Eintrag. Clientseitige **Suche** (Titel, Tags, Benutzer, Gruppen) und **Tag**-Filter (Mehrfach, UND) gelten jeweils für die aktive Ansicht. In der Liste können Sie Einträge per Checkbox für den Export auswählen.
 
-**Ansicht:** Standard ist **Tabelle**; Umschalter Liste / Tabelle / Kacheln (Preference lokal im Browser). Tabelle und Kacheln laden zusätzlich Benutzer, Tags, Gruppen und Favorit; Liste zeigt Titel, Benutzer, Tags und Gruppen kompakt.
+**Ansicht:** Standard ist **Tabelle**; Umschalter Liste / Tabelle / Kacheln (Preference lokal im Browser). Tabelle und Kacheln laden zusätzlich Benutzer, Tags, **freigegebene Gruppen** und Favorit; Liste zeigt Titel, Benutzer, Tags und Gruppen kompakt.
 
 ![Meine Secrets – Tabelle (Standard)](images/vault-secrets-table.png)
 
@@ -113,14 +113,18 @@ In der Liste **Öffnen** — Detail erscheint als **Modal** über der Liste (Sch
 
 ### Teilen
 
-Im Secret-Detail einen anderen User wählen → **Teilen**.  
+Im Secret-Detail unter **Zugriff** verfügbare User und Gruppen per Klick oder Drag & Drop hinzufügen. Entfernen rotiert den Datenschlüssel (alter Schlüssel wird ungültig).  
 Jeder Empfänger erhält einen eigenen Umschlag um den Datenschlüssel (kein gemeinsames Gruppenpasswort). Empfänger müssen im gleichen Tenant **onboarded** sein.
 
-Admins und Gruppenmitglieder können eine **Gruppe** wählen → **Gruppe teilen** (Mitglieder sehen nur eigene Gruppen; pro Mitglied eigener Envelope). Empfänger sehen den Eintrag unter **Geteilt mit mir**.
+Die Spalte **Gruppen** in der Secrets-Liste zeigt nur **explizit freigegebene** Gruppen — nicht Ihre eigenen Gruppenmitgliedschaften. Neue und importierte Secrets starten ohne Freigaben (`—`), bis Sie teilen.
+
+Wird ein User **neu in eine Gruppe** aufgenommen, teilt TeamVault die Gruppen-Secrets automatisch nach — sofern jemand mit Zugriff (z.&nbsp;B. Admin) den Vault **entsperrt** hat bzw. beim Hinzufügen entsperrt ist. Der Server erzeugt keine Umschläge (Zero-Knowledge); fehlende Freigaben werden beim nächsten Unlock nachgeholt.
+
+Optional beim **Anlegen** User/Gruppen vorauswählen; **Import** teilt nie automatisch. In der Secrets-Tabelle markiert ein **Teilen-Symbol** freigegebene Einträge (kräftiger) bzw. erlaubt Zugriff zu bearbeiten; Klick öffnet das Zugriffspanel.
 
 ### Tags & Suche
 
-Beim Anlegen **Tags** setzen (Komma-getrennt). Die Toolbar filtert nach Tag; die Suche trifft **Titel, Tags, Benutzername, Ersteller und Gruppen** (clientseitig bzw. aus der API).
+Beim Anlegen **Tags** setzen (Komma-getrennt). Die Toolbar filtert nach **einem oder mehreren Tags mit UND-Logik** (z.&nbsp;B. Storage **und** Block **und** Prod); die Suche trifft **Titel, Tags, Benutzername, Ersteller und Gruppen** (clientseitig bzw. aus der API).
 
 ![Tag-Filter](images/vault-tag-filter.png)
 
@@ -144,13 +148,13 @@ Sidebar **Import**: Datei wählen. Unterstützte Formate:
 - Proton Pass JSON
 - generisches CSV (`title,username,password,url,…`)
 
-Nach dem Parsen erscheint eine **Vorschau** — einzelne, mehrere oder alle Einträge anhaken, dann **Auswahl importieren**. Verschlüsselte `.tvbak` erst mit Backup-Passwort entsperren. Parsing und Verschlüsselung laufen nur im Browser; der Server sieht nur Ciphertext.
+Nach dem Parsen erscheint eine **Vorschau** — einzelne, mehrere oder alle Einträge anhaken, dann **Auswahl importieren**. Verschlüsselte `.tvbak` erst mit Backup-Passwort entsperren. Parsing und Verschlüsselung laufen nur im Browser; der Server sieht nur Ciphertext. Import legt Secrets **nur für Sie** an (keine automatische Gruppen-Freigabe).
 
 ![Import](images/vault-import.png)
 
 ### Export
 
-In der Secrets-Liste Einträge per Checkbox wählen (eines, mehrere, oder **Alle geladenen**). Ohne Auswahl gelten die **sichtbaren** Einträge (aktueller Tag-Filter/Suche).
+In der Secrets-Liste Einträge per Checkbox wählen (eines, mehrere, oder **Alle geladenen**). Ohne Auswahl gelten die **sichtbaren** Einträge (aktueller Tag-Filter UND/Suche).
 
 - **Export TeamVault** — vollständiges JSON inkl. Extra-Felder
 - **Export Bitwarden** — Login-Subset, unverschlüsselt
@@ -183,18 +187,18 @@ Sidebar **Konto**:
 
 ### Login-2FA (TOTP)
 
-1. **TOTP einrichten** → otpauth-URL in der Authenticator-App (**otpauth kopieren**)  
+1. **TOTP einrichten** → QR scannen (lokal im Browser erzeugt, kein CDN) oder otpauth-URL/**Secret** in die Authenticator-App übernehmen  
 2. Code bestätigen → **Aktivieren**  
 3. Beim nächsten Login Feld **TOTP** ausfüllen  
 
-TOTP schützt das Login, **nicht** die Vault-Entschlüsselung.
+Online-Hilfe mit Beispiel-QR: `/help/account`. TOTP schützt das Login, **nicht** die Vault-Entschlüsselung.
 
 ### Passkeys
 
 1. **Passkeys** → Namen vergeben → **Registrieren** (Browser/OS-Dialog)  
 2. Beim Login: Tenant + Username → **Passkey**  
 
-Passkeys ersetzen nur das Login — das Master-Passwort bleibt für den Vault nötig.
+Passkeys ersetzen nur das Login — das Master-Passwort bleibt für den Vault nötig. TeamVault erzeugt **keinen** eigenen Passkey-QR; ggf. zeigt der Browser bei geräteübergreifender Anmeldung selbst einen QR.
 
 ### Login-Passwort ändern
 
@@ -256,13 +260,17 @@ Nur `read` → keine Admin- oder Schreibaktionen. Cookie-Login ohne API-Key ist 
 
 ## 10. Hilfe
 
-Übersicht Web-App / Vault-Kurzanleitungen / CLI / Extension auf der Instanz unter **`/help`** (auch Sidebar **Hilfe** oder Login-Header):
+Übersicht Web-App / Vault / Konto (TOTP & Passkeys) / CLI / Extension auf der Instanz unter **`/help`** (auch Sidebar **Hilfe** oder Login-Header):
 
 ![Hilfe Übersicht](images/help.png)
 
-**Vault im Browser** — Anlegen, Teilen, Import mit Beispielen unter **`/help/vault`**:
+**Vault** — Anlegen, Teilen, Import:
 
 ![Vault-Kurzanleitungen](images/help-vault.png)
+
+**Konto** — TOTP (inkl. QR) und Passkeys: **`/help/account`**
+
+![Konto-Hilfe](images/help-account.png)
 
 | Problem | Tipp |
 |---------|------|

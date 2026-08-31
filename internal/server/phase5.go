@@ -19,7 +19,7 @@ import (
 
 type secretShareContext struct {
 	usernameByID map[store.UserID]string
-	groupsByUser map[store.UserID][]string
+	groupNameByID map[store.GroupID]string
 }
 
 func (a *API) loadSecretShareContext(ctx context.Context, tenant store.TenantID) (*secretShareContext, error) {
@@ -35,43 +35,40 @@ func (a *API) loadSecretShareContext(ctx context.Context, tenant store.TenantID)
 	if err != nil {
 		return nil, err
 	}
-	groupsByUser := make(map[store.UserID][]string)
-	seen := make(map[store.UserID]map[string]bool)
+	groupNameByID := make(map[store.GroupID]string, len(groups))
 	for _, g := range groups {
-		members, err := a.App.Vault.ListGroupMembers(ctx, tenant, g.ID)
-		if err != nil {
-			continue
-		}
-		for _, uid := range members {
-			if seen[uid] == nil {
-				seen[uid] = map[string]bool{}
-			}
-			if seen[uid][g.Name] {
-				continue
-			}
-			seen[uid][g.Name] = true
-			groupsByUser[uid] = append(groupsByUser[uid], g.Name)
-		}
+		groupNameByID[g.ID] = g.Name
 	}
-	return &secretShareContext{usernameByID: usernameByID, groupsByUser: groupsByUser}, nil
+	return &secretShareContext{usernameByID: usernameByID, groupNameByID: groupNameByID}, nil
 }
 
-func sharedGroupsForEnvelopes(sc *secretShareContext, envs []store.KeyEnvelope) []string {
-	if sc == nil || len(envs) == 0 {
+func sharedGroupNames(sc *secretShareContext, shares []store.SecretGroupShare) []string {
+	if sc == nil || len(shares) == 0 {
 		return nil
 	}
-	names := map[string]bool{}
-	for _, e := range envs {
-		for _, g := range sc.groupsByUser[e.UserID] {
-			names[g] = true
+	out := make([]string, 0, len(shares))
+	for _, sh := range shares {
+		if name := sc.groupNameByID[sh.GroupID]; name != "" {
+			out = append(out, name)
+		} else {
+			out = append(out, string(sh.GroupID))
 		}
 	}
-	if len(names) == 0 {
+	sort.Strings(out)
+	return out
+}
+
+func sharedUserNames(sc *secretShareContext, shares []store.SecretDirectShare) []string {
+	if sc == nil || len(shares) == 0 {
 		return nil
 	}
-	out := make([]string, 0, len(names))
-	for g := range names {
-		out = append(out, g)
+	out := make([]string, 0, len(shares))
+	for _, sh := range shares {
+		if name := sc.usernameByID[sh.UserID]; name != "" {
+			out = append(out, name)
+		} else {
+			out = append(out, string(sh.UserID))
+		}
 	}
 	sort.Strings(out)
 	return out
@@ -95,6 +92,7 @@ func (a *API) registerPhase5(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/secrets", a.requireAuth(a.requireOnboarded(a.handleListSecrets)))
 	mux.HandleFunc("POST /api/secrets", a.requireAuth(a.requireOnboarded(a.handleCreateSecret)))
 	mux.HandleFunc("GET /api/secrets/{id}", a.requireAuth(a.requireOnboarded(a.handleGetSecret)))
+	mux.HandleFunc("GET /api/secrets/{id}/access", a.requireAuth(a.requireOnboarded(a.handleSecretAccess)))
 	mux.HandleFunc("PUT /api/secrets/{id}", a.requireAuth(a.requireOnboarded(a.handleUpdateSecret)))
 	mux.HandleFunc("POST /api/secrets/{id}/share", a.requireAuth(a.requireOnboarded(a.handleShareSecret)))
 	mux.HandleFunc("POST /api/secrets/{id}/rotate", a.requireAuth(a.requireOnboarded(a.handleRotateSecret)))
@@ -576,6 +574,10 @@ type createSecretReq struct {
 	KeyVersion         uint32       `json:"key_version"`
 	CollectionID       string       `json:"collection_id"`
 	Envelopes          []envelopeIn `json:"envelopes"`
+	ShareUserIDs       []string     `json:"share_user_ids,omitempty"`
+	ShareGroupIDs      []string     `json:"share_group_ids,omitempty"`
+	DropUserIDs        []string     `json:"drop_user_ids,omitempty"`
+	DropGroupIDs       []string     `json:"drop_group_ids,omitempty"`
 }
 
 func packEnvelope(e envelopeIn) ([]byte, error) {
@@ -645,6 +647,34 @@ func (a *API) handleCreateSecret(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	for _, uid := range req.ShareUserIDs {
+		uid = strings.TrimSpace(uid)
+		if uid == "" || uid == string(sess.UserID) {
+			continue
+		}
+		if !a.recipientShareable(r, sess.TenantID, store.UserID(uid)) {
+			writeErr(w, http.StatusBadRequest, "share_user_ids: recipient must be onboarded")
+			return
+		}
+		if err := a.App.Vault.PutSecretDirectShare(r.Context(), store.SecretDirectShare{
+			TenantID: sess.TenantID, SecretID: id, UserID: store.UserID(uid),
+		}); err != nil {
+			writeErr(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
+	for _, gid := range req.ShareGroupIDs {
+		gid = strings.TrimSpace(gid)
+		if gid == "" {
+			continue
+		}
+		if err := a.App.Vault.PutSecretGroupShare(r.Context(), store.SecretGroupShare{
+			TenantID: sess.TenantID, SecretID: id, GroupID: store.GroupID(gid),
+		}); err != nil {
+			writeErr(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
 	if !a.appendAuditStrict(w, r, store.AuditEvent{
 		TenantID: sess.TenantID, ActorID: string(sess.UserID),
 		Action: "secret.create", ResourceType: "secret", ResourceID: string(id),
@@ -683,6 +713,15 @@ func (a *API) handleListSecrets(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	allGroupShares, err := a.App.Vault.ListSecretGroupSharesByTenant(r.Context(), sess.TenantID)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	groupSharesBySecret := map[store.SecretID][]store.SecretGroupShare{}
+	for _, sh := range allGroupShares {
+		groupSharesBySecret[sh.SecretID] = append(groupSharesBySecret[sh.SecretID], sh)
+	}
 	type envOut struct {
 		EphemeralPubB64 string `json:"ephemeral_pub_b64"`
 		NonceB64        string `json:"nonce_b64"`
@@ -690,15 +729,25 @@ func (a *API) handleListSecrets(w http.ResponseWriter, r *http.Request) {
 		KeyVersion      uint32 `json:"key_version"`
 	}
 	type item struct {
-		ID                  string   `json:"id"`
-		TitleCiphertextB64  string   `json:"title_ciphertext_b64"`
-		TitleNonceB64       string   `json:"title_nonce_b64"`
-		CreatedBy           string   `json:"created_by"`
-		CreatedByUsername   string   `json:"created_by_username,omitempty"`
-		HasAccess           bool     `json:"has_access"`
-		KeyVersion          uint32   `json:"key_version"`
-		SharedGroups        []string `json:"shared_groups,omitempty"`
-		Envelope            *envOut  `json:"envelope,omitempty"`
+		ID                 string   `json:"id"`
+		TitleCiphertextB64 string   `json:"title_ciphertext_b64"`
+		TitleNonceB64      string   `json:"title_nonce_b64"`
+		CreatedBy          string   `json:"created_by"`
+		CreatedByUsername  string   `json:"created_by_username,omitempty"`
+		HasAccess          bool     `json:"has_access"`
+		KeyVersion         uint32   `json:"key_version"`
+		SharedGroups       []string `json:"shared_groups,omitempty"`
+		SharedUsers        []string `json:"shared_users,omitempty"`
+		Envelope           *envOut  `json:"envelope,omitempty"`
+	}
+	allDirectShares, err := a.App.Vault.ListSecretDirectSharesByTenant(r.Context(), sess.TenantID)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	directSharesBySecret := map[store.SecretID][]store.SecretDirectShare{}
+	for _, sh := range allDirectShares {
+		directSharesBySecret[sh.SecretID] = append(directSharesBySecret[sh.SecretID], sh)
 	}
 	var filtered []item
 	for _, m := range metas {
@@ -727,7 +776,8 @@ func (a *API) handleListSecrets(w http.ResponseWriter, r *http.Request) {
 		}
 		if shareCtx != nil {
 			it.CreatedByUsername = shareCtx.usernameByID[m.CreatedBy]
-			it.SharedGroups = sharedGroupsForEnvelopes(shareCtx, envs)
+			it.SharedGroups = sharedGroupNames(shareCtx, groupSharesBySecret[m.ID])
+			it.SharedUsers = sharedUserNames(shareCtx, directSharesBySecret[m.ID])
 		}
 		if mine != nil && len(mine.WrappedDK) >= 32+24 {
 			eph, nonce, ct := mine.WrappedDK[:32], mine.WrappedDK[32:56], mine.WrappedDK[56:]
@@ -802,9 +852,113 @@ func (a *API) handleGetSecret(w http.ResponseWriter, r *http.Request) {
 	}
 	if shareCtx, err := a.loadSecretShareContext(r.Context(), sess.TenantID); err == nil && shareCtx != nil {
 		out["created_by_username"] = shareCtx.usernameByID[meta.CreatedBy]
-		out["shared_groups"] = sharedGroupsForEnvelopes(shareCtx, envs)
+		if gShares, err := a.App.Vault.ListSecretGroupShares(r.Context(), sess.TenantID, id); err == nil {
+			out["shared_groups"] = sharedGroupNames(shareCtx, gShares)
+		}
+		if dShares, err := a.App.Vault.ListSecretDirectShares(r.Context(), sess.TenantID, id); err == nil {
+			out["shared_users"] = sharedUserNames(shareCtx, dShares)
+			ids := make([]string, 0, len(dShares))
+			for _, sh := range dShares {
+				ids = append(ids, string(sh.UserID))
+			}
+			out["shared_user_ids"] = ids
+		}
 	}
 	writeJSON(w, http.StatusOK, out)
+}
+
+func (a *API) handleSecretAccess(w http.ResponseWriter, r *http.Request) {
+	sess, _ := a.sessionFrom(r)
+	id := store.SecretID(r.PathValue("id"))
+	if !a.callerHasEnvelope(r, sess.TenantID, id, sess.UserID) {
+		writeErr(w, http.StatusForbidden, "no access envelope")
+		return
+	}
+	meta, err := a.App.Vault.GetSecretMeta(r.Context(), sess.TenantID, id)
+	if err != nil {
+		writeErr(w, http.StatusNotFound, "not found")
+		return
+	}
+	shareCtx, err := a.loadSecretShareContext(r.Context(), sess.TenantID)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	dShares, err := a.App.Vault.ListSecretDirectShares(r.Context(), sess.TenantID, id)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	gShares, err := a.App.Vault.ListSecretGroupShares(r.Context(), sess.TenantID, id)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	type namedID struct {
+		ID       string `json:"id"`
+		Username string `json:"username,omitempty"`
+		Name     string `json:"name,omitempty"`
+	}
+	ownerName := shareCtx.usernameByID[meta.CreatedBy]
+	sharedUsers := make([]namedID, 0, len(dShares))
+	sharedUserSet := map[string]bool{}
+	for _, sh := range dShares {
+		sharedUserSet[string(sh.UserID)] = true
+		sharedUsers = append(sharedUsers, namedID{
+			ID: string(sh.UserID), Username: shareCtx.usernameByID[sh.UserID],
+		})
+	}
+	sharedGroups := make([]namedID, 0, len(gShares))
+	sharedGroupSet := map[string]bool{}
+	for _, sh := range gShares {
+		sharedGroupSet[string(sh.GroupID)] = true
+		sharedGroups = append(sharedGroups, namedID{
+			ID: string(sh.GroupID), Name: shareCtx.groupNameByID[sh.GroupID],
+		})
+	}
+	pks, err := a.App.Vault.ListUsers(r.Context(), sess.TenantID, store.UserQuery{Limit: 10000})
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	availUsers := []namedID{}
+	for _, u := range pks {
+		if u.ID == meta.CreatedBy || sharedUserSet[string(u.ID)] {
+			continue
+		}
+		if u.OnboardedAt == nil || len(u.PublicKey) == 0 || u.Status == "disabled" {
+			continue
+		}
+		availUsers = append(availUsers, namedID{ID: string(u.ID), Username: u.Username})
+	}
+	allGroups, err := a.App.Vault.ListGroups(r.Context(), sess.TenantID)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	myGroups, _ := a.App.Vault.ListUserGroups(r.Context(), sess.TenantID, sess.UserID)
+	mySet := map[store.GroupID]bool{}
+	for _, g := range myGroups {
+		mySet[g] = true
+	}
+	isAdmin := hasRole(sess.Roles, "tenant_admin") || hasRole(sess.Roles, "platform_admin")
+	availGroups := []namedID{}
+	for _, g := range allGroups {
+		if sharedGroupSet[string(g.ID)] {
+			continue
+		}
+		if !isAdmin && !mySet[g.ID] {
+			continue
+		}
+		availGroups = append(availGroups, namedID{ID: string(g.ID), Name: g.Name})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"owner":           namedID{ID: string(meta.CreatedBy), Username: ownerName},
+		"shared_users":    sharedUsers,
+		"shared_groups":   sharedGroups,
+		"available_users": availUsers,
+		"available_groups": availGroups,
+	})
 }
 
 func (a *API) callerHasEnvelope(r *http.Request, tenant store.TenantID, secret store.SecretID, user store.UserID) bool {
@@ -867,6 +1021,14 @@ func (a *API) handleShareSecret(w http.ResponseWriter, r *http.Request) {
 			}
 			writeErr(w, http.StatusInternalServerError, err.Error())
 			return
+		}
+		if e.UserID != string(sess.UserID) {
+			if err := a.App.Vault.PutSecretDirectShare(r.Context(), store.SecretDirectShare{
+				TenantID: sess.TenantID, SecretID: id, UserID: store.UserID(e.UserID),
+			}); err != nil {
+				writeErr(w, http.StatusInternalServerError, err.Error())
+				return
+			}
 		}
 	}
 	if err := a.App.Vault.AppendAudit(r.Context(), store.AuditEvent{
@@ -1038,6 +1200,20 @@ func (a *API) handleRotateSecret(w http.ResponseWriter, r *http.Request) {
 		}
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
+	}
+	for _, uid := range req.DropUserIDs {
+		uid = strings.TrimSpace(uid)
+		if uid == "" {
+			continue
+		}
+		_ = a.App.Vault.DeleteSecretDirectShare(r.Context(), sess.TenantID, id, store.UserID(uid))
+	}
+	for _, gid := range req.DropGroupIDs {
+		gid = strings.TrimSpace(gid)
+		if gid == "" {
+			continue
+		}
+		_ = a.App.Vault.DeleteSecretGroupShare(r.Context(), sess.TenantID, id, store.GroupID(gid))
 	}
 	if err := a.App.Vault.AppendAudit(r.Context(), store.AuditEvent{
 		ID: newID("aud"), TenantID: sess.TenantID, ActorID: string(sess.UserID),

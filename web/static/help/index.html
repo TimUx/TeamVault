@@ -7,47 +7,55 @@
   <link rel="stylesheet" href="/styles.css" />
   <link rel="stylesheet" href="/help/help.css" />
 </head>
-<body>
+<body class="help-body">
   <a class="skip-link" href="#main">Zum Inhalt springen</a>
-  <header class="top">
-    <div class="brand"><a href="/help" style="color:inherit;text-decoration:none">TeamVault Hilfe</a></div>
-    <div class="top-actions">
-      <a class="btn-ghost" href="/app" style="text-decoration:none;padding:.4rem .75rem">Zur App</a>
-    </div>
-  </header>
-  <main id="main" class="help-wrap">
-    <h1>Hilfe &amp; Clients</h1>
-    <p class="lead">Kurze Anleitungen für den Alltag: Web-App, Kommandozeile und Browser-Extension.</p>
+  <div class="help-backdrop" id="helpBackdrop"></div>
+  <div class="help-frame">
+    <aside class="help-sidebar" id="helpSidebar"></aside>
+    <div class="help-content">
+      <header class="help-top">
+        <button type="button" class="btn-ghost help-menu-toggle" id="helpMenuToggle" aria-expanded="false" aria-controls="helpSidebar">Menü</button>
+        <div class="brand">Übersicht</div>
+        <div class="help-top-actions">
+          <a class="btn-ghost" href="/app" style="text-decoration:none;padding:.4rem .75rem">Zur App</a>
+        </div>
+      </header>
+      <main id="main" class="help-main">
+        <h1>Hilfe &amp; Anleitungen</h1>
+        <p class="lead">TeamVault ist Zero-Knowledge: Secrets und Master-Passwort bleiben im Browser. Hier finden Sie Kurzanleitungen mit Beispielen und Screenshots.</p>
 
-    <nav class="help-nav" aria-label="Themen">
-      <a class="primary" href="/help/vault">Vault (Anlegen, Teilen, Import)</a>
-      <a class="primary" href="/help/cli">CLI (tvcli)</a>
-      <a class="primary" href="/help/extension">Browser-Extension</a>
-      <a href="/login">Login</a>
-      <a href="/app">Vault öffnen</a>
-    </nav>
+        <div class="help-step">
+          <h3>Vault</h3>
+          <p>Secrets <strong>anlegen</strong>, mit Usern/Gruppen <strong>teilen</strong> und aus Bitwarden, KeePass, Chrome u.&nbsp;a. <strong>importieren</strong>.</p>
+          <p><a href="/help/vault">Zur Vault-Anleitung →</a></p>
+          <figure class="help-figure">
+            <img src="/help/img/vault-secrets-table.png" alt="Vault: Meine Secrets in Tabellenansicht" width="1100" height="720" loading="lazy" />
+            <figcaption>Meine Secrets (Tabelle) nach dem Entsperren</figcaption>
+          </figure>
+        </div>
 
-    <div class="help-step">
-      <h3>Vault im Browser</h3>
-      <p>Secrets <strong>anlegen</strong>, mit Usern/Gruppen <strong>teilen</strong> und aus Bitwarden, KeePass, Chrome u.&nbsp;a. <strong>importieren</strong> — mit Beispielen: <a href="/help/vault">Kurzanleitungen Vault</a>.</p>
-    </div>
-    <div class="help-step">
-      <h3>1 · Web-App</h3>
-      <p>Im Browser anmelden (Organisation wählen, falls mehrere Mandanten) → Vault mit Master-Passwort entsperren → Secrets nutzen. Kurzanleitungen <strong>Anlegen / Teilen / Import</strong>: <a href="/help/vault">Vault-Hilfe</a>. Einstieg: <a href="/login">Login</a> bzw. <a href="/app">App</a>.</p>
-    </div>
-    <div class="help-step">
-      <h3>2 · CLI</h3>
-      <p>Für Skripte und Terminal: Binary installieren, einmal anmelden oder API-Key setzen, Secrets listen/lesen. <a href="/help/cli">Schritt für Schritt</a></p>
-    </div>
-    <div class="help-step">
-      <h3>3 · Extension</h3>
-      <p>Chrome, Edge oder Firefox: Extension laden, Server-URL setzen, im Popup entsperren, Fill/Copy auf passenden Seiten. <a href="/help/extension">Schritt für Schritt</a></p>
-    </div>
+        <div class="help-step">
+          <h3>Konto · TOTP &amp; Passkeys</h3>
+          <p>Login absichern mit Authenticator-App (TOTP inkl. QR) oder Passkey. Der Vault braucht weiterhin das Master-Passwort.</p>
+          <p><a href="/help/account">Zur Konto-Anleitung →</a></p>
+          <figure class="help-figure">
+            <img src="/help/img/account.png" alt="Konto-Seite mit TOTP und Passkeys" width="1100" height="720" loading="lazy" />
+            <figcaption>Konto: TOTP und Passkeys</figcaption>
+          </figure>
+        </div>
 
-    <p class="help-note">Diese Seiten laufen auf Ihrer TeamVault-Instanz (<span id="originHint"></span>). Markdown-Fassungen liegen im Git unter <code>docs/cli-guide.md</code>, <code>docs/extension-guide.md</code>, <code>docs/user-guide.md</code> und <code>docs/install-guide.md</code> (Server-Installation).</p>
-    <footer class="help-foot" id="aboutFoot"></footer>
-  </main>
+        <div class="help-step">
+          <h3>CLI &amp; Browser-Extension</h3>
+          <p>Für Automation und Autofill: <a href="/help/cli">tvcli</a> · <a href="/help/extension">Extension</a></p>
+        </div>
+
+        <p class="help-note">Diese Seiten laufen auf Ihrer Instanz (<span id="originHint"></span>). Ausführliche Markdown-Guides: <code>docs/user-guide.md</code>, <code>docs/cli-guide.md</code>, <code>docs/extension-guide.md</code>, <code>docs/install-guide.md</code>.</p>
+        <footer class="help-foot" id="aboutFoot"></footer>
+      </main>
+    </div>
+  </div>
   <script src="/help/tv-base.js"></script>
+  <script src="/help/nav.js"></script>
   <script src="/help/index.js"></script>
 </body>
 </html>

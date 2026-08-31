@@ -16,7 +16,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const schemaVersion = 4
+const schemaVersion = 5
 
 type Store struct {
 	db *sql.DB
@@ -157,11 +157,23 @@ CREATE TABLE IF NOT EXISTS webauthn_credentials (
   PRIMARY KEY (tenant_id, id)
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_webauthn_cred ON webauthn_credentials(tenant_id, credential_id);
+CREATE TABLE IF NOT EXISTS secret_direct_shares (
+  tenant_id TEXT NOT NULL,
+  secret_id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  PRIMARY KEY (tenant_id, secret_id, user_id)
+);
+CREATE TABLE IF NOT EXISTS secret_group_shares (
+  tenant_id TEXT NOT NULL,
+  secret_id TEXT NOT NULL,
+  group_id TEXT NOT NULL,
+  PRIMARY KEY (tenant_id, secret_id, group_id)
+);
 `)
 	if err != nil {
 		return err
 	}
-	// Best-effort upgrades from v1/v2/v3.
+	// Best-effort upgrades from v1/v2/v3/v4.
 	for _, q := range []string{
 		`ALTER TABLE tenants ADD COLUMN escrow_public_key BLOB`,
 		`ALTER TABLE users ADD COLUMN escrow_envelope BLOB`,
@@ -176,6 +188,14 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_webauthn_cred ON webauthn_credentials(tena
   PRIMARY KEY (tenant_id, id)
 )`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_webauthn_cred ON webauthn_credentials(tenant_id, credential_id)`,
+		`CREATE TABLE IF NOT EXISTS secret_direct_shares (
+  tenant_id TEXT NOT NULL, secret_id TEXT NOT NULL, user_id TEXT NOT NULL,
+  PRIMARY KEY (tenant_id, secret_id, user_id)
+)`,
+		`CREATE TABLE IF NOT EXISTS secret_group_shares (
+  tenant_id TEXT NOT NULL, secret_id TEXT NOT NULL, group_id TEXT NOT NULL,
+  PRIMARY KEY (tenant_id, secret_id, group_id)
+)`,
 	} {
 		_, _ = s.db.Exec(q)
 	}
@@ -549,6 +569,8 @@ func (s *Store) DeleteSecret(ctx context.Context, tenant store.TenantID, id stor
 	}
 	defer func() { _ = tx.Rollback() }()
 	for _, q := range []string{
+		`DELETE FROM secret_direct_shares WHERE tenant_id = ? AND secret_id = ?`,
+		`DELETE FROM secret_group_shares WHERE tenant_id = ? AND secret_id = ?`,
 		`DELETE FROM key_envelopes WHERE tenant_id = ? AND secret_id = ?`,
 		`DELETE FROM secret_ciphertext WHERE tenant_id = ? AND secret_id = ?`,
 		`DELETE FROM secrets WHERE tenant_id = ? AND id = ?`,
@@ -610,6 +632,9 @@ func (s *Store) DeleteGroup(ctx context.Context, tenant store.TenantID, id store
 	}
 	defer func() { _ = tx.Rollback() }()
 	if _, err := tx.ExecContext(ctx, `DELETE FROM group_members WHERE tenant_id = ? AND group_id = ?`, tenant, id); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM secret_group_shares WHERE tenant_id = ? AND group_id = ?`, tenant, id); err != nil {
 		return err
 	}
 	if _, err := tx.ExecContext(ctx, `DELETE FROM groups WHERE tenant_id = ? AND id = ?`, tenant, id); err != nil {
@@ -931,6 +956,162 @@ VALUES(?,?,?,?,?,0)
 	return tx.Commit()
 }
 
+func (s *Store) PutSecretDirectShare(ctx context.Context, share store.SecretDirectShare) error {
+	if err := requireTenant(share.TenantID); err != nil {
+		return err
+	}
+	if share.SecretID == "" || share.UserID == "" {
+		return errors.New("secret_id and user_id required")
+	}
+	_, err := s.db.ExecContext(ctx, `
+INSERT INTO secret_direct_shares(tenant_id, secret_id, user_id) VALUES(?,?,?)
+ON CONFLICT(tenant_id, secret_id, user_id) DO NOTHING`,
+		share.TenantID, share.SecretID, share.UserID)
+	return err
+}
+
+func (s *Store) DeleteSecretDirectShare(ctx context.Context, tenant store.TenantID, secret store.SecretID, user store.UserID) error {
+	if err := requireTenant(tenant); err != nil {
+		return err
+	}
+	_, err := s.db.ExecContext(ctx,
+		`DELETE FROM secret_direct_shares WHERE tenant_id = ? AND secret_id = ? AND user_id = ?`,
+		tenant, secret, user)
+	return err
+}
+
+func (s *Store) ListSecretDirectShares(ctx context.Context, tenant store.TenantID, secret store.SecretID) ([]store.SecretDirectShare, error) {
+	if err := requireTenant(tenant); err != nil {
+		return nil, err
+	}
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT tenant_id, secret_id, user_id FROM secret_direct_shares WHERE tenant_id = ? AND secret_id = ? ORDER BY user_id`,
+		tenant, secret)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []store.SecretDirectShare
+	for rows.Next() {
+		var sh store.SecretDirectShare
+		if err := rows.Scan(&sh.TenantID, &sh.SecretID, &sh.UserID); err != nil {
+			return nil, err
+		}
+		out = append(out, sh)
+	}
+	return out, rows.Err()
+}
+
+func (s *Store) ListSecretDirectSharesByTenant(ctx context.Context, tenant store.TenantID) ([]store.SecretDirectShare, error) {
+	if err := requireTenant(tenant); err != nil {
+		return nil, err
+	}
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT tenant_id, secret_id, user_id FROM secret_direct_shares WHERE tenant_id = ?`, tenant)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []store.SecretDirectShare
+	for rows.Next() {
+		var sh store.SecretDirectShare
+		if err := rows.Scan(&sh.TenantID, &sh.SecretID, &sh.UserID); err != nil {
+			return nil, err
+		}
+		out = append(out, sh)
+	}
+	return out, rows.Err()
+}
+
+func (s *Store) PutSecretGroupShare(ctx context.Context, share store.SecretGroupShare) error {
+	if err := requireTenant(share.TenantID); err != nil {
+		return err
+	}
+	if share.SecretID == "" || share.GroupID == "" {
+		return errors.New("secret_id and group_id required")
+	}
+	_, err := s.db.ExecContext(ctx, `
+INSERT INTO secret_group_shares(tenant_id, secret_id, group_id) VALUES(?,?,?)
+ON CONFLICT(tenant_id, secret_id, group_id) DO NOTHING`,
+		share.TenantID, share.SecretID, share.GroupID)
+	return err
+}
+
+func (s *Store) DeleteSecretGroupShare(ctx context.Context, tenant store.TenantID, secret store.SecretID, group store.GroupID) error {
+	if err := requireTenant(tenant); err != nil {
+		return err
+	}
+	_, err := s.db.ExecContext(ctx,
+		`DELETE FROM secret_group_shares WHERE tenant_id = ? AND secret_id = ? AND group_id = ?`,
+		tenant, secret, group)
+	return err
+}
+
+func (s *Store) ListSecretGroupShares(ctx context.Context, tenant store.TenantID, secret store.SecretID) ([]store.SecretGroupShare, error) {
+	if err := requireTenant(tenant); err != nil {
+		return nil, err
+	}
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT tenant_id, secret_id, group_id FROM secret_group_shares WHERE tenant_id = ? AND secret_id = ? ORDER BY group_id`,
+		tenant, secret)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []store.SecretGroupShare
+	for rows.Next() {
+		var sh store.SecretGroupShare
+		if err := rows.Scan(&sh.TenantID, &sh.SecretID, &sh.GroupID); err != nil {
+			return nil, err
+		}
+		out = append(out, sh)
+	}
+	return out, rows.Err()
+}
+
+func (s *Store) ListSecretGroupSharesByTenant(ctx context.Context, tenant store.TenantID) ([]store.SecretGroupShare, error) {
+	if err := requireTenant(tenant); err != nil {
+		return nil, err
+	}
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT tenant_id, secret_id, group_id FROM secret_group_shares WHERE tenant_id = ?`, tenant)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []store.SecretGroupShare
+	for rows.Next() {
+		var sh store.SecretGroupShare
+		if err := rows.Scan(&sh.TenantID, &sh.SecretID, &sh.GroupID); err != nil {
+			return nil, err
+		}
+		out = append(out, sh)
+	}
+	return out, rows.Err()
+}
+
+func (s *Store) ListSecretGroupSharesByGroup(ctx context.Context, tenant store.TenantID, group store.GroupID) ([]store.SecretGroupShare, error) {
+	if err := requireTenant(tenant); err != nil {
+		return nil, err
+	}
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT tenant_id, secret_id, group_id FROM secret_group_shares WHERE tenant_id = ? AND group_id = ?`,
+		tenant, group)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []store.SecretGroupShare
+	for rows.Next() {
+		var sh store.SecretGroupShare
+		if err := rows.Scan(&sh.TenantID, &sh.SecretID, &sh.GroupID); err != nil {
+			return nil, err
+		}
+		out = append(out, sh)
+	}
+	return out, rows.Err()
+}
+
 func (s *Store) AppendAudit(ctx context.Context, e store.AuditEvent) error {
 	if err := requireTenant(e.TenantID); err != nil {
 		return err
@@ -1079,6 +1260,16 @@ func (s *Store) appendTenantSnapshot(ctx context.Context, rec *store.SnapshotRec
 		}
 		rec.Secrets = append(rec.Secrets, sec)
 	}
+	ds, err := s.ListSecretDirectSharesByTenant(ctx, tid)
+	if err != nil {
+		return err
+	}
+	rec.DirectShares = append(rec.DirectShares, ds...)
+	gs, err := s.ListSecretGroupSharesByTenant(ctx, tid)
+	if err != nil {
+		return err
+	}
+	rec.GroupShares = append(rec.GroupShares, gs...)
 	return nil
 }
 
@@ -1111,6 +1302,8 @@ func (s *Store) wipeTenant(ctx context.Context, tid store.TenantID) error {
 	}
 	defer func() { _ = tx.Rollback() }()
 	for _, q := range []string{
+		`DELETE FROM secret_direct_shares WHERE tenant_id = ?`,
+		`DELETE FROM secret_group_shares WHERE tenant_id = ?`,
 		`DELETE FROM group_members WHERE tenant_id = ?`,
 		`DELETE FROM groups WHERE tenant_id = ?`,
 		`DELETE FROM webauthn_credentials WHERE tenant_id = ?`,
@@ -1135,6 +1328,8 @@ func (s *Store) wipeAll(ctx context.Context) error {
 	}
 	defer func() { _ = tx.Rollback() }()
 	for _, q := range []string{
+		`DELETE FROM secret_direct_shares`,
+		`DELETE FROM secret_group_shares`,
 		`DELETE FROM group_members`,
 		`DELETE FROM groups`,
 		`DELETE FROM webauthn_credentials`,
@@ -1210,6 +1405,16 @@ func (s *Store) ImportSnapshot(ctx context.Context, snap store.StoreSnapshot, mo
 			if err := s.PutKeyEnvelope(ctx, env); err != nil {
 				return err
 			}
+		}
+	}
+	for _, sh := range rec.DirectShares {
+		if err := s.PutSecretDirectShare(ctx, sh); err != nil {
+			return err
+		}
+	}
+	for _, sh := range rec.GroupShares {
+		if err := s.PutSecretGroupShare(ctx, sh); err != nil {
+			return err
 		}
 	}
 	return nil

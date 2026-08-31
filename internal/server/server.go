@@ -198,6 +198,10 @@ func apiKeyReadAllowed(r *http.Request) bool {
 		return true
 	case strings.HasPrefix(p, "/api/secrets/") && !strings.Contains(p[len("/api/secrets/"):], "/"):
 		return true // GET /api/secrets/{id}
+	case strings.HasPrefix(p, "/api/secrets/") && strings.HasSuffix(p, "/access"):
+		return true
+	case p == "/api/secrets/group-share-gaps":
+		return true
 	case strings.HasPrefix(p, "/api/secrets/") && strings.HasSuffix(p, "/group-member-keys"):
 		return true
 	default:

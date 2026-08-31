@@ -1,4 +1,5 @@
 (() => {
+  if (typeof tvHelpNav === "function") tvHelpNav("cli");
   const base = tvHelpOrigin();
   const set = (id, text) => {
     const el = document.getElementById(id);

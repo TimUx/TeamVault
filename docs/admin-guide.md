@@ -175,6 +175,7 @@ Sidebar **Administration → Benutzer & Gruppen → Gruppen**:
 - Gruppe anlegen; **Name** und **Beschreibung** in der Karte bearbeiten (Speichern beim Verlassen des Feldes); **Löschen** mit Bestätigung
 - Rechte/Sharing bleiben über lokale Zuordnung — **keine** LDAP-Gruppen-Autorisierung
 - Secrets können an Gruppen geteilt werden (pro Mitglied eigener Envelope) — siehe User Guide
+- **Neue Gruppenmitglieder:** Bei hinzugefügten Usern (Vault entsperrt) werden bestehende Gruppen-Freigaben clientseitig nachgeteilt; sonst beim nächsten Unlock eines Berechtigten (`GET /api/secrets/group-share-gaps`)
 
 ### 3.4 Zugriff & Proxy
 

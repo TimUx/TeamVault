@@ -128,8 +128,15 @@ async function onboardIfNeeded(page) {
 }
 
 async function seedSecrets(page) {
+  await page.evaluate(() => {
+    document.querySelectorAll('.sidebar-section[data-nav-section="vault"]').forEach((el) => {
+      el.classList.remove("collapsed");
+      const btn = el.querySelector(".sidebar-section-toggle");
+      if (btn) btn.setAttribute("aria-expanded", "true");
+    });
+  });
   await page.click('[data-nav="vault:create"]');
-  await page.waitForSelector("#stitle");
+  await page.waitForSelector("#stitle", { state: "visible", timeout: 30000 });
   await page.fill("#stitle", "GitHub");
   await page.fill("#stagsIn", "dev, github");
   await page.fill("#suser", "octocat");
@@ -253,6 +260,10 @@ async function main() {
   await page.click('[data-nav="account"]');
   await page.waitForSelector("#passkey", { timeout: 15000 });
   await shot(page, "account.png", { fullPage: true });
+  await page.click("#totp");
+  await page.waitForSelector("#otpQr svg, #otpurl", { timeout: 15000 }).catch(() => {});
+  await page.waitForTimeout(400);
+  await shot(page, "account-totp.png", { fullPage: true });
   const offlineOpt = page.locator("#offline_optin");
   if (await offlineOpt.count()) {
     await offlineOpt.check();
@@ -378,6 +389,9 @@ async function main() {
   await shot(page, "help.png", { fullPage: true });
   await page.goto(`${BASE}/help/vault`);
   await shot(page, "help-vault.png", { fullPage: true });
+  await page.goto(`${BASE}/help/account`);
+  await page.waitForSelector("#demoQr svg, #demoQr .hint", { timeout: 10000 }).catch(() => {});
+  await shot(page, "help-account.png", { fullPage: true });
   await page.goto(`${BASE}/help/extension`);
   await shot(page, "help-extension.png", { fullPage: true });
   await page.goto(`${BASE}/help/cli`);

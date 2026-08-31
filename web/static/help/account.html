@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>TOTP &amp; Passkeys – TeamVault Hilfe</title>
+  <link rel="stylesheet" href="/styles.css" />
+  <link rel="stylesheet" href="/help/help.css" />
+</head>
+<body class="help-body">
+  <a class="skip-link" href="#main">Zum Inhalt springen</a>
+  <div class="help-backdrop" id="helpBackdrop"></div>
+  <div class="help-frame">
+    <aside class="help-sidebar" id="helpSidebar"></aside>
+    <div class="help-content">
+      <header class="help-top">
+        <button type="button" class="btn-ghost help-menu-toggle" id="helpMenuToggle" aria-expanded="false" aria-controls="helpSidebar">Menü</button>
+        <div class="brand">Konto · TOTP &amp; Passkeys</div>
+        <div class="help-top-actions">
+          <a class="btn-ghost" href="/app" style="text-decoration:none;padding:.4rem .75rem">Zur App</a>
+        </div>
+      </header>
+      <main id="main" class="help-main">
+        <h1>TOTP und Passkeys</h1>
+        <p class="lead">Beide schützen nur den <strong>Login</strong>. Der Vault bleibt immer Master-Passwort-pflichtig (Zero-Knowledge).</p>
+
+        <nav class="help-toc" aria-label="Auf dieser Seite">
+          <a href="#totp">TOTP</a>
+          <a href="#passkeys">Passkeys</a>
+          <a href="#login">Beim Login</a>
+        </nav>
+
+        <figure class="help-figure">
+          <img src="/help/img/account.png" alt="Konto-Seite" width="1100" height="720" loading="lazy" />
+          <figcaption>Sidebar <strong>Konto</strong> — TOTP einrichten / Passkeys</figcaption>
+        </figure>
+
+        <h2 id="totp">TOTP einrichten (Authenticator-App)</h2>
+        <div class="help-step">
+          <h3>Ablauf</h3>
+          <ol>
+            <li>Anmelden, Vault entsperren → Sidebar <strong>Konto</strong>.</li>
+            <li><strong>TOTP einrichten</strong> klicken — der Server erzeugt ein Secret; der Browser zeigt einen <strong>QR-Code lokal</strong> (kein externes CDN) und die otpauth-URL.</li>
+            <li>Authenticator-App (Microsoft Authenticator, Google Authenticator, Aegis, …) öffnen → Konto hinzufügen → QR scannen <em>oder</em> Secret/otpauth manuell einfügen.</li>
+            <li>Den aktuellen 6-stelligen Code unter <strong>Code bestätigen</strong> eintragen → <strong>Aktivieren</strong>.</li>
+            <li>Beim nächsten Login erscheint das Feld <strong>TOTP</strong>.</li>
+          </ol>
+        </div>
+
+        <div class="help-step">
+          <h3>Beispiel: so sieht der QR aus</h3>
+          <p>Beispiel-otpauth (Demo-Secret, nicht produktiv):</p>
+          <code class="onedliner" id="demoOtp">otpauth://totp/TeamVault:max.mustermann?algorithm=SHA1&amp;digits=6&amp;issuer=TeamVault&amp;period=30&amp;secret=JBSWY3DPEHPK3PXP</code>
+          <div class="help-demo-qr" id="demoQr"></div>
+          <p class="help-note">In der App erscheint Ihr persönlicher QR neben der otpauth-URL. Nach dem Aktivieren wird das Secret nicht erneut angezeigt — bewahren Sie Backup-Codes Ihrer Authenticator-App sicher auf.</p>
+        </div>
+
+        <div class="help-step">
+          <h3>Was bedeutet die otpauth-URL?</h3>
+          <table class="help-kv">
+            <tr><th>issuer</th><td>TeamVault (Anzeigename in der App)</td></tr>
+            <tr><th>account</th><td>Ihr Username</td></tr>
+            <tr><th>secret</th><td>Base32-Schlüssel (nur einmal sichtbar)</td></tr>
+            <tr><th>period / digits</th><td>30 Sekunden, 6 Stellen (Standard)</td></tr>
+          </table>
+        </div>
+
+        <h2 id="passkeys">Passkeys registrieren</h2>
+        <div class="help-step">
+          <h3>Ablauf</h3>
+          <ol>
+            <li>Konto → <strong>Passkeys</strong>.</li>
+            <li>Namen vergeben (z.&nbsp;B. <code>Notebook Windows Hello</code>).</li>
+            <li><strong>Registrieren</strong> — Browser/OS-Dialog (PIN, Fingerabdruck, Sicherheitsschlüssel).</li>
+            <li>Der Passkey erscheint in der Liste; löschen ist jederzeit möglich.</li>
+          </ol>
+          <p class="help-note"><strong>Kein TeamVault-QR für Passkeys:</strong> Die Einrichtung läuft über WebAuthn im Browser. Wenn Sie ein Smartphone als Authenticator nutzen, kann <em>der Browser</em> einen eigenen QR anzeigen — das steuert nicht TeamVault.</p>
+        </div>
+
+        <div class="help-step">
+          <h3>Voraussetzungen</h3>
+          <ul>
+            <li>HTTPS (oder <code>localhost</code>)</li>
+            <li>Unterstützter Browser (Chrome, Edge, Safari, Firefox aktuell)</li>
+            <li>Öffentliche URL / Relying-Party muss zur Instanz passen (Admin: Zugriff &amp; Proxy)</li>
+          </ul>
+        </div>
+
+        <h2 id="login">Beim Login nutzen</h2>
+        <figure class="help-figure">
+          <img src="/help/img/login.png" alt="Login-Formular" width="1100" height="720" loading="lazy" />
+          <figcaption>Login: Organisation, Username, Passwort oder Passkey, optional TOTP</figcaption>
+        </figure>
+        <div class="help-step">
+          <ol>
+            <li><strong>Organisation</strong> wählen (bei mehreren Mandanten).</li>
+            <li>Mit <strong>Login-Passwort</strong> + ggf. <strong>TOTP</strong> — oder Button <strong>Passkey</strong>.</li>
+            <li>Danach Vault mit dem <strong>Master-Passwort</strong> entsperren (oder Onboarding beim ersten Mal).</li>
+          </ol>
+          <p class="help-note">Passkey ersetzt nur das Login — ohne Master-Passwort kein Vault-Zugriff.</p>
+        </div>
+
+        <footer class="help-foot" id="aboutFoot"></footer>
+      </main>
+    </div>
+  </div>
+  <script src="/help/tv-base.js"></script>
+  <script src="/help/nav.js"></script>
+  <script src="/help/qrcode.js"></script>
+  <script src="/help/account.js"></script>
+</body>
+</html>

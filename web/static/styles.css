@@ -774,6 +774,53 @@ body.admin-modal-open { overflow: hidden; }
 }
 .drag-user.in-group { background: var(--color-input-bg); }
 .drag-user.dragging { opacity: 0.45; cursor: grabbing; }
+
+/* Secret access dual panel */
+.access-panel { margin: 1rem 0 0.75rem; }
+.access-panel-title { margin: 0 0 0.25rem; font-size: 1rem; }
+.access-workspace {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+@media (max-width: 720px) {
+  .access-workspace { grid-template-columns: 1fr; }
+}
+.access-col input[type="search"] { margin: 0 0 0.5rem; width: 100%; }
+.access-list {
+  min-height: 7rem;
+  max-height: 14rem;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.access-chip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.4rem 0.55rem;
+  border-radius: var(--radius);
+  background: var(--color-muted);
+  border: 1px solid var(--color-border);
+  cursor: grab;
+  user-select: none;
+}
+.access-chip.owner { cursor: default; opacity: 0.9; }
+.access-chip.dragging { opacity: 0.45; }
+.access-chip .chip-meta { font-size: 0.75rem; color: var(--color-text-muted); }
+.access-chip button {
+  flex-shrink: 0;
+  padding: 0.15rem 0.45rem;
+  font-size: 0.8rem;
+}
+.access-list.drag-over {
+  border-color: var(--color-accent);
+  background: var(--color-hover);
+}
+
 .user-row-actions { margin-top: 0; gap: 0.35rem; }
 .users-toolbar {
   justify-content: space-between;
@@ -924,8 +971,31 @@ body.admin-modal-open { overflow: hidden; }
 .share-row select { flex: 1; min-width: 0; }
 .share-row .btn-sm { flex-shrink: 0; }
 .secrets-table .st-groups { color: var(--color-hint); }
+.secrets-table .st-share { width: 2.5rem; text-align: center; }
 .secrets-table .st-act { text-align: right; white-space: nowrap; }
 .secrets-table .st-fav .fav-ico { width: 0.95rem; height: 0.95rem; color: var(--color-accent); }
+
+.share-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--color-accent);
+  cursor: pointer;
+}
+.share-badge:hover {
+  background: var(--color-hover);
+  border-color: var(--color-border);
+}
+.share-badge .ico { width: 1.1rem; height: 1.1rem; }
+.share-badge-empty { color: var(--color-hint); opacity: 0.55; }
+.share-access-panel { max-width: 42rem; }
+.secret-tile-share { margin-left: auto; }
 
 .secrets-tiles {
   display: grid;
@@ -1043,6 +1113,45 @@ body.admin-modal-open { overflow: hidden; }
   background: var(--color-muted);
 }
 
+.tag-filter-wrap { min-width: 11rem; max-width: 18rem; }
+.tag-filter { position: relative; }
+.tag-filter-toggle { width: 100%; justify-content: flex-start; margin-top: 0.25rem; }
+.tag-filter-selected {
+  margin-top: 0.35rem;
+  min-height: 0;
+}
+.tag-filter-chip {
+  cursor: pointer;
+  background: var(--color-hover);
+  border-color: var(--color-accent);
+  color: inherit;
+  font: inherit;
+}
+.tag-filter-chip:hover { filter: brightness(0.97); }
+.tag-filter-menu {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 0.25rem);
+  left: 0;
+  right: 0;
+  min-width: 14rem;
+  max-height: 16rem;
+  overflow: auto;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+.tag-filter-hint { margin: 0 0 0.5rem; }
+.tag-filter-options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-bottom: 0.5rem;
+}
+.tag-filter-opt { margin: 0; gap: 0.4rem; align-items: center; }
+
 .lock-overlay {
   position: fixed;
   inset: 0;
@@ -1067,6 +1176,24 @@ body.admin-modal-open { overflow: hidden; }
 
 .preset-row { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0.5rem 0 0.75rem; }
 .secret-reveal[hidden] { display: none !important; }
+.totp-setup-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 1rem 1.25rem;
+  align-items: start;
+  margin: 0.75rem 0 1rem;
+}
+.totp-qr-wrap {
+  padding: 0.65rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: #fff;
+  width: fit-content;
+}
+.totp-qr-wrap svg { display: block; }
+@media (max-width: 720px) {
+  .totp-setup-grid { grid-template-columns: 1fr; }
+}
 
 @media (max-width: 900px) {
   .menu-toggle { display: inline-flex; align-items: center; }

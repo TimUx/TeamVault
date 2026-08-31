@@ -250,6 +250,35 @@ paths:
       responses:
         '200':
           description: ok
+  /api/secrets/{id}/access:
+    get:
+      tags: [secrets]
+      summary: Owner, explicit shares, and available share targets
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: access panel payload
+  /api/secrets/group-share-gaps:
+    get:
+      tags: [secrets]
+      summary: Group-shared secrets missing envelopes for members (caller must have access)
+      description: |
+        Used to auto-reseal after new group membership. Optional filters group_id, user_id.
+        Response includes the caller's envelope so the client can open the data key (ZK).
+      parameters:
+        - name: group_id
+          in: query
+          schema: { type: string }
+        - name: user_id
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: items to reseal
   /api/secrets/{id}/rotate:
     post:
       tags: [secrets]
@@ -257,6 +286,7 @@ paths:
       description: |
         Atomically invalidates the previous key_version, updates title/ciphertext,
         and writes new envelopes. Request must include at least one valid envelope;
+        optional drop_user_ids / drop_group_ids clear explicit share metadata after rotation.
         invalid envelopes are rejected before mutation.
       parameters:
         - name: id

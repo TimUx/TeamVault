@@ -17,6 +17,7 @@ func (a *API) registerPhase12(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/admin/groups/{id}/members/public-keys", a.requireAuth(a.requireTenantAdminOrAuditor(a.handleGroupMemberPublicKeys)))
 	mux.HandleFunc("GET /api/groups/{id}/member-keys", a.requireAuth(a.requireOnboarded(a.handleGroupMemberKeysForShare)))
 	mux.HandleFunc("GET /api/secrets/{id}/group-member-keys", a.requireAuth(a.requireOnboarded(a.handleSecretGroupMemberKeys)))
+	mux.HandleFunc("GET /api/secrets/group-share-gaps", a.requireAuth(a.requireOnboarded(a.handleGroupShareGaps)))
 	mux.HandleFunc("POST /api/secrets/{id}/share-group", a.requireAuth(a.requireOnboarded(a.handleShareGroup)))
 }
 
@@ -134,6 +135,128 @@ func (a *API) writeGroupMemberPublicKeys(w http.ResponseWriter, r *http.Request,
 	writeJSON(w, http.StatusOK, out)
 }
 
+// handleGroupShareGaps lists secrets the caller can open that are shared with a group
+// whose member still lacks an envelope. Client seals envelopes (zero-knowledge).
+// Optional query: group_id, user_id.
+func (a *API) handleGroupShareGaps(w http.ResponseWriter, r *http.Request) {
+	sess, _ := a.sessionFrom(r)
+	filterGroup := store.GroupID(strings.TrimSpace(r.URL.Query().Get("group_id")))
+	filterUser := store.UserID(strings.TrimSpace(r.URL.Query().Get("user_id")))
+
+	var shares []store.SecretGroupShare
+	var err error
+	if filterGroup != "" {
+		shares, err = a.App.Vault.ListSecretGroupSharesByGroup(r.Context(), sess.TenantID, filterGroup)
+	} else {
+		shares, err = a.App.Vault.ListSecretGroupSharesByTenant(r.Context(), sess.TenantID)
+	}
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if len(shares) == 0 {
+		writeJSON(w, http.StatusOK, map[string]any{"items": []any{}})
+		return
+	}
+
+	allEnvs, err := a.App.Vault.ListKeyEnvelopesByTenant(r.Context(), sess.TenantID)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	envsBySecret := map[store.SecretID][]store.KeyEnvelope{}
+	for i := range allEnvs {
+		e := allEnvs[i]
+		envsBySecret[e.SecretID] = append(envsBySecret[e.SecretID], e)
+	}
+	versions, err := a.App.Vault.ListSecretKeyVersions(r.Context(), sess.TenantID)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	type envOut struct {
+		EphemeralPubB64 string `json:"ephemeral_pub_b64"`
+		NonceB64        string `json:"nonce_b64"`
+		WrappedDKB64    string `json:"wrapped_dk_b64"`
+		KeyVersion      uint32 `json:"key_version"`
+	}
+	type gap struct {
+		SecretID       string  `json:"secret_id"`
+		GroupID        string  `json:"group_id"`
+		UserID         string  `json:"user_id"`
+		Username       string  `json:"username"`
+		PublicKeyB64   string  `json:"public_key_b64"`
+		KeyVersion     uint32  `json:"key_version"`
+		Envelope       *envOut `json:"envelope"`
+	}
+
+	membersCache := map[store.GroupID][]store.UserID{}
+	userCache := map[store.UserID]*store.UserRecord{}
+	var items []gap
+
+	for _, sh := range shares {
+		envs := envsBySecret[sh.SecretID]
+		var mine *store.KeyEnvelope
+		hasUser := map[store.UserID]bool{}
+		for i := range envs {
+			hasUser[envs[i].UserID] = true
+			if envs[i].UserID == sess.UserID {
+				mine = &envs[i]
+			}
+		}
+		if mine == nil || len(mine.WrappedDK) < 32+24 {
+			continue
+		}
+		members, ok := membersCache[sh.GroupID]
+		if !ok {
+			members, err = a.App.Vault.ListGroupMembers(r.Context(), sess.TenantID, sh.GroupID)
+			if err != nil {
+				continue
+			}
+			membersCache[sh.GroupID] = members
+		}
+		kv := versions[sh.SecretID]
+		if kv == 0 {
+			kv = mine.KeyVersion
+		}
+		eph, nonce, ct := mine.WrappedDK[:32], mine.WrappedDK[32:56], mine.WrappedDK[56:]
+		callerEnv := &envOut{
+			EphemeralPubB64: base64.StdEncoding.EncodeToString(eph),
+			NonceB64:        base64.StdEncoding.EncodeToString(nonce),
+			WrappedDKB64:    base64.StdEncoding.EncodeToString(ct),
+			KeyVersion:      mine.KeyVersion,
+		}
+		for _, mid := range members {
+			if filterUser != "" && mid != filterUser {
+				continue
+			}
+			if hasUser[mid] {
+				continue
+			}
+			u, ok := userCache[mid]
+			if !ok {
+				u, err = a.App.Vault.GetUser(r.Context(), sess.TenantID, mid)
+				if err != nil {
+					userCache[mid] = nil
+					continue
+				}
+				userCache[mid] = u
+			}
+			if u == nil || u.OnboardedAt == nil || len(u.PublicKey) == 0 || u.Status == "disabled" {
+				continue
+			}
+			items = append(items, gap{
+				SecretID: string(sh.SecretID), GroupID: string(sh.GroupID),
+				UserID: string(mid), Username: u.Username,
+				PublicKeyB64: base64.StdEncoding.EncodeToString(u.PublicKey),
+				KeyVersion: kv, Envelope: callerEnv,
+			})
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items})
+}
+
 func (a *API) handleShareGroup(w http.ResponseWriter, r *http.Request) {
 	sess, _ := a.sessionFrom(r)
 	id := store.SecretID(r.PathValue("id"))
@@ -193,6 +316,14 @@ func (a *API) handleShareGroup(w http.ResponseWriter, r *http.Request) {
 				writeErr(w, http.StatusConflict, "cannot revive revoked envelope")
 				return
 			}
+			writeErr(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
+	if body.GroupID != "" {
+		if err := a.App.Vault.PutSecretGroupShare(r.Context(), store.SecretGroupShare{
+			TenantID: sess.TenantID, SecretID: id, GroupID: store.GroupID(body.GroupID),
+		}); err != nil {
 			writeErr(w, http.StatusInternalServerError, err.Error())
 			return
 		}

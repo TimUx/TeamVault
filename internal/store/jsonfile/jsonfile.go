@@ -30,15 +30,17 @@ type envelopeRec struct {
 }
 
 type persistence struct {
-	Tenants   map[string]store.Tenant         `json:"tenants"`
-	Users     map[string]store.UserRecord     `json:"users"`
-	Secrets   map[string]store.SecretMeta     `json:"secrets"`
-	Blobs     map[string]store.CiphertextBlob `json:"blobs"`
-	Envelopes []envelopeRec                   `json:"envelopes"`
-	Audit     []store.AuditEvent              `json:"audit"`
-	Groups    map[string]store.Group          `json:"groups"`
-	Members   []store.GroupMember             `json:"members"`
-	WebAuthn  []store.WebAuthnCredential      `json:"webauthn"`
+	Tenants      map[string]store.Tenant         `json:"tenants"`
+	Users        map[string]store.UserRecord     `json:"users"`
+	Secrets      map[string]store.SecretMeta     `json:"secrets"`
+	Blobs        map[string]store.CiphertextBlob `json:"blobs"`
+	Envelopes    []envelopeRec                   `json:"envelopes"`
+	Audit        []store.AuditEvent              `json:"audit"`
+	Groups       map[string]store.Group          `json:"groups"`
+	Members      []store.GroupMember             `json:"members"`
+	WebAuthn     []store.WebAuthnCredential      `json:"webauthn"`
+	DirectShares []store.SecretDirectShare       `json:"direct_shares"`
+	GroupShares  []store.SecretGroupShare        `json:"group_shares"`
 }
 
 type Store struct {
@@ -95,6 +97,12 @@ func normalize(p *persistence) {
 	}
 	if p.Groups == nil {
 		p.Groups = map[string]store.Group{}
+	}
+	if p.DirectShares == nil {
+		p.DirectShares = []store.SecretDirectShare{}
+	}
+	if p.GroupShares == nil {
+		p.GroupShares = []store.SecretGroupShare{}
 	}
 }
 
@@ -394,6 +402,13 @@ func (s *Store) DeleteGroup(_ context.Context, tenant store.TenantID, id store.G
 		}
 	}
 	s.data.Members = mem
+	var gs []store.SecretGroupShare
+	for _, sh := range s.data.GroupShares {
+		if !(sh.TenantID == tenant && sh.GroupID == id) {
+			gs = append(gs, sh)
+		}
+	}
+	s.data.GroupShares = gs
 	return s.flush()
 }
 
@@ -489,6 +504,20 @@ func (s *Store) DeleteSecret(_ context.Context, tenant store.TenantID, id store.
 		}
 	}
 	s.data.Envelopes = envs
+	var ds []store.SecretDirectShare
+	for _, sh := range s.data.DirectShares {
+		if !(sh.TenantID == tenant && sh.SecretID == id) {
+			ds = append(ds, sh)
+		}
+	}
+	s.data.DirectShares = ds
+	var gs []store.SecretGroupShare
+	for _, sh := range s.data.GroupShares {
+		if !(sh.TenantID == tenant && sh.SecretID == id) {
+			gs = append(gs, sh)
+		}
+	}
+	s.data.GroupShares = gs
 	return s.flush()
 }
 
@@ -710,6 +739,149 @@ func (s *Store) CreateSecret(_ context.Context, meta store.SecretMeta, blob stor
 	return s.flush()
 }
 
+func (s *Store) PutSecretDirectShare(_ context.Context, share store.SecretDirectShare) error {
+	if err := requireTenant(share.TenantID); err != nil {
+		return err
+	}
+	if share.SecretID == "" || share.UserID == "" {
+		return errors.New("secret_id and user_id required")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, sh := range s.data.DirectShares {
+		if sh.TenantID == share.TenantID && sh.SecretID == share.SecretID && sh.UserID == share.UserID {
+			return nil
+		}
+	}
+	s.data.DirectShares = append(s.data.DirectShares, share)
+	return s.flush()
+}
+
+func (s *Store) DeleteSecretDirectShare(_ context.Context, tenant store.TenantID, secret store.SecretID, user store.UserID) error {
+	if err := requireTenant(tenant); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var out []store.SecretDirectShare
+	for _, sh := range s.data.DirectShares {
+		if !(sh.TenantID == tenant && sh.SecretID == secret && sh.UserID == user) {
+			out = append(out, sh)
+		}
+	}
+	s.data.DirectShares = out
+	return s.flush()
+}
+
+func (s *Store) ListSecretDirectShares(_ context.Context, tenant store.TenantID, secret store.SecretID) ([]store.SecretDirectShare, error) {
+	if err := requireTenant(tenant); err != nil {
+		return nil, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var out []store.SecretDirectShare
+	for _, sh := range s.data.DirectShares {
+		if sh.TenantID == tenant && sh.SecretID == secret {
+			out = append(out, sh)
+		}
+	}
+	return out, nil
+}
+
+func (s *Store) ListSecretDirectSharesByTenant(_ context.Context, tenant store.TenantID) ([]store.SecretDirectShare, error) {
+	if err := requireTenant(tenant); err != nil {
+		return nil, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var out []store.SecretDirectShare
+	for _, sh := range s.data.DirectShares {
+		if sh.TenantID == tenant {
+			out = append(out, sh)
+		}
+	}
+	return out, nil
+}
+
+func (s *Store) PutSecretGroupShare(_ context.Context, share store.SecretGroupShare) error {
+	if err := requireTenant(share.TenantID); err != nil {
+		return err
+	}
+	if share.SecretID == "" || share.GroupID == "" {
+		return errors.New("secret_id and group_id required")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, sh := range s.data.GroupShares {
+		if sh.TenantID == share.TenantID && sh.SecretID == share.SecretID && sh.GroupID == share.GroupID {
+			return nil
+		}
+	}
+	s.data.GroupShares = append(s.data.GroupShares, share)
+	return s.flush()
+}
+
+func (s *Store) DeleteSecretGroupShare(_ context.Context, tenant store.TenantID, secret store.SecretID, group store.GroupID) error {
+	if err := requireTenant(tenant); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var out []store.SecretGroupShare
+	for _, sh := range s.data.GroupShares {
+		if !(sh.TenantID == tenant && sh.SecretID == secret && sh.GroupID == group) {
+			out = append(out, sh)
+		}
+	}
+	s.data.GroupShares = out
+	return s.flush()
+}
+
+func (s *Store) ListSecretGroupShares(_ context.Context, tenant store.TenantID, secret store.SecretID) ([]store.SecretGroupShare, error) {
+	if err := requireTenant(tenant); err != nil {
+		return nil, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var out []store.SecretGroupShare
+	for _, sh := range s.data.GroupShares {
+		if sh.TenantID == tenant && sh.SecretID == secret {
+			out = append(out, sh)
+		}
+	}
+	return out, nil
+}
+
+func (s *Store) ListSecretGroupSharesByTenant(_ context.Context, tenant store.TenantID) ([]store.SecretGroupShare, error) {
+	if err := requireTenant(tenant); err != nil {
+		return nil, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var out []store.SecretGroupShare
+	for _, sh := range s.data.GroupShares {
+		if sh.TenantID == tenant {
+			out = append(out, sh)
+		}
+	}
+	return out, nil
+}
+
+func (s *Store) ListSecretGroupSharesByGroup(_ context.Context, tenant store.TenantID, group store.GroupID) ([]store.SecretGroupShare, error) {
+	if err := requireTenant(tenant); err != nil {
+		return nil, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var out []store.SecretGroupShare
+	for _, sh := range s.data.GroupShares {
+		if sh.TenantID == tenant && sh.GroupID == group {
+			out = append(out, sh)
+		}
+	}
+	return out, nil
+}
+
 func (s *Store) AppendAudit(_ context.Context, e store.AuditEvent) error {
 	if err := requireTenant(e.TenantID); err != nil {
 		return err
@@ -829,6 +1001,16 @@ func (s *Store) appendTenantSnapshotLocked(rec *store.SnapshotRecords, tid store
 		}
 		rec.Secrets = append(rec.Secrets, store.SnapshotSecret{Meta: meta, Blob: blobPtr, Envs: envs})
 	}
+	for _, sh := range s.data.DirectShares {
+		if sh.TenantID == tid {
+			rec.DirectShares = append(rec.DirectShares, sh)
+		}
+	}
+	for _, sh := range s.data.GroupShares {
+		if sh.TenantID == tid {
+			rec.GroupShares = append(rec.GroupShares, sh)
+		}
+	}
 }
 
 func (s *Store) wipeTenantLocked(tid store.TenantID) {
@@ -870,6 +1052,20 @@ func (s *Store) wipeTenantLocked(tid store.TenantID) {
 		}
 	}
 	s.data.WebAuthn = wa
+	var ds []store.SecretDirectShare
+	for _, sh := range s.data.DirectShares {
+		if sh.TenantID != tid {
+			ds = append(ds, sh)
+		}
+	}
+	s.data.DirectShares = ds
+	var gs []store.SecretGroupShare
+	for _, sh := range s.data.GroupShares {
+		if sh.TenantID != tid {
+			gs = append(gs, sh)
+		}
+	}
+	s.data.GroupShares = gs
 	var audit []store.AuditEvent
 	for _, e := range s.data.Audit {
 		if e.TenantID != tid {
@@ -920,6 +1116,12 @@ func (s *Store) ImportSnapshot(_ context.Context, snap store.StoreSnapshot, mode
 		for _, env := range sec.Envs {
 			s.data.Envelopes = append(s.data.Envelopes, envelopeRec{KeyEnvelope: env})
 		}
+	}
+	for _, sh := range rec.DirectShares {
+		s.data.DirectShares = append(s.data.DirectShares, sh)
+	}
+	for _, sh := range rec.GroupShares {
+		s.data.GroupShares = append(s.data.GroupShares, sh)
 	}
 	return s.flush()
 }
