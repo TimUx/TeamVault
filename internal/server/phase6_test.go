@@ -46,12 +46,36 @@ func TestPhase6AdminConfigAuditAPIKeysMigrate(t *testing.T) {
 	}
 
 	putJSONCookie(t, ts.URL+"/api/admin/ldap", map[string]any{
-		"enabled": false, "host": "ldap.example.invalid", "port": 389,
+		"enabled": false, "host": "ldap.example.invalid", "port": 636,
 		"base_dn": "dc=ex", "bind_dn": "cn=svc", "bind_password": "secret-bind",
+		"use_tls": true, "insecure_skip_verify": true,
 	}, jar)
 	ldap := getJSONCookie(t, ts.URL+"/api/admin/ldap", jar)
 	if ldap["bind_password"] != "***" {
 		t.Fatalf("ldap password not redacted: %v", ldap)
+	}
+	if ldap["insecure_skip_verify"] != true || ldap["use_tls"] != true {
+		t.Fatalf("ldap tls flags: %v", ldap)
+	}
+
+	trust := getJSONCookie(t, ts.URL+"/api/admin/trust", jar)
+	if trust["present"] == true {
+		t.Fatalf("expected empty trust store: %v", trust)
+	}
+	putJSONCookie(t, ts.URL+"/api/admin/trust", map[string]any{"ca_cert_pem": ""}, jar)
+	bad := map[string]any{"ca_cert_pem": "not-a-certificate"}
+	raw, _ := json.Marshal(bad)
+	trustReq, _ := http.NewRequest(http.MethodPut, ts.URL+"/api/admin/trust", bytes.NewReader(raw))
+	trustReq.Header.Set("Content-Type", "application/json")
+	setTestOrigin(trustReq)
+	trustReq.AddCookie(&http.Cookie{Name: "tv_session", Value: jar.m["tv_session"]})
+	trustRes, trustErr := http.DefaultClient.Do(trustReq)
+	if trustErr != nil {
+		t.Fatal(trustErr)
+	}
+	_ = trustRes.Body.Close()
+	if trustRes.StatusCode < 400 {
+		t.Fatalf("invalid CA PEM should fail, got %d", trustRes.StatusCode)
 	}
 
 	putJSONCookie(t, ts.URL+"/api/admin/mail", map[string]any{

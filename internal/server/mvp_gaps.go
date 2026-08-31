@@ -29,11 +29,11 @@ func (a *API) registerMVPGaps(mux *http.ServeMux) {
 func (a *API) handleClientPolicy(w http.ResponseWriter, r *http.Request) {
 	p := a.bundle().Policy
 	writeJSON(w, http.StatusOK, map[string]any{
-		"session_hours":        p.SessionHours,
-		"unlock_idle_minutes":  p.UnlockIdleMinutes,
-		"totp_required":        p.TOTPRequired,
-		"escrow_shamir_k":      p.EscrowShamirK,
-		"escrow_shamir_n":      p.EscrowShamirN,
+		"session_hours":       p.SessionHours,
+		"unlock_idle_minutes": p.UnlockIdleMinutes,
+		"totp_required":       p.TOTPRequired,
+		"escrow_shamir_k":     p.EscrowShamirK,
+		"escrow_shamir_n":     p.EscrowShamirN,
 	})
 }
 
@@ -74,6 +74,11 @@ func (a *API) handlePutLDAPConn(w http.ResponseWriter, r *http.Request) {
 				break
 			}
 		}
+	}
+	body.CACertPEM = ""
+	if err := ldapauth.ValidateTLS(body.Config); err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
 	}
 	found := false
 	for i := range b.LDAPConnections {
@@ -259,7 +264,7 @@ func (a *API) maybeMailInvite(u store.UserRecord, tenant store.TenantID) {
 	if ten != nil {
 		slug = ten.Slug
 	}
-	_ = mailer.Send(b.Mail, u.Email,
+	_ = mailer.Send(b.Mail, b.CACertPEM, u.Email,
 		mailer.Render(b.MailTemplates.InviteSubject, u.Username, slug),
 		mailer.Render(b.MailTemplates.InviteBody, u.Username, slug),
 	)
@@ -275,14 +280,15 @@ func (a *API) maybeMailDisabled(u store.UserRecord, tenant store.TenantID) {
 	if ten != nil {
 		slug = ten.Slug
 	}
-	_ = mailer.Send(b.Mail, u.Email,
+	_ = mailer.Send(b.Mail, b.CACertPEM, u.Email,
 		mailer.Render(b.MailTemplates.DisabledSubject, u.Username, slug),
 		mailer.Render(b.MailTemplates.DisabledBody, u.Username, slug),
 	)
 }
 
 func (a *API) ldapConfigFor(tenant store.TenantID) ldapauth.Config {
-	return a.bundle().LDAPForTenant(string(tenant))
+	b := a.bundle()
+	return b.WithTrust(b.LDAPForTenant(string(tenant)))
 }
 
 // --- login rate limit (in-memory; Prinzip: no secrets in logs) ---

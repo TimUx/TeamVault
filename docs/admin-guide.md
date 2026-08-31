@@ -150,28 +150,40 @@ Kein Zugriff auf Master-Passwort, Private Keys oder Recovery-Kit-Klartext.
 - Rechte/Sharing bleiben über lokale Zuordnung — **keine** LDAP-Gruppen-Autorisierung
 - Secrets können an Gruppen geteilt werden (pro Mitglied eigener Envelope) — siehe User Guide
 
-### 3.3 LDAP / AD
+### 3.3 Firmen-CA
+
+Sidebar **Administration → Firmen-CA**:
+
+- Instanzweites Root-/Zwischen-CA-Bundle (PEM), verschlüsselt in der Config
+- Wird für **LDAPS**, **SMTP** und künftige TLS-Clients (interne Dienste) verwendet
+- Behebt `certificate signed by unknown authority` bei eigener PKI, ohne die Prüfung zu deaktivieren
+
+### 3.4 LDAP / AD
 
 Sidebar **Administration → LDAP**:
 
 - Optional, **nur Login-Bind** (nie Autorisierung)
 - Felder: Host, Port, Base DN, Bind DN/Passwort, User-Filter
-- Test-Bind, Speichern, LDAP-Sync (fehlende → lokal disabled)
+- **LDAPS / TLS** (üblich Port 636). Der Hostname muss zum Zertifikat (CN/SAN) passen.
+- TLS-Vertrauen über die zentrale Firmen-CA (nicht hier hochladen)
+- **TLS-Zertifikatsfehler ignorieren:** unsichere Notlösung, wenn keine CA hinterlegt werden kann (Hostname und Signatur werden nicht geprüft).
+- Test-Bind (nutzt die aktuellen Formularwerte, auch ungespeicherte), Speichern, LDAP-Sync (fehlende → lokal disabled)
 - Just-in-Time: erster erfolgreicher LDAP-Login legt lokalen User an (`auth_backend=ldap`)
 
-### 3.4 SMTP
+### 3.5 SMTP
 
 - Outbound-Mail (Einladungen/Hinweise je nach Ausbau)
 - Host, Port, From, Credentials; Test-Button
+- SMTP-TLS nutzt dieselbe Firmen-CA
 
-### 3.5 Krypto & Policy
+### 3.6 Krypto & Policy
 
 - Argon2-Defaults / Presets für neue Onboardings
 - TOTP-Pflicht (Hinweis/Policy nach Login)
 - Idle-Lock der Vault-Session (Default 15 min) — nur Client-Unlock
 - **Admins: Secret-Liste nur mit Envelope** (`admin_secrets_envelope_only`): Wenn aktiv, sehen Tenant-Admins in der Secret-Liste nur Einträge, für die sie selbst ein Envelope haben (Inventar-Metadaten anderer Secrets ausgeblendet). Default: aus — Admins sehen alle Secret-Metadaten (IDs, Title-Ciphertext), Klartext bleibt Zero-Knowledge-geschützt.
 
-### 3.6 Escrow & Shamir
+### 3.7 Escrow & Shamir
 
 Wenn Recovery-Modus Escrow erlaubt (Wizard-Schritt Recovery bzw. später umschalten mit Bestätigung `REONBOARD`):
 
@@ -186,7 +198,7 @@ Wenn Recovery-Modus Escrow erlaubt (Wizard-Schritt Recovery bzw. später umschal
 
 Der private Escrow-Key darf nie in Logs oder dauerhaft auf dem Server landen.
 
-### 3.7 Audit & API-Keys
+### 3.8 Audit & API-Keys
 
 ![API-Keys](images/admin-apikeys.png)
 
@@ -204,7 +216,7 @@ Der private Escrow-Key darf nie in Logs oder dauerhaft auf dem Server landen.
 - Nach User-Disable: Secrets mit Envelope dieses Users rotieren (Hinweis + Liste `accessible-secrets` in Admin-UI; kein Auto-Rotate wegen ZK)
 - Tenant-Admins sehen standardmäßig in der Secret-Liste **Metadaten** (IDs, Title-Ciphertext) auch ohne eigenen Envelope — optional einschränkbar über Policy (siehe §3.5)
 
-### 3.8 Tenants, Storage-Migration & Instanz-Backup (`platform_admin`)
+### 3.9 Tenants, Storage-Migration & Instanz-Backup (`platform_admin`)
 
 - Weitere Tenants anlegen
 - Migration SQLite ↔ JSON: nur Ciphertext; Bestätigung `MIGRATE`
@@ -301,6 +313,7 @@ Sessions, Login-Rate-Limits und Passkey-Challenges liegen **im Prozessspeicher**
 | Start schlägt fehl „permission denied“ Unlock-Key | Datei von Container-UID lesbar? `chmod 700 secrets && chmod 644 secrets/teamvault_unlock` (Image = nonroot) |
 | GHCR-Pull fehlgeschlagen | `docker login ghcr.io`; Image `ghcr.io/timux/teamvault` sichtbar? Sonst lokal bauen (`docker-compose.build.yml`) |
 | LDAP-Login fehl | Test-Bind; Filter; User lokal nicht disabled |
+| LDAP TLS `unknown authority` | Firmen-Root-CA unter Administration → Firmen-CA hochladen; Host = Zertifikatsname; nur notfalls „TLS-Zertifikatsfehler ignorieren“ |
 | Passkey funktioniert nicht | HTTPS, RP-ID, Browser-Support |
 | Vault „Idle gesperrt“ | Erneut Master-Passwort; Idle-Minuten in Policy |
 | Cookie-POST „origin check failed“ | Proxy leitet Origin durch? |

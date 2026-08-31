@@ -6,14 +6,18 @@ import (
 	"strings"
 
 	ldap "github.com/go-ldap/ldap/v3"
+	"github.com/teamvault/teamvault/internal/tlsutil"
 )
 
 // Config for optional LDAP bind authentication.
 type Config struct {
-	Enabled      bool   `json:"enabled"`
-	Host         string `json:"host"`
-	Port         int    `json:"port"`
-	UseTLS       bool   `json:"use_tls"`
+	Enabled            bool   `json:"enabled"`
+	Host               string `json:"host"`
+	Port               int    `json:"port"`
+	UseTLS             bool   `json:"use_tls"`
+	InsecureSkipVerify bool   `json:"insecure_skip_verify"`
+	// CACertPEM is filled from the instance trust store at dial time; not edited per LDAP form.
+	CACertPEM    string `json:"ca_cert_pem,omitempty"`
 	BindDN       string `json:"bind_dn"`
 	BindPassword string `json:"bind_password"`
 	BaseDN       string `json:"base_dn"`
@@ -29,21 +33,7 @@ func Authenticate(cfg Config, username, password string) (dn string, err error) 
 	if cfg.Host == "" || username == "" || password == "" {
 		return "", fmt.Errorf("invalid ldap credentials")
 	}
-	port := cfg.Port
-	if port == 0 {
-		if cfg.UseTLS {
-			port = 636
-		} else {
-			port = 389
-		}
-	}
-	addr := fmt.Sprintf("%s:%d", cfg.Host, port)
-	var conn *ldap.Conn
-	if cfg.UseTLS {
-		conn, err = ldap.DialTLS("tcp", addr, &tls.Config{MinVersion: tls.VersionTLS12, ServerName: cfg.Host})
-	} else {
-		conn, err = ldap.DialURL(fmt.Sprintf("ldap://%s", addr))
-	}
+	conn, err := dial(cfg)
 	if err != nil {
 		return "", err
 	}
@@ -86,22 +76,7 @@ func UserExists(cfg Config, username string) (bool, error) {
 	if cfg.Host == "" || username == "" {
 		return false, fmt.Errorf("invalid ldap config")
 	}
-	port := cfg.Port
-	if port == 0 {
-		if cfg.UseTLS {
-			port = 636
-		} else {
-			port = 389
-		}
-	}
-	addr := fmt.Sprintf("%s:%d", cfg.Host, port)
-	var conn *ldap.Conn
-	var err error
-	if cfg.UseTLS {
-		conn, err = ldap.DialTLS("tcp", addr, &tls.Config{MinVersion: tls.VersionTLS12, ServerName: cfg.Host})
-	} else {
-		conn, err = ldap.DialURL(fmt.Sprintf("ldap://%s", addr))
-	}
+	conn, err := dial(cfg)
 	if err != nil {
 		return false, err
 	}
@@ -135,6 +110,31 @@ func TestServiceBind(cfg Config) error {
 	if cfg.Host == "" {
 		return fmt.Errorf("host required")
 	}
+	conn, err := dial(cfg)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	if cfg.BindDN == "" {
+		return nil
+	}
+	return conn.Bind(cfg.BindDN, cfg.BindPassword)
+}
+
+// ValidateTLS checks optional per-connection CA PEM. Prefer the instance trust store.
+func ValidateTLS(cfg Config) error {
+	return tlsutil.ValidatePEM(cfg.CACertPEM)
+}
+
+// TLSConfig builds the client TLS settings for LDAPS.
+func TLSConfig(cfg Config) (*tls.Config, error) {
+	return tlsutil.ClientConfig(cfg.Host, cfg.CACertPEM, cfg.InsecureSkipVerify)
+}
+
+func dial(cfg Config) (*ldap.Conn, error) {
+	if cfg.Host == "" {
+		return nil, fmt.Errorf("host required")
+	}
 	port := cfg.Port
 	if port == 0 {
 		if cfg.UseTLS {
@@ -144,19 +144,12 @@ func TestServiceBind(cfg Config) error {
 		}
 	}
 	addr := fmt.Sprintf("%s:%d", cfg.Host, port)
-	var conn *ldap.Conn
-	var err error
-	if cfg.UseTLS {
-		conn, err = ldap.DialTLS("tcp", addr, &tls.Config{MinVersion: tls.VersionTLS12, ServerName: cfg.Host})
-	} else {
-		conn, err = ldap.DialURL(fmt.Sprintf("ldap://%s", addr))
+	if !cfg.UseTLS {
+		return ldap.DialURL(fmt.Sprintf("ldap://%s", addr))
 	}
+	tlsCfg, err := TLSConfig(cfg)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	defer conn.Close()
-	if cfg.BindDN == "" {
-		return nil
-	}
-	return conn.Bind(cfg.BindDN, cfg.BindPassword)
+	return ldap.DialTLS("tcp", addr, tlsCfg)
 }

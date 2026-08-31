@@ -294,19 +294,32 @@ paths:
       responses:
         '200':
           description: storage, ldap, tenants, …
+  /api/admin/trust:
+    get:
+      tags: [admin]
+      summary: Instance company-root CA (PEM)
+      responses:
+        '200':
+          description: ca_cert_pem, present, cert_count
+    put:
+      tags: [admin]
+      summary: Replace instance company-root CA bundle
+      responses:
+        '200':
+          description: Saved PEM (empty clears)
   /api/admin/ldap:
     get:
       tags: [admin]
       summary: LDAP config (password redacted)
       responses:
         '200':
-          description: LDAP config
+          description: LDAP config including use_tls, insecure_skip_verify
     put:
       tags: [admin]
       summary: Update LDAP config
       responses:
         '200':
-          description: Saved (redacted)
+          description: Saved (password redacted)
   /api/admin/mail:
     get:
       tags: [admin]

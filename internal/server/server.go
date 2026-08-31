@@ -487,14 +487,14 @@ func (a *API) handleCryptoParams(w http.ResponseWriter, r *http.Request) {
 }
 
 type onboardReq struct {
-	PublicKey                   string `json:"public_key_b64"`
-	EncryptedPrivateKey         string `json:"encrypted_private_key_b64"`
-	EncryptedPrivateKeyNonce    string `json:"encrypted_private_key_nonce_b64"`
-	Salt                        string `json:"salt_b64"`
-	EncryptedPrivateKeyRecovery string `json:"encrypted_private_key_recovery_b64"`
-	RecoveryNonce               string `json:"recovery_nonce_b64"`
-	RecoverySalt                string `json:"recovery_salt_b64"`
-	EscrowEnvelope              string `json:"escrow_envelope_b64"`
+	PublicKey                   string                  `json:"public_key_b64"`
+	EncryptedPrivateKey         string                  `json:"encrypted_private_key_b64"`
+	EncryptedPrivateKeyNonce    string                  `json:"encrypted_private_key_nonce_b64"`
+	Salt                        string                  `json:"salt_b64"`
+	EncryptedPrivateKeyRecovery string                  `json:"encrypted_private_key_recovery_b64"`
+	RecoveryNonce               string                  `json:"recovery_nonce_b64"`
+	RecoverySalt                string                  `json:"recovery_salt_b64"`
+	EscrowEnvelope              string                  `json:"escrow_envelope_b64"`
 	Argon2                      cryptocore.Argon2Params `json:"argon2"`
 }
 
@@ -585,10 +585,10 @@ func (a *API) handleVaultKeys(w http.ResponseWriter, r *http.Request) {
 	}
 	salt, nonce, ct := u.EncryptedPrivateKey[:16], u.EncryptedPrivateKey[16:40], u.EncryptedPrivateKey[40:]
 	writeJSON(w, http.StatusOK, map[string]any{
-		"public_key_b64":                 base64.StdEncoding.EncodeToString(u.PublicKey),
-		"salt_b64":                       base64.StdEncoding.EncodeToString(salt),
+		"public_key_b64":                  base64.StdEncoding.EncodeToString(u.PublicKey),
+		"salt_b64":                        base64.StdEncoding.EncodeToString(salt),
 		"encrypted_private_key_nonce_b64": base64.StdEncoding.EncodeToString(nonce),
-		"encrypted_private_key_b64":      base64.StdEncoding.EncodeToString(ct),
+		"encrypted_private_key_b64":       base64.StdEncoding.EncodeToString(ct),
 	})
 }
 
@@ -868,7 +868,8 @@ func (a *API) handleEscrowPubKey(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) ldapConfig() ldapauth.Config {
-	return a.bundle().LDAP
+	b := a.bundle()
+	return b.WithTrust(b.LDAP)
 }
 
 func (a *API) sessionFrom(r *http.Request) (session.Session, bool) {
@@ -917,7 +918,7 @@ func (a *API) sessionFromAPIKey(r *http.Request, token string) (session.Session,
 	_ = json.Unmarshal([]byte(u.RolesJSON), &roles)
 	return session.Session{
 		ID: "apk:" + rec.ID, UserID: u.ID, TenantID: u.TenantID, Username: u.Username, Roles: roles,
-		Scopes: append([]string{}, rec.Scopes...),
+		Scopes:    append([]string{}, rec.Scopes...),
 		ExpiresAt: time.Now().UTC().Add(24 * time.Hour),
 	}, true
 }

@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"strings"
 	"time"
 
 	"github.com/teamvault/teamvault/internal/auth/ldapauth"
@@ -30,12 +31,12 @@ type MailTemplates struct {
 }
 
 type Policy struct {
-	TOTPRequired            bool `json:"totp_required"`
-	SessionHours            int  `json:"session_hours"`               // default 8 (OQ-17)
-	UnlockIdleMinutes       int  `json:"unlock_idle_minutes"`         // default 15 (OQ-17)
-	EscrowShamirK           int  `json:"escrow_shamir_k"`             // default 3
-	EscrowShamirN           int  `json:"escrow_shamir_n"`             // default 5
-	LDAPSyncHours           int  `json:"ldap_sync_hours"`             // default 24; 0 = manual only
+	TOTPRequired             bool `json:"totp_required"`
+	SessionHours             int  `json:"session_hours"`               // default 8 (OQ-17)
+	UnlockIdleMinutes        int  `json:"unlock_idle_minutes"`         // default 15 (OQ-17)
+	EscrowShamirK            int  `json:"escrow_shamir_k"`             // default 3
+	EscrowShamirN            int  `json:"escrow_shamir_n"`             // default 5
+	LDAPSyncHours            int  `json:"ldap_sync_hours"`             // default 24; 0 = manual only
 	AdminSecretsEnvelopeOnly bool `json:"admin_secrets_envelope_only"` // false = admins see all secret metadata in list (default)
 }
 
@@ -70,6 +71,8 @@ type Bundle struct {
 	PrimaryTenantID   string                  `json:"primary_tenant_id"`
 	PrimaryTenantSlug string                  `json:"primary_tenant_slug"`
 	LastLDAPSyncAt    *time.Time              `json:"last_ldap_sync_at,omitempty"`
+	// CACertPEM is the instance company-root / trust bundle (PEM). Used for LDAPS, SMTP, …
+	CACertPEM string `json:"ca_cert_pem,omitempty"`
 }
 
 func DefaultMailTemplates() MailTemplates {
@@ -83,8 +86,8 @@ func DefaultMailTemplates() MailTemplates {
 
 func Load(cfg *configstore.Data) Bundle {
 	b := Bundle{
-		Argon2: cryptocore.DefaultArgon2,
-		Policy: Policy{SessionHours: 8, UnlockIdleMinutes: 15, EscrowShamirK: 3, EscrowShamirN: 5, LDAPSyncHours: 24},
+		Argon2:        cryptocore.DefaultArgon2,
+		Policy:        Policy{SessionHours: 8, UnlockIdleMinutes: 15, EscrowShamirK: 3, EscrowShamirN: 5, LDAPSyncHours: 24},
 		MailTemplates: DefaultMailTemplates(),
 	}
 	if cfg == nil || len(cfg.Extra) == 0 {
@@ -109,6 +112,7 @@ func Load(cfg *configstore.Data) Bundle {
 	if b.MailTemplates.InviteSubject == "" {
 		b.MailTemplates = DefaultMailTemplates()
 	}
+	migrateCompanyCA(&b)
 	return b
 }
 
@@ -134,6 +138,38 @@ func (b Bundle) LDAPForTenant(tenantID string) ldapauth.Config {
 		}
 	}
 	return b.LDAP
+}
+
+func migrateCompanyCA(b *Bundle) {
+	if strings.TrimSpace(b.CACertPEM) != "" {
+		b.LDAP.CACertPEM = ""
+		for i := range b.LDAPConnections {
+			b.LDAPConnections[i].CACertPEM = ""
+		}
+		return
+	}
+	if p := strings.TrimSpace(b.LDAP.CACertPEM); p != "" {
+		b.CACertPEM = p
+	} else {
+		for _, c := range b.LDAPConnections {
+			if p := strings.TrimSpace(c.CACertPEM); p != "" {
+				b.CACertPEM = p
+				break
+			}
+		}
+	}
+	b.LDAP.CACertPEM = ""
+	for i := range b.LDAPConnections {
+		b.LDAPConnections[i].CACertPEM = ""
+	}
+}
+
+// WithTrust copies the instance company CA onto an LDAP config when it has none.
+func (b Bundle) WithTrust(cfg ldapauth.Config) ldapauth.Config {
+	if strings.TrimSpace(cfg.CACertPEM) == "" {
+		cfg.CACertPEM = b.CACertPEM
+	}
+	return cfg
 }
 
 func RedactLDAP(c ldapauth.Config) ldapauth.Config {
@@ -166,7 +202,7 @@ func NewAPIKey(name string, scopes []string, userID, tenantID string) (plaintext
 	plaintext = "tvk_" + hex.EncodeToString(b)
 	sum := sha256.Sum256([]byte(plaintext))
 	rec = APIKeyRecord{
-		ID: "apk_" + hex.EncodeToString(b[:8]),
+		ID:   "apk_" + hex.EncodeToString(b[:8]),
 		Name: name, HashHex: hex.EncodeToString(sum[:]), Scopes: scopes,
 		UserID: userID, TenantID: tenantID,
 		CreatedAt: time.Now().UTC(),

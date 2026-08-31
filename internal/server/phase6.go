@@ -1,7 +1,6 @@
 package server
 
 import (
-	"crypto/tls"
 	"encoding/base64"
 	"fmt"
 	"net"
@@ -17,6 +16,7 @@ import (
 	"github.com/teamvault/teamvault/internal/cryptocore"
 	"github.com/teamvault/teamvault/internal/instcfg"
 	"github.com/teamvault/teamvault/internal/store"
+	"github.com/teamvault/teamvault/internal/tlsutil"
 )
 
 func (a *API) registerPhase6(mux *http.ServeMux) {
@@ -24,6 +24,8 @@ func (a *API) registerPhase6(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/admin/ldap", a.requireAuth(a.requireAdmin(a.handleGetLDAP)))
 	mux.HandleFunc("PUT /api/admin/ldap", a.requireAuth(a.requireAdmin(a.handlePutLDAP)))
 	mux.HandleFunc("POST /api/admin/ldap/test", a.requireAuth(a.requireAdmin(a.handleTestLDAP)))
+	mux.HandleFunc("GET /api/admin/trust", a.requireAuth(a.requireAdmin(a.handleGetTrust)))
+	mux.HandleFunc("PUT /api/admin/trust", a.requireAuth(a.requireAdmin(a.handlePutTrust)))
 	mux.HandleFunc("GET /api/admin/mail", a.requireAuth(a.requireAdmin(a.handleGetMail)))
 	mux.HandleFunc("PUT /api/admin/mail", a.requireAuth(a.requireAdmin(a.handlePutMail)))
 	mux.HandleFunc("POST /api/admin/mail/test", a.requireAuth(a.requireAdmin(a.handleTestMail)))
@@ -70,9 +72,9 @@ func (a *API) handleAdminOverview(w http.ResponseWriter, r *http.Request) {
 	b := a.bundle()
 	tenants, _ := a.App.Vault.ListTenants(r.Context())
 	writeJSON(w, http.StatusOK, map[string]any{
-		"initialized": a.App.Config.Initialized,
-		"storage":     a.App.Config.Storage,
-		"vault_ok":    err == nil && h.OK,
+		"initialized":  a.App.Config.Initialized,
+		"storage":      a.App.Config.Storage,
+		"vault_ok":     err == nil && h.OK,
 		"vault_detail": h.Detail,
 		"ldap_enabled": b.LDAP.Enabled,
 		"ldap_host":    b.LDAP.Host,
@@ -99,6 +101,11 @@ func (a *API) handlePutLDAP(w http.ResponseWriter, r *http.Request) {
 	if cfg.BindPassword == "***" || cfg.BindPassword == "" {
 		cfg.BindPassword = b.LDAP.BindPassword
 	}
+	cfg.CACertPEM = "" // instance trust store, not per-LDAP
+	if err := ldapauth.ValidateTLS(cfg); err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	b.LDAP = cfg
 	if err := a.saveBundle(b); err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
@@ -113,6 +120,51 @@ func (a *API) handlePutLDAP(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, instcfg.RedactLDAP(cfg))
 }
 
+func (a *API) handleGetTrust(w http.ResponseWriter, r *http.Request) {
+	pem := strings.TrimSpace(a.bundle().CACertPEM)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ca_cert_pem": pem,
+		"present":     pem != "",
+		"cert_count":  tlsutil.CertCount(pem),
+	})
+}
+
+func (a *API) handlePutTrust(w http.ResponseWriter, r *http.Request) {
+	sess, _ := a.sessionFrom(r)
+	var body struct {
+		CACertPEM string `json:"ca_cert_pem"`
+	}
+	if err := readJSON(r, &body); err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err := tlsutil.ValidatePEM(body.CACertPEM); err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	b := a.bundle()
+	b.CACertPEM = strings.TrimSpace(body.CACertPEM)
+	b.LDAP.CACertPEM = ""
+	for i := range b.LDAPConnections {
+		b.LDAPConnections[i].CACertPEM = ""
+	}
+	if err := a.saveBundle(b); err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if !a.appendAuditStrict(w, r, store.AuditEvent{
+		TenantID: sess.TenantID, ActorID: string(sess.UserID),
+		Action: "admin.trust.update", ResourceType: "config", ResourceID: "ca",
+	}) {
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ca_cert_pem": b.CACertPEM,
+		"present":     b.CACertPEM != "",
+		"cert_count":  tlsutil.CertCount(b.CACertPEM),
+	})
+}
+
 func (a *API) handleTestLDAP(w http.ResponseWriter, r *http.Request) {
 	cfg := a.bundle().LDAP
 	var override ldapauth.Config
@@ -121,6 +173,11 @@ func (a *API) handleTestLDAP(w http.ResponseWriter, r *http.Request) {
 			override.BindPassword = cfg.BindPassword
 		}
 		cfg = override
+	}
+	cfg = a.bundle().WithTrust(cfg)
+	if err := ldapauth.ValidateTLS(cfg); err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
 	}
 	if err := ldapauth.TestServiceBind(cfg); err != nil {
 		writeErr(w, http.StatusBadRequest, err.Error())
@@ -180,7 +237,11 @@ func (a *API) handleTestMail(w http.ResponseWriter, r *http.Request) {
 		var auth smtp.Auth
 		auth = smtp.PlainAuth("", cfg.Username, cfg.Password, cfg.Host)
 		if cfg.UseTLS {
-			tlsCfg := &tls.Config{ServerName: cfg.Host, MinVersion: tls.VersionTLS12}
+			tlsCfg, err := tlsutil.ClientConfig(cfg.Host, a.bundle().CACertPEM, false)
+			if err != nil {
+				writeErr(w, http.StatusBadRequest, err.Error())
+				return
+			}
 			c, err := smtp.Dial(addr)
 			if err == nil {
 				_ = c.StartTLS(tlsCfg)

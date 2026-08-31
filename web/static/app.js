@@ -61,6 +61,7 @@ const ICO = {
   layoutTable: '<path d="M3 3h18v18H3zM3 9h18M3 15h18M9 3v18"/>',
   layoutGrid: '<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>',
   book: '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>',
+  cert: '<rect x="6" y="3" width="12" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h3"/>',
 };
 
 function icon(name, cls) {
@@ -968,6 +969,7 @@ function renderApp(app) {
           <div class="sidebar-section-title">Administration</div>
           ${navLink("admin:users", "users", "Benutzer", "admin-link", 'data-admin-only')}
           ${navLink("admin:groups", "group", "Gruppen", "admin-link", 'data-admin-only')}
+          ${navLink("admin:trust", "cert", "Firmen-CA", "admin-link", 'data-admin-only')}
           ${navLink("admin:ldap", "network", "LDAP", "admin-link", 'data-admin-only')}
           ${navLink("admin:smtp", "mail", "SMTP", "admin-link", 'data-admin-only')}
           ${navLink("admin:crypto", "shield", "Krypto &amp; Policy", "admin-link", 'data-admin-only')}
@@ -1306,20 +1308,37 @@ function renderApp(app) {
                     </div>
                   </div>
                 </div>
+                <div class="admin-section" data-admin-section="trust">
+                  <p class="hint">Instanzweites Firmen-Root-Zertifikat (PEM). Gilt für LDAPS, SMTP und spätere TLS-Verbindungen (z. B. interne Dienste). Mehrere Zertifikate in einer Datei sind möglich (Root + Zwischen-CAs).</p>
+                  <label>Firmen-Root-Zertifikat (PEM)</label>
+                  <input id="trust_ca_file" type="file" accept=".pem,.crt,.cer,.txt,application/x-pem-file,application/x-x509-ca-cert" />
+                  <textarea id="trust_ca_pem" rows="8" class="mono" placeholder="-----BEGIN CERTIFICATE-----"></textarea>
+                  <p class="hint" id="trust_ca_status"></p>
+                  <div class="row">
+                    <button class="btn-accent" type="button" id="trust_ca_save">CA speichern</button>
+                    <button class="btn-ghost btn-sm" type="button" id="trust_ca_clear">Zertifikat entfernen</button>
+                  </div>
+                </div>
                 <div class="admin-section" data-admin-section="ldap">
+                  <p class="hint">LDAP/AD nur für Login-Bind. Host muss zum Zertifikatsnamen (CN/SAN) passen. Die Firmen-CA liegt unter Administration → Firmen-CA.</p>
                   <label class="inline"><input id="ldap_en" type="checkbox" /> Aktiv</label>
                   <label>Host</label><input id="ldap_host" />
-                  <label>Port</label><input id="ldap_port" type="number" />
+                  <label>Port</label><input id="ldap_port" type="number" placeholder="636 bei LDAPS" />
+                  <label class="inline"><input id="ldap_tls" type="checkbox" checked /> LDAPS / TLS</label>
                   <label>Base DN</label><input id="ldap_base" />
                   <label>Bind DN</label><input id="ldap_bind" />
                   <label>Bind-Passwort</label><input id="ldap_pw" type="password" placeholder="unverändert lassen = behalten" />
                   <label>User-Filter</label><input id="ldap_filter" placeholder="(uid=%s)" />
+                  <p class="hint" id="ldap_trust_hint"></p>
+                  <label class="inline"><input id="ldap_skip_tls" type="checkbox" /> TLS-Zertifikatsfehler ignorieren</label>
+                  <p class="hint">Unsicher: Signatur und Hostname werden nicht geprüft. Nur wenn keine Firmen-CA hinterlegt werden kann. Anschließend Test-Bind nutzen.</p>
                   <div class="row">
                     <button class="btn-accent" type="button" id="ldap_save">LDAP speichern</button>
                     <button class="btn-ghost" type="button" id="ldap_test">Test-Bind</button>
                   </div>
                 </div>
                 <div class="admin-section" data-admin-section="smtp">
+                  <p class="hint">SMTP-TLS nutzt die zentrale Firmen-CA (Administration → Firmen-CA).</p>
                   <label class="inline"><input id="mail_en" type="checkbox" /> Aktiv</label>
                   <label>Host</label><input id="mail_host" />
                   <label>Port</label><input id="mail_port" type="number" />
@@ -1429,6 +1448,7 @@ function renderApp(app) {
     account: "Konto",
     "admin:users": "Benutzer",
     "admin:groups": "Gruppen",
+    "admin:trust": "Firmen-CA",
     "admin:ldap": "LDAP",
     "admin:smtp": "SMTP",
     "admin:crypto": "Krypto & Policy",
@@ -3272,9 +3292,22 @@ function renderApp(app) {
     n.querySelector("#ldap_en").checked = !!ldap.enabled;
     n.querySelector("#ldap_host").value = ldap.host || "";
     n.querySelector("#ldap_port").value = ldap.port || "";
+    const ldapPort = Number(ldap.port) || 0;
+    n.querySelector("#ldap_tls").checked = !(ldap.host && ldapPort === 389 && !ldap.use_tls);
     n.querySelector("#ldap_base").value = ldap.base_dn || "";
     n.querySelector("#ldap_bind").value = ldap.bind_dn || "";
     n.querySelector("#ldap_filter").value = ldap.user_filter || "";
+    n.querySelector("#ldap_skip_tls").checked = !!ldap.insecure_skip_verify;
+    const trust = await api("/api/admin/trust");
+    n.querySelector("#trust_ca_pem").value = trust.ca_cert_pem || "";
+    n.querySelector("#trust_ca_file").value = "";
+    paintTrustCAStatus();
+    const th = n.querySelector("#ldap_trust_hint");
+    if (th) {
+      th.textContent = trust.present
+        ? `Zentrale Firmen-CA aktiv (${trust.cert_count || 1} Zertifikat${(trust.cert_count || 1) === 1 ? "" : "e"}).`
+        : "Keine zentrale Firmen-CA — LDAPS prüft gegen System-CAs. Unter Firmen-CA hinterlegen.";
+    }
     const mail = await api("/api/admin/mail");
     n.querySelector("#mail_en").checked = !!mail.enabled;
     n.querySelector("#mail_host").value = mail.host || "";
@@ -3378,21 +3411,61 @@ function renderApp(app) {
       err.hidden = false; err.textContent = e.message;
     }
   };
+  function ldapFormPayload() {
+    return {
+      enabled: n.querySelector("#ldap_en").checked,
+      host: n.querySelector("#ldap_host").value.trim(),
+      port: Number(n.querySelector("#ldap_port").value) || 0,
+      base_dn: n.querySelector("#ldap_base").value.trim(),
+      bind_dn: n.querySelector("#ldap_bind").value.trim(),
+      bind_password: n.querySelector("#ldap_pw").value || "***",
+      user_filter: n.querySelector("#ldap_filter").value.trim(),
+      use_tls: n.querySelector("#ldap_tls").checked,
+      insecure_skip_verify: n.querySelector("#ldap_skip_tls").checked,
+    };
+  }
+  function paintTrustCAStatus() {
+    const pem = (n.querySelector("#trust_ca_pem").value || "").trim();
+    const st = n.querySelector("#trust_ca_status");
+    if (!st) return;
+    if (!pem) {
+      st.textContent = "Kein Firmen-CA hinterlegt — ausgehende TLS-Verbindungen (LDAP, SMTP, …) prüfen gegen System-CAs.";
+      return;
+    }
+    const blocks = pem.split("-----BEGIN CERTIFICATE-----").length - 1;
+    st.textContent = blocks > 0
+      ? `CA hinterlegt (${blocks} Zertifikat${blocks === 1 ? "" : "e"}, ${pem.length} Zeichen). Gilt instanzweit.`
+      : "Text enthält kein PEM-Zertifikat (erwartet -----BEGIN CERTIFICATE-----).";
+  }
+  n.querySelector("#trust_ca_file").onchange = async (ev) => {
+    const f = ev.target.files && ev.target.files[0];
+    if (!f) return;
+    n.querySelector("#trust_ca_pem").value = (await f.text()).trim();
+    paintTrustCAStatus();
+  };
+  n.querySelector("#trust_ca_pem").oninput = paintTrustCAStatus;
+  n.querySelector("#trust_ca_clear").onclick = () => {
+    n.querySelector("#trust_ca_pem").value = "";
+    n.querySelector("#trust_ca_file").value = "";
+    paintTrustCAStatus();
+  };
+  n.querySelector("#trust_ca_save").onclick = async () => {
+    const err = n.querySelector("#aerr"); err.hidden = true;
+    try {
+      await api("/api/admin/trust", {
+        method: "PUT",
+        body: JSON.stringify({ ca_cert_pem: n.querySelector("#trust_ca_pem").value.trim() }),
+      });
+      await refreshAdmin();
+      err.hidden = false; err.style.color = "var(--color-ok)"; err.textContent = "Firmen-CA gespeichert";
+    } catch (e) { err.hidden = false; err.style.color = ""; err.textContent = e.message; }
+  };
   n.querySelector("#ldap_save").onclick = async () => {
     const err = n.querySelector("#aerr"); err.hidden = true;
     try {
       await api("/api/admin/ldap", {
         method: "PUT",
-        body: JSON.stringify({
-          enabled: n.querySelector("#ldap_en").checked,
-          host: n.querySelector("#ldap_host").value.trim(),
-          port: Number(n.querySelector("#ldap_port").value) || 0,
-          base_dn: n.querySelector("#ldap_base").value.trim(),
-          bind_dn: n.querySelector("#ldap_bind").value.trim(),
-          bind_password: n.querySelector("#ldap_pw").value || "***",
-          user_filter: n.querySelector("#ldap_filter").value.trim(),
-          use_tls: true,
-        }),
+        body: JSON.stringify(ldapFormPayload()),
       });
       n.querySelector("#ldap_pw").value = "";
       await refreshAdmin();
@@ -3401,7 +3474,10 @@ function renderApp(app) {
   n.querySelector("#ldap_test").onclick = async () => {
     const err = n.querySelector("#aerr"); err.hidden = true;
     try {
-      await api("/api/admin/ldap/test", { method: "POST", body: "{}" });
+      await api("/api/admin/ldap/test", {
+        method: "POST",
+        body: JSON.stringify(ldapFormPayload()),
+      });
       err.hidden = false; err.style.color = "var(--color-ok)"; err.textContent = "LDAP Test OK";
     } catch (e) { err.hidden = false; err.style.color = ""; err.textContent = e.message; }
   };

@@ -47,17 +47,24 @@ Setup-User erhält `platform_admin` **und** `tenant_admin`.
 - Mitglieder per Drag & Drop zuordnen (lokale **und** LDAP-provisionierte User gleichartig)
 - Keine LDAP-Gruppen-Sync für Rechte
 
-### 2.5 LDAP/AD-Verbindungen
+### 2.5 Firmen-CA (Trust)
+
+- Eine instanzweite PEM-Datei (Root + optionale Zwischen-CAs)
+- Gilt für LDAPS, SMTP-STARTTLS und spätere ausgehende TLS-Verbindungen
+- Nicht im LDAP-/SMTP-Formular duplizieren
+
+### 2.6 LDAP/AD-Verbindungen
 
 - Mehrere Verbindungen **pro Tenant** (OQ-09)
 - CRUD: Host, TLS, Bind, Base-DN, Filter
+- TLS nutzt die zentrale Firmen-CA; optional Zertifikatsprüfung überspringen (unsicher)
 - Test-Bind
 - Aktiv/Inaktiv
 - Periodischer Sync (Default täglich): fehlende LDAP-Accounts → lokaler User `disabled` (nicht löschen) (OQ-11)
 - Bei Auto-Disable: Pflicht-Rotation nur wenn User alleiniger Secret-Owner; sonst Rechteentzug + Key-Rotation (Prinzip 7)
 - Secrets nur Schreibfelder (nie zurücklesen im Klartext)
 
-### 2.6 LDAP-User-Integration
+### 2.7 LDAP-User-Integration
 
 **Modell (fest laut Anforderung):**
 
@@ -77,43 +84,43 @@ flowchart LR
 
 Autorisierung = lokal. LDAP-Gruppenmitgliedschaften werden im MVP **komplett ignoriert** (OQ-10); Datenmodell bleibt für spätere Info-Anzeige erweiterbar.
 
-### 2.7 Mail / SMTP
+### 2.8 Mail / SMTP
 
 - SMTP-Einstellungen, Test-Mail
 - Vorlagen für Einladung / „Account disabled“ (ohne Secret-Inhalte)
 
-### 2.8 Storage-Backend & Migration
+### 2.9 Storage-Backend & Migration
 
 - Aktuelles Backend anzeigen
 - Neues Backend konfigurieren
 - Migrations-Wizard gemäß [`storage-abstraction.md`](storage-abstraction.md)
 - Besonders strikte Bestätigungen (Datenverlustrisiko)
 
-### 2.9 Verschlüsselungsparameter
+### 2.10 Verschlüsselungsparameter
 
 - Tenant-Argon2id-Defaults anpassen
 - Hinweis: betrifft neue Ableitungen / MP-Wechsel; bestehende Ciphertexts bleiben gültig bis User Keys neu siegeln
 
-### 2.10 Key-Recovery (Admin)
+### 2.11 Key-Recovery (Admin)
 
 - Modus anzeigen/umschalten (mit Re-Onboarding)
 - Escrow optional deaktivierbar
 - Bei Escrow: Share-Status (k/n, Default 3-of-5), Recovery-Ritual, auditiert; Share-Holder MVP nur Personen (OQ-13)
 - Bei User-Kit: nur Policy-Texte; kein Kit-Abruf
 
-### 2.11 Audit-Log
+### 2.12 Audit-Log
 
 - Filter: User, Aktion, Zeitraum, Resource
 - Export (CSV/JSON) ohne Secret-Klartext
 - Tamper-Evident soweit praktikabel (append-only)
 
-### 2.12 API-Key-Verwaltung
+### 2.13 API-Key-Verwaltung
 
 - Erzeugen (Klartext **einmal** zeigen), widerrufen, Scopes, Expiry
 - Scopes: `read` | `vault` | `admin` (Pflicht, mind. einer; UI-Checkboxen)
 - Gehashte Speicherung; Enforcement in `requireAuth`
 
-### 2.13 2FA Policy
+### 2.14 2FA Policy
 
 - TOTP Pflicht/Optional (Phase 4, Pflicht-Baseline für Prod)
 - Passkeys: nicht im ersten Prod-Release (OQ-20); später nur Login, nie Vault-Unlock (OQ-04)
