@@ -3,6 +3,7 @@
 | # | Check | Status |
 |---|--------|--------|
 | Config | LDAP/SMTP-Secrets nur in sealed Config; API redaktiert Passwörter (`***`) | OK |
+| Trust | Instanzweite Firmen-CA (`/api/admin/trust`); LDAP/SMTP nutzen Bundle; Skip-Verify nur LDAP-Notfall | OK |
 | 6 LDAP | Test-Bind = Service-Bind only; keine Autorisierung über LDAP | OK |
 | Escrow | Private Escrow-Key nur clientseitig erzeugt; Server speichert Public Key | OK |
 | Audit | Append-only Events; Export ohne Secret-Klartext | OK |

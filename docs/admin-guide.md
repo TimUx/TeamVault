@@ -154,23 +154,32 @@ Kein Zugriff auf Master-Passwort, Private Keys oder Recovery-Kit-Klartext.
 
 Sidebar **Administration → Firmen-CA**:
 
+![Firmen-CA](images/admin-trust.png)
+
 - Instanzweites Root-/Zwischen-CA-Bundle (PEM), verschlüsselt in der Config
 - Wird für **LDAPS**, **SMTP** und künftige TLS-Clients (interne Dienste) verwendet
 - Behebt `certificate signed by unknown authority` bei eigener PKI, ohne die Prüfung zu deaktivieren
+- PEM-Datei hochladen oder einfügen; **CA speichern** / **Zertifikat entfernen**
 
 ### 3.4 LDAP / AD
 
 Sidebar **Administration → LDAP**:
 
+![LDAP](images/admin-ldap.png)
+
 - Optional, **nur Login-Bind** (nie Autorisierung)
 - Felder: Host, Port, Base DN, Bind DN/Passwort, User-Filter
 - **LDAPS / TLS** (üblich Port 636). Der Hostname muss zum Zertifikat (CN/SAN) passen.
-- TLS-Vertrauen über die zentrale Firmen-CA (nicht hier hochladen)
+- TLS-Vertrauen über die zentrale Firmen-CA (nicht hier hochladen); Hinweis zeigt, ob eine CA hinterlegt ist
 - **TLS-Zertifikatsfehler ignorieren:** unsichere Notlösung, wenn keine CA hinterlegt werden kann (Hostname und Signatur werden nicht geprüft).
 - Test-Bind (nutzt die aktuellen Formularwerte, auch ungespeicherte), Speichern, LDAP-Sync (fehlende → lokal disabled)
 - Just-in-Time: erster erfolgreicher LDAP-Login legt lokalen User an (`auth_backend=ldap`)
 
 ### 3.5 SMTP
+
+Sidebar **Administration → SMTP**:
+
+![SMTP](images/admin-smtp.png)
 
 - Outbound-Mail (Einladungen/Hinweise je nach Ausbau)
 - Host, Port, From, Credentials; Test-Button
@@ -214,7 +223,7 @@ Der private Escrow-Key darf nie in Logs oder dauerhaft auf dem Server landen.
 
 - Cookie-Sessions ohne Scope-Einschränkung. **Legacy-Keys ohne Scopes** (`legacy_no_scopes` in der Key-Liste): nur **read-only** GET-Allowlist — keine Schreib- oder Admin-Aktionen. Key mit expliziten Scopes neu ausstellen und alten Key widerrufen.
 - Nach User-Disable: Secrets mit Envelope dieses Users rotieren (Hinweis + Liste `accessible-secrets` in Admin-UI; kein Auto-Rotate wegen ZK)
-- Tenant-Admins sehen standardmäßig in der Secret-Liste **Metadaten** (IDs, Title-Ciphertext) auch ohne eigenen Envelope — optional einschränkbar über Policy (siehe §3.5)
+- Tenant-Admins sehen standardmäßig in der Secret-Liste **Metadaten** (IDs, Title-Ciphertext) auch ohne eigenen Envelope — optional einschränkbar über Policy (siehe §3.6)
 
 ### 3.9 Tenants, Storage-Migration & Instanz-Backup (`platform_admin`)
 
@@ -336,3 +345,5 @@ Dokumentations-Screenshots liegen unter `docs/images/`. Neu erzeugen (Playwright
 ```
 
 Voraussetzungen: Docker, Node.js/npm. Das Skript startet temporär `go run ./cmd/teamvault` in einem Container auf Port **8099**, führt Setup/Login/Onboarding durch und überschreibt die PNGs in `docs/images/`.
+
+Ohne Docker (Windows): Dev-Server lokal auf `:8099` starten, dann `TV_URL=http://127.0.0.1:8099 TV_BROWSER_CHANNEL=msedge node scripts/capture-docs-screenshots.mjs` (falls Playwright-Chromium nicht geladen werden kann, z. B. hinter Firmenproxy).
