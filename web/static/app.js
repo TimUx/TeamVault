@@ -143,10 +143,19 @@ function navLink(nav, icoName, label, extraClass, attrs) {
   return `<button type="button" class="${cls}" data-nav="${nav}"${extra}><span class="nav-ico">${icon(icoName)}</span><span>${label}</span></button>`;
 }
 
+function navSectionDefaultCollapsed(sectionId) {
+  return sectionId === "admin";
+}
+
+function navSubsectionDefaultCollapsed() {
+  return true;
+}
+
 function navSection(sectionId, title, bodyHtml, sectionAttrs) {
   const extra = sectionAttrs ? ` ${sectionAttrs}` : "";
-  return `<div class="sidebar-section" data-nav-section="${sectionId}"${extra}>
-    <button type="button" class="sidebar-section-toggle" aria-expanded="true" aria-controls="navSec-${sectionId}">
+  const collapsed = navSectionDefaultCollapsed(sectionId);
+  return `<div class="sidebar-section${collapsed ? " collapsed" : ""}" data-nav-section="${sectionId}"${extra}>
+    <button type="button" class="sidebar-section-toggle" aria-expanded="${collapsed ? "false" : "true"}" aria-controls="navSec-${sectionId}">
       <span class="sidebar-section-chevron" aria-hidden="true">${icon("chevron")}</span>
       <span class="sidebar-section-title-text">${title}</span>
     </button>
@@ -157,8 +166,9 @@ function navSection(sectionId, title, bodyHtml, sectionAttrs) {
 }
 
 function navSubSection(subId, title, bodyHtml) {
-  return `<div class="sidebar-subsection" data-nav-subsection="${subId}">
-    <button type="button" class="sidebar-subsection-toggle" aria-expanded="true" aria-controls="navSub-${subId}">
+  const collapsed = navSubsectionDefaultCollapsed();
+  return `<div class="sidebar-subsection${collapsed ? " collapsed" : ""}" data-nav-subsection="${subId}">
+    <button type="button" class="sidebar-subsection-toggle" aria-expanded="${collapsed ? "false" : "true"}" aria-controls="navSub-${subId}">
       <span class="sidebar-section-chevron" aria-hidden="true">${icon("chevron")}</span>
       <span>${title}</span>
     </button>
@@ -1858,7 +1868,9 @@ function renderApp(app) {
     const saved = loadNavSectionsState();
     n.querySelectorAll(".sidebar-section[data-nav-section]").forEach((sec) => {
       const id = sec.dataset.navSection;
-      const collapsed = saved[id] === true;
+      const collapsed = Object.prototype.hasOwnProperty.call(saved, id)
+        ? !!saved[id]
+        : navSectionDefaultCollapsed(id);
       setNavSectionCollapsed(sec, collapsed, false);
       const btn = sec.querySelector(".sidebar-section-toggle");
       if (!btn) return;
@@ -1869,7 +1881,9 @@ function renderApp(app) {
     const savedSub = loadNavSubsectionsState();
     n.querySelectorAll(".sidebar-subsection[data-nav-subsection]").forEach((sub) => {
       const id = sub.dataset.navSubsection;
-      const collapsed = savedSub[id] === true;
+      const collapsed = Object.prototype.hasOwnProperty.call(savedSub, id)
+        ? !!savedSub[id]
+        : navSubsectionDefaultCollapsed();
       setNavSubsectionCollapsed(sub, collapsed, false);
       const btn = sub.querySelector(".sidebar-subsection-toggle");
       if (!btn) return;
