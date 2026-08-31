@@ -1,0 +1,85 @@
+# Build and publish standalone teamvault server binaries on release tags.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  CGO_ENABLED: "0"
+
+jobs:
+  binaries:
+    name: Binaries (${{ matrix.goos }}-${{ matrix.goarch }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            suffix: ""
+          - goos: linux
+            goarch: arm64
+            suffix: ""
+          - goos: darwin
+            goarch: amd64
+            suffix: ""
+          - goos: darwin
+            goarch: arm64
+            suffix: ""
+          - goos: windows
+            goarch: amd64
+            suffix: ".exe"
+          - goos: windows
+            goarch: arm64
+            suffix: ".exe"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          set -euo pipefail
+          name="teamvault-${GOOS}-${GOARCH}${{ matrix.suffix }}"
+          go build -trimpath \
+            -ldflags="-s -w -X github.com/teamvault/teamvault/internal/buildinfo.Version=${GITHUB_REF_NAME} -X github.com/teamvault/teamvault/internal/buildinfo.Commit=${GITHUB_SHA}" \
+            -o "dist/${name}" ./cmd/teamvault
+          ls -la "dist/${name}"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: teamvault-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/teamvault-*
+
+  release:
+    name: Publish release assets
+    needs: binaries
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: List assets
+        run: ls -la dist/
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/teamvault-*

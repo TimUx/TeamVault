@@ -43,6 +43,11 @@ func TestSetupCommitAndLoginHTTP(t *testing.T) {
 		t.Fatal(status)
 	}
 
+	tenants := getJSONSlice(t, ts.URL+"/api/auth/tenants")
+	if len(tenants) != 1 || tenants[0]["slug"] != "t1" || tenants[0]["name"] != "T" {
+		t.Fatalf("auth tenants: %#v", tenants)
+	}
+
 	jar := &cookieJar{m: map[string]string{}}
 	login := postJSON(t, ts.URL+"/api/auth/login", map[string]string{
 		"tenant_slug": "t1", "username": "admin", "password": "password1234",
@@ -71,6 +76,21 @@ func getJSON(t *testing.T, url string) map[string]any {
 	var m map[string]any
 	_ = json.NewDecoder(res.Body).Decode(&m)
 	return m
+}
+
+func getJSONSlice(t *testing.T, url string) []map[string]any {
+	t.Helper()
+	res, err := http.Get(url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	var out []map[string]any
+	_ = json.NewDecoder(res.Body).Decode(&out)
+	if res.StatusCode >= 300 {
+		t.Fatalf("%d %v", res.StatusCode, out)
+	}
+	return out
 }
 
 func getJSONCookie(t *testing.T, url string, jar *cookieJar) map[string]any {

@@ -153,7 +153,7 @@ Beide dürfen keine Vault-Klartexte halten.
 
 - Round-Trip Metadaten + opaque Blobs
 - Tenant-Isolation (Query ohne `tenant_id` muss scheitern)
-- Snapshot Export/Import SQLite ↔ SQLite zuerst; später Cross-Backend
+- Snapshot Export/Import SQLite ↔ SQLite zuerst; später Cross-Backend. `ExportSnapshot(nil)` umfasst **alle** Tenants inkl. Groups, Members, WebAuthn.
 - Kein Test darf Klartext-Secrets „zum Vergleich“ im Store erwarten
 
 ---

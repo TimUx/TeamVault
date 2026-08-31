@@ -16,33 +16,80 @@ Der erste User aus dem Setup-Wizard erhält **beide** Admin-Rollen.
 
 ## 2. Erstinstallation
 
+Ausführlich inkl. One-Liner: [**Installationsanleitung**](install-guide.md).
+
 ### 2.1 Voraussetzungen
 
-- Go 1.23+ **oder** Docker
-- Persistentes Datenverzeichnis
+- **Docker** + Compose v2 **oder** Go 1.23+
+- Persistentes Datenverzeichnis / Volume
 - Unlock-Keyfile ≥ **32 Byte** hohe Entropie (kein Passwort)
 
-### 2.2 Unlock-Key
+### 2.2 One-Liner
 
-```powershell
-# Beispiel
-openssl rand -out unlock.key 48
-$env:TEAMVAULT_MASTER_UNLOCK_KEY_FILE = ".\unlock.key"
+Docker: nur Compose/Env + Unlock-Keyfile (kein Repo-Clone). Go: schlanke Installation mit Release-Binary (kein Repo-Clone). Details: [Installationsanleitung](install-guide.md).
+
+```bash
+# Docker (empfohlen)
+curl -fsSL https://raw.githubusercontent.com/TimUx/TeamVault/main/scripts/install-docker.sh | bash
+
+# Go (ohne Container)
+curl -fsSL https://raw.githubusercontent.com/TimUx/TeamVault/main/scripts/install-go.sh | bash
 ```
 
-Der Key entsperrt nur die Config-DB. Vault-Secrets bleiben Zero-Knowledge.
+```powershell
+# Docker
+irm https://raw.githubusercontent.com/TimUx/TeamVault/main/scripts/install-docker.ps1 | iex
 
-### 2.3 Start
+# Go
+irm https://raw.githubusercontent.com/TimUx/TeamVault/main/scripts/install-go.ps1 | iex
+```
+
+### 2.3 Unlock-Key und `.env`
+
+Der Unlock-Key entsperrt nur die Config-DB. Vault-Secrets bleiben Zero-Knowledge.
+
+**Empfohlen:** Keyfile + `.env` (Compose lädt `.env` automatisch; Key-Bytes nie in die `.env` schreiben).
+
+```bash
+cp .env.example .env
+mkdir -m 700 -p secrets
+openssl rand -out secrets/teamvault_unlock 48
+chmod 644 secrets/teamvault_unlock   # Image = nonroot (UID 65532); Verzeichnis bleibt 700
+# .env enthält z. B.:
+#   TEAMVAULT_UNLOCK_KEY_HOST=./secrets/teamvault_unlock
+#   TEAMVAULT_PUBLISH_PORT=8080
+#   TEAMVAULT_IMAGE=ghcr.io/timux/teamvault:latest
+```
 
 ```powershell
-go run ./cmd/teamvault -addr :8080
-# oder
-docker compose up -d --build
+Copy-Item .env.example .env
+New-Item -ItemType Directory -Force secrets | Out-Null
+# openssl rand -out secrets/teamvault_unlock 48
+```
+
+| Variable | Verwendung |
+|----------|------------|
+| `TEAMVAULT_MASTER_UNLOCK_KEY_FILE` | Pfad zum Keyfile (Prod / Go) |
+| `TEAMVAULT_MASTER_UNLOCK_KEY` | Nur Dev/Test-Fallback (Key-Bytes in Env) |
+| `TEAMVAULT_PUBLISH_PORT` / `TEAMVAULT_UNLOCK_KEY_HOST` | Docker Compose via `.env` |
+| `TEAMVAULT_IMAGE` | GHCR-Image, z. B. `ghcr.io/timux/teamvault:1.2.1` |
+| `TEAMVAULT_PULL_POLICY` | Default `always` |
+
+### 2.4 Start
+
+```bash
+# Docker: immer zuerst pullen (CI-Images)
+docker compose pull && docker compose up -d
+
+# Go: .env laden
+set -a; source .env; set +a
+go run ./cmd/teamvault
+# bzw. ./bin/teamvault nach go build
 ```
 
 Browser: `/setup` — solange `initialized=false`.
 
-### 2.4 Setup-Wizard
+### 2.5 Setup-Wizard
 
 | Schritt | Inhalt |
 |---------|--------|
@@ -83,7 +130,10 @@ In der **Sidebar** unter **Administration** (sichtbar für `tenant_admin` / `pla
 
 ![Benutzer](images/admin-users.png)
 
-- Lokale User anlegen (Username + Login-Passwort ≥12)
+![User bearbeiten](images/admin-user-edit.png)
+
+- Lokale User anlegen (Username, optional Anzeigename/E-Mail, Login-Passwort ≥12)
+- **Bearbeiten:** Anzeigename, E-Mail, Rollen (`member`, `tenant_admin`, `auditor`, optional `platform_admin`), für lokale User optional neues Login-Passwort
 - Status: active / disabled, Onboarding-Status, Auth-Backend (`local` / `ldap`)
 - Disable statt Löschen (LDAP-Sync deaktiviert fehlende Accounts)
 - Nach **Disable**: Hinweis, Secrets mit Envelope dieses Users zu **rotieren** (Zero-Knowledge — kein Auto-Rotate). Optional Liste der Secret-IDs (Meta only).
@@ -94,7 +144,9 @@ Kein Zugriff auf Master-Passwort, Private Keys oder Recovery-Kit-Klartext.
 
 ![Gruppen](images/admin-groups.png)
 
-- Gruppen anlegen, Members über Group-ID (`grp_…`) + User-ID (`usr_…`)
+- **Zwei Bereiche:** links aktive User (ziehbar), rechts Gruppen-Karten mit Drop-Zone
+- User per **Drag & Drop** in eine Gruppe ziehen; aus Gruppe zurück in den Pool ziehen = Mitgliedschaft entfernen; zwischen Gruppen ziehen = zusätzliche Mitgliedschaft
+- Gruppe anlegen; **Name** und **Beschreibung** in der Karte bearbeiten (Speichern beim Verlassen des Feldes); **Löschen** mit Bestätigung
 - Rechte/Sharing bleiben über lokale Zuordnung — **keine** LDAP-Gruppen-Autorisierung
 - Secrets können an Gruppen geteilt werden (pro Mitglied eigener Envelope) — siehe User Guide
 
@@ -152,19 +204,29 @@ Der private Escrow-Key darf nie in Logs oder dauerhaft auf dem Server landen.
 - Nach User-Disable: Secrets mit Envelope dieses Users rotieren (Hinweis + Liste `accessible-secrets` in Admin-UI; kein Auto-Rotate wegen ZK)
 - Tenant-Admins sehen standardmäßig in der Secret-Liste **Metadaten** (IDs, Title-Ciphertext) auch ohne eigenen Envelope — optional einschränkbar über Policy (siehe §3.5)
 
-### 3.8 Tenants & Storage-Migration (`platform_admin`)
+### 3.8 Tenants, Storage-Migration & Instanz-Backup (`platform_admin`)
 
 - Weitere Tenants anlegen
 - Migration SQLite ↔ JSON: nur Ciphertext; Bestätigung `MIGRATE`
+- **Instanz-Snapshot** herunterladen / wiederherstellen (`GET /api/admin/backup`, `POST /api/admin/backup/restore` mit `confirm=RESTORE`) — siehe §5
 
 ## 4. Docker & Package
 
-Siehe Root-[README](../README.md#docker). Compose mountet:
+Siehe [Installationsanleitung](install-guide.md) und Root-[README](../README.md#docker). Compose nutzt `.env` und mountet:
 
 - Volume `/data` — Vault/Config
-- Unlock-Datei → `/run/secrets/teamvault_unlock` (read-only)
+- Unlock-Datei → `/run/secrets/teamvault_unlock` (read-only), Host-Pfad über `TEAMVAULT_UNLOCK_KEY_HOST`
 
-CI (GitHub Actions) baut Images und pusht sie nach GHCR, z. B. `ghcr.io/timux/teamvault:latest`. Unlock-Key nie ins Image legen.
+Default-Image: `ghcr.io/timux/teamvault:latest` (`TEAMVAULT_IMAGE`) — von CI nach Push auf `main` / Tags `v*` veröffentlicht. Compose hat **keinen** lokalen `build:`-Schritt; nur Pull (`pull_policy: always`).
+
+```bash
+docker compose pull && docker compose up -d
+```
+
+Pin auf Release (empfohlen Prod): `TEAMVAULT_IMAGE=ghcr.io/timux/teamvault:1.2.1` in `.env`.  
+Lokaler Build nur bei Bedarf: `docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build` bzw. Install-Skript mit `TEAMVAULT_BUILD=1`.
+
+Unlock-Key nie ins Image legen.
 
 ### 4.1 Client-Downloads (CLI & Extension)
 
@@ -191,14 +253,23 @@ $env:TEAMVAULT_URL='https://vault.example'; irm "$env:TEAMVAULT_URL/help/install
 
 | Was | Hinweis |
 |-----|---------|
-| Datenverzeichnis / Volume | Enthält nur Ciphertext + Metadaten |
+| **Instanz-Snapshot** (Admin-UI) | Platform-Admin: *Tenants & Migration* → Snapshot herunterladen. Nur Ciphertext + Metadaten. Restore mit Bestätigung `RESTORE` ersetzt den Vault-Store. |
+| Datenverzeichnis / Volume | Alternative: Datei-Kopie von SQLite/JSON + Config; enthält nur Ciphertext + Metadaten |
 | Unlock-Keyfile | Separat, streng schützen — ohne Key keine Config |
+| User-`.tvbak` | Clientseitige verschlüsselte Secrets-Sicherung (User-Guide); kein Ersatz für Instanz-Backup |
 | Escrow-Shares / User-Recovery-Kits | Offline, nie zusammen mit Unlock-Key lagern |
 
-### 5.1 Backup-/Restore-Drill (kurz)
+### 5.1 Backup über die Admin-UI
 
-1. Instanz stoppen; Volume/`TEAMVAULT_DATA_DIR` und Unlock-Keyfile sichern.
-2. Auf Testsystem wiederherstellen; gleichen Unlock-Key mounten; starten.
+1. Als `platform_admin` anmelden, Vault entsperren.
+2. **Tenants & Migration → Snapshot herunterladen** (`GET /api/admin/backup`).
+3. Unlock-Keyfile und User-Recovery-Kits **nicht** in derselben Ablage wie den Snapshot.
+4. Restore: Snapshot-Datei wählen, `RESTORE` tippen → **Wiederherstellen**. Danach Login prüfen.
+
+### 5.2 Backup-/Restore-Drill (kurz)
+
+1. Instanz stoppen; Volume/`TEAMVAULT_DATA_DIR` und Unlock-Keyfile sichern — **oder** Snapshot aus der Admin-UI plus Unlock-Keyfile.
+2. Auf Testsystem wiederherstellen; gleichen Unlock-Key mounten; starten (bei UI-Restore: laufende Instanz, Confirm `RESTORE`).
 3. Login + Vault-Unlock prüfen — Klartext nur clientseitig.
 4. Erfolg dokumentieren; Prod-Backup-Rhythmus festlegen.
 
@@ -225,15 +296,30 @@ Sessions, Login-Rate-Limits und Passkey-Challenges liegen **im Prozessspeicher**
 
 | Symptom | Check |
 |---------|--------|
-| Start schlägt fehl „missing unlock key“ | `TEAMVAULT_MASTER_UNLOCK_KEY_FILE` gesetzt und lesbar? |
-| Setup erscheint erneut | Falsches Data-Dir oder Unlock-Key? |
+| Start schlägt fehl „missing unlock key“ | `TEAMVAULT_MASTER_UNLOCK_KEY_FILE` / Compose-Mount `TEAMVAULT_UNLOCK_KEY_HOST` gesetzt und lesbar? |
+| Setup erscheint erneut | Falsches Data-Dir/Volume oder anderes Unlock-Keyfile? |
+| Start schlägt fehl „permission denied“ Unlock-Key | Datei von Container-UID lesbar? `chmod 700 secrets && chmod 644 secrets/teamvault_unlock` (Image = nonroot) |
+| GHCR-Pull fehlgeschlagen | `docker login ghcr.io`; Image `ghcr.io/timux/teamvault` sichtbar? Sonst lokal bauen (`docker-compose.build.yml`) |
 | LDAP-Login fehl | Test-Bind; Filter; User lokal nicht disabled |
 | Passkey funktioniert nicht | HTTPS, RP-ID, Browser-Support |
 | Vault „Idle gesperrt“ | Erneut Master-Passwort; Idle-Minuten in Policy |
 | Cookie-POST „origin check failed“ | Proxy leitet Origin durch? |
+| Restore `checksum mismatch` | Snapshot-Datei unverändert hochladen (Roh-JSON, nicht umgeschrieben) |
 
 ## 8. Weiterführend
 
+- Installation: [install-guide.md](install-guide.md)
 - Sicherheitsregeln: [`.cursor/rules/security-principles.mdc`](../.cursor/rules/security-principles.mdc)
 - Admin-UI Scope (Planung): [planning/admin-ui-scope.md](planning/admin-ui-scope.md)
 - OpenAPI: [openapi.yaml](openapi.yaml)
+- Checkliste: [SECURITY-REVIEW-CHECKLIST.md](../SECURITY-REVIEW-CHECKLIST.md)
+
+### Screenshots aktualisieren (Maintainer)
+
+Dokumentations-Screenshots liegen unter `docs/images/`. Neu erzeugen (Playwright + lokaler Dev-Server mit aktuellem `web/static`):
+
+```bash
+./scripts/capture-docs-screenshots.sh
+```
+
+Voraussetzungen: Docker, Node.js/npm. Das Skript startet temporär `go run ./cmd/teamvault` in einem Container auf Port **8099**, führt Setup/Login/Onboarding durch und überschreibt die PNGs in `docs/images/`.

@@ -1,0 +1,8 @@
+{
+  "private": true,
+  "type": "module",
+  "description": "Dev tooling for documentation screenshots only",
+  "dependencies": {
+    "playwright": "^1.62.1"
+  }
+}

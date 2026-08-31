@@ -100,10 +100,11 @@ TeamVault löst dasselbe Kernproblem wie **Bitwarden**, **Vaultwarden** und **Pa
 | Reife Extension + Autofill (Chrome/Edge/Firefox) | Bitwarden | Ohne das schwer gegen VW/BW zu gewinnen | Phase 10 |
 | Clientseitige Suche + Feld-UI + Copy | alle | Erwartungshaltung; OQ-12 | Phase 10 |
 | Passwort-Generator | alle | Geringer Aufwand | Phase 10 |
-| Ordner / Collections (ohne Gruppen-Passwort) | BW / Passbolt | Orientierung | Phase 12 |
-| Import (BW JSON/CSV/KeePass, clientseitig) | BW / KeePass | Migrations-Blocker | Phase 12 |
-| Gruppen → Envelopes für Member | Passbolt / BW | Passt zu Prinzip 5 | Phase 12 |
-| TOTP im Vault-Eintrag (ciphertext) | Bitwarden | Sehr häufig genutzt | Phase 12 |
+| Ordner / Collections (ohne Gruppen-Passwort) | BW / Passbolt | Orientierung | **umgesetzt** |
+| Import (BW JSON/CSV/KeePass + weitere Formate, clientseitig) | BW / KeePass | Migrations-Blocker | **umgesetzt** (v1.1+) |
+| Gruppen → Envelopes für Member | Passbolt / BW | Passt zu Prinzip 5 | **umgesetzt** |
+| TOTP im Vault-Eintrag (ciphertext) | Bitwarden | Sehr häufig genutzt | **umgesetzt** |
+| Export / verschlüsselte Sicherung (`.tvbak`) | BW | Migration & Backup | **umgesetzt** (v1.1+) |
 
 ### Optional / später (weiter deferred)
 
@@ -152,6 +153,6 @@ TeamVault löst dasselbe Kernproblem wie **Bitwarden**, **Vaultwarden** und **Pa
 
 Die Vergleichslücken decken sich mit [roadmap-phase9plus.md](roadmap-phase9plus.md):
 
-1. Phase 10: Extension/Autofill, Suche, Felder, Generator (Parität zur **Basis-Erwartung**)  
-2. Phase 12: Ordner, Import, Gruppen-Share, TOTP-in-Entry (Parität zu **Team-Alltag**)  
+1. Phase 10–12 Kern: Extension/Autofill, Suche, Felder, Generator, Ordner, Import, Gruppen-Share, TOTP-in-Entry — **weitgehend umgesetzt**  
+2. Ops: Install-One-Liner, GHCR-Compose, Instanz-Backup — **umgesetzt** (v1.1+)  
 3. Nicht: BW-Protokoll (Differenzierung behalten)

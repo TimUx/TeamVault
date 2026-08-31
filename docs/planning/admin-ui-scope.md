@@ -35,16 +35,16 @@ Setup-User erhält `platform_admin` **und** `tenant_admin`.
 
 ### 2.3 Lokale User-Verwaltung
 
-- Anlegen, Bearbeiten, Deaktivieren lokaler User (unabhängig von LDAP)
-- Login-Passwort setzen/resetten (nur `auth_backend=local`)
+- Anlegen, **Bearbeiten** (Anzeigename, E-Mail, Rollen), Deaktivieren lokaler User (unabhängig von LDAP)
+- Login-Passwort setzen/resetten (nur `auth_backend=local`) — im Bearbeiten-Dialog oder separater Admin-API
 - Rolle zuweisen
 - Anzeige: Onboarding-Status (`pending` / `complete`)
 - **Kein** Zugriff auf Master-Passwort, Private Keys, Recovery-Kit-Klartext
 
 ### 2.4 Gruppenverwaltung (lokal)
 
-- Gruppen CRUD
-- Mitglieder zuordnen (lokale **und** LDAP-provisionierte User gleichartig)
+- Gruppen anlegen, umbenennen, beschreiben, löschen
+- Mitglieder per Drag & Drop zuordnen (lokale **und** LDAP-provisionierte User gleichartig)
 - Keine LDAP-Gruppen-Sync für Rechte
 
 ### 2.5 LDAP/AD-Verbindungen

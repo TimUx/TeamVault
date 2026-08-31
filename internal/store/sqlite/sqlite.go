@@ -994,18 +994,9 @@ func (s *Store) Health(ctx context.Context) (store.Health, error) {
 	return store.Health{Backend: "sqlite", OK: true, Detail: "ok"}, nil
 }
 
-type snapRecords struct {
-	Tenants []store.Tenant     `json:"tenants"`
-	Users   []store.UserRecord `json:"users"`
-	Secrets []struct {
-		Meta store.SecretMeta      `json:"meta"`
-		Blob *store.CiphertextBlob `json:"blob,omitempty"`
-		Envs []store.KeyEnvelope   `json:"envelopes"`
-	} `json:"secrets"`
-}
-
 func (s *Store) ExportSnapshot(ctx context.Context, tenant *store.TenantID) (*store.StoreSnapshot, error) {
-	var rec snapRecords
+	var rec store.SnapshotRecords
+	var tenants []store.Tenant
 	if tenant != nil {
 		if err := requireTenant(*tenant); err != nil {
 			return nil, err
@@ -1014,46 +1005,17 @@ func (s *Store) ExportSnapshot(ctx context.Context, tenant *store.TenantID) (*st
 		if err != nil {
 			return nil, err
 		}
-		rec.Tenants = []store.Tenant{*t}
-		users, err := s.ListUsers(ctx, *tenant, store.UserQuery{Limit: 100000})
+		tenants = []store.Tenant{*t}
+	} else {
+		all, err := s.ListTenants(ctx)
 		if err != nil {
 			return nil, err
 		}
-		rec.Users = users
-		rows, err := s.db.QueryContext(ctx, `SELECT id FROM secrets WHERE tenant_id = ?`, *tenant)
-		if err != nil {
+		tenants = all
+	}
+	for i := range tenants {
+		if err := s.appendTenantSnapshot(ctx, &rec, tenants[i]); err != nil {
 			return nil, err
-		}
-		var ids []store.SecretID
-		for rows.Next() {
-			var sid store.SecretID
-			if err := rows.Scan(&sid); err != nil {
-				rows.Close()
-				return nil, err
-			}
-			ids = append(ids, sid)
-		}
-		if err := rows.Close(); err != nil {
-			return nil, err
-		}
-		if err := rows.Err(); err != nil {
-			return nil, err
-		}
-		for _, sid := range ids {
-			meta, err := s.GetSecretMeta(ctx, *tenant, sid)
-			if err != nil {
-				return nil, err
-			}
-			blob, _ := s.GetSecretCiphertext(ctx, *tenant, sid)
-			envs, err := s.ListKeyEnvelopes(ctx, *tenant, sid)
-			if err != nil {
-				return nil, err
-			}
-			rec.Secrets = append(rec.Secrets, struct {
-				Meta store.SecretMeta      `json:"meta"`
-				Blob *store.CiphertextBlob `json:"blob,omitempty"`
-				Envs []store.KeyEnvelope   `json:"envelopes"`
-			}{Meta: *meta, Blob: blob, Envs: envs})
 		}
 	}
 	raw, err := json.Marshal(rec)
@@ -1070,36 +1032,144 @@ func (s *Store) ExportSnapshot(ctx context.Context, tenant *store.TenantID) (*st
 	}, nil
 }
 
+func (s *Store) appendTenantSnapshot(ctx context.Context, rec *store.SnapshotRecords, t store.Tenant) error {
+	tid := t.ID
+	rec.Tenants = append(rec.Tenants, t)
+	users, err := s.ListUsers(ctx, tid, store.UserQuery{Limit: 100000})
+	if err != nil {
+		return err
+	}
+	rec.Users = append(rec.Users, users...)
+
+	groups, err := s.ListGroups(ctx, tid)
+	if err != nil {
+		return err
+	}
+	rec.Groups = append(rec.Groups, groups...)
+	for _, g := range groups {
+		uids, err := s.ListGroupMembers(ctx, tid, g.ID)
+		if err != nil {
+			return err
+		}
+		for _, uid := range uids {
+			rec.Members = append(rec.Members, store.GroupMember{TenantID: tid, GroupID: g.ID, UserID: uid})
+		}
+	}
+
+	wa, err := s.listWebAuthnByTenant(ctx, tid)
+	if err != nil {
+		return err
+	}
+	rec.WebAuthn = append(rec.WebAuthn, wa...)
+
+	metas, err := s.ListSecretMetas(ctx, tid)
+	if err != nil {
+		return err
+	}
+	for _, meta := range metas {
+		blob, _ := s.GetSecretCiphertext(ctx, tid, meta.ID)
+		envs, err := s.ListKeyEnvelopes(ctx, tid, meta.ID)
+		if err != nil {
+			return err
+		}
+		sec := store.SnapshotSecret{Meta: meta, Envs: envs}
+		if blob != nil {
+			b := *blob
+			sec.Blob = &b
+		}
+		rec.Secrets = append(rec.Secrets, sec)
+	}
+	return nil
+}
+
+func (s *Store) listWebAuthnByTenant(ctx context.Context, tenant store.TenantID) ([]store.WebAuthnCredential, error) {
+	rows, err := s.db.QueryContext(ctx, `
+SELECT id, tenant_id, user_id, credential_id, public_key, attestation, transport, sign_count, name, aaguid, created_at
+FROM webauthn_credentials WHERE tenant_id = ?`, tenant)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []store.WebAuthnCredential
+	for rows.Next() {
+		var c store.WebAuthnCredential
+		var cAt string
+		if err := rows.Scan(&c.ID, &c.TenantID, &c.UserID, &c.CredentialID, &c.PublicKey, &c.Attestation, &c.Transport,
+			&c.SignCount, &c.Name, &c.AAGUID, &cAt); err != nil {
+			return nil, err
+		}
+		c.CreatedAt, _ = time.Parse(time.RFC3339Nano, cAt)
+		out = append(out, c)
+	}
+	return out, rows.Err()
+}
+
+func (s *Store) wipeTenant(ctx context.Context, tid store.TenantID) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	for _, q := range []string{
+		`DELETE FROM group_members WHERE tenant_id = ?`,
+		`DELETE FROM groups WHERE tenant_id = ?`,
+		`DELETE FROM webauthn_credentials WHERE tenant_id = ?`,
+		`DELETE FROM key_envelopes WHERE tenant_id = ?`,
+		`DELETE FROM secret_ciphertext WHERE tenant_id = ?`,
+		`DELETE FROM secrets WHERE tenant_id = ?`,
+		`DELETE FROM audit_events WHERE tenant_id = ?`,
+		`DELETE FROM users WHERE tenant_id = ?`,
+		`DELETE FROM tenants WHERE id = ?`,
+	} {
+		if _, err := tx.ExecContext(ctx, q, tid); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+func (s *Store) wipeAll(ctx context.Context) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	for _, q := range []string{
+		`DELETE FROM group_members`,
+		`DELETE FROM groups`,
+		`DELETE FROM webauthn_credentials`,
+		`DELETE FROM key_envelopes`,
+		`DELETE FROM secret_ciphertext`,
+		`DELETE FROM secrets`,
+		`DELETE FROM audit_events`,
+		`DELETE FROM users`,
+		`DELETE FROM tenants`,
+	} {
+		if _, err := tx.ExecContext(ctx, q); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
 func (s *Store) ImportSnapshot(ctx context.Context, snap store.StoreSnapshot, mode store.ImportMode) error {
 	sum := sha256.Sum256(snap.Records)
 	if hex.EncodeToString(sum[:]) != snap.ChecksumSHA256 {
 		return errors.New("snapshot checksum mismatch")
 	}
-	var rec snapRecords
+	var rec store.SnapshotRecords
 	if err := json.Unmarshal(snap.Records, &rec); err != nil {
 		return err
 	}
-	if mode == store.ImportReplace && snap.TenantFilter != nil {
-		tid := *snap.TenantFilter
-		tx, err := s.db.BeginTx(ctx, nil)
-		if err != nil {
-			return err
-		}
-		defer func() { _ = tx.Rollback() }()
-		for _, q := range []string{
-			`DELETE FROM key_envelopes WHERE tenant_id = ?`,
-			`DELETE FROM secret_ciphertext WHERE tenant_id = ?`,
-			`DELETE FROM secrets WHERE tenant_id = ?`,
-			`DELETE FROM audit_events WHERE tenant_id = ?`,
-			`DELETE FROM users WHERE tenant_id = ?`,
-			`DELETE FROM tenants WHERE id = ?`,
-		} {
-			if _, err := tx.ExecContext(ctx, q, tid); err != nil {
+	if mode == store.ImportReplace {
+		if snap.TenantFilter != nil {
+			if err := s.wipeTenant(ctx, *snap.TenantFilter); err != nil {
 				return err
 			}
-		}
-		if err := tx.Commit(); err != nil {
-			return err
+		} else {
+			if err := s.wipeAll(ctx); err != nil {
+				return err
+			}
 		}
 	}
 	for _, t := range rec.Tenants {
@@ -1109,6 +1179,21 @@ func (s *Store) ImportSnapshot(ctx context.Context, snap store.StoreSnapshot, mo
 	}
 	for _, u := range rec.Users {
 		if err := s.UpsertUser(ctx, u); err != nil {
+			return err
+		}
+	}
+	for _, g := range rec.Groups {
+		if err := s.PutGroup(ctx, g); err != nil {
+			return err
+		}
+	}
+	for _, m := range rec.Members {
+		if err := s.AddGroupMember(ctx, m); err != nil {
+			return err
+		}
+	}
+	for _, c := range rec.WebAuthn {
+		if err := s.PutWebAuthnCredential(ctx, c); err != nil {
 			return err
 		}
 	}

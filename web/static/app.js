@@ -131,10 +131,25 @@ function ensureHeaderControls() {
 
 function formatAboutLine(info) {
   const product = (info && info.product) || "TeamVault";
-  const version = (info && info.version) || "dev";
-  const commit = info && info.commit && info.commit !== "none" ? ` (${info.commit})` : "";
+  let version = String((info && info.version) || "dev");
+  const commit = info && info.commit && info.commit !== "none" ? String(info.commit) : "";
   const developer = (info && info.developer) || "Timo Braun";
-  return `${product} ${version}${commit} · Entwickler: ${developer}`;
+  const semver = version.match(/^v?(\d+\.\d+\.\d+)/);
+  if (semver) {
+    version = "v" + semver[1];
+  } else if (commit && version !== "dev") {
+    version = version + " (" + commit.slice(0, 7) + ")";
+  }
+  return `${product} ${version} · Entwickler: ${developer}`;
+}
+
+function formatSessionInfo(me) {
+  if (!me) return "";
+  const tenant = me.tenant_name || me.tenant_slug || me.tenant_id || "";
+  let line = `Angemeldet als ${me.username}`;
+  if (tenant) line += ` · ${tenant}`;
+  if (me.totp_enabled) line += " · TOTP aktiv";
+  return line;
 }
 
 let aboutCache = null;
@@ -452,9 +467,13 @@ function renderLogin(app) {
   const n = el(`<div class="panel">
     <h1>Login</h1>
     <p class="lead">Login-Passwort oder Passkey. Zum Entschlüsseln des Vaults brauchen Sie weiterhin Ihr Master-Passwort.</p>
-    <label>Tenant-Slug</label><input id="slug" />
-    <label>Username</label><input id="user" />
-    <label>Passwort</label><input id="pw" type="password" />
+    <label>Organisation</label>
+    <select id="slug" autocomplete="organization" disabled>
+      <option value="">Lade Organisationen…</option>
+    </select>
+    <p class="hint">Bestehende Mandanten — Auswahl für diesen Login.</p>
+    <label>Username</label><input id="user" autocomplete="username" />
+    <label>Passwort</label><input id="pw" type="password" autocomplete="current-password" />
     <label>TOTP (falls aktiv)</label><input id="totp" inputmode="numeric" autocomplete="one-time-code" />
     <div class="error" id="err" hidden></div>
     <div class="row">
@@ -462,19 +481,47 @@ function renderLogin(app) {
       <button class="btn-ghost" type="button" id="doPasskey">Passkey</button>
     </div>
   </div>`);
+  const slugSel = n.querySelector("#slug");
+  (async () => {
+    try {
+      const tenants = await api("/api/auth/tenants");
+      slugSel.innerHTML = "";
+      if (!tenants.length) {
+        slugSel.innerHTML = '<option value="">Keine Organisation vorhanden</option>';
+        return;
+      }
+      let saved = "";
+      try { saved = localStorage.getItem("tv-tenant-slug") || ""; } catch (_) {}
+      tenants.sort((a, b) => a.name.localeCompare(b.name, "de"));
+      for (const t of tenants) {
+        const o = document.createElement("option");
+        o.value = t.slug;
+        o.textContent = t.name === t.slug ? t.name : `${t.name} (${t.slug})`;
+        slugSel.appendChild(o);
+      }
+      slugSel.disabled = false;
+      if (saved && tenants.some((t) => t.slug === saved)) slugSel.value = saved;
+      else if (tenants.length === 1) slugSel.value = tenants[0].slug;
+    } catch (_) {
+      slugSel.innerHTML = '<option value="">Organisationen konnten nicht geladen werden</option>';
+    }
+  })();
   n.querySelector("#doLogin").onclick = async () => {
     const err = n.querySelector("#err");
     err.hidden = true;
     try {
+      const tenantSlug = slugSel.value.trim();
+      if (!tenantSlug) throw new Error("Bitte Organisation wählen");
       const res = await api("/api/auth/login", {
         method: "POST",
         body: JSON.stringify({
-          tenant_slug: n.querySelector("#slug").value.trim(),
+          tenant_slug: tenantSlug,
           username: n.querySelector("#user").value.trim(),
           password: n.querySelector("#pw").value,
           totp_code: n.querySelector("#totp").value.trim(),
         }),
       });
+      try { localStorage.setItem("tv-tenant-slug", tenantSlug); } catch (_) {}
       location.href = res.needs_vault_onboard ? "/onboard" : "/app";
     } catch (e) {
       err.hidden = false; err.textContent = e.message;
@@ -490,7 +537,8 @@ function renderLogin(app) {
     err.hidden = true;
     try {
       if (!window.PublicKeyCredential) throw new Error("Passkeys werden von diesem Browser nicht unterstützt");
-      const tenant = n.querySelector("#slug").value.trim();
+      const tenant = slugSel.value.trim();
+      if (!tenant) throw new Error("Bitte Organisation wählen");
       const username = n.querySelector("#user").value.trim();
       const begin = await api("/api/webauthn/login/begin", {
         method: "POST",
@@ -509,6 +557,7 @@ function renderLogin(app) {
           totp_code: n.querySelector("#totp").value.trim(),
         }),
       });
+      try { localStorage.setItem("tv-tenant-slug", tenant); } catch (_) {}
       location.href = res.needs_vault_onboard ? "/onboard" : "/app";
     } catch (e) {
       err.hidden = false; err.textContent = e.message;
@@ -666,17 +715,18 @@ const vault = {
   secretsOffset: 0,
   pageLimit: 50,
   searchQuery: "",
-  folderFilter: "",
+  tagFilter: "",
   ownershipFilter: "mine", // mine | shared
   viewMode: (function () {
     try {
       const v = localStorage.getItem("tv-secrets-view");
       if (v === "table" || v === "tiles" || v === "list") return v;
     } catch (_) {}
-    return "list";
+    return "table";
   })(),
   groups: [],
   totpTimer: null,
+  selectedIds: new Set(),
 };
 
 function isAdmin() {
@@ -825,6 +875,37 @@ function normalizeSecretPayload(raw) {
   };
 }
 
+function parseTagsInput(raw) {
+  return String(raw || "")
+    .split(",")
+    .map((t) => t.trim())
+    .filter(Boolean);
+}
+
+function mergeTags(...lists) {
+  const seen = new Set();
+  const out = [];
+  for (const list of lists) {
+    for (const t of list) {
+      if (t && !seen.has(t)) {
+        seen.add(t);
+        out.push(t);
+      }
+    }
+  }
+  return out;
+}
+
+function mergeFolderIntoTags(payload, collectionId) {
+  const folder = String(collectionId || "").trim();
+  if (!folder) return payload;
+  return { ...payload, tags: mergeTags(payload.tags || [], [folder]) };
+}
+
+function importItemTags(it) {
+  return mergeTags(it.tags || [], parseTagsInput(it.collection_id));
+}
+
 function newExtraId() {
   return "x_" + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
 }
@@ -876,6 +957,7 @@ function renderApp(app) {
           ${navLink("vault:shared", "share", "Geteilt mit mir")}
           ${navLink("vault:create", "plus", "Neu anlegen")}
           ${navLink("vault:import", "upload", "Import")}
+          ${navLink("vault:backup", "download", "Sicherung")}
         </div>
         <div class="sidebar-section">
           <div class="sidebar-section-title">Konto</div>
@@ -934,59 +1016,97 @@ function renderApp(app) {
         <div id="vaultui" hidden>
           <div class="app-tab active" data-pane="vault">
             <div class="vault-section active" data-vault="secrets">
-              <div class="panel">
-                <div class="toolbar">
-                  <div>
-                    <label><span class="label-with-ico">${icon("search", "label-ico")} Suche</span></label>
-                    <input id="ssearch" type="search" placeholder="Titel, Ordner…" />
-                  </div>
-                  <div>
-                    <label><span class="label-with-ico">${icon("folder", "label-ico")} Ordner</span></label>
-                    <select id="sfolder"><option value="">Alle</option></select>
-                  </div>
-                  <div class="secrets-view-wrap">
-                    <label>Ansicht</label>
-                    <div class="secrets-view-toggle" role="group" aria-label="Ansicht">
-                      <button type="button" class="btn-icon" data-view="list" title="Liste" aria-label="Liste">${icon("layoutList")}</button>
-                      <button type="button" class="btn-icon" data-view="table" title="Tabelle" aria-label="Tabelle">${icon("layoutTable")}</button>
-                      <button type="button" class="btn-icon" data-view="tiles" title="Kacheln" aria-label="Kacheln">${icon("layoutGrid")}</button>
+              <div class="secrets-workspace">
+                <div class="panel vault-chrome">
+                  <div class="toolbar toolbar-compact">
+                    <div>
+                      <label><span class="label-with-ico">${icon("search", "label-ico")} Suche</span></label>
+                      <input id="ssearch" type="search" placeholder="Titel, Tags, Benutzer, Gruppen…" />
+                    </div>
+                    <div>
+                      <label>Tag</label>
+                      <select id="stag"><option value="">Alle Tags</option></select>
+                    </div>
+                    <div class="secrets-view-wrap">
+                      <label>Ansicht</label>
+                      <div class="secrets-view-toggle" role="group" aria-label="Ansicht">
+                        <button type="button" class="btn-icon" data-view="list" title="Liste" aria-label="Liste">${icon("layoutList")}</button>
+                        <button type="button" class="btn-icon" data-view="table" title="Tabelle" aria-label="Tabelle">${icon("layoutTable")}</button>
+                        <button type="button" class="btn-icon" data-view="tiles" title="Kacheln" aria-label="Kacheln">${icon("layoutGrid")}</button>
+                      </div>
                     </div>
                   </div>
+                  <div class="selection-bar selection-bar-compact" id="selBar">
+                    <label class="inline"><input type="checkbox" id="selAllVisible" /> Sichtbare</label>
+                    <span class="hint" id="selCount">0 ausgewählt</span>
+                    <button class="btn-ghost btn-sm" type="button" id="selClear">Auswahl aufheben</button>
+                    <button class="btn-ghost btn-sm" type="button" id="selAllLoaded">Alle geladenen</button>
+                    <span class="hint" id="sCount"></span>
+                  </div>
+                  <div class="row row-compact">
+                    <button class="btn-ghost btn-sm btn-with-ico" type="button" id="sMore" hidden>${btnLabel("chevron", "Mehr laden")}</button>
+                    <button class="btn-ghost btn-sm btn-with-ico" type="button" id="sExportTv">${btnLabel("download", "Export TeamVault")}</button>
+                    <button class="btn-ghost btn-sm btn-with-ico" type="button" id="sExportJson">${btnLabel("download", "Export Bitwarden")}</button>
+                    <button class="btn-ghost btn-sm btn-with-ico" type="button" id="sExportCsv">${btnLabel("download", "Export CSV")}</button>
+                    <button class="btn-ghost btn-sm btn-with-ico" type="button" id="sExportBak">${btnLabel("lock", "Export verschlüsselt")}</button>
+                  </div>
                 </div>
-                <div id="slist" class="list secrets-list"></div>
-                <div class="row">
-                  <button class="btn-ghost btn-with-ico" type="button" id="sMore" hidden>${btnLabel("chevron", "Mehr laden")}</button>
-                  <button class="btn-ghost btn-with-ico" type="button" id="sExportJson">${btnLabel("download", "Export JSON")}</button>
-                  <button class="btn-ghost btn-with-ico" type="button" id="sExportCsv">${btnLabel("download", "Export CSV")}</button>
-                  <span class="hint" id="sCount"></span>
+                <div class="panel secrets-stage">
+                  <div id="slist" class="list secrets-list"></div>
                 </div>
               </div>
-              <div class="panel" id="sdetail" hidden>
-                <h1 id="dtitle">Secret</h1>
-                <div id="dfields" class="secret-fields"></div>
-                <p class="hint" id="drec"></p>
-                <label>Teilen mit User</label>
-                <select id="shareto"></select>
-                <div id="gshareWrap" hidden>
-                  <label>Gruppe teilen</label>
-                  <select id="sharegroup"><option value="">— Gruppe wählen —</option></select>
+              <div class="secret-modal" id="sdetail" hidden role="dialog" aria-modal="true" aria-labelledby="dtitle">
+                <div class="secret-modal-backdrop" id="sdetailBackdrop"></div>
+                <div class="secret-modal-panel panel">
+                  <div class="secret-modal-head">
+                    <h1 id="dtitle">Secret</h1>
+                    <div class="row row-compact">
+                      <button class="btn-accent btn-sm btn-with-ico" type="button" id="dedit">${btnLabel("save", "Bearbeiten")}</button>
+                      <button class="btn-ghost btn-sm" type="button" id="sdetailClose">Schließen</button>
+                    </div>
+                  </div>
+                  <div id="dview">
+                    <div id="dfields" class="secret-fields"></div>
+                    <p class="hint" id="drec"></p>
+                    <label>Teilen mit User</label>
+                    <div class="row row-compact share-row">
+                      <select id="shareto"></select>
+                      <button class="btn-accent btn-sm btn-with-ico" type="button" id="share">${btnLabel("share", "Teilen")}</button>
+                    </div>
+                    <div id="groupShareBlock" hidden>
+                      <label>Teilen mit Gruppe</label>
+                      <div class="row row-compact share-row">
+                        <select id="sharegroup"><option value="">— Gruppe wählen —</option></select>
+                        <button class="btn-ghost btn-sm btn-with-ico" type="button" id="shareGroup">${btnLabel("users", "Gruppe teilen")}</button>
+                      </div>
+                      <p class="hint" id="groupShareHint" hidden></p>
+                    </div>
+                    <div class="row row-compact">
+                      <button class="btn-ghost btn-sm btn-with-ico" type="button" id="revoke">${btnLabel("rotate", "Zugriff entziehen + rotieren")}</button>
+                      <button class="btn-danger btn-sm btn-with-ico" type="button" id="sdel">${btnLabel("trash", "Löschen")}</button>
+                      <button class="btn-ghost btn-sm btn-with-ico" type="button" id="sExportOne">${btnLabel("download", "Export")}</button>
+                    </div>
+                  </div>
+                  <div id="deditForm" hidden>
+                    <label>Titel</label><input id="edtitle" />
+                    <label>Tags</label><input id="edtags" placeholder="storage, prod (Komma)" />
+                    <label>Benutzername</label><input id="eduser" autocomplete="off" />
+                    <label>Passwort</label><input id="edpw" type="password" autocomplete="off" />
+                    <label>Notizen</label><textarea id="ednotes" rows="3"></textarea>
+                    <div class="row row-compact">
+                      <button class="btn-accent btn-sm" type="button" id="dsave">Speichern</button>
+                      <button class="btn-ghost btn-sm" type="button" id="dcancel">Abbrechen</button>
+                    </div>
+                  </div>
+                  <div class="error" id="derr" hidden></div>
                 </div>
-                <div class="row">
-                  <button class="btn-accent btn-with-ico" type="button" id="share">${btnLabel("share", "Teilen")}</button>
-                  <button class="btn-ghost btn-with-ico" type="button" id="shareGroup" hidden>${btnLabel("users", "Gruppe teilen")}</button>
-                  <button class="btn-ghost btn-with-ico" type="button" id="revoke">${btnLabel("rotate", "Zugriff entziehen + rotieren")}</button>
-                  <button class="btn-danger btn-with-ico" type="button" id="sdel">${btnLabel("trash", "Löschen")}</button>
-                </div>
-                <div class="error" id="derr" hidden></div>
               </div>
             </div>
 
             <div class="vault-section" data-vault="create">
               <div class="panel">
                 <label>Titel</label><input id="stitle" />
-                <label>Ordner</label>
-                <input id="sfolderIn" list="folderList" placeholder="z. B. Infrastruktur" autocomplete="off" />
-                <datalist id="folderList"></datalist>
+                <label>Tags</label><input id="stagsIn" placeholder="storage, prod (Komma)" autocomplete="off" />
                 <label>Benutzername</label><input id="suser" autocomplete="off" />
                 <label>Passwort</label>
                 <div class="row gen-row" style="margin-top:0.35rem">
@@ -1019,6 +1139,13 @@ function renderApp(app) {
                   </label>
                   <button class="btn-ghost" type="button" id="sextraAddBtn">Hinzufügen</button>
                 </div>
+                <label>Teilen mit Usern (optional)</label>
+                <select id="screateUsers" multiple size="4"></select>
+                <p class="hint">Strg/Cmd-Klick für Mehrfachauswahl. Nur onboardete User.</p>
+                <div id="screateGroupsWrap" hidden>
+                  <label>Gruppen teilen (optional)</label>
+                  <select id="screateGroups" multiple size="3"></select>
+                </div>
                 <div class="error" id="serr" hidden></div>
                 <div class="row"><button class="btn-accent btn-with-ico" type="button" id="screate">${btnLabel("save", "Speichern (clientseitig verschlüsselt)")}</button></div>
               </div>
@@ -1026,14 +1153,56 @@ function renderApp(app) {
 
             <div class="vault-section" data-vault="import">
               <div class="panel">
-                <p class="hint">Bitwarden-JSON, CSV oder KeePass-XML — Parsing und Verschlüsselung nur im Browser (Zero-Knowledge).</p>
-                <input id="simport" type="file" accept=".json,.csv,.xml,text/csv,application/json,text/xml" />
+                <p class="hint">Unterstützt: TeamVault JSON/.tvbak, Bitwarden JSON, KeePass XML, KeePassXC/Chrome/Firefox/LastPass/1Password-CSV, Proton Pass JSON, 1Password 1PUX (<code>export.data</code>). Parsing und Verschlüsselung nur im Browser.</p>
+                <input id="simport" type="file" accept=".json,.csv,.xml,.tvbak,text/csv,application/json,text/xml" />
+                <div id="simportPwWrap" hidden>
+                  <label>Backup-Passwort</label>
+                  <input id="simportPw" type="password" autocomplete="off" />
+                  <div class="row">
+                    <button class="btn-accent btn-with-ico" type="button" id="simportUnlock">${btnLabel("unlock", "Sicherung entsperren")}</button>
+                  </div>
+                </div>
+                <div id="simportPreviewWrap" hidden>
+                  <label class="inline"><input type="checkbox" id="simportAll" checked /> Alle Einträge</label>
+                  <span class="hint" id="simportCount"></span>
+                  <div class="import-preview-wrap">
+                    <table class="secrets-table" id="simportPreview">
+                      <thead><tr><th></th><th>Titel</th><th>Benutzer</th><th>URL</th><th>Tags</th></tr></thead>
+                      <tbody></tbody>
+                    </table>
+                  </div>
+                </div>
                 <div class="row">
-                  <button class="btn-ghost btn-with-ico" type="button" id="simportRun" disabled>${btnLabel("upload", "Import starten")}</button>
+                  <button class="btn-ghost btn-with-ico" type="button" id="simportRun" disabled>${btnLabel("upload", "Auswahl importieren")}</button>
                   <span class="hint" id="simportHint"></span>
                 </div>
                 <div class="error" id="ierr" hidden></div>
                 <div class="ok" id="iok" hidden></div>
+              </div>
+            </div>
+
+            <div class="vault-section" data-vault="backup">
+              <div class="panel">
+                <h2>Verschlüsselte Sicherung</h2>
+                <p class="hint">Alle Secrets, die Sie entschlüsseln können, als <code>.tvbak</code> (Argon2id + AES-GCM). Der Server sieht den Klartext nicht. Backup-Passwort mindestens 12 Zeichen — getrennt vom Master-Passwort wählen.</p>
+                <label>Backup-Passwort</label>
+                <input id="bak_pw" type="password" autocomplete="new-password" />
+                <label>Wiederholen</label>
+                <input id="bak_pw2" type="password" autocomplete="new-password" />
+                <div class="row">
+                  <button class="btn-accent btn-with-ico" type="button" id="bak_create">${btnLabel("download", "Sicherung herunterladen")}</button>
+                </div>
+                <h2>Wiederherstellen</h2>
+                <p class="hint">TeamVault-Sicherung (<code>.tvbak</code>) oder Klartext-Export. Einträge werden als neue Secrets angelegt (kein Überschreiben bestehender IDs).</p>
+                <input id="bak_file" type="file" accept=".tvbak,.json,application/json" />
+                <label>Backup-Passwort (bei .tvbak)</label>
+                <input id="bak_restore_pw" type="password" autocomplete="off" />
+                <div class="row">
+                  <button class="btn-ghost btn-with-ico" type="button" id="bak_restore">${btnLabel("upload", "Wiederherstellen")}</button>
+                  <span class="hint" id="bak_hint"></span>
+                </div>
+                <div class="error" id="bak_err" hidden></div>
+                <div class="ok" id="bak_ok" hidden></div>
               </div>
             </div>
           </div>
@@ -1087,18 +1256,55 @@ function renderApp(app) {
                 <div class="admin-section" data-admin-section="users">
                   <div id="ulist" class="list"></div>
                   <div class="hint" id="udisable_hint" hidden></div>
+                  <h3 class="admin-subhead">Neuer User</h3>
                   <label>Username</label><input id="nuser" />
+                  <label>Anzeigename</label><input id="ndisplay" />
+                  <label>E-Mail</label><input id="nemail" type="email" autocomplete="off" />
                   <label>Passwort (≥12)</label><input id="npw" type="password" />
                   <div class="row"><button class="btn-accent" type="button" id="ucreate">User anlegen</button></div>
                 </div>
                 <div class="admin-section" data-admin-section="groups">
-                  <div id="glist" class="list"></div>
-                  <label>Gruppenname</label><input id="gname" />
-                  <div class="row"><button class="btn-accent" type="button" id="gcreate">Gruppe anlegen</button></div>
-                  <label>Member hinzufügen (Group-ID)</label><input id="gmid" placeholder="grp_…" />
-                  <label>User-ID</label><input id="gmuid" placeholder="usr_…" />
-                  <div class="row"><button class="btn-ghost" type="button" id="gmadd">Member speichern</button></div>
+                  <div class="groups-workspace">
+                    <aside class="groups-pool panel-inset">
+                      <h3>User</h3>
+                      <p class="hint">Aktive User in eine Gruppe ziehen.</p>
+                      <div id="userPool" class="drag-pool"></div>
+                    </aside>
+                    <div class="groups-board">
+                      <div class="groups-toolbar row">
+                        <input id="gname" placeholder="Neue Gruppe…" />
+                        <button class="btn-accent" type="button" id="gcreate">Gruppe anlegen</button>
+                      </div>
+                      <div id="glist" class="groups-grid"></div>
+                    </div>
+                  </div>
                   <div class="row"><button class="btn-ghost" type="button" id="ldap_sync">LDAP-Sync (Disable fehlende)</button></div>
+                </div>
+                <div id="userEditModal" class="admin-modal" hidden role="dialog" aria-modal="true" aria-labelledby="userEditTitle">
+                  <div class="admin-modal-backdrop" id="userEditBackdrop"></div>
+                  <div class="admin-modal-panel panel">
+                    <div class="admin-modal-head">
+                      <h2 id="userEditTitle">User bearbeiten</h2>
+                      <button type="button" class="btn-ghost btn-sm" id="userEditClose">Schließen</button>
+                    </div>
+                    <p class="hint" id="userEditMeta"></p>
+                    <label>Anzeigename</label><input id="ue_display" />
+                    <label>E-Mail</label><input id="ue_email" type="email" autocomplete="off" />
+                    <div id="ue_local_block">
+                      <label>Neues Login-Passwort (optional, ≥12)</label><input id="ue_password" type="password" autocomplete="new-password" />
+                    </div>
+                    <fieldset class="role-fieldset">
+                      <legend>Rollen</legend>
+                      <label class="inline"><input type="checkbox" id="ue_role_member" value="member" /> member</label>
+                      <label class="inline"><input type="checkbox" id="ue_role_admin" value="tenant_admin" /> tenant_admin</label>
+                      <label class="inline"><input type="checkbox" id="ue_role_auditor" value="auditor" /> auditor</label>
+                      <label class="inline" id="ue_role_plat_wrap"><input type="checkbox" id="ue_role_plat" value="platform_admin" /> platform_admin</label>
+                    </fieldset>
+                    <div class="error" id="ue_err" hidden></div>
+                    <div class="row">
+                      <button class="btn-accent" type="button" id="ue_save">Speichern</button>
+                    </div>
+                  </div>
                 </div>
                 <div class="admin-section" data-admin-section="ldap">
                   <label class="inline"><input id="ldap_en" type="checkbox" /> Aktiv</label>
@@ -1178,6 +1384,19 @@ function renderApp(app) {
                   <label>DSN / Pfad</label><input id="mig_dsn" placeholder="leer = data/vault-migrated.*" />
                   <label>Bestätigung</label><input id="mig_confirm" placeholder="MIGRATE" />
                   <div class="row"><button class="btn-danger" type="button" id="mig_go">Migrieren</button></div>
+                  <h2>Instanz-Backup / Restore</h2>
+                  <p class="hint">Snapshot enthält nur Ciphertext + Metadaten (Tenants, User, Gruppen, Secrets, Passkeys). Unlock-Keyfile und Recovery-Kits <strong>nicht</strong> in dieser Datei — separat sichern. Restore mit <code>RESTORE</code> ersetzt den gesamten Vault-Store. Danach neu anmelden, falls User-IDs abweichen.</p>
+                  <div class="row">
+                    <button class="btn-accent btn-with-ico" type="button" id="inst_bak_dl">${btnLabel("download", "Snapshot herunterladen")}</button>
+                  </div>
+                  <label>Snapshot-Datei</label>
+                  <input id="inst_bak_file" type="file" accept=".json,application/json" />
+                  <label>Bestätigung</label>
+                  <input id="inst_bak_confirm" placeholder="RESTORE" autocomplete="off" />
+                  <div class="row">
+                    <button class="btn-danger" type="button" id="inst_bak_restore">Wiederherstellen</button>
+                  </div>
+                  <div class="ok" id="inst_bak_ok" hidden></div>
                 </div>
               </div>
               <div class="admin-section" data-admin-section="audit">
@@ -1197,6 +1416,8 @@ function renderApp(app) {
   live.setAttribute("aria-atomic", "true");
   app.appendChild(live);
   let currentSecret = null;
+  let currentSecretPayload = null;
+  let currentSecretTitle = "";
   let totpSecretPlain = "";
 
   const NAV_TITLES = {
@@ -1204,6 +1425,7 @@ function renderApp(app) {
     "vault:shared": "Geteilt mit mir",
     "vault:create": "Neu anlegen",
     "vault:import": "Import",
+    "vault:backup": "Sicherung",
     account: "Konto",
     "admin:users": "Benutzer",
     "admin:groups": "Gruppen",
@@ -1270,8 +1492,7 @@ function renderApp(app) {
   api("/api/me").then((me) => {
     if (me.needs_vault_onboard) { location.href = "/onboard"; return; }
     vault.me = me;
-    n.querySelector("#info").textContent = `Angemeldet als ${me.username} · Tenant ${me.tenant_id}` +
-      (me.totp_enabled ? " · TOTP aktiv" : "");
+    n.querySelector("#info").textContent = formatSessionInfo(me);
   }).catch(() => { location.href = "/login"; });
 
   n.querySelector("#out").onclick = async () => {
@@ -1446,9 +1667,17 @@ function renderApp(app) {
     } catch (e) { err.hidden = false; err.textContent = e.message; }
   };
 
-  async function collectDecryptedExportItems() {
+  async function ensureAllSecretsLoaded() {
+    while (vault.secretsCache.length < vault.secretsTotal) {
+      await refreshSecrets(false);
+    }
+  }
+
+  async function collectDecryptedExportItems(ids) {
+    const want = ids && ids.length ? new Set(ids) : null;
     const items = [];
     for (const it of vault.secretsCache) {
+      if (want && !want.has(it.id)) continue;
       if (!it.has_access || !it.envelope) continue;
       try {
         const dk = openDKFromEnvelope(it.envelope);
@@ -1460,13 +1689,14 @@ function renderApp(app) {
         );
         const det = await api("/api/secrets/" + it.id);
         const ddk = openDKFromEnvelope(det.envelope);
-        const payload = JSON.parse(await TVCrypto.decryptPayload(
+        const pt = await TVCrypto.decryptPayload(
           TVCrypto.b64dec(det.ciphertext_b64),
           TVCrypto.b64dec(det.nonce_b64),
           ddk, det.key_version || kv
-        ));
+        );
         ddk.fill(0); dk.fill(0);
-        items.push({ title, payload, collection_id: it.collection_id || "" });
+        const payload = normalizeSecretPayload(JSON.parse(new TextDecoder().decode(pt)));
+        items.push({ title, payload: mergeFolderIntoTags(payload, it.collection_id) });
       } catch (_) { /* skip undecryptable */ }
     }
     return items;
@@ -1481,48 +1711,105 @@ function renderApp(app) {
     URL.revokeObjectURL(a.href);
   }
 
-  n.querySelector("#sExportJson").onclick = async () => {
-    if (!confirm("Klartext-Export als JSON speichern? Die Datei enthält Passwörter im Klartext — sicher ablegen und danach löschen.")) return;
+  function selectedExportIds() {
+    const visible = filterVisibleSecrets();
+    if (vault.selectedIds.size) {
+      return visible.filter((it) => vault.selectedIds.has(it.id) && it.has_access).map((it) => it.id);
+    }
+    return visible.filter((it) => it.has_access).map((it) => it.id);
+  }
+
+  function confirmPlainExport(kind, count) {
+    const scope = vault.selectedIds.size ? `${count} ausgewählte` : `${count} sichtbare`;
+    return confirm(
+      `Klartext-Export (${kind}) von ${scope} Secrets speichern? Die Datei enthält Passwörter im Klartext — sicher ablegen und danach löschen.`
+    );
+  }
+
+  async function runPlainExport(format) {
     try {
-      const items = await collectDecryptedExportItems();
-      const bw = {
-        encrypted: false,
-        items: items.map((it) => ({
-          type: 1,
-          name: it.title,
-          folderId: it.collection_id || null,
-          login: {
-            username: it.payload.username || "",
-            password: it.payload.password || "",
-            totp: it.payload.totp || null,
-            uris: (it.payload.urls || (it.payload.url ? [it.payload.url] : [])).map((u) => ({ uri: u })),
-          },
-          notes: (it.payload.extra || []).filter((e) => e.type === "notes").map((e) => e.value).join("\n") || "",
-        })),
-      };
-      downloadBlob("teamvault-export.json", JSON.stringify(bw, null, 2), "application/json");
+      if (!window.TVVaultIO) throw new Error("Export-Modul nicht geladen");
+      const ids = selectedExportIds();
+      if (!ids.length) throw new Error("Keine Secrets zum Export");
+      const label = format === "csv" ? "CSV" : format === "bitwarden" ? "Bitwarden-JSON" : "TeamVault-JSON";
+      if (!confirmPlainExport(label, ids.length)) return;
+      const items = await collectDecryptedExportItems(ids);
+      if (format === "csv") {
+        downloadBlob("teamvault-export.csv", TVVaultIO.toCSV(items), "text/csv");
+      } else if (format === "bitwarden") {
+        downloadBlob("teamvault-export.json", JSON.stringify(TVVaultIO.toBitwardenJSON(items), null, 2), "application/json");
+      } else {
+        downloadBlob("teamvault-export.json", JSON.stringify(TVVaultIO.toTeamVaultJSON(items), null, 2), "application/json");
+      }
+    } catch (e) { alert(e.message); }
+  }
+
+  async function runEncryptedExport(ids) {
+    const pw = prompt("Backup-Passwort (mind. 12 Zeichen). Die Datei ist ohne dieses Passwort wertlos.");
+    if (pw == null) return;
+    if (pw.length < 12) throw new Error("Backup-Passwort mindestens 12 Zeichen");
+    const items = await collectDecryptedExportItems(ids);
+    if (!items.length) throw new Error("Keine Secrets zum Export");
+    const wrapped = await TVVaultIO.wrapBackup(TVVaultIO.toTeamVaultJSON(items), pw, vault.params || {});
+    downloadBlob("teamvault-backup.tvbak", JSON.stringify(wrapped, null, 2), "application/json");
+  }
+
+  n.querySelector("#sExportTv").onclick = () => runPlainExport("teamvault");
+  n.querySelector("#sExportJson").onclick = () => runPlainExport("bitwarden");
+  n.querySelector("#sExportCsv").onclick = () => runPlainExport("csv");
+  n.querySelector("#sExportBak").onclick = async () => {
+    try {
+      const ids = selectedExportIds();
+      if (!ids.length) throw new Error("Keine Secrets zum Export");
+      if (!confirm(`Verschlüsselte Sicherung von ${ids.length} Secrets erzeugen?`)) return;
+      await runEncryptedExport(ids);
     } catch (e) { alert(e.message); }
   };
-  n.querySelector("#sExportCsv").onclick = async () => {
-    if (!confirm("Klartext-Export als CSV speichern? Die Datei enthält Passwörter im Klartext — sicher ablegen und danach löschen.")) return;
+
+  function updateSelectionBar() {
+    const visible = filterVisibleSecrets();
+    const nSel = visible.filter((it) => vault.selectedIds.has(it.id)).length;
+    const countEl = n.querySelector("#selCount");
+    if (countEl) countEl.textContent = nSel + " ausgewählt";
+    const all = n.querySelector("#selAllVisible");
+    if (all) all.checked = visible.length > 0 && nSel === visible.length;
+  }
+
+  function bindSecretCheckbox(cb, id) {
+    cb.checked = vault.selectedIds.has(id);
+    cb.onchange = () => {
+      if (cb.checked) vault.selectedIds.add(id);
+      else vault.selectedIds.delete(id);
+      updateSelectionBar();
+    };
+  }
+
+  n.querySelector("#selAllVisible").onchange = () => {
+    const on = n.querySelector("#selAllVisible").checked;
+    for (const it of filterVisibleSecrets()) {
+      if (on) vault.selectedIds.add(it.id);
+      else vault.selectedIds.delete(it.id);
+    }
+    paintSecretList();
+  };
+  n.querySelector("#selClear").onclick = () => {
+    vault.selectedIds.clear();
+    paintSecretList();
+  };
+  n.querySelector("#selAllLoaded").onclick = async () => {
     try {
-      const items = await collectDecryptedExportItems();
-      const esc = (s) => `"${String(s ?? "").replace(/"/g, '""')}"`;
-      const lines = ["title,username,password,url,folder,notes"];
-      for (const it of items) {
-        const url = (it.payload.urls && it.payload.urls[0]) || it.payload.url || "";
-        const notes = (it.payload.extra || []).filter((e) => e.type === "notes").map((e) => e.value).join(" ");
-        lines.push([it.title, it.payload.username, it.payload.password, url, it.collection_id, notes].map(esc).join(","));
+      await ensureAllSecretsLoaded();
+      for (const it of vault.secretsCache) {
+        if (it.has_access) vault.selectedIds.add(it.id);
       }
-      downloadBlob("teamvault-export.csv", lines.join("\n"), "text/csv");
+      paintSecretList();
     } catch (e) { alert(e.message); }
   };
 
   async function afterUnlock() {
     try {
       vault.me = await api("/api/me");
-      n.querySelector("#info").textContent = `Angemeldet als ${vault.me.username} · Tenant ${vault.me.tenant_id}` +
-        (vault.me.totp_enabled ? " · TOTP aktiv" : "");
+      n.querySelector("#info").textContent = formatSessionInfo(vault.me);
     } catch (_) {}
     try {
       const pol = await api("/api/policy/client");
@@ -1560,32 +1847,129 @@ function renderApp(app) {
       }
       try { await refreshAdmin(); } catch (e) { console.warn('refreshAdmin', e); }
     }
-    if (isAdmin()) {
-      n.querySelector("#gshareWrap").hidden = false;
-      n.querySelector("#shareGroup").hidden = false;
-      try {
-        vault.groups = await api("/api/admin/groups");
-        const sel = n.querySelector("#sharegroup");
-        sel.innerHTML = `<option value="">— Gruppe wählen —</option>` +
-          vault.groups.map((g) => `<option value="${g.id}">${g.name}</option>`).join("");
-      } catch (_) { vault.groups = []; }
-    } else {
-      try {
-        vault.groups = await api("/api/groups");
-        if (vault.groups.length) {
-          n.querySelector("#gshareWrap").hidden = false;
-          n.querySelector("#shareGroup").hidden = false;
-          const sel = n.querySelector("#sharegroup");
-          sel.innerHTML = `<option value="">— Gruppe wählen —</option>` +
-            vault.groups.map((g) => `<option value="${g.id}">${g.name}</option>`).join("");
-        }
-      } catch (_) { vault.groups = []; }
-    }
+    await refreshGroupShareUI();
+    await refreshSharePickers();
     vault.secretsCache = [];
     vault.secretsOffset = 0;
     await refreshSecrets(true);
     navigateTo("vault:mine");
   }
+
+  async function refreshGroupShareUI() {
+    const block = n.querySelector("#groupShareBlock");
+    const sel = n.querySelector("#sharegroup");
+    const hint = n.querySelector("#groupShareHint");
+    if (!block || !sel) return;
+    try {
+      vault.groups = await api("/api/groups");
+    } catch (_) {
+      vault.groups = [];
+    }
+    const groups = vault.groups || [];
+    sel.innerHTML = `<option value="">— Gruppe wählen —</option>` +
+      groups.map((g) => `<option value="${g.id}">${g.name}</option>`).join("");
+    const canShare = isAdmin() || groups.length > 0;
+    block.hidden = !canShare;
+    if (hint) {
+      if (canShare && !groups.length && isAdmin()) {
+        hint.hidden = false;
+        hint.textContent = "Noch keine Gruppen — unter Admin → Gruppen anlegen.";
+      } else {
+        hint.hidden = true;
+        hint.textContent = "";
+      }
+    }
+    const gWrap = n.querySelector("#screateGroupsWrap");
+    const gSel = n.querySelector("#screateGroups");
+    if (gWrap && gSel) {
+      gWrap.hidden = !groups.length;
+      if (groups.length) {
+        gSel.innerHTML = groups.map((g) => `<option value="${g.id}">${g.name}</option>`).join("");
+      }
+    }
+  }
+
+  async function refreshSharePickers() {
+    try {
+      const pks = await api("/api/users/public-keys");
+      const userSel = n.querySelector("#screateUsers");
+      if (userSel) {
+        userSel.innerHTML = pks
+          .filter((p) => p.user_id !== vault.me?.user_id && p.onboarded !== false)
+          .map((p) => `<option value="${p.user_id}" data-pk="${p.public_key_b64}">${p.username}</option>`)
+          .join("");
+      }
+    } catch (_) {}
+  }
+
+  function closeSecretModal() {
+    const panel = n.querySelector("#sdetail");
+    if (panel) panel.hidden = true;
+    document.body.classList.remove("secret-modal-open");
+    const editForm = n.querySelector("#deditForm");
+    const dview = n.querySelector("#dview");
+    if (editForm) editForm.hidden = true;
+    if (dview) dview.hidden = false;
+    currentSecret = null;
+    currentSecretPayload = null;
+    currentSecretTitle = "";
+  }
+
+  n.querySelector("#sdetailClose").onclick = closeSecretModal;
+  n.querySelector("#sdetailBackdrop").onclick = closeSecretModal;
+  n.querySelector("#dcancel").onclick = () => {
+    n.querySelector("#deditForm").hidden = true;
+    n.querySelector("#dview").hidden = false;
+  };
+  n.querySelector("#dedit").onclick = () => {
+    if (!currentSecret || !currentSecretPayload) return;
+    n.querySelector("#edtitle").value = currentSecretTitle || "";
+    n.querySelector("#eduser").value = currentSecretPayload.username || "";
+    n.querySelector("#edpw").value = currentSecretPayload.password || "";
+    n.querySelector("#edtags").value = (currentSecretPayload.tags || []).join(", ");
+    n.querySelector("#ednotes").value = currentSecretPayload.notes || "";
+    n.querySelector("#dview").hidden = true;
+    n.querySelector("#deditForm").hidden = false;
+  };
+  n.querySelector("#dsave").onclick = async () => {
+    const err = n.querySelector("#derr"); err.hidden = true;
+    try {
+      if (!currentSecret || !vault.sk) throw new Error("Kein Secret geladen");
+      const title = n.querySelector("#edtitle").value.trim();
+      if (!title) throw new Error("Titel erforderlich");
+      const payload = normalizeSecretPayload({
+        ...currentSecretPayload,
+        username: n.querySelector("#eduser").value,
+        password: n.querySelector("#edpw").value,
+        tags: n.querySelector("#edtags").value.split(",").map((t) => t.trim()).filter(Boolean),
+        notes: n.querySelector("#ednotes").value,
+      });
+      const kv = currentSecret.key_version;
+      const dk = openDKFromEnvelope(currentSecret.envelope);
+      const titleEnc = await TVCrypto.encryptTitle(title, dk, kv);
+      const bodyEnc = await TVCrypto.encryptPayload(
+        new TextEncoder().encode(JSON.stringify(payload)),
+        dk, kv
+      );
+      dk.fill(0);
+      await api("/api/secrets/" + currentSecret.id, {
+        method: "PUT",
+        body: JSON.stringify({
+          title_ciphertext_b64: TVCrypto.b64enc(titleEnc.ciphertext),
+          title_nonce_b64: TVCrypto.b64enc(titleEnc.nonce),
+          ciphertext_b64: TVCrypto.b64enc(bodyEnc.ciphertext),
+          nonce_b64: TVCrypto.b64enc(bodyEnc.nonce),
+          key_version: kv,
+        }),
+      });
+      n.querySelector("#deditForm").hidden = true;
+      n.querySelector("#dview").hidden = false;
+      await refreshSecrets(true);
+      await openSecret(currentSecret.id);
+    } catch (e) {
+      err.hidden = false; err.textContent = e.message;
+    }
+  };
 
   n.querySelector("#ulock").onclick = async () => {
     const err = n.querySelector("#uerr"); err.hidden = true;
@@ -1638,8 +2022,8 @@ function renderApp(app) {
     vault.searchQuery = n.querySelector("#ssearch").value.trim().toLowerCase();
     paintSecretList();
   };
-  n.querySelector("#sfolder").onchange = () => {
-    vault.folderFilter = n.querySelector("#sfolder").value;
+  n.querySelector("#stag").onchange = () => {
+    vault.tagFilter = n.querySelector("#stag").value;
     paintSecretList();
   };
   n.querySelector("#spwGen").onclick = () => {
@@ -1744,10 +2128,7 @@ function renderApp(app) {
         return;
       }
       if (type === "tags") {
-        payload.tags = (row.querySelector(".slot-val")?.value || "")
-          .split(",")
-          .map((t) => t.trim())
-          .filter(Boolean);
+        payload.tags = mergeTags(payload.tags, parseTagsInput(row.querySelector(".slot-val")?.value));
         return;
       }
       if (type === "favorite") {
@@ -1760,6 +2141,7 @@ function renderApp(app) {
       const value = row.querySelector(".slot-val")?.value || "";
       payload.extra.push({ id: row.dataset.slotId || newExtraId(), type, label, value });
     });
+    payload.tags = mergeTags(payload.tags, parseTagsInput(n.querySelector("#stagsIn")?.value));
     return payload;
   }
 
@@ -1768,7 +2150,7 @@ function renderApp(app) {
     n.querySelector("#suser").value = "";
     n.querySelector("#spw").value = "";
     n.querySelector("#spw").type = "password";
-    n.querySelector("#sfolderIn").value = "";
+    n.querySelector("#stagsIn").value = "";
     n.querySelector("#sextraSlots").innerHTML = "";
     n.querySelector("#sextraAdd").value = "";
     n.querySelector("#spwShow").innerHTML = btnLabel("eye", "Anzeigen");
@@ -1789,27 +2171,85 @@ function renderApp(app) {
   };
 
   let importPending = [];
+  let importEncryptedRaw = null;
+
+  function resetImportUi() {
+    importPending = [];
+    importEncryptedRaw = null;
+    n.querySelector("#simportRun").disabled = true;
+    n.querySelector("#simportPreviewWrap").hidden = true;
+    n.querySelector("#simportPwWrap").hidden = true;
+    n.querySelector("#simportHint").textContent = "";
+    n.querySelector("#simportPreview tbody").innerHTML = "";
+  }
+
+  function renderImportPreview(items) {
+    const wrap = n.querySelector("#simportPreviewWrap");
+    const tbody = n.querySelector("#simportPreview tbody");
+    tbody.innerHTML = "";
+    items.forEach((it, i) => {
+      const tr = el(`<tr>
+        <td><input type="checkbox" class="imp-check" checked data-i="${i}" /></td>
+        <td></td><td></td><td class="muted"></td><td class="muted"></td>
+      </tr>`);
+      tr.children[1].textContent = it.title || "Import";
+      tr.children[2].textContent = it.username || "—";
+      tr.children[3].textContent = it.url || (it.urls && it.urls[0]) || "—";
+      tr.children[4].textContent = importItemTags(it).join(", ") || "—";
+      tbody.appendChild(tr);
+    });
+    wrap.hidden = items.length === 0;
+    n.querySelector("#simportAll").checked = true;
+    n.querySelector("#simportCount").textContent = items.length + " Einträge";
+    n.querySelector("#simportRun").disabled = items.length === 0;
+  }
+
+  n.querySelector("#simportAll").onchange = () => {
+    const on = n.querySelector("#simportAll").checked;
+    n.querySelectorAll(".imp-check").forEach((cb) => { cb.checked = on; });
+  };
+
   n.querySelector("#simport").onchange = async () => {
     const err = n.querySelector("#ierr"); err.hidden = true;
     n.querySelector("#iok").hidden = true;
-    importPending = [];
-    n.querySelector("#simportRun").disabled = true;
+    resetImportUi();
     const file = n.querySelector("#simport").files?.[0];
     if (!file) return;
     try {
       if (!window.TVImport) throw new Error("Import-Modul nicht geladen");
       const text = await file.text();
       const parsed = TVImport.detectAndParse(file.name, text);
-      importPending = parsed.items;
+      if (parsed.encrypted) {
+        importEncryptedRaw = parsed.raw;
+        n.querySelector("#simportPwWrap").hidden = false;
+        n.querySelector("#simportHint").textContent = "Verschlüsselte Sicherung — Passwort eingeben";
+        return;
+      }
+      importPending = parsed.items || [];
       n.querySelector("#simportHint").textContent =
-        `${parsed.format}: ${importPending.length} Einträge bereit`;
-      n.querySelector("#simportRun").disabled = importPending.length === 0;
+        `${parsed.format}: ${importPending.length} Einträge erkannt`;
+      renderImportPreview(importPending);
     } catch (e) {
       err.hidden = false; err.textContent = e.message;
     }
   };
 
-  async function postEncryptedSecret(title, payload, collectionId) {
+  n.querySelector("#simportUnlock").onclick = async () => {
+    const err = n.querySelector("#ierr"); err.hidden = true;
+    try {
+      if (!importEncryptedRaw) throw new Error("Keine Sicherung geladen");
+      const pw = n.querySelector("#simportPw").value;
+      const data = await TVVaultIO.unwrapBackup(importEncryptedRaw, pw);
+      importPending = (data.items || []).map((it) => TVImport.normalizeItem(it));
+      n.querySelector("#simportPwWrap").hidden = true;
+      n.querySelector("#simportHint").textContent = `teamvault-backup: ${importPending.length} Einträge`;
+      renderImportPreview(importPending);
+    } catch (e) {
+      err.hidden = false; err.textContent = e.message;
+    }
+  };
+
+  async function postEncryptedSecret(title, payload, shareOpts) {
     const kv = 1;
     const dk = TVCrypto.generateDataKey();
     const titleEnc = await TVCrypto.encryptTitle(title, dk, kv);
@@ -1819,7 +2259,30 @@ function renderApp(app) {
       kv
     );
     const meKeys = await api("/api/vault/keys");
-    const env = TVCrypto.sealDataKeyForRecipient(dk, TVCrypto.b64dec(meKeys.public_key_b64), kv);
+    const envelopes = [];
+    const seen = new Set();
+    const addEnv = (uid, pkB64) => {
+      if (!uid || seen.has(uid) || !pkB64) return;
+      envelopes.push(TVCrypto.envelopeToAPI(
+        uid,
+        TVCrypto.sealDataKeyForRecipient(dk, TVCrypto.b64dec(pkB64), kv)
+      ));
+      seen.add(uid);
+    };
+    addEnv(vault.me.user_id, meKeys.public_key_b64);
+    const userSel = n.querySelector("#screateUsers");
+    if (userSel && shareOpts !== false) {
+      for (const opt of userSel.selectedOptions) {
+        addEnv(opt.value, opt.dataset.pk);
+      }
+    }
+    const gSel = n.querySelector("#screateGroups");
+    if (gSel && shareOpts !== false) {
+      for (const opt of gSel.selectedOptions) {
+        const pks = await api("/api/groups/" + encodeURIComponent(opt.value) + "/member-keys");
+        for (const p of pks) addEnv(p.user_id, p.public_key_b64);
+      }
+    }
     dk.fill(0);
     const body = {
       title_ciphertext_b64: TVCrypto.b64enc(titleEnc.ciphertext),
@@ -1827,77 +2290,132 @@ function renderApp(app) {
       ciphertext_b64: TVCrypto.b64enc(bodyEnc.ciphertext),
       nonce_b64: TVCrypto.b64enc(bodyEnc.nonce),
       key_version: kv,
-      envelopes: [TVCrypto.envelopeToAPI(vault.me.user_id, env)],
+      envelopes,
     };
-    if (collectionId) body.collection_id = collectionId;
     await api("/api/secrets", { method: "POST", body: JSON.stringify(body) });
+  }
+
+  async function importNormalizedItems(items, hintEl, okEl, errEl) {
+    errEl.hidden = true;
+    okEl.hidden = true;
+    if (!items.length) return;
+    let done = 0;
+    let failed = 0;
+    if (!vault.sk) throw new Error("Vault gesperrt");
+    for (const it of items) {
+      if (hintEl) hintEl.textContent = `Importiere ${done + 1}/${items.length}…`;
+      try {
+        await postEncryptedSecret(
+          it.title,
+          normalizeSecretPayload({
+            username: it.username || "",
+            password: it.password || "",
+            notes: it.notes || "",
+            url: it.url || "",
+            urls: it.urls || [],
+            totp_seed: it.totp_seed || "",
+            tags: importItemTags(it),
+            favorite: !!it.favorite,
+            extra: it.extra || [],
+          })
+        );
+        done++;
+      } catch {
+        failed++;
+      }
+      it.password = "";
+      it.totp_seed = "";
+      it.notes = "";
+    }
+    if (hintEl) hintEl.textContent = "";
+    okEl.hidden = false;
+    okEl.textContent = failed
+      ? `${done} importiert, ${failed} fehlgeschlagen`
+      : `${done} Einträge importiert`;
+    await refreshSecrets(true);
   }
 
   n.querySelector("#simportRun").onclick = async () => {
     const err = n.querySelector("#ierr");
     const ok = n.querySelector("#iok");
-    err.hidden = true;
-    ok.hidden = true;
-    if (!importPending.length) return;
-    const items = importPending.slice();
-    importPending = [];
-    n.querySelector("#simportRun").disabled = true;
-    let done = 0;
-    let failed = 0;
-    const hint = n.querySelector("#simportHint");
     try {
-      if (!vault.sk) throw new Error("Vault gesperrt");
-      for (const it of items) {
-        hint.textContent = `Importiere ${done + 1}/${items.length}…`;
-        try {
-          await postEncryptedSecret(
-            it.title,
-            normalizeSecretPayload({
-              username: it.username || "",
-              password: it.password || "",
-              notes: it.notes || "",
-              url: it.url || "",
-              urls: it.urls || [],
-              totp_seed: it.totp_seed || "",
-              tags: it.tags || [],
-              favorite: !!it.favorite,
-              extra: it.extra || [],
-            }),
-            it.collection_id || ""
-          );
-          done++;
-        } catch {
-          failed++;
-        }
-        it.password = "";
-        it.totp_seed = "";
-        it.notes = "";
-      }
-      hint.textContent = "";
+      const checks = [...n.querySelectorAll(".imp-check")];
+      const items = checks.length
+        ? checks.filter((cb) => cb.checked).map((cb) => importPending[Number(cb.dataset.i)]).filter(Boolean)
+        : importPending.slice();
+      if (!items.length) throw new Error("Keine Einträge ausgewählt");
+      n.querySelector("#simportRun").disabled = true;
+      await importNormalizedItems(items, n.querySelector("#simportHint"), ok, err);
       n.querySelector("#simport").value = "";
-      ok.hidden = false;
-      ok.textContent = failed
-        ? `${done} importiert, ${failed} fehlgeschlagen`
-        : `${done} Einträge importiert`;
-      await refreshSecrets(true);
+      resetImportUi();
     } catch (e) {
       err.hidden = false;
       err.textContent = e.message;
+      n.querySelector("#simportRun").disabled = importPending.length === 0;
     }
   };
 
-  function updateFolderOptions() {
-    const sel = n.querySelector("#sfolder");
-    const cur = vault.folderFilter;
-    const folders = [...new Set(vault.secretsCache.map((s) => s.collection_id).filter(Boolean))].sort();
-    sel.innerHTML = `<option value="">Alle</option>` + folders.map((f) =>
-      `<option value="${f.replace(/"/g, "&quot;")}">${f}</option>`
-    ).join("");
-    sel.value = cur;
-    const dl = n.querySelector("#folderList");
-    if (dl) {
-      dl.innerHTML = folders.map((f) => `<option value="${f.replace(/"/g, "&quot;")}"></option>`).join("");
+  n.querySelector("#bak_create").onclick = async () => {
+    const err = n.querySelector("#bak_err");
+    const ok = n.querySelector("#bak_ok");
+    err.hidden = true; ok.hidden = true;
+    try {
+      const pw = n.querySelector("#bak_pw").value;
+      const pw2 = n.querySelector("#bak_pw2").value;
+      if (pw !== pw2) throw new Error("Passwörter stimmen nicht überein");
+      await ensureAllSecretsLoaded();
+      const ids = vault.secretsCache.filter((it) => it.has_access).map((it) => it.id);
+      if (!ids.length) throw new Error("Keine Secrets zum Sichern");
+      const items = await collectDecryptedExportItems(ids);
+      const wrapped = await TVVaultIO.wrapBackup(TVVaultIO.toTeamVaultJSON(items), pw, vault.params || {});
+      downloadBlob("teamvault-backup.tvbak", JSON.stringify(wrapped, null, 2), "application/json");
+      n.querySelector("#bak_pw").value = "";
+      n.querySelector("#bak_pw2").value = "";
+      ok.hidden = false;
+      ok.textContent = `${items.length} Secrets gesichert (verschlüsselt). Datei und Passwort getrennt aufbewahren.`;
+    } catch (e) {
+      err.hidden = false; err.textContent = e.message;
     }
+  };
+
+  n.querySelector("#bak_restore").onclick = async () => {
+    const err = n.querySelector("#bak_err");
+    const ok = n.querySelector("#bak_ok");
+    const hint = n.querySelector("#bak_hint");
+    err.hidden = true; ok.hidden = true;
+    try {
+      const file = n.querySelector("#bak_file").files?.[0];
+      if (!file) throw new Error("Datei wählen");
+      const parsed = TVImport.detectAndParse(file.name, await file.text());
+      let items = parsed.items || [];
+      if (parsed.encrypted) {
+        const data = await TVVaultIO.unwrapBackup(parsed.raw, n.querySelector("#bak_restore_pw").value);
+        items = (data.items || []).map((it) => TVImport.normalizeItem(it));
+      }
+      if (!items.length) throw new Error("Keine Einträge in der Datei");
+      if (!confirm(`${items.length} Secrets wiederherstellen? Bestehende Einträge bleiben erhalten.`)) return;
+      await importNormalizedItems(items, hint, ok, err);
+      n.querySelector("#bak_file").value = "";
+      n.querySelector("#bak_restore_pw").value = "";
+    } catch (e) {
+      err.hidden = false; err.textContent = e.message;
+    }
+  };
+
+  function updateTagOptions() {
+    const sel = n.querySelector("#stag");
+    if (!sel) return;
+    const cur = vault.tagFilter;
+    const tags = [...new Set(vault.secretsCache.flatMap((s) => s._tags || []).filter(Boolean))].sort();
+    sel.innerHTML = `<option value="">Alle Tags</option>` + tags.map((t) =>
+      `<option value="${escHtml(t).replace(/"/g, "&quot;")}">${escHtml(t)}</option>`
+    ).join("");
+    sel.value = tags.includes(cur) ? cur : "";
+    if (sel.value !== cur) vault.tagFilter = sel.value;
+  }
+
+  function needsSecretMeta(it) {
+    return !it._metaLoaded && it.has_access;
   }
 
   function matchesOwnership(it) {
@@ -1909,16 +2427,18 @@ function renderApp(app) {
 
   function filterVisibleSecrets() {
     const q = vault.searchQuery;
-    const folder = vault.folderFilter;
+    const tag = vault.tagFilter;
     return vault.secretsCache.filter((it) => {
       if (!matchesOwnership(it)) return false;
-      if (folder && (it.collection_id || "") !== folder) return false;
+      if (tag && !(it._tags || []).includes(tag)) return false;
       if (!q) return true;
       const title = (it._title || "").toLowerCase();
-      const folderName = (it.collection_id || "").toLowerCase();
       const user = (it._username || "").toLowerCase();
       const tags = (it._tags || []).join(" ").toLowerCase();
-      return title.includes(q) || folderName.includes(q) || user.includes(q) || tags.includes(q) ||
+      const creator = (it.created_by_username || "").toLowerCase();
+      const groups = (it.shared_groups || []).join(" ").toLowerCase();
+      return title.includes(q) || user.includes(q) || tags.includes(q) ||
+        creator.includes(q) || groups.includes(q) ||
         (it.id || "").toLowerCase().includes(q);
     });
   }
@@ -1929,10 +2449,8 @@ function renderApp(app) {
   }
 
   async function enrichSecretMeta(it) {
-    if (it._metaLoaded || !it.has_access || !it.envelope || !vault.sk) {
-      it._metaLoaded = true;
-      return;
-    }
+    if (it._metaLoaded) return;
+    if (!it.has_access || !it.envelope || !vault.sk) return;
     try {
       const det = await api("/api/secrets/" + it.id);
       const dk = openDKFromEnvelope(det.envelope);
@@ -1943,7 +2461,7 @@ function renderApp(app) {
         dk, kv
       );
       dk.fill(0);
-      const payload = normalizeSecretPayload(JSON.parse(pt));
+      const payload = normalizeSecretPayload(JSON.parse(new TextDecoder().decode(pt)));
       it._username = payload.username || "";
       it._tags = payload.tags || [];
       it._favorite = !!payload.favorite;
@@ -1968,16 +2486,29 @@ function renderApp(app) {
     if (!list) return;
     list.innerHTML = "";
     list.className = "list secrets-list secrets-view-" + vault.viewMode;
-    const visible = filterVisibleSecrets();
 
-    const needsMeta = vault.viewMode === "table" || vault.viewMode === "tiles";
-    if (needsMeta) {
-      const pending = visible.filter((it) => !it._metaLoaded);
+    const enrichThenRepaint = (pending) => {
+      list.innerHTML = `<p class="hint">Lade Details…</p>`;
+      mapPool(pending, 4, enrichSecretMeta).then(() => {
+        updateTagOptions();
+        paintSecretList();
+      });
+    };
+
+    if (vault.tagFilter || vault.searchQuery) {
+      const pending = vault.secretsCache.filter(needsSecretMeta);
       if (pending.length) {
-        list.innerHTML = `<p class="hint">Lade Details…</p>`;
-        mapPool(pending, 4, enrichSecretMeta).then(() => paintSecretList());
+        enrichThenRepaint(pending);
         return;
       }
+    }
+
+    const visible = filterVisibleSecrets();
+
+    const pendingVisible = visible.filter(needsSecretMeta);
+    if (pendingVisible.length) {
+      enrichThenRepaint(pendingVisible);
+      return;
     }
 
     if (!visible.length) {
@@ -1987,18 +2518,20 @@ function renderApp(app) {
       list.innerHTML = `<p class="hint">${empty}</p>`;
     } else if (vault.viewMode === "table") {
       const table = el(`<table class="secrets-table"><thead><tr>
-        <th>Titel</th><th>Ordner</th><th>Benutzer</th><th>Tags</th><th></th><th></th>
+        <th class="st-check"></th><th>Titel</th><th>Benutzer</th><th>Tags</th><th>Gruppen</th><th></th><th></th>
       </tr></thead><tbody></tbody></table>`);
       const tbody = table.querySelector("tbody");
       for (const it of visible) {
         const tr = el(`<tr>
+          <td class="st-check"><input type="checkbox" class="sec-check" ${it.has_access ? "" : "disabled"} /></td>
           <td class="st-title"></td>
-          <td class="st-folder muted">${escHtml(it.collection_id || "—")}</td>
           <td class="st-user">${escHtml(it._username || "—")}</td>
           <td class="st-tags"></td>
+          <td class="st-groups muted">${escHtml((it.shared_groups || []).join(", ") || "—")}</td>
           <td class="st-fav">${it._favorite ? icon("star", "fav-ico") : ""}</td>
           <td class="st-act"><button type="button" class="btn-ghost btn-with-ico btn-sm">${btnLabel("open", "Öffnen")}</button></td>
         </tr>`);
+        bindSecretCheckbox(tr.querySelector(".sec-check"), it.id);
         const titleCell = tr.querySelector(".st-title");
         titleCell.appendChild(document.createTextNode(secretTitleLabel(it)));
         const tagsCell = tr.querySelector(".st-tags");
@@ -2016,6 +2549,7 @@ function renderApp(app) {
       for (const it of visible) {
         const tile = el(`<article class="secret-tile">
           <div class="secret-tile-head">
+            <input type="checkbox" class="sec-check" ${it.has_access ? "" : "disabled"} />
             <span class="list-row-ico" aria-hidden="true">${icon("key")}</span>
             ${it._favorite ? `<span class="fav-mark" title="Favorit">${icon("star", "fav-ico")}</span>` : ""}
           </div>
@@ -2024,10 +2558,11 @@ function renderApp(app) {
           <div class="secret-tile-tags"></div>
           <button type="button" class="btn-ghost btn-with-ico btn-sm">${btnLabel("open", "Öffnen")}</button>
         </article>`);
+        bindSecretCheckbox(tile.querySelector(".sec-check"), it.id);
         tile.querySelector(".secret-tile-title").textContent = secretTitleLabel(it);
         const bits = [];
-        if (it.collection_id) bits.push(it.collection_id);
         if (it._username) bits.push(it._username);
+        if (it.shared_groups && it.shared_groups.length) bits.push(it.shared_groups.join(", "));
         if (it._url) bits.push(it._url);
         tile.querySelector(".secret-tile-meta").textContent = bits.join(" · ") || "—";
         const tagsEl = tile.querySelector(".secret-tile-tags");
@@ -2040,12 +2575,20 @@ function renderApp(app) {
       list.appendChild(grid);
     } else {
       for (const it of visible) {
-        const row = el(`<div class="list-row"><span class="list-row-main"></span><button class="btn-ghost btn-with-ico" type="button">${btnLabel("open", "Öffnen")}</button></div>`);
-        const span = row.querySelector("span");
+        const row = el(`<div class="list-row">
+          <input type="checkbox" class="sec-check" ${it.has_access ? "" : "disabled"} />
+          <span class="list-row-main"></span>
+          <button class="btn-ghost btn-with-ico" type="button">${btnLabel("open", "Öffnen")}</button>
+        </div>`);
+        bindSecretCheckbox(row.querySelector(".sec-check"), it.id);
+        const span = row.querySelector(".list-row-main");
         const lead = `<span class="list-row-ico" aria-hidden="true">${icon(it.has_access ? "key" : "lock")}</span>`;
         span.innerHTML = lead;
         span.appendChild(document.createTextNode(
-          secretTitleLabel(it) + (it.collection_id ? ` · ${it.collection_id}` : "")
+          secretTitleLabel(it) +
+          (it._username ? ` · ${it._username}` : "") +
+          (it.shared_groups && it.shared_groups.length ? ` · ${it.shared_groups.join(", ")}` : "") +
+          (it._tags && it._tags.length ? ` · #${it._tags.join(", #")}` : "")
         ));
         row.querySelector("button").onclick = () => openSecret(it.id);
         list.appendChild(row);
@@ -2056,6 +2599,8 @@ function renderApp(app) {
     n.querySelector("#sCount").textContent =
       `${visible.length} ${scopeLabel} · ${vault.secretsCache.length} geladen · ${vault.secretsTotal} gesamt`;
     n.querySelector("#sMore").hidden = vault.secretsCache.length >= vault.secretsTotal;
+    updateTagOptions();
+    updateSelectionBar();
   }
 
   async function decryptListTitles(items) {
@@ -2093,7 +2638,7 @@ function renderApp(app) {
     await decryptListTitles(page);
     vault.secretsCache = vault.secretsCache.concat(page);
     vault.secretsOffset = vault.secretsCache.length;
-    updateFolderOptions();
+    updateTagOptions();
     paintSecretList();
   }
 
@@ -2103,8 +2648,11 @@ function renderApp(app) {
 
   async function openSecret(id) {
     const err = n.querySelector("#derr"); err.hidden = true;
-    const panel = n.querySelector("#sdetail"); panel.hidden = false;
-    navigateTo(vault.ownershipFilter === "shared" ? "vault:shared" : "vault:mine");
+    const panel = n.querySelector("#sdetail");
+    panel.hidden = false;
+    n.querySelector("#deditForm").hidden = true;
+    n.querySelector("#dview").hidden = false;
+    document.body.classList.add("secret-modal-open");
     if (vault.totpTimer) {
       clearInterval(vault.totpTimer);
       vault.totpTimer = null;
@@ -2126,6 +2674,8 @@ function renderApp(app) {
       );
       const payload = normalizeSecretPayload(JSON.parse(new TextDecoder().decode(pt)));
       dk.fill(0);
+      currentSecretPayload = payload;
+      currentSecretTitle = title;
       n.querySelector("#dtitle").textContent = (payload.favorite ? "★ " : "") + title;
       const tags = payload.tags;
       const fields = n.querySelector("#dfields");
@@ -2239,14 +2789,16 @@ function renderApp(app) {
           };
         }
       }
+      const groupHint = (det.shared_groups || currentSecret?.shared_groups || []).join(", ");
       n.querySelector("#drec").textContent =
         "Empfänger: " + (det.recipients || []).join(", ") +
         " · v" + kv +
-        (det.collection_id ? " · Ordner " + det.collection_id : "");
+        (groupHint ? " · Gruppen: " + groupHint : "");
       const pks = await api("/api/users/public-keys");
       const sel = n.querySelector("#shareto");
       sel.innerHTML = pks.filter((p) => !(det.recipients || []).includes(p.user_id))
         .map((p) => `<option value="${p.user_id}" data-pk="${p.public_key_b64}">${p.username}</option>`).join("");
+      await refreshGroupShareUI();
     } catch (e) {
       err.hidden = false; err.textContent = e.message;
     }
@@ -2258,8 +2810,7 @@ function renderApp(app) {
       const title = n.querySelector("#stitle").value.trim();
       if (!title) throw new Error("Titel erforderlich");
       const payload = collectCreatePayload();
-      const collectionId = n.querySelector("#sfolderIn").value.trim();
-      await postEncryptedSecret(title, payload, collectionId);
+      await postEncryptedSecret(title, payload);
       resetCreateForm();
       await refreshSecrets(true);
       navigateTo("vault:mine");
@@ -2363,36 +2914,275 @@ function renderApp(app) {
     }
   };
 
+  n.querySelector("#sExportOne").onclick = async () => {
+    if (!currentSecret) return;
+    try {
+      const fmt = (prompt("Format: json, bitwarden, csv oder backup", "json") || "").trim().toLowerCase();
+      if (!fmt) return;
+      const ids = [currentSecret.id];
+      if (fmt === "backup") {
+        await runEncryptedExport(ids);
+        return;
+      }
+      if (!["json", "bitwarden", "csv"].includes(fmt)) throw new Error("Unbekanntes Format");
+      if (!confirmPlainExport(fmt, 1)) return;
+      const items = await collectDecryptedExportItems(ids);
+      if (!items.length) throw new Error("Secret nicht entschlüsselbar");
+      if (fmt === "csv") {
+        downloadBlob("teamvault-secret.csv", TVVaultIO.toCSV(items), "text/csv");
+      } else if (fmt === "bitwarden") {
+        downloadBlob("teamvault-secret.json", JSON.stringify(TVVaultIO.toBitwardenJSON(items), null, 2), "application/json");
+      } else {
+        downloadBlob("teamvault-secret.json", JSON.stringify(TVVaultIO.toTeamVaultJSON(items), null, 2), "application/json");
+      }
+    } catch (e) { alert(e.message); }
+  };
+
   n.querySelector("#sdel").onclick = async () => {
     if (!confirm("Secret löschen?")) return;
     await api("/api/secrets/" + currentSecret.id, { method: "DELETE" });
-    n.querySelector("#sdetail").hidden = true;
+    closeSecretModal();
+    document.body.classList.remove("secret-modal-open");
     await refreshSecrets(true);
   };
 
-  async function refreshAdmin() {
-    if (isAuditorOnly()) {
-      try {
-        const auditRaw = await api("/api/admin/audit");
-        const audit = Array.isArray(auditRaw) ? auditRaw : (auditRaw.items || []);
-        n.querySelector("#alist").innerHTML = audit.slice(0, 50).map((e) =>
-          `<div>${e.created_at} · ${e.action} · ${e.actor_id} · ${e.resource_type}/${e.resource_id}</div>`
-        ).join("") || "<p>Keine Events</p>";
-        n.querySelector("#overview").textContent = "Auditor — nur Audit-Ansicht";
-      } catch (e) {
-        n.querySelector("#overview").textContent = e.message;
-      }
+  let editingUser = null;
+  let groupsDnDBusy = false;
+
+  function parseUserRoles(rolesJson) {
+    try {
+      const r = JSON.parse(rolesJson || "[]");
+      return Array.isArray(r) ? r : [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  function formatUserRoles(rolesJson) {
+    const r = parseUserRoles(rolesJson);
+    return r.length ? r.join(", ") : "member";
+  }
+
+  function closeUserEditor() {
+    editingUser = null;
+    const modal = n.querySelector("#userEditModal");
+    if (modal) modal.hidden = true;
+    document.body.classList.remove("admin-modal-open");
+  }
+
+  function openUserEditor(user) {
+    editingUser = user;
+    const modal = n.querySelector("#userEditModal");
+    if (!modal) return;
+    n.querySelector("#userEditTitle").textContent = `User: ${user.username}`;
+    n.querySelector("#userEditMeta").textContent =
+      `${user.status}${user.onboarded ? " · onboarded" : ""} · ${user.auth_backend}`;
+    n.querySelector("#ue_display").value = user.display_name || "";
+    n.querySelector("#ue_email").value = user.email || "";
+    n.querySelector("#ue_password").value = "";
+    const roles = parseUserRoles(user.roles);
+    n.querySelector("#ue_role_member").checked = roles.includes("member");
+    n.querySelector("#ue_role_admin").checked = roles.includes("tenant_admin");
+    n.querySelector("#ue_role_auditor").checked = roles.includes("auditor");
+    n.querySelector("#ue_role_plat").checked = roles.includes("platform_admin");
+    const platWrap = n.querySelector("#ue_role_plat_wrap");
+    if (platWrap) {
+      platWrap.hidden = !(vault.me?.roles || []).includes("platform_admin");
+    }
+    const localBlock = n.querySelector("#ue_local_block");
+    if (localBlock) localBlock.hidden = user.auth_backend !== "local";
+    n.querySelector("#ue_err").hidden = true;
+    modal.hidden = false;
+    document.body.classList.add("admin-modal-open");
+  }
+
+  function readDragPayload(ev) {
+    try {
+      return JSON.parse(ev.dataTransfer.getData("text/plain") || "{}");
+    } catch (_) {
+      return {};
+    }
+  }
+
+  function wireDragUser(el, uid, username, fromGid) {
+    el.draggable = true;
+    el.dataset.uid = uid;
+    el.dataset.username = username;
+    if (fromGid) el.dataset.gid = fromGid;
+    el.addEventListener("dragstart", (ev) => {
+      ev.dataTransfer.setData("text/plain", JSON.stringify({ uid, fromGid: fromGid || "" }));
+      ev.dataTransfer.effectAllowed = "move";
+      el.classList.add("dragging");
+    });
+    el.addEventListener("dragend", () => el.classList.remove("dragging"));
+  }
+
+  async function groupsMemberAdd(gid, uid) {
+    await api("/api/admin/groups/" + encodeURIComponent(gid) + "/members", {
+      method: "POST",
+      body: JSON.stringify({ user_id: uid }),
+    });
+  }
+
+  async function groupsMemberRemove(gid, uid) {
+    await api("/api/admin/groups/" + encodeURIComponent(gid) + "/members/" + encodeURIComponent(uid), {
+      method: "DELETE",
+    });
+  }
+
+  async function handleGroupDrop(gid, payload) {
+    if (groupsDnDBusy || !payload.uid) return;
+    groupsDnDBusy = true;
+    const errEl = n.querySelector("#aerr");
+    try {
+      if (payload.fromGid && payload.fromGid === gid) return;
+      await groupsMemberAdd(gid, payload.uid);
+      await refreshAdmin();
+      await refreshSharePickers();
+    } catch (e) {
+      if (errEl) { errEl.hidden = false; errEl.textContent = e.message; }
+    } finally {
+      groupsDnDBusy = false;
+    }
+  }
+
+  async function handlePoolDrop(payload) {
+    if (groupsDnDBusy || !payload.uid || !payload.fromGid) return;
+    groupsDnDBusy = true;
+    const errEl = n.querySelector("#aerr");
+    try {
+      await groupsMemberRemove(payload.fromGid, payload.uid);
+      await refreshAdmin();
+      await refreshSharePickers();
+    } catch (e) {
+      if (errEl) { errEl.hidden = false; errEl.textContent = e.message; }
+    } finally {
+      groupsDnDBusy = false;
+    }
+  }
+
+  function wireDropZone(zone, onDrop) {
+    zone.addEventListener("dragover", (ev) => {
+      ev.preventDefault();
+      ev.dataTransfer.dropEffect = "move";
+      zone.classList.add("drag-over");
+    });
+    zone.addEventListener("dragleave", (ev) => {
+      if (!zone.contains(ev.relatedTarget)) zone.classList.remove("drag-over");
+    });
+    zone.addEventListener("drop", async (ev) => {
+      ev.preventDefault();
+      zone.classList.remove("drag-over");
+      const payload = readDragPayload(ev);
+      await onDrop(payload);
+    });
+  }
+
+  function paintGroupsWorkspace(users, groups) {
+    const pool = n.querySelector("#userPool");
+    const glist = n.querySelector("#glist");
+    if (!pool || !glist) return;
+
+    pool.innerHTML = "";
+    users.filter((u) => u.status !== "disabled").forEach((u) => {
+      const chip = document.createElement("div");
+      chip.className = "drag-user";
+      chip.textContent = u.display_name || u.username;
+      wireDragUser(chip, u.id, u.username, "");
+      pool.appendChild(chip);
+    });
+    wireDropZone(pool, handlePoolDrop);
+
+    if (!groups.length) {
+      glist.innerHTML = "<p class='hint'>Noch keine Gruppen — oben anlegen.</p>";
       return;
     }
-    const ov = await api("/api/admin/overview");
-    n.querySelector("#overview").textContent =
-      `Storage ${ov.storage.backend} · Vault ${ov.vault_ok ? "OK" : "FAIL"} · LDAP ${ov.ldap_enabled ? ov.ldap_host : "aus"} · Tenants ${ov.tenant_count}`;
-    const users = await api("/api/admin/users");
+
+    glist.innerHTML = groups.map((g) => {
+      const members = (g.members || []).map((m) => {
+        const uid = typeof m === "string" ? m : m.user_id;
+        const un = typeof m === "string" ? m : (m.username || m.user_id);
+        return `<div class="drag-user in-group" data-uid="${escHtml(uid)}" data-gid="${escHtml(g.id)}" data-username="${escHtml(un)}">${escHtml(un)}</div>`;
+      }).join("");
+      return `<div class="group-card" data-gid="${escHtml(g.id)}">
+        <div class="group-card-head">
+          <input class="group-name" value="${escHtml(g.name)}" data-gid="${escHtml(g.id)}" aria-label="Gruppenname" />
+          <button type="button" class="btn-ghost btn-sm group-del" data-gid="${escHtml(g.id)}">Löschen</button>
+        </div>
+        <input class="group-desc" placeholder="Beschreibung (optional)" value="${escHtml(g.description || "")}" data-gid="${escHtml(g.id)}" aria-label="Beschreibung" />
+        <div class="group-drop" data-gid="${escHtml(g.id)}">
+          ${members || '<span class="hint group-drop-hint">User hierher ziehen</span>'}
+        </div>
+      </div>`;
+    }).join("");
+
+    glist.querySelectorAll(".drag-user.in-group").forEach((el) => {
+      wireDragUser(el, el.dataset.uid, el.dataset.username, el.dataset.gid);
+    });
+    glist.querySelectorAll(".group-drop").forEach((zone) => {
+      wireDropZone(zone, (payload) => handleGroupDrop(zone.dataset.gid, payload));
+    });
+    glist.querySelectorAll(".group-del").forEach((btn) => {
+      btn.onclick = async () => {
+        if (!confirm("Gruppe wirklich löschen? Mitglieder-Zuordnungen werden entfernt.")) return;
+        const errEl = n.querySelector("#aerr");
+        try {
+          await api("/api/admin/groups/" + encodeURIComponent(btn.dataset.gid), { method: "DELETE" });
+          await refreshAdmin();
+          await refreshSharePickers();
+        } catch (e) {
+          if (errEl) { errEl.hidden = false; errEl.textContent = e.message; }
+        }
+      };
+    });
+    const saveGroupField = async (gid, name, description) => {
+      const errEl = n.querySelector("#aerr");
+      try {
+        await api("/api/admin/groups/" + encodeURIComponent(gid), {
+          method: "PUT",
+          body: JSON.stringify({ name: name.trim(), description: description.trim() }),
+        });
+        await refreshAdmin();
+        await refreshSharePickers();
+      } catch (e) {
+        if (errEl) { errEl.hidden = false; errEl.textContent = e.message; }
+      }
+    };
+    glist.querySelectorAll(".group-name").forEach((inp) => {
+      inp.addEventListener("change", () => {
+        const card = inp.closest(".group-card");
+        const desc = card?.querySelector(".group-desc")?.value || "";
+        if (inp.value.trim()) saveGroupField(inp.dataset.gid, inp.value, desc);
+      });
+    });
+    glist.querySelectorAll(".group-desc").forEach((inp) => {
+      inp.addEventListener("change", () => {
+        const card = inp.closest(".group-card");
+        const name = card?.querySelector(".group-name")?.value || "";
+        if (name.trim()) saveGroupField(inp.dataset.gid, name, inp.value);
+      });
+    });
+  }
+
+  function paintUsersList(users) {
     n.querySelector("#ulist").innerHTML = users.map((u) =>
-      `<div class="list-row"><span>${u.username} · ${u.status}${u.onboarded ? " · onboarded" : ""} · ${u.auth_backend}</span>` +
-      (u.status !== "disabled" ? `<button class="btn-ghost" data-dis="${u.id}" type="button">Disable</button>` : "") +
-      `</div>`
-    ).join("");
+      `<div class="list-row user-row">
+        <div class="list-row-main">
+          <strong>${escHtml(u.username)}</strong>
+          <span class="hint">${escHtml(u.display_name || "—")} · ${escHtml(u.status)}${u.onboarded ? " · onboarded" : ""} · ${escHtml(u.auth_backend)} · ${escHtml(formatUserRoles(u.roles))}</span>
+        </div>
+        <div class="row user-row-actions">
+          <button class="btn-ghost btn-sm" data-edit-user="${escHtml(u.id)}" type="button">Bearbeiten</button>
+          ${u.status !== "disabled" ? `<button class="btn-ghost btn-sm" data-dis="${escHtml(u.id)}" type="button">Disable</button>` : ""}
+        </div>
+      </div>`
+    ).join("") || "<p class='hint'>Keine User</p>";
+    n.querySelector("#ulist").querySelectorAll("[data-edit-user]").forEach((btn) => {
+      btn.onclick = () => {
+        const u = users.find((x) => x.id === btn.dataset.editUser);
+        if (u) openUserEditor(u);
+      };
+    });
     n.querySelector("#ulist").querySelectorAll("[data-dis]").forEach((btn) => {
       btn.onclick = async () => {
         const uid = btn.dataset.dis;
@@ -2414,16 +3204,70 @@ function renderApp(app) {
         await refreshAdmin();
       };
     });
+  }
+
+  const userEditModal = n.querySelector("#userEditModal");
+  if (userEditModal) {
+    n.querySelector("#userEditClose").onclick = closeUserEditor;
+    n.querySelector("#userEditBackdrop").onclick = closeUserEditor;
+    n.querySelector("#ue_save").onclick = async () => {
+      if (!editingUser) return;
+      const errEl = n.querySelector("#ue_err");
+      errEl.hidden = true;
+      try {
+        const roles = [];
+        if (n.querySelector("#ue_role_member").checked) roles.push("member");
+        if (n.querySelector("#ue_role_admin").checked) roles.push("tenant_admin");
+        if (n.querySelector("#ue_role_auditor").checked) roles.push("auditor");
+        if (n.querySelector("#ue_role_plat").checked) roles.push("platform_admin");
+        if (!roles.length) throw new Error("Mindestens eine Rolle wählen");
+        const body = {
+          display_name: n.querySelector("#ue_display").value.trim(),
+          email: n.querySelector("#ue_email").value.trim(),
+          roles,
+        };
+        const pw = n.querySelector("#ue_password").value;
+        if (pw) {
+          if (editingUser.auth_backend !== "local") throw new Error("Login-Passwort nur für lokale User");
+          if (pw.length < 12) throw new Error("Passwort mindestens 12 Zeichen");
+          body.password = pw;
+        }
+        await api("/api/admin/users/" + encodeURIComponent(editingUser.id), {
+          method: "PUT",
+          body: JSON.stringify(body),
+        });
+        closeUserEditor();
+        await refreshAdmin();
+      } catch (e) {
+        errEl.hidden = false;
+        errEl.textContent = e.message;
+      }
+    };
+  }
+
+  async function refreshAdmin() {
+    if (isAuditorOnly()) {
+      try {
+        const auditRaw = await api("/api/admin/audit");
+        const audit = Array.isArray(auditRaw) ? auditRaw : (auditRaw.items || []);
+        n.querySelector("#alist").innerHTML = audit.slice(0, 50).map((e) =>
+          `<div>${e.created_at} · ${e.action} · ${e.actor_id} · ${e.resource_type}/${e.resource_id}</div>`
+        ).join("") || "<p>Keine Events</p>";
+        n.querySelector("#overview").textContent = "Auditor — nur Audit-Ansicht";
+      } catch (e) {
+        n.querySelector("#overview").textContent = e.message;
+      }
+      return;
+    }
+    const ov = await api("/api/admin/overview");
+    n.querySelector("#overview").textContent =
+      `Storage ${ov.storage.backend} · Vault ${ov.vault_ok ? "OK" : "FAIL"} · LDAP ${ov.ldap_enabled ? ov.ldap_host : "aus"} · Tenants ${ov.tenant_count}`;
+    const users = await api("/api/admin/users");
+    paintUsersList(users);
     const groups = await api("/api/admin/groups");
     vault.groups = groups;
-    n.querySelector("#glist").innerHTML = groups.map((g) =>
-      `<div class="list-row"><span>${g.name} · ${g.id} (${(g.members || []).length})</span></div>`
-    ).join("") || "<p class='hint'>Keine Gruppen</p>";
-    const gsel = n.querySelector("#sharegroup");
-    if (gsel) {
-      gsel.innerHTML = `<option value="">— Gruppe wählen —</option>` +
-        groups.map((g) => `<option value="${g.id}">${g.name}</option>`).join("");
-    }
+    paintGroupsWorkspace(users, groups);
+    await refreshGroupShareUI();
     const ldap = await api("/api/admin/ldap");
     n.querySelector("#ldap_en").checked = !!ldap.enabled;
     n.querySelector("#ldap_host").value = ldap.host || "";
@@ -2505,9 +3349,16 @@ function renderApp(app) {
     try {
       await api("/api/admin/users", {
         method: "POST",
-        body: JSON.stringify({ username: n.querySelector("#nuser").value.trim(), password: n.querySelector("#npw").value }),
+        body: JSON.stringify({
+          username: n.querySelector("#nuser").value.trim(),
+          display_name: n.querySelector("#ndisplay").value.trim(),
+          email: n.querySelector("#nemail").value.trim(),
+          password: n.querySelector("#npw").value,
+        }),
       });
       n.querySelector("#nuser").value = "";
+      n.querySelector("#ndisplay").value = "";
+      n.querySelector("#nemail").value = "";
       n.querySelector("#npw").value = "";
       await refreshAdmin();
     } catch (e) {
@@ -2672,16 +3523,6 @@ function renderApp(app) {
       }
     } catch (e) { err.hidden = false; err.textContent = e.message; }
   };
-  n.querySelector("#gmadd").onclick = async () => {
-    const err = n.querySelector("#aerr"); err.hidden = true;
-    try {
-      await api("/api/admin/groups/" + n.querySelector("#gmid").value.trim() + "/members", {
-        method: "POST",
-        body: JSON.stringify({ user_id: n.querySelector("#gmuid").value.trim() }),
-      });
-      await refreshAdmin();
-    } catch (e) { err.hidden = false; err.textContent = e.message; }
-  };
   n.querySelector("#ldap_sync").onclick = async () => {
     const err = n.querySelector("#aerr"); err.hidden = true;
     try {
@@ -2736,6 +3577,38 @@ function renderApp(app) {
       err.hidden = false; err.style.color = "var(--color-ok)";
       err.textContent = "Migration OK → " + JSON.stringify(res.storage);
       await refreshAdmin();
+    } catch (e) { err.hidden = false; err.style.color = ""; err.textContent = e.message; }
+  };
+  n.querySelector("#inst_bak_dl").onclick = async () => {
+    const err = n.querySelector("#aerr"); err.hidden = true;
+    try {
+      const res = await fetch("/api/admin/backup", { credentials: "same-origin" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || res.statusText);
+      downloadBlob("teamvault-instance-backup.json", JSON.stringify(data, null, 2), "application/json");
+      const ok = n.querySelector("#inst_bak_ok");
+      ok.hidden = false;
+      ok.textContent = "Snapshot heruntergeladen (nur Ciphertext). Unlock-Keyfile separat sichern.";
+    } catch (e) { err.hidden = false; err.style.color = ""; err.textContent = e.message; }
+  };
+  n.querySelector("#inst_bak_restore").onclick = async () => {
+    const err = n.querySelector("#aerr"); err.hidden = true;
+    const ok = n.querySelector("#inst_bak_ok"); ok.hidden = true;
+    try {
+      const file = n.querySelector("#inst_bak_file").files?.[0];
+      if (!file) throw new Error("Snapshot-Datei wählen");
+      const confirm = n.querySelector("#inst_bak_confirm").value.trim();
+      const text = await file.text();
+      const res = await fetch("/api/admin/backup/restore?confirm=" + encodeURIComponent(confirm), {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: text,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || res.statusText);
+      ok.hidden = false;
+      ok.textContent = "Restore OK (" + (data.exported_at || "") + "). Bei Abweichungen neu anmelden.";
     } catch (e) { err.hidden = false; err.style.color = ""; err.textContent = e.message; }
   };
 }

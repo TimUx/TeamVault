@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -96,6 +97,7 @@ func (a *API) Handler() http.Handler {
 	mux.HandleFunc("GET /api/openapi.yaml", a.handleOpenAPI)
 	mux.HandleFunc("GET /api/setup/status", a.handleSetupStatus)
 	mux.HandleFunc("POST /api/setup/commit", a.handleSetupCommit)
+	mux.HandleFunc("GET /api/auth/tenants", a.handleAuthTenants)
 	mux.HandleFunc("POST /api/auth/login", a.handleLogin)
 	mux.HandleFunc("POST /api/auth/logout", a.handleLogout)
 	mux.HandleFunc("GET /api/me", a.handleMe)
@@ -130,6 +132,7 @@ func (a *API) Handler() http.Handler {
 	mux.Handle("GET /styles.css", web.Handler())
 	mux.Handle("GET /app.js", web.Handler())
 	mux.Handle("GET /import-parse.js", web.Handler())
+	mux.Handle("GET /vault-io.js", web.Handler())
 	mux.Handle("GET /cryptocore.js", web.Handler())
 	mux.Handle("GET /index.html", web.Handler())
 	return a.withSecurity(mux)
@@ -289,6 +292,36 @@ type loginReq struct {
 	TOTPCode   string `json:"totp_code"`
 }
 
+func (a *API) handleAuthTenants(w http.ResponseWriter, r *http.Request) {
+	if !a.App.Config.Initialized {
+		writeErr(w, http.StatusConflict, "setup not completed")
+		return
+	}
+	list, err := a.App.Vault.ListTenants(r.Context())
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	type row struct {
+		Slug string `json:"slug"`
+		Name string `json:"name"`
+	}
+	out := make([]row, 0, len(list))
+	for _, t := range list {
+		if t.Status == "disabled" {
+			continue
+		}
+		out = append(out, row{Slug: t.Slug, Name: t.Name})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Name == out[j].Name {
+			return out[i].Slug < out[j].Slug
+		}
+		return out[i].Name < out[j].Name
+	})
+	writeJSON(w, http.StatusOK, out)
+}
+
 func (a *API) handleLogin(w http.ResponseWriter, r *http.Request) {
 	if !a.App.Config.Initialized {
 		writeErr(w, http.StatusConflict, "setup not completed")
@@ -378,7 +411,8 @@ func (a *API) handleLogin(w http.ResponseWriter, r *http.Request) {
 	sess := a.Sessions.Create(user.ID, tenant.ID, user.Username, roles)
 	a.setSessionCookie(w, r, sess)
 	writeJSON(w, http.StatusOK, map[string]any{
-		"username": user.Username, "tenant_id": tenant.ID, "roles": roles, "status": user.Status,
+		"username": user.Username, "tenant_id": tenant.ID, "tenant_name": tenant.Name, "tenant_slug": tenant.Slug,
+		"roles": roles, "status": user.Status,
 		"needs_vault_onboard": user.OnboardedAt == nil, "totp_enabled": user.TotpEnabled,
 		"needs_totp_setup": a.bundle().Policy.TOTPRequired && !user.TotpEnabled,
 		"recovery_mode":    tenant.RecoveryMode,
@@ -405,8 +439,13 @@ func (a *API) handleMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ten, _ := a.App.Vault.GetTenant(r.Context(), sess.TenantID)
+	tenantName, tenantSlug := "", ""
+	if ten != nil {
+		tenantName, tenantSlug = ten.Name, ten.Slug
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"user_id": sess.UserID, "tenant_id": sess.TenantID, "username": sess.Username, "roles": sess.Roles,
+		"user_id": sess.UserID, "tenant_id": sess.TenantID, "tenant_name": tenantName, "tenant_slug": tenantSlug,
+		"username": sess.Username, "roles": sess.Roles,
 		"needs_vault_onboard": u.OnboardedAt == nil, "totp_enabled": u.TotpEnabled,
 		"auth_backend": u.AuthBackend,
 		"passkey_count": func() int {

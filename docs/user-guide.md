@@ -1,7 +1,7 @@
 # TeamVault – User Guide
 
 Anleitung für den Alltag: Anmelden, Vault nutzen, teilen, Absichern.  
-Installation und Admin-Themen: [Admin Guide](admin-guide.md).
+Installation: [Installationsanleitung](install-guide.md) · Betrieb: [Admin Guide](admin-guide.md).
 
 Version und Entwickler (Timo Braun) sehen Sie unten in der App bzw. unter Login.
 
@@ -19,8 +19,10 @@ Der Server sieht niemals Ihr Master-Passwort und niemals Klartext-Secrets (Zero-
 ## 2. Erste Anmeldung
 
 1. URL Ihrer Instanz öffnen → **Login**
-2. **Tenant-Slug**, Username, Login-Passwort (TOTP falls aktiv)
+2. **Organisation** (Dropdown der Mandanten), Username, Login-Passwort (TOTP falls aktiv)
 3. Optional **Passkey** statt Passwort (wenn registriert)
+
+Die zuletzt gewählte Organisation wird im Browser gemerkt. Bei genau einem Mandanten ist dieser vorausgewählt.
 
 Oben rechts: **Hilfe** (ohne Login) öffnet die Client-Anleitungen unter `/help`. Hinweis unter dem Formular: Version und Entwickler. Passkeys betreffen nur den Login — der Vault braucht weiterhin das Master-Passwort.
 
@@ -62,14 +64,17 @@ Nach dem Entsperren: linke **Sidebar** mit Icons. Unter Vault getrennt:
 |------|--------|
 | **Meine Secrets** | Einträge, die Sie angelegt haben (`created_by` = Sie) |
 | **Geteilt mit mir** | Einträge mit Zugriff, die jemand anderes angelegt hat |
+| **Neu anlegen** | Formular für einen neuen Eintrag |
+| **Import** | Dateien aus anderen Passwortmanagern übernehmen |
+| **Sicherung** | Verschlüsselte `.tvbak`-Backup / Wiederherstellen |
 
-Kein vermischter „Alle“-Eintrag. Clientseitige **Suche** und **Ordner**-Filter gelten jeweils für die aktive Ansicht.
+Kein vermischter „Alle“-Eintrag. Clientseitige **Suche** (Titel, Tags, Benutzer, Gruppen) und **Tag**-Filter gelten jeweils für die aktive Ansicht. In der Liste können Sie Einträge per Checkbox für den Export auswählen.
 
-**Ansicht:** Umschalter Liste / Tabelle / Kacheln (Preference lokal im Browser). Liste zeigt Titel und Ordner; Tabelle und Kacheln laden zusätzlich Benutzer, Tags und Favorit (clientseitig entschlüsselt).
+**Ansicht:** Standard ist **Tabelle**; Umschalter Liste / Tabelle / Kacheln (Preference lokal im Browser). Tabelle und Kacheln laden zusätzlich Benutzer, Tags, Gruppen und Favorit; Liste zeigt Titel, Benutzer, Tags und Gruppen kompakt.
+
+![Meine Secrets – Tabelle (Standard)](images/vault-secrets-table.png)
 
 ![Meine Secrets – Liste](images/vault-secrets.png)
-
-![Meine Secrets – Tabelle](images/vault-secrets-table.png)
 
 ![Meine Secrets – Kacheln](images/vault-secrets-tiles.png)
 
@@ -79,7 +84,7 @@ Kein vermischter „Alle“-Eintrag. Clientseitige **Suche** und **Ordner**-Filt
 
 ### Anlegen
 
-Sidebar **Neu anlegen**: Titel, Ordner, Benutzername und Passwort sind immer sichtbar. Weitere Felder über **Feld hinzufügen**:
+Sidebar **Neu anlegen**: Titel, Tags, Benutzername und Passwort sind immer sichtbar. Weitere Felder über **Feld hinzufügen**:
 
 | Typ | Inhalt |
 |-----|--------|
@@ -93,15 +98,19 @@ Sidebar **Neu anlegen**: Titel, Ordner, Benutzername und Passwort sind immer sic
 
 Titel und Payload werden vor dem Upload verschlüsselt; der Server speichert nur Ciphertext.
 
+Optional direkt beim Anlegen **User** und **Gruppen** zum Teilen auswählen (nur onboardete Ziele).
+
 **Generator:** Länge und Symbole einstellen → **Generator** füllt das Passwortfeld (CSPRNG im Browser).
 
 ![Secret anlegen](images/vault-create.png)
 
-### Öffnen
+### Öffnen & Bearbeiten
 
-In der Liste **Öffnen** — Klartext erscheint nur bei Ihnen im Browser. Felder mit **Kopieren** / **Anzeigen**; Key/Zertifikat zusätzlich **Download**. Live-**TOTP** erscheint, wenn ein Seed hinterlegt ist. Mehrere Websites werden einzeln angezeigt.
+In der Liste **Öffnen** — Detail erscheint als **Modal** über der Liste (Schließen mit Button, Backdrop oder **Escape**). Klartext nur im Browser. Felder mit **Kopieren** / **Anzeigen**; Key/Zertifikat zusätzlich **Download**. Live-**TOTP** erscheint, wenn ein Seed hinterlegt ist. Mehrere Websites werden einzeln angezeigt.
 
-![Secret-Detail](images/vault-secret-detail.png)
+**Bearbeiten** im Modal: Titel, Benutzername, Passwort, Tags, Notizen — Speichern verschlüsselt clientseitig (`PUT /api/secrets/{id}`).
+
+![Secret-Detail (Modal)](images/vault-secret-detail.png)
 
 ### Teilen
 
@@ -110,11 +119,11 @@ Jeder Empfänger erhält einen eigenen Umschlag um den Datenschlüssel (kein gem
 
 Admins und Gruppenmitglieder können eine **Gruppe** wählen → **Gruppe teilen** (Mitglieder sehen nur eigene Gruppen; pro Mitglied eigener Envelope). Empfänger sehen den Eintrag unter **Geteilt mit mir**.
 
-### Ordner
+### Tags & Suche
 
-Beim Anlegen einen **Ordner**-Namen setzen. Die Liste filtert nach Ordner; die Suche trifft Titel und Ordnernamen (clientseitig).
+Beim Anlegen **Tags** setzen (Komma-getrennt). Die Toolbar filtert nach Tag; die Suche trifft **Titel, Tags, Benutzername, Ersteller und Gruppen** (clientseitig bzw. aus der API).
 
-![Ordner-Filter](images/vault-folder-filter.png)
+![Tag-Filter](images/vault-tag-filter.png)
 
 ### TOTP im Eintrag
 
@@ -126,15 +135,38 @@ Mehrfach **Website (URL)** hinzufügen. Import aus Bitwarden übernimmt alle `ur
 
 ### Import
 
-Sidebar **Import**: Bitwarden-JSON, CSV oder KeePass-XML wählen. Parsing und Verschlüsselung laufen nur im Browser; der Server sieht nur Ciphertext.
+Sidebar **Import**: Datei wählen. Unterstützte Formate:
+
+- TeamVault JSON / verschlüsselte `.tvbak`
+- Bitwarden JSON (Login-Einträge)
+- KeePass XML, KeePassXC-CSV
+- Chrome/Edge- und Firefox-CSV
+- LastPass-CSV, 1Password-CSV, 1Password 1PUX (`export.data`)
+- Proton Pass JSON
+- generisches CSV (`title,username,password,url,…`)
+
+Nach dem Parsen erscheint eine **Vorschau** — einzelne, mehrere oder alle Einträge anhaken, dann **Auswahl importieren**. Verschlüsselte `.tvbak` erst mit Backup-Passwort entsperren. Parsing und Verschlüsselung laufen nur im Browser; der Server sieht nur Ciphertext.
 
 ![Import](images/vault-import.png)
 
 ### Export
 
-Unter der Secrets-Liste: **Export JSON** (Bitwarden-Login-Subset, unverschlüsselt lokal) oder **Export CSV** — mit Bestätigung, weil Klartext auf Disk landet. Es werden nur Einträge exportiert, die Sie entschlüsseln können — der Server sieht den Klartext nicht.
+In der Secrets-Liste Einträge per Checkbox wählen (eines, mehrere, oder **Alle geladenen**). Ohne Auswahl gelten die **sichtbaren** Einträge (aktueller Tag-Filter/Suche).
+
+- **Export TeamVault** — vollständiges JSON inkl. Extra-Felder
+- **Export Bitwarden** — Login-Subset, unverschlüsselt
+- **Export CSV** — Klartext
+- **Export verschlüsselt** — `.tvbak` mit eigenem Backup-Passwort (Argon2id)
+
+Im Secret-Detail: **Dieses Secret exportieren**. Bestätigung, weil Klartext auf Disk landet (außer `.tvbak`). Es werden nur Einträge exportiert, die Sie entschlüsseln können — der Server sieht den Klartext nicht.
 
 ![Export-Buttons](images/vault-export.png)
+
+### Sicherung (Backup / Restore)
+
+Sidebar **Sicherung**: alle für Sie entschlüsselbaren Secrets als verschlüsselte `.tvbak` herunterladen. Wiederherstellen legt die Einträge **neu** an (bestehende bleiben). Backup-Passwort mindestens 12 Zeichen, getrennt vom Master-Passwort und Unlock-Key aufbewahren.
+
+Instanz-weites Ciphertext-Backup (Tenants, User, Secrets): siehe [Admin Guide](admin-guide.md#5-backup).
 
 ### Zugriff entziehen
 
@@ -206,7 +238,8 @@ Nur `read` → keine Admin- oder Schreibaktionen. Cookie-Login ohne API-Key ist 
 - Nach Teilen nur notwendige Personen; bei Austritt Admin um Entzug/Rotation bitten  
 - Öffentliche/geteilte Rechner: nach Nutzung **Logout** und Browser schließen  
 - Phishing: nur die bekannte Firmen-URL verwenden; Extension Fill/Copy nur bei Host-Match  
-- Export-Dateien enthalten Klartext — sicher ablegen und zeitnah löschen  
+- Klartext-Export (JSON/CSV) sicher ablegen und zeitnah löschen  
+- `.tvbak` und Backup-Passwort getrennt vom Unlock-Key und Master-Passwort aufbewahren  
 
 ## 10. Hilfe
 
@@ -221,6 +254,7 @@ Nur `read` → keine Admin- oder Schreibaktionen. Cookie-Login ohne API-Key ist 
 | Passkey fehlt | Neu registrieren; Gerät/OS-Support prüfen |
 | Secret „kein Zugriff“ | Noch nicht geteilt oder Rechte entzogen |
 | Fill/Copy blockiert | Secret-URL passt nicht zum Tab-Host |
+| Import leer / Format? | Vorschau prüfen; KeePass nur XML (kein `.kdbx`); `.tvbak` braucht Backup-Passwort |
 | CLI/Extension-Install | `/help/cli` bzw. `/help/extension`; Admin muss `/downloads/` befüllen |
 
-Technische API: [openapi.yaml](openapi.yaml) · Admin: [admin-guide.md](admin-guide.md)
+Technische API: [openapi.yaml](openapi.yaml) · Installation: [install-guide.md](install-guide.md) · Admin: [admin-guide.md](admin-guide.md)
