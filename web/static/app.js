@@ -92,6 +92,36 @@ function el(html) {
   return t.content.firstChild;
 }
 
+/** Panel-interne Tabs: Gruppe mit [data-panel-group], Buttons [data-panel-tab], Panels [data-panel-pane]. */
+function bindPanelTabs(root, group, opts = {}) {
+  const scope = root.querySelector(`[data-panel-group="${group}"]`);
+  if (!scope) return;
+  const tabs = [...scope.querySelectorAll(`[data-panel-tab]`)].filter(
+    (btn) => btn.closest("[data-panel-group]") === scope
+  );
+  const panes = [...scope.querySelectorAll(`[data-panel-pane]`)].filter(
+    (pane) => pane.closest("[data-panel-group]") === scope
+  );
+  function show(id) {
+    tabs.forEach((btn) => {
+      const on = btn.dataset.panelTab === id;
+      btn.classList.toggle("active", on);
+      btn.setAttribute("aria-selected", on ? "true" : "false");
+    });
+    panes.forEach((pane) => {
+      const on = pane.dataset.panelPane === id;
+      pane.classList.toggle("active", on);
+      pane.hidden = !on;
+    });
+    if (typeof opts.onShow === "function") opts.onShow(id);
+  }
+  tabs.forEach((btn) => {
+    btn.onclick = () => show(btn.dataset.panelTab);
+  });
+  const initial = tabs.find((b) => b.classList.contains("active"))?.dataset.panelTab || tabs[0]?.dataset.panelTab;
+  if (initial) show(initial);
+}
+
 /** Flat stroke icons (inline SVG, no CDN — air-gap). */
 const ICO = {
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>',
@@ -1251,7 +1281,7 @@ function renderApp(app) {
       <nav class="app-sidebar-nav" id="appSidebarNav">
         ${navSection("vault", "Vault", `
           ${navLink("vault:mine", "key", "Meine Secrets", "active")}
-          ${navLink("vault:shared", "share", "Geteilt mit mir")}
+          ${navLink("vault:shared", "share", "Geteilte Secrets")}
           ${navLink("vault:create", "plus", "Neu anlegen")}
           ${navLink("vault:import", "upload", "Import")}
           ${navLink("vault:backup", "download", "Sicherung")}
@@ -1448,6 +1478,12 @@ function renderApp(app) {
 
             <div class="vault-section" data-vault="create">
               <div class="panel">
+                <p class="hint">Privat = nur Sie unter „Meine Secrets“. Geteilt = Team-Eintrag unter „Geteilte Secrets“ (nicht unter Meine Secrets); alle Berechtigten können bearbeiten.</p>
+                <div class="panel-tabs" role="tablist" aria-label="Secret-Typ" id="svisTabs">
+                  <button type="button" class="panel-tab active" role="tab" data-svis="private" aria-selected="true">Privat</button>
+                  <button type="button" class="panel-tab" role="tab" data-svis="shared" aria-selected="false">Geteilt</button>
+                </div>
+                <input type="hidden" id="svis" value="private" />
                 <label>Titel</label><input id="stitle" />
                 <label>Tags</label><input id="stagsIn" placeholder="storage, prod (Komma)" autocomplete="off" />
                 <label>Benutzername</label><input id="suser" autocomplete="off" />
@@ -1482,12 +1518,14 @@ function renderApp(app) {
                   </label>
                   <button class="btn-ghost" type="button" id="sextraAddBtn">Hinzufügen</button>
                 </div>
-                <label>Teilen mit Usern (optional)</label>
-                <select id="screateUsers" multiple size="4"></select>
-                <p class="hint">Strg/Cmd-Klick für Mehrfachauswahl. Nur onboardete User.</p>
-                <div id="screateGroupsWrap" hidden>
-                  <label>Gruppen teilen (optional)</label>
-                  <select id="screateGroups" multiple size="3"></select>
+                <div id="sshareWrap" hidden>
+                  <label>Teilen mit Usern</label>
+                  <select id="screateUsers" multiple size="4"></select>
+                  <p class="hint">Strg/Cmd-Klick für Mehrfachauswahl. Mindestens ein User oder eine Gruppe.</p>
+                  <div id="screateGroupsWrap" hidden>
+                    <label>Gruppen</label>
+                    <select id="screateGroups" multiple size="3"></select>
+                  </div>
                 </div>
                 <div class="error" id="serr" hidden></div>
                 <div class="row"><button class="btn-accent btn-with-ico" type="button" id="screate">${btnLabel("save", "Speichern (clientseitig verschlüsselt)")}</button></div>
@@ -1525,24 +1563,31 @@ function renderApp(app) {
             </div>
 
             <div class="vault-section" data-vault="backup">
-              <div class="panel">
-                <h2>Verschlüsselte Sicherung</h2>
-                <p class="hint">Alle Secrets, die Sie entschlüsseln können, als <code>.tvbak</code> (Argon2id + AES-GCM). Der Server sieht den Klartext nicht. Backup-Passwort mindestens 12 Zeichen — getrennt vom Master-Passwort wählen.</p>
-                <label>Backup-Passwort</label>
-                <input id="bak_pw" type="password" autocomplete="new-password" />
-                <label>Wiederholen</label>
-                <input id="bak_pw2" type="password" autocomplete="new-password" />
-                <div class="row">
-                  <button class="btn-accent btn-with-ico" type="button" id="bak_create">${btnLabel("download", "Sicherung herunterladen")}</button>
+              <div class="panel" data-panel-group="backup">
+                <p class="hint">Clientseitige Sicherung — der Server sieht keinen Klartext.</p>
+                <div class="panel-tabs" role="tablist" aria-label="Sicherung">
+                  <button type="button" class="panel-tab active" role="tab" data-panel-tab="export" aria-selected="true">Sicherung erstellen</button>
+                  <button type="button" class="panel-tab" role="tab" data-panel-tab="restore" aria-selected="false">Wiederherstellen</button>
                 </div>
-                <h2>Wiederherstellen</h2>
-                <p class="hint">TeamVault-Sicherung (<code>.tvbak</code>) oder Klartext-Export. Einträge werden als neue Secrets angelegt (kein Überschreiben bestehender IDs).</p>
-                <input id="bak_file" type="file" accept=".tvbak,.json,application/json" />
-                <label>Backup-Passwort (bei .tvbak)</label>
-                <input id="bak_restore_pw" type="password" autocomplete="off" />
-                <div class="row">
-                  <button class="btn-ghost btn-with-ico" type="button" id="bak_restore">${btnLabel("upload", "Wiederherstellen")}</button>
-                  <span class="hint" id="bak_hint"></span>
+                <div class="panel-tab-pane active" role="tabpanel" data-panel-pane="export">
+                  <p class="hint">Alle Secrets, die Sie entschlüsseln können, als <code>.tvbak</code> (Argon2id + AES-GCM). Backup-Passwort mindestens 12 Zeichen — getrennt vom Master-Passwort wählen.</p>
+                  <label>Backup-Passwort</label>
+                  <input id="bak_pw" type="password" autocomplete="new-password" />
+                  <label>Wiederholen</label>
+                  <input id="bak_pw2" type="password" autocomplete="new-password" />
+                  <div class="row">
+                    <button class="btn-accent btn-with-ico" type="button" id="bak_create">${btnLabel("download", "Sicherung herunterladen")}</button>
+                  </div>
+                </div>
+                <div class="panel-tab-pane" role="tabpanel" data-panel-pane="restore" hidden>
+                  <p class="hint">TeamVault-Sicherung (<code>.tvbak</code>) oder Klartext-Export. Einträge werden als neue Secrets angelegt (kein Überschreiben bestehender IDs).</p>
+                  <input id="bak_file" type="file" accept=".tvbak,.json,application/json" />
+                  <label>Backup-Passwort (bei .tvbak)</label>
+                  <input id="bak_restore_pw" type="password" autocomplete="off" />
+                  <div class="row">
+                    <button class="btn-ghost btn-with-ico" type="button" id="bak_restore">${btnLabel("upload", "Wiederherstellen")}</button>
+                    <span class="hint" id="bak_hint"></span>
+                  </div>
                 </div>
                 <div class="error" id="bak_err" hidden></div>
                 <div class="ok" id="bak_ok" hidden></div>
@@ -1551,56 +1596,73 @@ function renderApp(app) {
           </div>
 
           <div class="app-tab" data-pane="account">
-            <div class="panel">
-              <p class="hint">TOTP und Passkey betreffen nur den Login — der Vault bleibt Master-Passwort-pflichtig.</p>
-              <div class="row">
-                <button class="btn-accent" type="button" id="totp">TOTP einrichten</button>
-                <button class="btn-ghost" type="button" id="passkey">Passkeys</button>
+            <div class="panel account-panel" data-panel-group="account">
+              <p class="hint">Login-Absicherung und Geräte-Kopie — der Vault bleibt Master-Passwort-pflichtig.</p>
+              <div class="panel-tabs" role="tablist" aria-label="Konto-Bereiche">
+                <button type="button" class="panel-tab active" role="tab" data-panel-tab="totp" aria-selected="true">TOTP</button>
+                <button type="button" class="panel-tab" role="tab" data-panel-tab="passkeys" aria-selected="false">Passkeys</button>
+                <button type="button" class="panel-tab" role="tab" data-panel-tab="login" aria-selected="false">Login-Passwort</button>
+                <button type="button" class="panel-tab" role="tab" data-panel-tab="master" aria-selected="false">Master-Passwort</button>
+                <button type="button" class="panel-tab" role="tab" data-panel-tab="offline" aria-selected="false">Offline-Vault</button>
               </div>
-              <div id="totpbox" hidden>
-                <p class="hint">QR lokal im Browser erzeugt (kein externes CDN). Alternative: otpauth-URL kopieren.</p>
-                <div class="totp-setup-grid">
-                  <div class="totp-qr-wrap" id="otpQr" aria-live="polite"></div>
-                  <div>
-                    <p class="hint">otpauth-URL:</p>
-                    <pre class="mono" id="otpurl"></pre>
-                    <div class="row">
-                      <button class="btn-ghost" type="button" id="otpCopy">otpauth kopieren</button>
-                      <button class="btn-ghost" type="button" id="otpReveal">Secret kurz anzeigen</button>
-                    </div>
-                    <p class="hint secret-reveal" id="otpSecret" hidden></p>
-                  </div>
+
+              <div class="panel-tab-pane active" role="tabpanel" data-panel-pane="totp">
+                <p class="hint">Zwei-Faktor per Authenticator-App (nur Login). QR wird lokal im Browser erzeugt.</p>
+                <div class="row">
+                  <button class="btn-accent" type="button" id="totpSetup">TOTP einrichten</button>
                 </div>
-                <label>Code bestätigen</label><input id="code" inputmode="numeric" autocomplete="one-time-code" />
-                <div class="row"><button class="btn-accent" type="button" id="en">Aktivieren</button></div>
-                <div class="error" id="terr" hidden></div>
+                <div id="totpbox" hidden>
+                  <div class="totp-setup-grid">
+                    <div class="totp-qr-wrap" id="otpQr" aria-live="polite"></div>
+                    <div>
+                      <p class="hint">otpauth-URL:</p>
+                      <pre class="mono" id="otpurl"></pre>
+                      <div class="row">
+                        <button class="btn-ghost" type="button" id="otpCopy">otpauth kopieren</button>
+                        <button class="btn-ghost" type="button" id="otpReveal">Secret kurz anzeigen</button>
+                      </div>
+                      <p class="hint secret-reveal" id="otpSecret" hidden></p>
+                    </div>
+                  </div>
+                  <label>Code bestätigen</label><input id="code" inputmode="numeric" autocomplete="one-time-code" />
+                  <div class="row"><button class="btn-accent" type="button" id="en">Aktivieren</button></div>
+                  <div class="error" id="terr" hidden></div>
+                </div>
               </div>
-              <div id="pkbox" hidden>
-                <p class="hint">Passkeys werden vom Browser bzw. Betriebssystem eingerichtet (Windows Hello, Face ID, Sicherheitsschlüssel). TeamVault erzeugt dafür keinen eigenen QR — bei Anmeldung von einem anderen Gerät zeigt ggf. der Browser selbst einen QR.</p>
+
+              <div class="panel-tab-pane" role="tabpanel" data-panel-pane="passkeys" hidden>
+                <p class="hint">Passkeys werden vom Browser bzw. Betriebssystem eingerichtet (Windows Hello, Face ID, Sicherheitsschlüssel). TeamVault erzeugt dafür keinen eigenen QR.</p>
                 <label>Name</label><input id="pkname" value="Mein Passkey" />
                 <div id="pklist" class="list"></div>
                 <div class="row"><button class="btn-accent" type="button" id="pkreg">Registrieren</button></div>
                 <div class="error" id="pkerr" hidden></div>
               </div>
-              <h2>Login-Passwort ändern</h2>
-              <p class="hint">Nur bei lokalem Auth-Backend. LDAP-User ändern das Passwort in AD.</p>
-              <label>Aktuelles Login-Passwort</label><input id="lpw_cur" type="password" autocomplete="current-password" />
-              <label>Neues Login-Passwort (≥12)</label><input id="lpw_new" type="password" autocomplete="new-password" />
-              <div class="row"><button class="btn-accent" type="button" id="lpw_save">Login-Passwort speichern</button></div>
-              <h2>Master-Passwort ändern</h2>
-              <p class="hint">Clientseitig: Private Key wird neu versiegelt; Server speichert nur Ciphertexte. Recovery-Kit / Escrow wird mit erneuert.</p>
-              <label>Aktuelles Master-Passwort</label><input id="mpw_cur" type="password" autocomplete="current-password" />
-              <label>Neues Master-Passwort</label><input id="mpw_new" type="password" autocomplete="new-password" />
-              <label>Recovery-Kit speichern (bei user_kit)</label><input id="mpw_kit" type="text" readonly placeholder="wird erzeugt…" />
-              <div class="row"><button class="btn-accent" type="button" id="mpw_save">Master-Passwort speichern</button></div>
-              <h2>Offline-Vault auf diesem Gerät</h2>
-              <p class="hint" id="offlineAccHint">Verschlüsselte Kopie für Offline-Lesen (30 Tage, nur Ciphertext). Schreiben bleibt online.</p>
-              <p class="hint" id="offlineAccStatus">—</p>
-              <label class="inline"><input id="offline_optin" type="checkbox" /> Offline-Kopie nach Entsperren aktualisieren</label>
-              <div class="row">
-                <button class="btn-ghost btn-sm" type="button" id="offline_sync">Jetzt synchronisieren</button>
-                <button class="btn-ghost btn-sm" type="button" id="offline_wipe">Offline-Kopie löschen</button>
+
+              <div class="panel-tab-pane" role="tabpanel" data-panel-pane="login" hidden>
+                <p class="hint">Nur bei lokalem Auth-Backend. LDAP-User ändern das Passwort in AD.</p>
+                <label>Aktuelles Login-Passwort</label><input id="lpw_cur" type="password" autocomplete="current-password" />
+                <label>Neues Login-Passwort (≥12)</label><input id="lpw_new" type="password" autocomplete="new-password" />
+                <div class="row"><button class="btn-accent" type="button" id="lpw_save">Login-Passwort speichern</button></div>
               </div>
+
+              <div class="panel-tab-pane" role="tabpanel" data-panel-pane="master" hidden>
+                <p class="hint">Clientseitig: Private Key wird neu versiegelt; Server speichert nur Ciphertexte. Recovery-Kit / Escrow wird mit erneuert.</p>
+                <label>Aktuelles Master-Passwort</label><input id="mpw_cur" type="password" autocomplete="current-password" />
+                <label>Neues Master-Passwort</label><input id="mpw_new" type="password" autocomplete="new-password" />
+                <label>Recovery-Kit speichern (bei user_kit)</label><input id="mpw_kit" type="text" readonly placeholder="wird erzeugt…" />
+                <div class="row"><button class="btn-accent" type="button" id="mpw_save">Master-Passwort speichern</button></div>
+              </div>
+
+              <div class="panel-tab-pane" role="tabpanel" data-panel-pane="offline" hidden>
+                <p class="hint" id="offlineAccHint">Verschlüsselte Kopie für Offline-Lesen (30 Tage, nur Ciphertext). Schreiben bleibt online.</p>
+                <p class="hint" id="offlineAccStatus">—</p>
+                <label class="inline"><input id="offline_optin" type="checkbox" /> Offline-Kopie nach Entsperren aktualisieren</label>
+                <div class="row">
+                  <button class="btn-ghost btn-sm" type="button" id="offline_sync">Jetzt synchronisieren</button>
+                  <button class="btn-ghost btn-sm" type="button" id="offline_wipe">Offline-Kopie löschen</button>
+                </div>
+              </div>
+
               <div class="error" id="acc_err" hidden></div>
               <div class="ok" id="acc_ok" hidden></div>
             </div>
@@ -1757,36 +1819,54 @@ function renderApp(app) {
                     <button class="btn-ghost" type="button" id="mail_test">SMTP testen</button>
                   </div>
                 </div>
-                <div class="admin-section" data-admin-section="crypto">
-                  <p class="hint">Argon2id-Presets (Vault-KDF):</p>
-                  <div class="preset-row" id="presetRow"></div>
-                  <label>Argon2 Memory (KiB)</label><input id="arg_mem" type="number" />
-                  <label>Argon2 Time</label><input id="arg_time" type="number" />
-                  <label>Argon2 Threads</label><input id="arg_threads" type="number" value="1" />
-                  <label class="inline"><input id="totp_req" type="checkbox" /> TOTP Pflicht (Hinweis nach Login)</label>
-                  <label class="inline"><input id="admin_env_only" type="checkbox" /> Admins: Secret-Liste nur mit Envelope</label>
-                  <label class="inline"><input id="offline_cache" type="checkbox" checked /> Offline-Vault-Cache erlauben (Ciphertext auf Geräten)</label>
-                  <div class="row">
-                    <button class="btn-accent" type="button" id="crypto_save">Krypto speichern</button>
-                    <button class="btn-ghost" type="button" id="policy_save">Policy speichern</button>
+                <div class="admin-section" data-admin-section="crypto" data-panel-group="crypto">
+                  <div class="panel-tabs" role="tablist" aria-label="Krypto und Policy">
+                    <button type="button" class="panel-tab active" role="tab" data-panel-tab="kdf" aria-selected="true">Argon2 / KDF</button>
+                    <button type="button" class="panel-tab" role="tab" data-panel-tab="policy" aria-selected="false">Policy</button>
+                  </div>
+                  <div class="panel-tab-pane active" role="tabpanel" data-panel-pane="kdf">
+                    <p class="hint">Argon2id-Presets (Vault-KDF):</p>
+                    <div class="preset-row" id="presetRow"></div>
+                    <label>Argon2 Memory (KiB)</label><input id="arg_mem" type="number" />
+                    <label>Argon2 Time</label><input id="arg_time" type="number" />
+                    <label>Argon2 Threads</label><input id="arg_threads" type="number" value="1" />
+                    <div class="row">
+                      <button class="btn-accent" type="button" id="crypto_save">Krypto speichern</button>
+                    </div>
+                  </div>
+                  <div class="panel-tab-pane" role="tabpanel" data-panel-pane="policy" hidden>
+                    <p class="hint">Tenant-Policy für Login und Vault-Verhalten.</p>
+                    <label class="inline"><input id="totp_req" type="checkbox" /> TOTP Pflicht (Hinweis nach Login)</label>
+                    <label class="inline"><input id="admin_env_only" type="checkbox" /> Admins: Secret-Liste nur mit Envelope</label>
+                    <label class="inline"><input id="offline_cache" type="checkbox" checked /> Offline-Vault-Cache erlauben (Ciphertext auf Geräten)</label>
+                    <div class="row">
+                      <button class="btn-accent" type="button" id="policy_save">Policy speichern</button>
+                    </div>
                   </div>
                 </div>
-                <div class="admin-section" data-admin-section="recovery">
-                  <p class="hint">Wechsel erzwingt Re-Onboarding aller User. Bestätigung: <code>REONBOARD</code></p>
-                  <label>Modus</label>
-                  <select id="rec_mode">
-                    <option value="user_kit">User Recovery-Kit</option>
-                    <option value="admin_escrow">Admin-Escrow</option>
-                  </select>
-                  <label class="inline"><input id="rec_escrow" type="checkbox" /> Escrow erlauben</label>
-                  <label>Bestätigung</label><input id="rec_confirm" placeholder="REONBOARD" autocomplete="off" />
-                  <div class="row"><button class="btn-danger" type="button" id="rec_save">Recovery-Modus ändern</button></div>
-                  <h2>Escrow-Pubkey + Shamir (clientseitig)</h2>
-                  <p class="hint">Privater Escrow-Key wird nur im Browser gesplittet (secrets.js). Server speichert nur den Public Key. Alternativ: <code>tvcli escrow-split</code>.</p>
-                  <label>Shamir k</label><input id="shamir_k" type="number" value="3" />
-                  <label>Shamir n</label><input id="shamir_n" type="number" value="5" />
-                  <div class="ok" id="escrow_out" hidden></div>
-                  <div class="row"><button class="btn-accent" type="button" id="escrow_gen">Escrow-Keypair + Shares</button></div>
+                <div class="admin-section" data-admin-section="recovery" data-panel-group="recovery">
+                  <div class="panel-tabs" role="tablist" aria-label="Recovery und Escrow">
+                    <button type="button" class="panel-tab active" role="tab" data-panel-tab="mode" aria-selected="true">Recovery-Modus</button>
+                    <button type="button" class="panel-tab" role="tab" data-panel-tab="escrow" aria-selected="false">Escrow / Shamir</button>
+                  </div>
+                  <div class="panel-tab-pane active" role="tabpanel" data-panel-pane="mode">
+                    <p class="hint">Wechsel erzwingt Re-Onboarding aller User. Bestätigung: <code>REONBOARD</code></p>
+                    <label>Modus</label>
+                    <select id="rec_mode">
+                      <option value="user_kit">User Recovery-Kit</option>
+                      <option value="admin_escrow">Admin-Escrow</option>
+                    </select>
+                    <label class="inline"><input id="rec_escrow" type="checkbox" /> Escrow erlauben</label>
+                    <label>Bestätigung</label><input id="rec_confirm" placeholder="REONBOARD" autocomplete="off" />
+                    <div class="row"><button class="btn-danger" type="button" id="rec_save">Recovery-Modus ändern</button></div>
+                  </div>
+                  <div class="panel-tab-pane" role="tabpanel" data-panel-pane="escrow" hidden>
+                    <p class="hint">Privater Escrow-Key wird nur im Browser gesplittet (secrets.js). Server speichert nur den Public Key. Alternativ: <code>tvcli escrow-split</code>.</p>
+                    <label>Shamir k</label><input id="shamir_k" type="number" value="3" />
+                    <label>Shamir n</label><input id="shamir_n" type="number" value="5" />
+                    <div class="ok" id="escrow_out" hidden></div>
+                    <div class="row"><button class="btn-accent" type="button" id="escrow_gen">Escrow-Keypair + Shares</button></div>
+                  </div>
                 </div>
                 <div class="admin-section" data-admin-section="apikeys">
                   <p class="hint">Scopes: <code>read</code> (GET allowlist), <code>vault</code> (Secret-Schreibaktionen), <code>admin</code> (/api/admin/*). User-Rollen gelten zusätzlich.</p>
@@ -1798,32 +1878,41 @@ function renderApp(app) {
                   <div class="row"><button class="btn-accent" type="button" id="kcreate">API-Key erzeugen</button></div>
                   <div class="ok" id="ktoken" hidden></div>
                 </div>
-                <div class="admin-section" data-admin-section="platform" id="plat" hidden>
-                  <h2>Tenants (Plattform-Administrator)</h2>
-                  <div id="tlist" class="list"></div>
-                  <label>Name</label><input id="tname" />
-                  <label>Slug</label><input id="tslug" />
-                  <div class="row"><button class="btn-accent" type="button" id="tcreate">Tenant anlegen</button></div>
-                  <h2>Storage-Migration</h2>
-                  <p class="hint">Exportiert nur Ciphertext. Bestätigung: MIGRATE</p>
-                  <label>Ziel-Backend</label>
-                  <select id="mig_backend"><option value="json">json</option><option value="sqlite">sqlite</option></select>
-                  <label>DSN / Pfad</label><input id="mig_dsn" placeholder="leer = data/vault-migrated.*" />
-                  <label>Bestätigung</label><input id="mig_confirm" placeholder="MIGRATE" />
-                  <div class="row"><button class="btn-danger" type="button" id="mig_go">Migrieren</button></div>
-                  <h2>Instanz-Backup / Restore</h2>
-                  <p class="hint">Snapshot enthält nur Ciphertext + Metadaten (Tenants, User, Gruppen, Secrets, Passkeys). Unlock-Keyfile und Recovery-Kits <strong>nicht</strong> in dieser Datei — separat sichern. Restore mit <code>RESTORE</code> ersetzt den gesamten Vault-Store. Danach neu anmelden, falls User-IDs abweichen.</p>
-                  <div class="row">
-                    <button class="btn-accent btn-with-ico" type="button" id="inst_bak_dl">${btnLabel("download", "Snapshot herunterladen")}</button>
+                <div class="admin-section" data-admin-section="platform" id="plat" hidden data-panel-group="platform">
+                  <div class="panel-tabs" role="tablist" aria-label="Plattform">
+                    <button type="button" class="panel-tab active" role="tab" data-panel-tab="tenants" aria-selected="true">Tenants</button>
+                    <button type="button" class="panel-tab" role="tab" data-panel-tab="migrate" aria-selected="false">Storage-Migration</button>
+                    <button type="button" class="panel-tab" role="tab" data-panel-tab="instance" aria-selected="false">Instanz-Backup</button>
                   </div>
-                  <label>Snapshot-Datei</label>
-                  <input id="inst_bak_file" type="file" accept=".json,application/json" />
-                  <label>Bestätigung</label>
-                  <input id="inst_bak_confirm" placeholder="RESTORE" autocomplete="off" />
-                  <div class="row">
-                    <button class="btn-danger" type="button" id="inst_bak_restore">Wiederherstellen</button>
+                  <div class="panel-tab-pane active" role="tabpanel" data-panel-pane="tenants">
+                    <p class="hint">Tenants anlegen und verwalten (Plattform-Administrator).</p>
+                    <div id="tlist" class="list"></div>
+                    <label>Name</label><input id="tname" />
+                    <label>Slug</label><input id="tslug" />
+                    <div class="row"><button class="btn-accent" type="button" id="tcreate">Tenant anlegen</button></div>
                   </div>
-                  <div class="ok" id="inst_bak_ok" hidden></div>
+                  <div class="panel-tab-pane" role="tabpanel" data-panel-pane="migrate" hidden>
+                    <p class="hint">Exportiert nur Ciphertext. Bestätigung: MIGRATE</p>
+                    <label>Ziel-Backend</label>
+                    <select id="mig_backend"><option value="json">json</option><option value="sqlite">sqlite</option></select>
+                    <label>DSN / Pfad</label><input id="mig_dsn" placeholder="leer = data/vault-migrated.*" />
+                    <label>Bestätigung</label><input id="mig_confirm" placeholder="MIGRATE" />
+                    <div class="row"><button class="btn-danger" type="button" id="mig_go">Migrieren</button></div>
+                  </div>
+                  <div class="panel-tab-pane" role="tabpanel" data-panel-pane="instance" hidden>
+                    <p class="hint">Snapshot enthält nur Ciphertext + Metadaten (Tenants, User, Gruppen, Secrets, Passkeys). Unlock-Keyfile und Recovery-Kits <strong>nicht</strong> in dieser Datei — separat sichern. Restore mit <code>RESTORE</code> ersetzt den gesamten Vault-Store. Danach neu anmelden, falls User-IDs abweichen.</p>
+                    <div class="row">
+                      <button class="btn-accent btn-with-ico" type="button" id="inst_bak_dl">${btnLabel("download", "Snapshot herunterladen")}</button>
+                    </div>
+                    <label>Snapshot-Datei</label>
+                    <input id="inst_bak_file" type="file" accept=".json,application/json" />
+                    <label>Bestätigung</label>
+                    <input id="inst_bak_confirm" placeholder="RESTORE" autocomplete="off" />
+                    <div class="row">
+                      <button class="btn-danger" type="button" id="inst_bak_restore">Wiederherstellen</button>
+                    </div>
+                    <div class="ok" id="inst_bak_ok" hidden></div>
+                  </div>
                 </div>
               </div>
               <div class="admin-section" data-admin-section="audit">
@@ -1857,7 +1946,7 @@ function renderApp(app) {
 
   const NAV_TITLES = {
     "vault:mine": "Meine Secrets",
-    "vault:shared": "Geteilt mit mir",
+    "vault:shared": "Geteilte Secrets",
     "vault:create": "Neu anlegen",
     "vault:import": "Import",
     "vault:backup": "Sicherung",
@@ -2220,9 +2309,19 @@ function renderApp(app) {
     }
   };
 
-  n.querySelector("#totp").onclick = async () => {
+  bindPanelTabs(n, "backup");
+  bindPanelTabs(n, "crypto");
+  bindPanelTabs(n, "recovery");
+  bindPanelTabs(n, "platform");
+  bindPanelTabs(n, "account", {
+    onShow(tab) {
+      if (tab === "passkeys") refreshPasskeys().catch(() => {});
+      if (tab === "offline") updateOfflineAccountUI(vault.offlineSnapshot);
+    },
+  });
+
+  n.querySelector("#totpSetup").onclick = async () => {
     const box = n.querySelector("#totpbox"); box.hidden = false;
-    n.querySelector("#pkbox").hidden = true;
     const res = await api("/api/totp/setup", { method: "POST", body: "{}" });
     totpSecretPlain = res.secret || "";
     const otpUrl = res.otpauth_url || "";
@@ -2258,11 +2357,6 @@ function renderApp(app) {
       sec.textContent = "";
       ev.currentTarget.textContent = "Secret kurz anzeigen";
     }
-  };
-  n.querySelector("#passkey").onclick = async () => {
-    n.querySelector("#pkbox").hidden = false;
-    n.querySelector("#totpbox").hidden = true;
-    await refreshPasskeys();
   };
   async function refreshPasskeys() {
     const list = n.querySelector("#pklist");
@@ -2774,6 +2868,23 @@ function renderApp(app) {
     } catch (_) {}
   }
 
+  function setCreateVisibility(vis) {
+    const v = vis === "shared" ? "shared" : "private";
+    const hidden = n.querySelector("#svis");
+    if (hidden) hidden.value = v;
+    n.querySelectorAll("#svisTabs [data-svis]").forEach((btn) => {
+      const on = btn.dataset.svis === v;
+      btn.classList.toggle("active", on);
+      btn.setAttribute("aria-selected", on ? "true" : "false");
+    });
+    const wrap = n.querySelector("#sshareWrap");
+    if (wrap) wrap.hidden = v !== "shared";
+  }
+  n.querySelectorAll("#svisTabs [data-svis]").forEach((btn) => {
+    btn.onclick = () => setCreateVisibility(btn.dataset.svis);
+  });
+  setCreateVisibility("private");
+
   function closeSecretModal() {
     const panel = n.querySelector("#sdetail");
     if (panel) panel.hidden = true;
@@ -3116,6 +3227,11 @@ function renderApp(app) {
     n.querySelector("#sextraSlots").innerHTML = "";
     n.querySelector("#sextraAdd").value = "";
     n.querySelector("#spwShow").innerHTML = btnLabel("eye", "Anzeigen");
+    const userSel = n.querySelector("#screateUsers");
+    if (userSel) userSel.selectedIndex = -1;
+    const gSel = n.querySelector("#screateGroups");
+    if (gSel) gSel.selectedIndex = -1;
+    setCreateVisibility("private");
   }
 
   n.querySelector("#sextraAddBtn").onclick = () => {
@@ -3235,20 +3351,27 @@ function renderApp(app) {
     };
     addEnv(vault.me.user_id, meKeys.public_key_b64);
     const allowShare = shareOpts !== false;
+    const visibility = (shareOpts && shareOpts.visibility) ||
+      (n.querySelector("#svis")?.value) ||
+      "private";
     const userSel = n.querySelector("#screateUsers");
-    if (userSel && allowShare) {
+    if (userSel && allowShare && visibility === "shared") {
       for (const opt of userSel.selectedOptions) {
         addEnv(opt.value, opt.dataset.pk);
         if (opt.value && opt.value !== vault.me.user_id) shareUserIds.push(opt.value);
       }
     }
     const gSel = n.querySelector("#screateGroups");
-    if (gSel && allowShare) {
+    if (gSel && allowShare && visibility === "shared") {
       for (const opt of gSel.selectedOptions) {
         shareGroupIds.push(opt.value);
         const pks = await api("/api/groups/" + encodeURIComponent(opt.value) + "/member-keys");
         for (const p of pks) addEnv(p.user_id, p.public_key_b64);
       }
+    }
+    if (visibility === "shared" && !shareUserIds.length && !shareGroupIds.length) {
+      dk.fill(0);
+      throw new Error("Geteiltes Secret: mindestens einen User oder eine Gruppe wählen");
     }
     dk.fill(0);
     const body = {
@@ -3258,10 +3381,12 @@ function renderApp(app) {
       nonce_b64: TVCrypto.b64enc(bodyEnc.nonce),
       key_version: kv,
       envelopes,
+      visibility: visibility === "shared" ? "shared" : "private",
     };
     if (shareUserIds.length) body.share_user_ids = shareUserIds;
     if (shareGroupIds.length) body.share_group_ids = shareGroupIds;
     await api("/api/secrets", { method: "POST", body: JSON.stringify(body) });
+    return body.visibility;
   }
 
   async function importNormalizedItems(items, hintEl, okEl, errEl) {
@@ -3287,7 +3412,7 @@ function renderApp(app) {
             favorite: !!it.favorite,
             extra: it.extra || [],
           }),
-          false
+          { visibility: "private" }
         );
         done++;
       } catch {
@@ -3377,10 +3502,9 @@ function renderApp(app) {
   }
 
   function matchesOwnership(it) {
-    const me = vault.me?.user_id;
-    if (!it.has_access || !me) return false;
-    const mine = (it.created_by || "") === me;
-    return vault.ownershipFilter === "shared" ? !mine : mine;
+    if (!it.has_access) return false;
+    const vis = (it.visibility || "private") === "shared" ? "shared" : "private";
+    return vault.ownershipFilter === "shared" ? vis === "shared" : vis === "private";
   }
 
   function filterVisibleSecrets() {
@@ -3444,11 +3568,13 @@ function renderApp(app) {
   }
 
   function secretIsShared(it) {
-    return !!(it && ((it.shared_groups && it.shared_groups.length) || (it.shared_users && it.shared_users.length)));
+    return (it && it.visibility === "shared") ||
+      !!(it && ((it.shared_groups && it.shared_groups.length) || (it.shared_users && it.shared_users.length)));
   }
 
   function shareSummaryTitle(it) {
     const bits = [];
+    if (it.created_by_username) bits.push("Angelegt: " + it.created_by_username);
     if (it.shared_users && it.shared_users.length) bits.push("User: " + it.shared_users.join(", "));
     if (it.shared_groups && it.shared_groups.length) bits.push("Gruppen: " + it.shared_groups.join(", "));
     return bits.join(" · ") || "Zugriff bearbeiten";
@@ -3458,8 +3584,8 @@ function renderApp(app) {
     if (!it.has_access || vault.offlineMode) return "";
     const shared = secretIsShared(it);
     const cls = shared ? "share-badge" : "share-badge share-badge-empty";
-    const title = shared ? shareSummaryTitle(it) : "Zugriff teilen / bearbeiten";
-    const label = shared ? "Geteilt — Zugriff anzeigen" : "Zugriff bearbeiten";
+    const title = shared ? shareSummaryTitle(it) : "Als geteiltes Secret freigeben";
+    const label = shared ? "Zugriff anzeigen" : "Teilen";
     return `<button type="button" class="${cls}" data-share-edit="${escHtml(it.id)}" title="${escHtml(title)}" aria-label="${escHtml(label)}">${icon("share")}</button>`;
   }
 
@@ -3505,24 +3631,41 @@ function renderApp(app) {
     if (!visible.length) {
       const empty = vault.ownershipFilter === "shared"
         ? "Keine geteilten Secrets."
-        : "Noch keine eigenen Secrets.";
+        : "Noch keine privaten Secrets.";
       list.innerHTML = `<p class="hint">${empty}</p>`;
     } else if (vault.viewMode === "table") {
-      const table = el(`<table class="secrets-table"><thead><tr>
-        <th class="st-check"></th><th>Titel</th><th>Benutzer</th><th>Tags</th><th>Gruppen</th><th class="st-share" title="Freigabe"> </th><th></th><th></th>
-      </tr></thead><tbody></tbody></table>`);
+      const sharedView = vault.ownershipFilter === "shared";
+      const head = sharedView
+        ? `<th class="st-check"></th><th>Titel</th><th>Benutzer</th><th>Tags</th><th>Angelegt von</th><th>User</th><th>Gruppen</th><th class="st-share" title="Zugriff"> </th><th></th><th></th>`
+        : `<th class="st-check"></th><th>Titel</th><th>Benutzer</th><th>Tags</th><th class="st-share" title="Teilen"> </th><th></th><th></th>`;
+      const table = el(`<table class="secrets-table"><thead><tr>${head}</tr></thead><tbody></tbody></table>`);
       const tbody = table.querySelector("tbody");
       for (const it of visible) {
-        const tr = el(`<tr>
-          <td class="st-check"><input type="checkbox" class="sec-check" ${it.has_access ? "" : "disabled"} /></td>
-          <td class="st-title"></td>
-          <td class="st-user">${escHtml(it._username || "—")}</td>
-          <td class="st-tags"></td>
-          <td class="st-groups muted">${escHtml((it.shared_groups || []).join(", ") || "—")}</td>
-          <td class="st-share">${shareBadgeButton(it)}</td>
-          <td class="st-fav">${it._favorite ? icon("star", "fav-ico") : ""}</td>
-          <td class="st-act"><button type="button" class="btn-ghost btn-with-ico btn-sm">${btnLabel("open", "Öffnen")}</button></td>
-        </tr>`);
+        let tr;
+        if (sharedView) {
+          tr = el(`<tr>
+            <td class="st-check"><input type="checkbox" class="sec-check" ${it.has_access ? "" : "disabled"} /></td>
+            <td class="st-title"></td>
+            <td class="st-user">${escHtml(it._username || "—")}</td>
+            <td class="st-tags"></td>
+            <td class="st-creator muted">${escHtml(it.created_by_username || "—")}</td>
+            <td class="st-users muted">${escHtml((it.shared_users || []).join(", ") || "—")}</td>
+            <td class="st-groups muted">${escHtml((it.shared_groups || []).join(", ") || "—")}</td>
+            <td class="st-share">${shareBadgeButton(it)}</td>
+            <td class="st-fav">${it._favorite ? icon("star", "fav-ico") : ""}</td>
+            <td class="st-act"><button type="button" class="btn-ghost btn-with-ico btn-sm">${btnLabel("open", "Öffnen")}</button></td>
+          </tr>`);
+        } else {
+          tr = el(`<tr>
+            <td class="st-check"><input type="checkbox" class="sec-check" ${it.has_access ? "" : "disabled"} /></td>
+            <td class="st-title"></td>
+            <td class="st-user">${escHtml(it._username || "—")}</td>
+            <td class="st-tags"></td>
+            <td class="st-share">${shareBadgeButton(it)}</td>
+            <td class="st-fav">${it._favorite ? icon("star", "fav-ico") : ""}</td>
+            <td class="st-act"><button type="button" class="btn-ghost btn-with-ico btn-sm">${btnLabel("open", "Öffnen")}</button></td>
+          </tr>`);
+        }
         bindSecretCheckbox(tr.querySelector(".sec-check"), it.id);
         const titleCell = tr.querySelector(".st-title");
         titleCell.appendChild(document.createTextNode(secretTitleLabel(it)));
@@ -3595,7 +3738,7 @@ function renderApp(app) {
       bindShareBadge(list);
     }
 
-    const scopeLabel = vault.ownershipFilter === "shared" ? "geteilt" : "eigene";
+    const scopeLabel = vault.ownershipFilter === "shared" ? "geteilt" : "privat";
     n.querySelector("#sCount").textContent =
       `${visible.length} ${scopeLabel} · ${vault.secretsCache.length} geladen · ${vault.secretsTotal} gesamt`;
     n.querySelector("#sMore").hidden = vault.secretsCache.length >= vault.secretsTotal;
@@ -3841,10 +3984,10 @@ function renderApp(app) {
       const title = n.querySelector("#stitle").value.trim();
       if (!title) throw new Error("Titel erforderlich");
       const payload = collectCreatePayload();
-      await postEncryptedSecret(title, payload);
+      const visibility = await postEncryptedSecret(title, payload);
       resetCreateForm();
       await refreshSecrets(true);
-      navigateTo("vault:mine");
+      navigateTo(visibility === "shared" ? "vault:shared" : "vault:mine");
     } catch (e) {
       err.hidden = false; err.textContent = e.message;
     }
@@ -4025,12 +4168,18 @@ function renderApp(app) {
           "Empfänger: " + (currentSecret.recipients || []).join(", ") +
           " · v" + currentSecret.key_version +
           (userHint ? " · User: " + userHint : "") +
-          (groupHint ? " · Gruppen: " + groupHint : "");
+          (groupHint ? " · Gruppen: " + groupHint : "") +
+          (currentSecret.visibility === "shared" ? " · Geteilt" : " · Privat");
       }
       await renderAccessPanel("detail");
     }
     if (shareEditorOpen) await renderAccessPanel("modal");
     await refreshSecrets(true);
+    if (currentSecret.visibility === "shared" && vault.ownershipFilter === "mine") {
+      navigateTo("vault:shared");
+    } else if (currentSecret.visibility !== "shared" && vault.ownershipFilter === "shared") {
+      navigateTo("vault:mine");
+    }
   }
 
   async function openShareEditor(id) {

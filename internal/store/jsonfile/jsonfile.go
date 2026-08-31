@@ -104,6 +104,31 @@ func normalize(p *persistence) {
 	if p.GroupShares == nil {
 		p.GroupShares = []store.SecretGroupShare{}
 	}
+	// Backfill visibility for older snapshots (empty = private unless shares/extra envelopes).
+	sharedSecret := map[string]bool{}
+	for _, sh := range p.DirectShares {
+		sharedSecret[secretKey(sh.TenantID, sh.SecretID)] = true
+	}
+	for _, sh := range p.GroupShares {
+		sharedSecret[secretKey(sh.TenantID, sh.SecretID)] = true
+	}
+	for _, e := range p.Envelopes {
+		if e.Revoked {
+			continue
+		}
+		key := secretKey(e.TenantID, e.SecretID)
+		if m, ok := p.Secrets[key]; ok && e.UserID != m.CreatedBy {
+			sharedSecret[key] = true
+		}
+	}
+	for key, m := range p.Secrets {
+		vis := store.NormalizeVisibility(m.Visibility)
+		if sharedSecret[key] {
+			vis = store.VisibilityShared
+		}
+		m.Visibility = vis
+		p.Secrets[key] = m
+	}
 }
 
 func (s *Store) flush() error {
@@ -482,7 +507,9 @@ func (s *Store) ListSecretMetas(_ context.Context, tenant store.TenantID) ([]sto
 	var out []store.SecretMeta
 	for _, m := range s.data.Secrets {
 		if m.TenantID == tenant {
-			out = append(out, m)
+			cp := m
+			cp.Visibility = store.NormalizeVisibility(cp.Visibility)
+			out = append(out, cp)
 		}
 	}
 	return out, nil
@@ -537,6 +564,7 @@ func (s *Store) PutSecretMeta(_ context.Context, meta store.SecretMeta) error {
 		}
 	}
 	meta.UpdatedAt = now
+	meta.Visibility = store.NormalizeVisibility(meta.Visibility)
 	s.data.Secrets[key] = meta
 	return s.flush()
 }
@@ -552,6 +580,7 @@ func (s *Store) GetSecretMeta(_ context.Context, tenant store.TenantID, id store
 		return nil, store.ErrNotFound
 	}
 	cp := m
+	cp.Visibility = store.NormalizeVisibility(cp.Visibility)
 	return &cp, nil
 }
 
@@ -727,6 +756,7 @@ func (s *Store) CreateSecret(_ context.Context, meta store.SecretMeta, blob stor
 		meta.CreatedAt = now
 	}
 	meta.UpdatedAt = now
+	meta.Visibility = store.NormalizeVisibility(meta.Visibility)
 	s.data.Secrets[secretKey(meta.TenantID, meta.ID)] = meta
 	s.data.Blobs[secretKey(meta.TenantID, meta.ID)] = blob
 

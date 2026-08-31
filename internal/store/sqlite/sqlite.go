@@ -16,7 +16,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const schemaVersion = 5
+const schemaVersion = 6
 
 type Store struct {
 	db *sql.DB
@@ -92,6 +92,7 @@ CREATE TABLE IF NOT EXISTS secrets (
   title_ciphertext BLOB NOT NULL,
   title_nonce BLOB NOT NULL,
   created_by TEXT NOT NULL,
+  visibility TEXT NOT NULL DEFAULT 'private',
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   PRIMARY KEY (tenant_id, id)
@@ -173,7 +174,7 @@ CREATE TABLE IF NOT EXISTS secret_group_shares (
 	if err != nil {
 		return err
 	}
-	// Best-effort upgrades from v1/v2/v3/v4.
+	// Best-effort upgrades from v1…v5.
 	for _, q := range []string{
 		`ALTER TABLE tenants ADD COLUMN escrow_public_key BLOB`,
 		`ALTER TABLE users ADD COLUMN escrow_envelope BLOB`,
@@ -196,9 +197,28 @@ CREATE TABLE IF NOT EXISTS secret_group_shares (
   tenant_id TEXT NOT NULL, secret_id TEXT NOT NULL, group_id TEXT NOT NULL,
   PRIMARY KEY (tenant_id, secret_id, group_id)
 )`,
+		`ALTER TABLE secrets ADD COLUMN visibility TEXT NOT NULL DEFAULT 'private'`,
 	} {
 		_, _ = s.db.Exec(q)
 	}
+	// v6: mark existing shared secrets (explicit shares or extra envelopes).
+	_, _ = s.db.Exec(`
+UPDATE secrets SET visibility = 'shared'
+WHERE visibility = 'private' AND (
+  EXISTS (
+    SELECT 1 FROM secret_direct_shares d
+    WHERE d.tenant_id = secrets.tenant_id AND d.secret_id = secrets.id
+  )
+  OR EXISTS (
+    SELECT 1 FROM secret_group_shares g
+    WHERE g.tenant_id = secrets.tenant_id AND g.secret_id = secrets.id
+  )
+  OR EXISTS (
+    SELECT 1 FROM key_envelopes e
+    WHERE e.tenant_id = secrets.tenant_id AND e.secret_id = secrets.id
+      AND e.revoked = 0 AND e.user_id != secrets.created_by
+  )
+)`)
 	var n int
 	if err := s.db.QueryRow(`SELECT COUNT(1) FROM schema_migrations WHERE version = ?`, schemaVersion).Scan(&n); err != nil {
 		return err
@@ -503,13 +523,14 @@ func (s *Store) PutSecretMeta(ctx context.Context, meta store.SecretMeta) error 
 		meta.CreatedAt = now
 	}
 	meta.UpdatedAt = now
+	meta.Visibility = store.NormalizeVisibility(meta.Visibility)
 	_, err := s.db.ExecContext(ctx, `
-INSERT INTO secrets(id, tenant_id, collection_id, title_ciphertext, title_nonce, created_by, created_at, updated_at)
-VALUES(?,?,?,?,?,?,?,?)
+INSERT INTO secrets(id, tenant_id, collection_id, title_ciphertext, title_nonce, created_by, visibility, created_at, updated_at)
+VALUES(?,?,?,?,?,?,?,?,?)
 ON CONFLICT(tenant_id, id) DO UPDATE SET
   collection_id=excluded.collection_id, title_ciphertext=excluded.title_ciphertext,
-  title_nonce=excluded.title_nonce, updated_at=excluded.updated_at
-`, meta.ID, meta.TenantID, meta.CollectionID, meta.TitleCiphertext, meta.TitleNonce, meta.CreatedBy,
+  title_nonce=excluded.title_nonce, visibility=excluded.visibility, updated_at=excluded.updated_at
+`, meta.ID, meta.TenantID, meta.CollectionID, meta.TitleCiphertext, meta.TitleNonce, meta.CreatedBy, string(meta.Visibility),
 		meta.CreatedAt.Format(time.RFC3339Nano), meta.UpdatedAt.Format(time.RFC3339Nano))
 	return err
 }
@@ -519,16 +540,17 @@ func (s *Store) GetSecretMeta(ctx context.Context, tenant store.TenantID, id sto
 		return nil, err
 	}
 	row := s.db.QueryRowContext(ctx, `
-SELECT id, tenant_id, collection_id, title_ciphertext, title_nonce, created_by, created_at, updated_at
+SELECT id, tenant_id, collection_id, title_ciphertext, title_nonce, created_by, COALESCE(visibility,'private'), created_at, updated_at
 FROM secrets WHERE tenant_id = ? AND id = ?`, tenant, id)
 	var m store.SecretMeta
-	var cAt, uAt string
-	if err := row.Scan(&m.ID, &m.TenantID, &m.CollectionID, &m.TitleCiphertext, &m.TitleNonce, &m.CreatedBy, &cAt, &uAt); err != nil {
+	var cAt, uAt, vis string
+	if err := row.Scan(&m.ID, &m.TenantID, &m.CollectionID, &m.TitleCiphertext, &m.TitleNonce, &m.CreatedBy, &vis, &cAt, &uAt); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, store.ErrNotFound
 		}
 		return nil, err
 	}
+	m.Visibility = store.NormalizeVisibility(store.SecretVisibility(vis))
 	m.CreatedAt, _ = time.Parse(time.RFC3339Nano, cAt)
 	m.UpdatedAt, _ = time.Parse(time.RFC3339Nano, uAt)
 	return &m, nil
@@ -539,7 +561,7 @@ func (s *Store) ListSecretMetas(ctx context.Context, tenant store.TenantID) ([]s
 		return nil, err
 	}
 	rows, err := s.db.QueryContext(ctx, `
-SELECT id, tenant_id, collection_id, title_ciphertext, title_nonce, created_by, created_at, updated_at
+SELECT id, tenant_id, collection_id, title_ciphertext, title_nonce, created_by, COALESCE(visibility,'private'), created_at, updated_at
 FROM secrets WHERE tenant_id = ? ORDER BY updated_at DESC`, tenant)
 	if err != nil {
 		return nil, err
@@ -548,10 +570,11 @@ FROM secrets WHERE tenant_id = ? ORDER BY updated_at DESC`, tenant)
 	var out []store.SecretMeta
 	for rows.Next() {
 		var m store.SecretMeta
-		var cAt, uAt string
-		if err := rows.Scan(&m.ID, &m.TenantID, &m.CollectionID, &m.TitleCiphertext, &m.TitleNonce, &m.CreatedBy, &cAt, &uAt); err != nil {
+		var cAt, uAt, vis string
+		if err := rows.Scan(&m.ID, &m.TenantID, &m.CollectionID, &m.TitleCiphertext, &m.TitleNonce, &m.CreatedBy, &vis, &cAt, &uAt); err != nil {
 			return nil, err
 		}
+		m.Visibility = store.NormalizeVisibility(store.SecretVisibility(vis))
 		m.CreatedAt, _ = time.Parse(time.RFC3339Nano, cAt)
 		m.UpdatedAt, _ = time.Parse(time.RFC3339Nano, uAt)
 		out = append(out, m)
@@ -860,13 +883,14 @@ WHERE tenant_id = ? AND secret_id = ? AND key_version = ?`, tenant, id, oldKeyVe
 		meta.CreatedAt = now
 	}
 	meta.UpdatedAt = now
+	meta.Visibility = store.NormalizeVisibility(meta.Visibility)
 	if _, err := tx.ExecContext(ctx, `
-INSERT INTO secrets(id, tenant_id, collection_id, title_ciphertext, title_nonce, created_by, created_at, updated_at)
-VALUES(?,?,?,?,?,?,?,?)
+INSERT INTO secrets(id, tenant_id, collection_id, title_ciphertext, title_nonce, created_by, visibility, created_at, updated_at)
+VALUES(?,?,?,?,?,?,?,?,?)
 ON CONFLICT(tenant_id, id) DO UPDATE SET
   collection_id=excluded.collection_id, title_ciphertext=excluded.title_ciphertext,
-  title_nonce=excluded.title_nonce, updated_at=excluded.updated_at
-`, meta.ID, meta.TenantID, meta.CollectionID, meta.TitleCiphertext, meta.TitleNonce, meta.CreatedBy,
+  title_nonce=excluded.title_nonce, visibility=excluded.visibility, updated_at=excluded.updated_at
+`, meta.ID, meta.TenantID, meta.CollectionID, meta.TitleCiphertext, meta.TitleNonce, meta.CreatedBy, string(meta.Visibility),
 		meta.CreatedAt.Format(time.RFC3339Nano), meta.UpdatedAt.Format(time.RFC3339Nano)); err != nil {
 		return err
 	}
@@ -927,10 +951,11 @@ func (s *Store) CreateSecret(ctx context.Context, meta store.SecretMeta, blob st
 		meta.CreatedAt = now
 	}
 	meta.UpdatedAt = now
+	meta.Visibility = store.NormalizeVisibility(meta.Visibility)
 	if _, err := tx.ExecContext(ctx, `
-INSERT INTO secrets(id, tenant_id, collection_id, title_ciphertext, title_nonce, created_by, created_at, updated_at)
-VALUES(?,?,?,?,?,?,?,?)
-`, meta.ID, meta.TenantID, meta.CollectionID, meta.TitleCiphertext, meta.TitleNonce, meta.CreatedBy,
+INSERT INTO secrets(id, tenant_id, collection_id, title_ciphertext, title_nonce, created_by, visibility, created_at, updated_at)
+VALUES(?,?,?,?,?,?,?,?,?)
+`, meta.ID, meta.TenantID, meta.CollectionID, meta.TitleCiphertext, meta.TitleNonce, meta.CreatedBy, string(meta.Visibility),
 		meta.CreatedAt.Format(time.RFC3339Nano), meta.UpdatedAt.Format(time.RFC3339Nano)); err != nil {
 		return err
 	}

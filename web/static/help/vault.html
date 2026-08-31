@@ -31,7 +31,7 @@
 
         <figure class="help-figure">
           <img src="/help/img/nav-sidebar.png" alt="Sidebar Navigation" width="1100" height="720" loading="lazy" />
-          <figcaption>Sidebar: Meine Secrets, Geteilt mit mir, Neu anlegen, Import, Sicherung</figcaption>
+          <figcaption>Sidebar: Meine Secrets, Geteilte Secrets, Neu anlegen, Import, Sicherung</figcaption>
         </figure>
 
         <h2 id="anlegen">Secret anlegen</h2>
@@ -40,16 +40,17 @@
           <ol>
             <li>Anmelden und Vault mit dem <strong>Master-Passwort</strong> entsperren.</li>
             <li>Sidebar <strong>Neu anlegen</strong> öffnen.</li>
+            <li><strong>Privat</strong> oder <strong>Geteilt</strong> wählen. Privat erscheint nur unter Meine Secrets; Geteilt nur unter Geteilte Secrets.</li>
             <li><strong>Titel</strong>, optional <strong>Tags</strong>, <strong>Benutzername</strong> und <strong>Passwort</strong> eintragen.</li>
             <li>Passwort per <strong>Generator</strong> erzeugen oder manuell setzen.</li>
             <li>Weitere Felder über <strong>Feld hinzufügen</strong>: Website, TOTP-Seed, Notizen, SSH-Keys, …</li>
-            <li>Optional User/Gruppen zum Teilen wählen (nur onboardete Ziele).</li>
+            <li>Bei <strong>Geteilt</strong>: mindestens einen User oder eine Gruppe wählen (nur onboardete Ziele).</li>
             <li>Speichern — der Server speichert nur Ciphertext.</li>
           </ol>
         </div>
         <figure class="help-figure">
           <img src="/help/img/vault-create.png" alt="Formular Neu anlegen" width="1100" height="720" loading="lazy" />
-          <figcaption>Beispiel: Secret „GitHub“ anlegen</figcaption>
+          <figcaption>Beispiel: privates Secret „GitHub“ anlegen</figcaption>
         </figure>
         <div class="help-step">
           <h3>Beispiel (VPN-Zugang)</h3>
@@ -64,7 +65,7 @@
         </div>
 
         <h2 id="teilen">Secrets teilen</h2>
-        <p>Teilen erfolgt <strong>explizit</strong> pro Person oder Gruppe mit eigenem Umschlag — kein gemeinsames Gruppenpasswort. Die Listen-Spalte <strong>Gruppen</strong> zeigt nur freigegebene Gruppen, nicht Ihre Mitgliedschaften.</p>
+        <p>Geteilte Secrets liegen unter <strong>Geteilte Secrets</strong> (auch für den Anleger). Teilen erfolgt <strong>explizit</strong> pro Person oder Gruppe mit eigenem Umschlag — kein gemeinsames Gruppenpasswort. Alle Berechtigten können bearbeiten.</p>
         <figure class="help-figure">
           <img src="/help/img/vault-secret-detail.png" alt="Secret-Detail mit Zugriffspanel" width="1100" height="720" loading="lazy" />
           <figcaption>Secret-Detail: Zugriffspanel (verfügbar / aktuell)</figcaption>
@@ -72,9 +73,9 @@
         <div class="help-step">
           <h3>Zugriff vergeben</h3>
           <ol>
-            <li>Secret <strong>Öffnen</strong> → Bereich <strong>Zugriff</strong>.</li>
+            <li>Secret <strong>Öffnen</strong> → Bereich <strong>Zugriff</strong> (oder Teilen-Symbol in der Liste).</li>
             <li>User oder Gruppe links anklicken oder nach rechts ziehen.</li>
-            <li>Empfänger sieht den Eintrag unter <strong>Geteilt mit mir</strong>.</li>
+            <li>Ein privates Secret wird dadurch zum geteilten Eintrag und erscheint unter <strong>Geteilte Secrets</strong>.</li>
           </ol>
         </div>
         <div class="help-step">
@@ -82,13 +83,13 @@
           <ol>
             <li>Bei einem Eintrag rechts <strong>Entfernen</strong> (oder zurück nach links ziehen).</li>
             <li>Der Datenschlüssel wird rotiert; der alte Umschlag wird ungültig.</li>
+            <li>Ohne verbleibende Freigaben wird das Secret wieder <strong>privat</strong>.</li>
           </ol>
-          <p class="help-note">Import und Anlegen ohne Auswahl erzeugen <strong>keine</strong> Freigaben.</p>
-          <p class="help-note">Neue Gruppenmitglieder erhalten Gruppen-Secrets automatisch nachgeteilt, sobald jemand mit Zugriff den Vault entsperrt hat (Zero-Knowledge).</p>
+          <p class="help-note"><strong>Import</strong> legt Secrets immer als privat an. Neue Gruppenmitglieder erhalten Gruppen-Secrets automatisch nachgeteilt, sobald jemand mit Zugriff den Vault entsperrt hat (Zero-Knowledge).</p>
         </div>
         <figure class="help-figure">
-          <img src="/help/img/vault-shared.png" alt="Geteilt mit mir" width="1100" height="720" loading="lazy" />
-          <figcaption>Ansicht „Geteilt mit mir“</figcaption>
+          <img src="/help/img/vault-shared.png" alt="Geteilte Secrets" width="1100" height="720" loading="lazy" />
+          <figcaption>Ansicht „Geteilte Secrets“</figcaption>
         </figure>
 
         <h2 id="import">Import aus Fremdtools</h2>

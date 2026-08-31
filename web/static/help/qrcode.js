@@ -48,9 +48,8 @@
     return rem;
   }
 
-  // ECC-M capacities: data codewords (excl. ec)
+  // size, dataCW, ecPerBlock, blocks, alignCenters (excl. 6)
   const SPEC = {
-    // size, dataCW, ecPerBlock, blocks, alignCenters
     1: [21, 16, 10, 1, []],
     2: [25, 28, 16, 1, [18]],
     3: [29, 44, 26, 1, [22]],
@@ -61,16 +60,13 @@
     8: [49, 154, 22, 4, [24, 42]],
     9: [53, 182, 22, 5, [26, 46]],
     10: [57, 216, 26, 5, [28, 50]],
+    11: [61, 254, 30, 5, [30, 54]],
+    12: [65, 290, 22, 8, [32, 58]],
+    13: [69, 334, 22, 9, [34, 62]],
+    14: [73, 365, 24, 9, [26, 46, 66]],
+    15: [77, 415, 24, 10, [26, 48, 70]],
+    16: [81, 453, 28, 10, [26, 50, 74]],
   };
-
-  function byteLen(s) {
-    let n = 0;
-    for (let i = 0; i < s.length; i++) {
-      const c = s.charCodeAt(i);
-      n += c < 128 ? 1 : c < 2048 ? 2 : 3;
-    }
-    return n;
-  }
 
   function utf8Bytes(s) {
     const out = [];
@@ -86,10 +82,18 @@
     return out;
   }
 
+  function lenBitsFor(ver) {
+    return ver >= 10 ? 16 : 8;
+  }
+
+  function byteCapacity(ver) {
+    const dataCW = SPEC[ver][1];
+    return Math.floor((dataCW * 8 - 4 - lenBitsFor(ver)) / 8);
+  }
+
   function pickVersion(n) {
-    for (let v = 1; v <= 10; v++) {
-      // mode(4) + len(8) + data + terminator reserved ≈ n+2
-      if (SPEC[v][1] >= n + 2) return v;
+    for (let v = 1; v <= 16; v++) {
+      if (byteCapacity(v) >= n) return v;
     }
     throw new Error("Text zu lang für lokalen QR");
   }
@@ -118,7 +122,7 @@
     const payload = utf8Bytes(text);
     const buf = bitBuffer();
     buf.push(0b0100, 4);
-    buf.push(payload.length, 8);
+    buf.push(payload.length, lenBitsFor(ver));
     payload.forEach((b) => buf.push(b, 8));
     const capacity = dataCW * 8;
     const rem = capacity - buf.bits.length;
@@ -161,12 +165,13 @@
         const yy = oy + y;
         if (xx < 0 || yy < 0 || xx >= m.length || yy >= m.length) continue;
         const on =
-          (x >= 0 && x <= 6 && y >= 0 && y <= 6 && (x === 0 || x === 6 || y === 0 || y === 6 || (x >= 2 && x <= 4 && y >= 2 && y <= 4))) ||
-          false;
-        if (x >= -1 && x <= 7 && y >= -1 && y <= 7) {
-          if (x === -1 || x === 7 || y === -1 || y === 7) m[yy][xx] = 0;
-          else m[yy][xx] = on ? 1 : 0;
-        }
+          x >= 0 &&
+          x <= 6 &&
+          y >= 0 &&
+          y <= 6 &&
+          (x === 0 || x === 6 || y === 0 || y === 6 || (x >= 2 && x <= 4 && y >= 2 && y <= 4));
+        if (x === -1 || x === 7 || y === -1 || y === 7) m[yy][xx] = 0;
+        else m[yy][xx] = on ? 1 : 0;
       }
     }
   }
@@ -186,44 +191,94 @@
 
   function applyMask(id, x, y) {
     switch (id) {
-      case 0: return (x + y) % 2 === 0;
-      case 1: return y % 2 === 0;
-      case 2: return x % 3 === 0;
-      case 3: return (x + y) % 3 === 0;
-      case 4: return (Math.floor(y / 2) + Math.floor(x / 3)) % 2 === 0;
-      case 5: return ((x * y) % 2) + ((x * y) % 3) === 0;
-      case 6: return (((x * y) % 2) + ((x * y) % 3)) % 2 === 0;
-      default: return (((x + y) % 2) + ((x * y) % 3)) % 2 === 0;
+      case 0:
+        return (x + y) % 2 === 0;
+      case 1:
+        return y % 2 === 0;
+      case 2:
+        return x % 3 === 0;
+      case 3:
+        return (x + y) % 3 === 0;
+      case 4:
+        return (Math.floor(y / 2) + Math.floor(x / 3)) % 2 === 0;
+      case 5:
+        return ((x * y) % 2) + ((x * y) % 3) === 0;
+      case 6:
+        return (((x * y) % 2) + ((x * y) % 3)) % 2 === 0;
+      default:
+        return (((x + y) % 2) + ((x * y) % 3)) % 2 === 0;
     }
   }
 
   function formatBits(mask) {
     // ECC-M = 00
-    let bits = (0b00 << 3) | mask;
-    bits <<= 10;
+    const data = (0b00 << 3) | mask;
+    let rem = data << 10;
     const gen = 0b10100110111;
     for (let i = 14; i >= 10; i--) {
-      if (((bits >> i) & 1) !== 0) bits ^= gen << (i - 10);
+      if (((rem >> i) & 1) !== 0) rem ^= gen << (i - 10);
     }
-    return ((0b00 << 3) | mask) << 10 | bits ^ 0b101010000010010;
+    return ((data << 10) | (rem & 0x3ff)) ^ 0b101010000010010;
   }
 
   function drawFormat(m, size, bits) {
     const positions = [
-      [8, 0], [8, 1], [8, 2], [8, 3], [8, 4], [8, 5], [8, 7], [8, 8],
-      [7, 8], [5, 8], [4, 8], [3, 8], [2, 8], [1, 8], [0, 8],
+      [8, 0],
+      [8, 1],
+      [8, 2],
+      [8, 3],
+      [8, 4],
+      [8, 5],
+      [8, 7],
+      [8, 8],
+      [7, 8],
+      [5, 8],
+      [4, 8],
+      [3, 8],
+      [2, 8],
+      [1, 8],
+      [0, 8],
     ];
     for (let i = 0; i < 15; i++) {
       const bit = (bits >> i) & 1;
       m[positions[i][1]][positions[i][0]] = bit;
     }
+    // second copy: bits 0–7 along top row right, bits 8–14 along left column bottom
     for (let i = 0; i < 8; i++) m[8][size - 1 - i] = (bits >> i) & 1;
-    for (let i = 0; i < 7; i++) m[size - 7 + i][8] = (bits >> (14 - i)) & 1;
+    for (let i = 0; i < 7; i++) m[size - 7 + i][8] = (bits >> (8 + i)) & 1;
+  }
+
+  function versionBits(ver) {
+    let rem = ver << 12;
+    const gen = 0x1f25;
+    for (let i = 17; i >= 12; i--) {
+      if (((rem >> i) & 1) !== 0) rem ^= gen << (i - 12);
+    }
+    return (ver << 12) | (rem & 0xfff);
+  }
+
+  function reserveVersion(m, size) {
+    for (let i = 0; i < 6; i++) {
+      for (let j = 0; j < 3; j++) {
+        m[i][size - 11 + j] = 0;
+        m[size - 11 + j][i] = 0;
+      }
+    }
+  }
+
+  function drawVersion(m, size, bits) {
+    for (let i = 0; i < 18; i++) {
+      const bit = (bits >> i) & 1;
+      const a = Math.floor(i / 3);
+      const b = i % 3;
+      m[a][size - 11 + b] = bit;
+      m[size - 11 + b][a] = bit;
+    }
   }
 
   function encode(text) {
-    const data = utf8Bytes(text);
-    const ver = pickVersion(data.length);
+    const payload = utf8Bytes(text);
+    const ver = pickVersion(payload.length);
     const [size, , , , aligns] = SPEC[ver];
     const m = emptyMatrix(size);
 
@@ -240,8 +295,6 @@
     for (const cy of centers) {
       for (const cx of centers) {
         if ((cx === 6 && cy === 6) || (cx === 6 && cy === size - 7) || (cx === size - 7 && cy === 6)) continue;
-        if (cx === size - 7 && cy === size - 7) continue;
-        // skip if overlaps finder
         if ((cx < 9 && cy < 9) || (cx > size - 10 && cy < 9) || (cx < 9 && cy > size - 10)) continue;
         setAlign(m, cx, cy);
       }
@@ -259,6 +312,8 @@
       if (m[size - 1 - i][8] === null) m[size - 1 - i][8] = 0;
     }
     m[size - 8][8] = 1;
+
+    if (ver >= 7) reserveVersion(m, size);
 
     const code = buildData(text, ver);
     const codeBits = [];
@@ -284,20 +339,13 @@
       m[y][x] = codeBits[i] || 0;
     }
 
-    // Mask 0
     const mask = 0;
-    for (let y = 0; y < size; y++) {
-      for (let x = 0; x < size; x++) {
-        // only data modules: those that were in path
-        // Use: not timing/finder/align — reserved before data were set; path cells were null then filled
-      }
-    }
-    // Apply mask only to data modules (path)
     for (const [x, y] of path) {
       if (applyMask(mask, x, y)) m[y][x] ^= 1;
     }
     drawFormat(m, size, formatBits(mask));
-    return { m, size };
+    if (ver >= 7) drawVersion(m, size, versionBits(ver));
+    return { m, size, ver };
   }
 
   function svg(text, opts) {

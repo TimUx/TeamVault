@@ -328,6 +328,10 @@ func (a *API) handleShareGroup(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if err := a.syncSecretVisibility(r.Context(), sess.TenantID, id, true); err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 	meta, _ := json.Marshal(map[string]string{"group_id": body.GroupID})
 	if err := a.App.Vault.AppendAudit(r.Context(), store.AuditEvent{
 		ID: newID("aud"), TenantID: sess.TenantID, ActorID: string(sess.UserID),

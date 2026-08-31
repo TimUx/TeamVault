@@ -70,6 +70,21 @@ type UserQuery struct {
 	Limit            int
 }
 
+// SecretVisibility separates personal vault entries from team-shared ones.
+type SecretVisibility string
+
+const (
+	VisibilityPrivate SecretVisibility = "private"
+	VisibilityShared  SecretVisibility = "shared"
+)
+
+func NormalizeVisibility(v SecretVisibility) SecretVisibility {
+	if v == VisibilityShared {
+		return VisibilityShared
+	}
+	return VisibilityPrivate
+}
+
 // SecretMeta holds non-decryptable identifiers. Title is ciphertext (OQ-12).
 type SecretMeta struct {
 	ID               SecretID
@@ -78,6 +93,7 @@ type SecretMeta struct {
 	TitleCiphertext  []byte
 	TitleNonce       []byte
 	CreatedBy        UserID
+	Visibility       SecretVisibility // private = nur unter „Meine Secrets“; shared = nur unter „Geteilt“
 	CreatedAt        time.Time
 	UpdatedAt        time.Time
 }

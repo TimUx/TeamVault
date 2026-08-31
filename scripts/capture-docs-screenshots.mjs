@@ -137,28 +137,29 @@ async function seedSecrets(page) {
   });
   await page.click('[data-nav="vault:create"]');
   await page.waitForSelector("#stitle", { state: "visible", timeout: 30000 });
+  await page.click('#svisTabs [data-svis="private"]').catch(() => {});
   await page.fill("#stitle", "GitHub");
   await page.fill("#stagsIn", "dev, github");
   await page.fill("#suser", "octocat");
   await page.fill("#spw", "demo-secret-pw!");
   await shot(page, "vault-create.png", { fullPage: true });
   await page.click("#screate");
-  await page.waitForSelector(".secrets-table tbody tr", { timeout: 30000 });
-  await page.waitForSelector(".secrets-table .tag", { timeout: 30000 }).catch(() => {});
+  await page.waitForSelector(".secrets-table tbody tr, .secrets-list .list-row, .secret-tile", { timeout: 30000 });
   await page.waitForTimeout(800);
 
   await page.click('[data-nav="vault:create"]');
   await page.waitForSelector("#stitle");
+  await page.click('#svisTabs [data-svis="private"]').catch(() => {});
   await page.fill("#stitle", "Pure Storage");
   await page.fill("#stagsIn", "storage, infra");
   await page.fill("#suser", "pureuser");
   await page.fill("#spw", "demo-storage-pw!");
   await page.click("#screate");
-  await page.waitForSelector(".secrets-table tbody tr", { timeout: 30000 });
+  await page.waitForSelector(".secrets-table tbody tr, .secrets-list .list-row, .secret-tile", { timeout: 30000 });
   await page.waitForTimeout(800);
 
   await page.click('[data-nav="vault:mine"]');
-  await page.waitForSelector(".secrets-table tbody tr", { timeout: 30000 });
+  await page.waitForSelector(".secrets-table tbody tr, .secrets-list .list-row, .secret-tile", { timeout: 30000 });
 }
 
 async function captureSetup(page) {
@@ -243,13 +244,19 @@ async function main() {
 
   await page.click('[data-view="table"]');
   await page.waitForTimeout(400);
-  await page.selectOption("#stag", { label: "dev" }).catch(async () => {
-    const opts = await page.locator("#stag option").count();
-    if (opts > 1) await page.locator("#stag").selectOption({ index: 1 });
-  });
+  await page.click("#stagToggle").catch(() => {});
+  await page.waitForSelector("#stagMenu:not([hidden])", { timeout: 5000 }).catch(() => {});
+  const tagDev = page.locator('#stagOptions input[value="dev"]');
+  if (await tagDev.count()) {
+    await tagDev.check();
+  } else {
+    const firstTag = page.locator("#stagOptions input[type=checkbox]").first();
+    if (await firstTag.count()) await firstTag.check();
+  }
   await page.waitForTimeout(800);
   await shot(page, "vault-tag-filter.png", { fullPage: true });
-  await page.selectOption("#stag", { label: "" }).catch(() => page.locator("#stag").selectOption({ index: 0 }));
+  await page.click("#stagClear").catch(() => {});
+  await page.waitForTimeout(300);
 
   await page.click('[data-nav="vault:import"]');
   await shot(page, "vault-import.png", { fullPage: true });
@@ -258,12 +265,14 @@ async function main() {
 
   await unlockVault(page);
   await page.click('[data-nav="account"]');
-  await page.waitForSelector("#passkey", { timeout: 15000 });
+  await page.waitForSelector('[data-panel-tab="totp"], #totpSetup', { timeout: 15000 });
   await shot(page, "account.png", { fullPage: true });
-  await page.click("#totp");
+  await page.click('[data-panel-tab="totp"]').catch(() => {});
+  await page.click("#totpSetup");
   await page.waitForSelector("#otpQr svg, #otpurl", { timeout: 15000 }).catch(() => {});
   await page.waitForTimeout(400);
   await shot(page, "account-totp.png", { fullPage: true });
+  await page.click('[data-panel-tab="offline"]').catch(() => {});
   const offlineOpt = page.locator("#offline_optin");
   if (await offlineOpt.count()) {
     await offlineOpt.check();
@@ -273,6 +282,13 @@ async function main() {
 
   console.log("Admin…");
   await page.waitForSelector("#navAdminSection:not([hidden])", { timeout: 15000 });
+  await page.evaluate(() => {
+    document.querySelectorAll('.sidebar-section[data-nav-section="admin"], .sidebar-subsection').forEach((el) => {
+      el.classList.remove("collapsed");
+      const btn = el.querySelector(".sidebar-section-toggle, .sidebar-subsection-toggle");
+      if (btn) btn.setAttribute("aria-expanded", "true");
+    });
+  });
   await page.click('[data-nav="admin:users"]');
   await page.waitForSelector("#ulist .users-table tbody tr, #ulist .list-row", { timeout: 15000 });
   await page.waitForTimeout(500);
@@ -345,7 +361,9 @@ async function main() {
   await shot(page, "admin-smtp.png", { fullPage: true });
 
   await page.click('[data-nav="admin:crypto"]');
-  await page.waitForSelector('[data-admin-section="crypto"] #offline_cache');
+  await page.waitForSelector('[data-admin-section="crypto"]');
+  await page.click('[data-panel-tab="kdf"]').catch(() => {});
+  await page.waitForSelector('[data-panel-pane="kdf"]:not([hidden]) #arg_mem', { timeout: 10000 });
   await page.waitForTimeout(400);
   await shot(page, "admin-crypto.png", { fullPage: true });
 
@@ -369,12 +387,14 @@ async function main() {
     await page.locator("button:has-text('Öffnen')").first().click();
   }
   await page.waitForSelector("#sdetail:not([hidden])", { timeout: 15000 });
-  await page.waitForSelector("#groupShareBlock:not([hidden])", { timeout: 15000 }).catch(() => {});
+  await page.waitForSelector("#accessPanel, #accessCurrent", { timeout: 15000 }).catch(() => {});
   await page.waitForTimeout(500);
   await shot(page, "vault-secret-detail.png");
   await page.click("#sdetailClose");
 
   await page.click('[data-nav="admin:recovery"]');
+  await page.waitForSelector('[data-panel-tab="mode"], #rec_mode', { timeout: 10000 });
+  await page.click('[data-panel-tab="mode"]').catch(() => {});
   await shot(page, "admin-recovery.png", { fullPage: true });
   await page.click('[data-nav="admin:apikeys"]');
   await shot(page, "admin-apikeys.png", { fullPage: true });
@@ -383,6 +403,33 @@ async function main() {
   await page.waitForSelector("#sysOverview", { timeout: 15000 });
   await page.waitForTimeout(400);
   await shot(page, "admin-system.png", { fullPage: true });
+
+  // Shared secret for vault-shared.png (Ops group exists from admin steps)
+  await page.click('[data-nav="vault:create"]');
+  await page.waitForSelector("#stitle");
+  await page.click('#svisTabs [data-svis="shared"]');
+  await page.waitForSelector("#sshareWrap:not([hidden])");
+  await page.fill("#stitle", "Team Wiki");
+  await page.fill("#stagsIn", "team, shared");
+  await page.fill("#suser", "wiki");
+  await page.fill("#spw", "shared-demo-pw!");
+  await page.waitForTimeout(400);
+  const opsOpt = page.locator("#screateGroups option").filter({ hasText: "Ops" }).first();
+  if (await opsOpt.count()) {
+    await page.selectOption("#screateGroups", { label: "Ops" }).catch(async () => {
+      await opsOpt.evaluate((el) => { el.selected = true; });
+    });
+  } else {
+    const anyGroup = page.locator("#screateGroups option").first();
+    if (await anyGroup.count()) await page.selectOption("#screateGroups", { index: 0 });
+  }
+  await page.click("#screate");
+  await page.waitForTimeout(1500);
+  await page.click('[data-nav="vault:shared"]');
+  await page.waitForTimeout(800);
+  await page.click('[data-view="table"]').catch(() => {});
+  await page.waitForTimeout(500);
+  await shot(page, "vault-shared.png", { fullPage: true });
 
   console.log("Help & theme…");
   await page.goto(`${BASE}/help`);
@@ -406,6 +453,14 @@ async function main() {
   });
   await page.waitForTimeout(300);
   await shot(page, "theme-dark.png", { fullPage: true });
+
+  // Mirror docs images used by /help into web/static/help/img
+  const HELP_IMG = path.join(ROOT, "web", "static", "help", "img");
+  fs.mkdirSync(HELP_IMG, { recursive: true });
+  for (const f of fs.readdirSync(OUT).filter((n) => n.endsWith(".png"))) {
+    fs.copyFileSync(path.join(OUT, f), path.join(HELP_IMG, f));
+  }
+  console.log("Copied screenshots to web/static/help/img/");
 
   await browser.close();
   console.log("Done.");

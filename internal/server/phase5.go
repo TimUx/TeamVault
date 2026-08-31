@@ -58,6 +58,35 @@ func sharedGroupNames(sc *secretShareContext, shares []store.SecretGroupShare) [
 	return out
 }
 
+// syncSecretVisibility sets private vs shared from share markers (and optional forceShared on create/share).
+func (a *API) syncSecretVisibility(ctx context.Context, tenant store.TenantID, id store.SecretID, forceShared bool) error {
+	meta, err := a.App.Vault.GetSecretMeta(ctx, tenant, id)
+	if err != nil {
+		return err
+	}
+	vis := store.VisibilityPrivate
+	if forceShared {
+		vis = store.VisibilityShared
+	} else {
+		dShares, err := a.App.Vault.ListSecretDirectShares(ctx, tenant, id)
+		if err != nil {
+			return err
+		}
+		gShares, err := a.App.Vault.ListSecretGroupShares(ctx, tenant, id)
+		if err != nil {
+			return err
+		}
+		if len(dShares) > 0 || len(gShares) > 0 {
+			vis = store.VisibilityShared
+		}
+	}
+	if store.NormalizeVisibility(meta.Visibility) == vis {
+		return nil
+	}
+	meta.Visibility = vis
+	return a.App.Vault.PutSecretMeta(ctx, *meta)
+}
+
 func sharedUserNames(sc *secretShareContext, shares []store.SecretDirectShare) []string {
 	if sc == nil || len(shares) == 0 {
 		return nil
@@ -576,6 +605,7 @@ type createSecretReq struct {
 	Envelopes          []envelopeIn `json:"envelopes"`
 	ShareUserIDs       []string     `json:"share_user_ids,omitempty"`
 	ShareGroupIDs      []string     `json:"share_group_ids,omitempty"`
+	Visibility         string       `json:"visibility,omitempty"` // private | shared
 	DropUserIDs        []string     `json:"drop_user_ids,omitempty"`
 	DropGroupIDs       []string     `json:"drop_group_ids,omitempty"`
 }
@@ -620,10 +650,37 @@ func (a *API) handleCreateSecret(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "envelopes required")
 		return
 	}
+	shareUserN, shareGroupN := 0, 0
+	for _, uid := range req.ShareUserIDs {
+		if strings.TrimSpace(uid) != "" && strings.TrimSpace(uid) != string(sess.UserID) {
+			shareUserN++
+		}
+	}
+	for _, gid := range req.ShareGroupIDs {
+		if strings.TrimSpace(gid) != "" {
+			shareGroupN++
+		}
+	}
+	vis := store.NormalizeVisibility(store.SecretVisibility(strings.TrimSpace(req.Visibility)))
+	if req.Visibility == "" {
+		if shareUserN+shareGroupN > 0 {
+			vis = store.VisibilityShared
+		} else {
+			vis = store.VisibilityPrivate
+		}
+	}
+	if vis == store.VisibilityShared && shareUserN+shareGroupN == 0 {
+		writeErr(w, http.StatusBadRequest, "shared secrets require at least one user or group")
+		return
+	}
+	if vis == store.VisibilityPrivate && shareUserN+shareGroupN > 0 {
+		vis = store.VisibilityShared
+	}
 	id := store.SecretID(newID("sec"))
 	meta := store.SecretMeta{
 		ID: id, TenantID: sess.TenantID, CollectionID: req.CollectionID,
 		TitleCiphertext: titleCT, TitleNonce: titleN, CreatedBy: sess.UserID,
+		Visibility: vis,
 	}
 	envs := make([]store.KeyEnvelope, 0, len(req.Envelopes))
 	for _, e := range req.Envelopes {
@@ -681,7 +738,7 @@ func (a *API) handleCreateSecret(w http.ResponseWriter, r *http.Request) {
 	}) {
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"id": id, "key_version": req.KeyVersion})
+	writeJSON(w, http.StatusOK, map[string]any{"id": id, "key_version": req.KeyVersion, "visibility": string(vis)})
 }
 
 func (a *API) handleListSecrets(w http.ResponseWriter, r *http.Request) {
@@ -734,6 +791,7 @@ func (a *API) handleListSecrets(w http.ResponseWriter, r *http.Request) {
 		TitleNonceB64      string   `json:"title_nonce_b64"`
 		CreatedBy          string   `json:"created_by"`
 		CreatedByUsername  string   `json:"created_by_username,omitempty"`
+		Visibility         string   `json:"visibility"`
 		HasAccess          bool     `json:"has_access"`
 		KeyVersion         uint32   `json:"key_version"`
 		SharedGroups       []string `json:"shared_groups,omitempty"`
@@ -772,6 +830,7 @@ func (a *API) handleListSecrets(w http.ResponseWriter, r *http.Request) {
 		it := item{
 			ID: string(m.ID), TitleCiphertextB64: base64.StdEncoding.EncodeToString(m.TitleCiphertext),
 			TitleNonceB64: base64.StdEncoding.EncodeToString(m.TitleNonce), CreatedBy: string(m.CreatedBy),
+			Visibility: string(store.NormalizeVisibility(m.Visibility)),
 			HasAccess: access, KeyVersion: kv,
 		}
 		if shareCtx != nil {
@@ -842,6 +901,8 @@ func (a *API) handleGetSecret(w http.ResponseWriter, r *http.Request) {
 		"ciphertext_b64":       base64.StdEncoding.EncodeToString(blob.Ciphertext),
 		"nonce_b64":            base64.StdEncoding.EncodeToString(blob.Nonce),
 		"key_version":          blob.KeyVersion,
+		"created_by":           string(meta.CreatedBy),
+		"visibility":           string(store.NormalizeVisibility(meta.Visibility)),
 		"envelope": map[string]any{
 			"ephemeral_pub_b64": base64.StdEncoding.EncodeToString(eph),
 			"nonce_b64":         base64.StdEncoding.EncodeToString(nonce),
@@ -954,6 +1015,7 @@ func (a *API) handleSecretAccess(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"owner":           namedID{ID: string(meta.CreatedBy), Username: ownerName},
+		"visibility":      string(store.NormalizeVisibility(meta.Visibility)),
 		"shared_users":    sharedUsers,
 		"shared_groups":   sharedGroups,
 		"available_users": availUsers,
@@ -1030,6 +1092,10 @@ func (a *API) handleShareSecret(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
+	}
+	if err := a.syncSecretVisibility(r.Context(), sess.TenantID, id, true); err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
 	}
 	if err := a.App.Vault.AppendAudit(r.Context(), store.AuditEvent{
 		ID: newID("aud"), TenantID: sess.TenantID, ActorID: string(sess.UserID),
@@ -1214,6 +1280,10 @@ func (a *API) handleRotateSecret(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		_ = a.App.Vault.DeleteSecretGroupShare(r.Context(), sess.TenantID, id, store.GroupID(gid))
+	}
+	if err := a.syncSecretVisibility(r.Context(), sess.TenantID, id, false); err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
 	}
 	if err := a.App.Vault.AppendAudit(r.Context(), store.AuditEvent{
 		ID: newID("aud"), TenantID: sess.TenantID, ActorID: string(sess.UserID),

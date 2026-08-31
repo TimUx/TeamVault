@@ -6,7 +6,7 @@ const TV_SW_BASE = (() => {
   return i >= 0 ? p.slice(0, i) : "";
 })();
 
-const CACHE = "teamvault-shell-v2";
+const CACHE = "teamvault-shell-v5";
 const PRECACHE = [
   "/",
   "/index.html",
@@ -16,6 +16,7 @@ const PRECACHE = [
   "/import-parse.js",
   "/vault-io.js",
   "/offline-store.js",
+  "/qrcode.js",
   "/sw-register.js",
   "/manifest.webmanifest",
   "/vendor/nacl-fast.min.js",

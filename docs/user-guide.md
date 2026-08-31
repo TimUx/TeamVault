@@ -61,8 +61,8 @@ Nach dem Entsperren: linke **Sidebar** mit Icons. Unter Vault getrennt:
 
 | Menü | Inhalt |
 |------|--------|
-| **Meine Secrets** | Einträge, die Sie angelegt haben (`created_by` = Sie) |
-| **Geteilt mit mir** | Einträge mit Zugriff, die jemand anderes angelegt hat |
+| **Meine Secrets** | Private Secrets (nur Sie) — `visibility=private` |
+| **Geteilte Secrets** | Team-Secrets mit User-/Gruppen-Freigabe — `visibility=shared` (auch wenn Sie der Anleger sind) |
 | **Neu anlegen** | Formular für einen neuen Eintrag |
 | **Import** | Dateien aus anderen Passwortmanagern übernehmen |
 | **Sicherung** | Verschlüsselte `.tvbak`-Backup / Wiederherstellen |
@@ -79,7 +79,7 @@ Kein vermischter „Alle“-Eintrag. Clientseitige **Suche** (Titel, Tags, Benut
 
 ![Navigation](images/nav-sidebar.png)
 
-![Geteilt mit mir](images/vault-shared.png)
+![Geteilte Secrets](images/vault-shared.png)
 
 ### Anlegen
 
@@ -95,9 +95,12 @@ Sidebar **Neu anlegen**: Titel, Tags, Benutzername und Passwort sind immer sicht
 | Zertifikat (PEM) | Paste oder Datei |
 | Freitext / Geheimnis | Custom-Felder |
 
-Titel und Payload werden vor dem Upload verschlüsselt; der Server speichert nur Ciphertext.
+Beim Anlegen zuerst **Privat** oder **Geteilt** wählen:
 
-Optional direkt beim Anlegen **User** und **Gruppen** zum Teilen auswählen (nur onboardete Ziele).
+- **Privat** — erscheint nur unter **Meine Secrets**; nur Sie haben Zugriff.
+- **Geteilt** — erscheint unter **Geteilte Secrets** (auch für den Anleger, nicht unter Meine Secrets). Mindestens ein User oder eine Gruppe ist Pflicht; alle Berechtigten können den Eintrag bearbeiten.
+
+Titel und Payload werden vor dem Upload verschlüsselt; der Server speichert nur Ciphertext.
 
 **Generator:** Länge und Symbole einstellen → **Generator** füllt das Passwortfeld (CSPRNG im Browser).
 
@@ -107,7 +110,7 @@ Optional direkt beim Anlegen **User** und **Gruppen** zum Teilen auswählen (nur
 
 In der Liste **Öffnen** — Detail erscheint als **Modal** über der Liste (Schließen mit Button, Backdrop oder **Escape**). Klartext nur im Browser. Felder mit **Kopieren** / **Anzeigen**; Key/Zertifikat zusätzlich **Download**. Live-**TOTP** erscheint, wenn ein Seed hinterlegt ist. Mehrere Websites werden einzeln angezeigt.
 
-**Bearbeiten** im Modal: Titel, Benutzername, Passwort, Tags, Notizen — Speichern verschlüsselt clientseitig (`PUT /api/secrets/{id}`).
+**Bearbeiten** im Modal: Titel, Benutzername, Passwort, Tags, Notizen — Speichern verschlüsselt clientseitig (`PUT /api/secrets/{id}`). Bei geteilten Secrets kann jeder mit Envelope speichern.
 
 ![Secret-Detail (Modal)](images/vault-secret-detail.png)
 
@@ -116,11 +119,13 @@ In der Liste **Öffnen** — Detail erscheint als **Modal** über der Liste (Sch
 Im Secret-Detail unter **Zugriff** verfügbare User und Gruppen per Klick oder Drag & Drop hinzufügen. Entfernen rotiert den Datenschlüssel (alter Schlüssel wird ungültig).  
 Jeder Empfänger erhält einen eigenen Umschlag um den Datenschlüssel (kein gemeinsames Gruppenpasswort). Empfänger müssen im gleichen Tenant **onboarded** sein.
 
-Die Spalte **Gruppen** in der Secrets-Liste zeigt nur **explizit freigegebene** Gruppen — nicht Ihre eigenen Gruppenmitgliedschaften. Neue und importierte Secrets starten ohne Freigaben (`—`), bis Sie teilen.
+Ein privates Secret wird durch Teilen zum **geteilten** Secret und wandert in die Liste **Geteilte Secrets**. Entfernen aller Freigaben macht es wieder privat.
+
+Die Tabelle **Geteilte Secrets** zeigt Anleger, User- und Gruppen-Freigaben. **Meine Secrets** bleibt ohne Freigabe-Spalten (nur Teilen-Aktion).
 
 Wird ein User **neu in eine Gruppe** aufgenommen, teilt TeamVault die Gruppen-Secrets automatisch nach — sofern jemand mit Zugriff (z.&nbsp;B. Admin) den Vault **entsperrt** hat bzw. beim Hinzufügen entsperrt ist. Der Server erzeugt keine Umschläge (Zero-Knowledge); fehlende Freigaben werden beim nächsten Unlock nachgeholt.
 
-Optional beim **Anlegen** User/Gruppen vorauswählen; **Import** teilt nie automatisch. In der Secrets-Tabelle markiert ein **Teilen-Symbol** freigegebene Einträge (kräftiger) bzw. erlaubt Zugriff zu bearbeiten; Klick öffnet das Zugriffspanel.
+**Import** legt Secrets immer als **privat** an.
 
 ### Tags & Suche
 

@@ -32,14 +32,14 @@
 
         <figure class="help-figure">
           <img src="/help/img/account.png" alt="Konto-Seite" width="1100" height="720" loading="lazy" />
-          <figcaption>Sidebar <strong>Konto</strong> — TOTP einrichten / Passkeys</figcaption>
+          <figcaption>Sidebar <strong>Konto</strong> — Tabs: TOTP, Passkeys, Login-/Master-Passwort, Offline-Vault</figcaption>
         </figure>
 
         <h2 id="totp">TOTP einrichten (Authenticator-App)</h2>
         <div class="help-step">
           <h3>Ablauf</h3>
           <ol>
-            <li>Anmelden, Vault entsperren → Sidebar <strong>Konto</strong>.</li>
+            <li>Anmelden, Vault entsperren → Sidebar <strong>Konto</strong> → Tab <strong>TOTP</strong>.</li>
             <li><strong>TOTP einrichten</strong> klicken — der Server erzeugt ein Secret; der Browser zeigt einen <strong>QR-Code lokal</strong> (kein externes CDN) und die otpauth-URL.</li>
             <li>Authenticator-App (Microsoft Authenticator, Google Authenticator, Aegis, …) öffnen → Konto hinzufügen → QR scannen <em>oder</em> Secret/otpauth manuell einfügen.</li>
             <li>Den aktuellen 6-stelligen Code unter <strong>Code bestätigen</strong> eintragen → <strong>Aktivieren</strong>.</li>
@@ -69,7 +69,7 @@
         <div class="help-step">
           <h3>Ablauf</h3>
           <ol>
-            <li>Konto → <strong>Passkeys</strong>.</li>
+            <li>Konto → Tab <strong>Passkeys</strong>.</li>
             <li>Namen vergeben (z.&nbsp;B. <code>Notebook Windows Hello</code>).</li>
             <li><strong>Registrieren</strong> — Browser/OS-Dialog (PIN, Fingerabdruck, Sicherheitsschlüssel).</li>
             <li>Der Passkey erscheint in der Liste; löschen ist jederzeit möglich.</li>
