@@ -59,8 +59,29 @@ func TestHelpBaseRewrite(t *testing.T) {
 	if !strings.Contains(out, `href="/vault/app"`) || !strings.Contains(out, `src="/vault/help/index.js"`) {
 		t.Fatalf("got %q", out)
 	}
-	if !strings.Contains(out, `window.__TV_BASE__="/vault"`) {
-		t.Fatal("missing tv base inject")
+	if !strings.Contains(out, `meta name="tv-base" content="/vault"`) {
+		t.Fatal("missing tv-base meta")
+	}
+	if strings.Contains(out, `window.__TV_BASE__`) {
+		t.Fatal("inline __TV_BASE__ script must not be injected (CSP)")
+	}
+}
+
+func TestQRCodeJSServed(t *testing.T) {
+	h := Handler("/vault")
+	req := httptest.NewRequest(http.MethodGet, "/qrcode.js", nil)
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status %d", rr.Code)
+	}
+	ct := rr.Header().Get("Content-Type")
+	if !strings.Contains(ct, "javascript") && !strings.Contains(ct, "ecmascript") {
+		// Go FileServer may use application/javascript or text/javascript
+		t.Fatalf("content-type %q (body starts %q)", ct, rr.Body.String()[:min(40, rr.Body.Len())])
+	}
+	if !strings.Contains(rr.Body.String(), "TVQR") {
+		t.Fatal("expected TVQR in qrcode.js")
 	}
 }
 

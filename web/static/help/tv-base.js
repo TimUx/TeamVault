@@ -1,7 +1,12 @@
 function tvHelpBase() {
   if (typeof window.__TV_BASE__ === "string") {
-    return window.__TV_BASE__.replace(/\/$/, "");
+    const v = window.__TV_BASE__.replace(/\/$/, "");
+    if (v) return v;
   }
+  try {
+    const meta = (document.querySelector('meta[name="tv-base"]')?.content || "").replace(/\/$/, "");
+    if (meta) return meta;
+  } catch (_) {}
   const m = location.pathname.match(/^(.*)\/help(?:\/|$)/);
   return m ? m[1] : "";
 }

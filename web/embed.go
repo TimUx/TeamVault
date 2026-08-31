@@ -139,8 +139,7 @@ func HelpBaseRewrite(html []byte, base string) []byte {
 		return html
 	}
 	s := string(html)
-	inject := `<meta name="tv-base" content="` + base + `" />` +
-		`<script>window.__TV_BASE__="` + base + `";</script>`
+	inject := `<meta name="tv-base" content="` + base + `" />`
 	s = strings.Replace(s, "<head>", "<head>\n  "+inject, 1)
 	s = strings.ReplaceAll(s, `href="/`, `href="`+base+`/`)
 	s = strings.ReplaceAll(s, `src="/`, `src="`+base+`/`)
