@@ -88,7 +88,7 @@ func main() {
 		fmt.Println("logged in (session cookie stored)")
 	case "secrets":
 		if len(args) < 2 {
-			fatal(fmt.Errorf("secrets requires list|get|create"))
+			fatal(fmt.Errorf("secrets requires list|get|create|update"))
 		}
 		switch args[1] {
 		case "list":
@@ -108,9 +108,10 @@ func main() {
 			if err := c.secretsGet(*id); err != nil {
 				fatal(err)
 			}
-		case "create":
-			fs := flag.NewFlagSet("create", flag.ExitOnError)
-			title := fs.String("title", "", "title (required)")
+		case "create", "update":
+			fs := flag.NewFlagSet(args[1], flag.ExitOnError)
+			id := fs.String("id", "", "secret id (update only)")
+			title := fs.String("title", "", "title (required for create)")
 			user := fs.String("username", "", "username field")
 			pass := fs.String("password", "", "password field (prefer prompt if empty)")
 			urlsFlag := fs.String("urls", "", "URLs separated by ;")
@@ -121,6 +122,11 @@ func main() {
 			tags := fs.String("tags", "", "comma-separated tags")
 			favorite := fs.Bool("favorite", false, "mark favorite")
 			folder := fs.String("folder", "", "collection / folder id")
+			visibility := fs.String("visibility", "private", "private or shared (create)")
+			shareUsers := stringSlice{}
+			shareGroups := stringSlice{}
+			fs.Var(&shareUsers, "share-user", "user id to share with (repeatable; create)")
+			fs.Var(&shareGroups, "share-group", "group id to share with (repeatable; create)")
 			sshPriv := fs.String("ssh-private", "", "SSH private key (PEM text)")
 			sshPrivFile := fs.String("ssh-private-file", "", "SSH private key file")
 			sshPub := fs.String("ssh-public", "", "SSH public key")
@@ -134,54 +140,43 @@ func main() {
 			fs.Var(&extraFlags, "extra", "custom field type=label:value (repeatable; type=text|secret)")
 			fs.Var(&extraFileFlags, "extra-file", "custom field type=label:path (repeatable)")
 			_ = fs.Parse(args[2:])
-			if *title == "" {
+			provided := map[string]bool{}
+			fs.Visit(func(f *flag.Flag) { provided[f.Name] = true })
+			if args[1] == "update" {
+				if *id == "" && fs.NArg() > 0 {
+					*id = fs.Arg(0)
+				}
+				if *id == "" {
+					fatal(fmt.Errorf("update requires -id"))
+				}
+			} else if *title == "" {
 				fatal(fmt.Errorf("create requires -title"))
 			}
-			pw := []byte(*pass)
-			if len(pw) == 0 {
-				var err error
-				pw, err = readSecret("Secret password: ")
+			in := secretFlagInput{
+				title: *title, username: *user, password: *pass,
+				urlsFlag: *urlsFlag, urlFlags: urlFlags, notes: *notes, totp: *totp,
+				tags: *tags, favorite: *favorite, folder: *folder, visibility: *visibility,
+				shareUsers: shareUsers, shareGroups: shareGroups,
+				sshPriv: *sshPriv, sshPrivFile: *sshPrivFile, sshPub: *sshPub, sshPubFile: *sshPubFile,
+				s3Access: *s3Access, s3Secret: *s3Secret, cert: *cert, certFile: *certFile,
+				extraFlags: extraFlags, extraFileFlags: extraFileFlags,
+				provided: provided,
+			}
+			if args[1] == "create" {
+				opts, err := secretOptsFromFlags(in, true)
 				if err != nil {
 					fatal(err)
 				}
-			}
-			urlList := append(splitSemi(*urlsFlag), []string(urlFlags)...)
-			opts := secretCreateOpts{
-				Title: *title, Username: *user, Password: string(pw),
-				URLs: urlList, Notes: *notes, TOTP: *totp, Tags: splitComma(*tags),
-				Favorite: *favorite, Folder: *folder,
-			}
-			var err error
-			if opts.SSHPrivate, err = valueOrFile(*sshPriv, *sshPrivFile); err != nil {
-				fatal(err)
-			}
-			if opts.SSHPublic, err = valueOrFile(*sshPub, *sshPubFile); err != nil {
-				fatal(err)
-			}
-			opts.S3Access = *s3Access
-			opts.S3Secret = *s3Secret
-			if opts.Cert, err = valueOrFile(*cert, *certFile); err != nil {
-				fatal(err)
-			}
-			for _, e := range extraFlags {
-				ex, err := parseExtraFlag(e, false)
-				if err != nil {
+				if err := c.secretsCreate(opts); err != nil {
 					fatal(err)
 				}
-				opts.Extra = append(opts.Extra, ex)
-			}
-			for _, e := range extraFileFlags {
-				ex, err := parseExtraFlag(e, true)
-				if err != nil {
+				fmt.Println("created")
+			} else {
+				if err := c.secretsUpdate(*id, in); err != nil {
 					fatal(err)
 				}
-				opts.Extra = append(opts.Extra, ex)
+				fmt.Println("updated")
 			}
-			if err := c.secretsCreate(opts); err != nil {
-				fatal(err)
-			}
-			zero(pw)
-			fmt.Println("created")
 		default:
 			fatal(fmt.Errorf("unknown secrets subcommand"))
 		}
@@ -209,11 +204,13 @@ Usage:
   tvcli secrets get -id ID
   tvcli secrets create -title TITLE [-username U] [-password P]
       [-url URL]… [-urls "a;b"] [-notes N] [-totp SEED] [-tags t1,t2] [-favorite]
-      [-folder NAME]
+      [-folder NAME] [-visibility private|shared]
+      [-share-user UID]… [-share-group GID]…
       [-ssh-private TEXT|-ssh-private-file PATH] [-ssh-public …]
       [-s3-access KEY] [-s3-secret KEY]
       [-cert PEM|-cert-file PATH]
       [-extra type=label:value]… [-extra-file type=label:path]…
+  tvcli secrets update -id ID [-title T] [-username U] … (same field flags as create)
 
   tvcli escrow-split -k 3 -n 5 -in escrow.sk
   tvcli escrow-combine share1.hex share2.hex share3.hex
@@ -296,14 +293,11 @@ func (c *client) secretsList() error {
 		return err
 	}
 	defer zero(sk)
-	raw, err := c.getRaw("/api/secrets")
+	items, err := c.fetchAllSecrets()
 	if err != nil {
 		return err
 	}
-	var items []map[string]any
-	if err := json.Unmarshal(raw, &items); err != nil {
-		return err
-	}
+	fmt.Println("id\thas_access\tvisibility\ttitle")
 	for _, it := range items {
 		id := str(it["id"])
 		title := id
@@ -312,9 +306,40 @@ func (c *client) secretsList() error {
 				title = t
 			}
 		}
-		fmt.Printf("%s\t%v\t%s\n", id, it["has_access"], title)
+		vis := str(it["visibility"])
+		if vis == "" {
+			vis = "private"
+		}
+		fmt.Printf("%s\t%v\t%s\t%s\n", id, it["has_access"], vis, title)
 	}
 	return nil
+}
+
+func (c *client) fetchAllSecrets() ([]map[string]any, error) {
+	const pageSize = 200
+	var all []map[string]any
+	for offset := 0; ; offset += pageSize {
+		raw, err := c.getRaw(fmt.Sprintf("/api/secrets?limit=%d&offset=%d", pageSize, offset))
+		if err != nil {
+			return nil, err
+		}
+		var page struct {
+			Items []map[string]any `json:"items"`
+			Total int              `json:"total"`
+		}
+		if err := json.Unmarshal(raw, &page); err == nil && page.Items != nil {
+			all = append(all, page.Items...)
+			if len(all) >= page.Total || len(page.Items) == 0 {
+				return all, nil
+			}
+			continue
+		}
+		var legacy []map[string]any
+		if err := json.Unmarshal(raw, &legacy); err != nil {
+			return nil, err
+		}
+		return legacy, nil
+	}
 }
 
 func (c *client) secretsGet(id string) error {
@@ -369,10 +394,111 @@ type secretCreateOpts struct {
 	Tags                      []string
 	Favorite                  bool
 	Folder                    string
+	Visibility                string
+	ShareUsers, ShareGroups   []string
 	SSHPrivate, SSHPublic     string
 	S3Access, S3Secret        string
 	Cert                      string
 	Extra                     []map[string]string
+}
+
+type secretFlagInput struct {
+	title, username, password string
+	urlsFlag                  string
+	urlFlags                  stringSlice
+	notes, totp, tags         string
+	favorite                  bool
+	folder, visibility        string
+	shareUsers, shareGroups   stringSlice
+	sshPriv, sshPrivFile      string
+	sshPub, sshPubFile        string
+	s3Access, s3Secret        string
+	cert, certFile            string
+	extraFlags, extraFileFlags stringSlice
+	provided                  map[string]bool
+}
+
+func secretOptsFromFlags(in secretFlagInput, promptPassword bool) (secretCreateOpts, error) {
+	pw := in.password
+	if promptPassword && pw == "" && !in.provided["password"] {
+		b, err := readSecret("Secret password: ")
+		if err != nil {
+			return secretCreateOpts{}, err
+		}
+		pw = string(b)
+		zero(b)
+	}
+	opts := secretCreateOpts{
+		Title: in.title, Username: in.username, Password: pw,
+		URLs: append(splitSemi(in.urlsFlag), []string(in.urlFlags)...),
+		Notes: in.notes, TOTP: in.totp, Tags: splitComma(in.tags),
+		Favorite: in.favorite, Folder: in.folder,
+		Visibility: strings.TrimSpace(in.visibility),
+		ShareUsers: []string(in.shareUsers), ShareGroups: []string(in.shareGroups),
+		S3Access: in.s3Access, S3Secret: in.s3Secret,
+	}
+	var err error
+	if opts.SSHPrivate, err = valueOrFile(in.sshPriv, in.sshPrivFile); err != nil {
+		return secretCreateOpts{}, err
+	}
+	if opts.SSHPublic, err = valueOrFile(in.sshPub, in.sshPubFile); err != nil {
+		return secretCreateOpts{}, err
+	}
+	if opts.Cert, err = valueOrFile(in.cert, in.certFile); err != nil {
+		return secretCreateOpts{}, err
+	}
+	for _, e := range in.extraFlags {
+		ex, err := parseExtraFlag(e, false)
+		if err != nil {
+			return secretCreateOpts{}, err
+		}
+		opts.Extra = append(opts.Extra, ex)
+	}
+	for _, e := range in.extraFileFlags {
+		ex, err := parseExtraFlag(e, true)
+		if err != nil {
+			return secretCreateOpts{}, err
+		}
+		opts.Extra = append(opts.Extra, ex)
+	}
+	if opts.Visibility == "" {
+		opts.Visibility = "private"
+	}
+	return opts, nil
+}
+
+func buildSecretPayload(opts secretCreateOpts) (map[string]any, error) {
+	extra := append([]map[string]string{}, opts.Extra...)
+	push := func(typ, label, value string) {
+		if value == "" {
+			return
+		}
+		extra = append(extra, map[string]string{
+			"id": fmt.Sprintf("x_%s_%d", typ, len(extra)), "type": typ, "label": label, "value": value,
+		})
+	}
+	push("ssh_private_key", "SSH Private Key", opts.SSHPrivate)
+	push("ssh_public_key", "SSH Public Key", opts.SSHPublic)
+	push("s3_access_key", "S3 Access Key", opts.S3Access)
+	push("s3_secret_key", "S3 Secret Key", opts.S3Secret)
+	push("certificate", "Zertifikat", opts.Cert)
+	payloadObj := map[string]any{
+		"username":  opts.Username,
+		"password":  opts.Password,
+		"urls":      opts.URLs,
+		"notes":     opts.Notes,
+		"totp_seed": opts.TOTP,
+		"tags":      opts.Tags,
+		"favorite":  opts.Favorite,
+		"extra":     extra,
+	}
+	if len(opts.URLs) == 0 {
+		payloadObj["urls"] = []string{}
+	}
+	if opts.Tags == nil {
+		payloadObj["tags"] = []string{}
+	}
+	return payloadObj, nil
 }
 
 type stringSlice []string
@@ -464,6 +590,7 @@ func (c *client) secretsCreate(opts secretCreateOpts) error {
 	if err != nil {
 		return err
 	}
+	meID := str(me["user_id"])
 	keys, err := c.getJSON("/api/vault/keys")
 	if err != nil {
 		return err
@@ -478,35 +605,9 @@ func (c *client) secretsCreate(opts secretCreateOpts) error {
 	if err != nil {
 		return err
 	}
-	extra := append([]map[string]string{}, opts.Extra...)
-	push := func(typ, label, value string) {
-		if value == "" {
-			return
-		}
-		extra = append(extra, map[string]string{
-			"id": fmt.Sprintf("x_%s_%d", typ, len(extra)), "type": typ, "label": label, "value": value,
-		})
-	}
-	push("ssh_private_key", "SSH Private Key", opts.SSHPrivate)
-	push("ssh_public_key", "SSH Public Key", opts.SSHPublic)
-	push("s3_access_key", "S3 Access Key", opts.S3Access)
-	push("s3_secret_key", "S3 Secret Key", opts.S3Secret)
-	push("certificate", "Zertifikat", opts.Cert)
-	payloadObj := map[string]any{
-		"username":  opts.Username,
-		"password":  opts.Password,
-		"urls":      opts.URLs,
-		"notes":     opts.Notes,
-		"totp_seed": opts.TOTP,
-		"tags":      opts.Tags,
-		"favorite":  opts.Favorite,
-		"extra":     extra,
-	}
-	if len(opts.URLs) == 0 {
-		payloadObj["urls"] = []string{}
-	}
-	if opts.Tags == nil {
-		payloadObj["tags"] = []string{}
+	payloadObj, err := buildSecretPayload(opts)
+	if err != nil {
+		return err
 	}
 	payload, err := json.Marshal(payloadObj)
 	if err != nil {
@@ -516,28 +617,284 @@ func (c *client) secretsCreate(opts secretCreateOpts) error {
 	if err != nil {
 		return err
 	}
-	pub := mustB64(str(keys["public_key_b64"]))
-	env, err := cryptocore.SealDataKeyForRecipient(dk, pub, kv)
+	envelopes, shareUserIDs, shareGroupIDs, err := c.buildShareEnvelopes(dk, kv, meID, str(keys["public_key_b64"]), opts)
 	if err != nil {
 		return err
 	}
-	_ = sk
 	body := map[string]any{
 		"title_ciphertext_b64": b64(titleCT.Ciphertext),
 		"title_nonce_b64":      b64(titleCT.Nonce),
 		"ciphertext_b64":       b64(bodyCT.Ciphertext),
 		"nonce_b64":            b64(bodyCT.Nonce),
 		"key_version":          kv,
-		"envelopes": []map[string]any{{
-			"user_id": str(me["user_id"]), "key_version": kv,
-			"wrapped_dk_b64": b64(env.Ciphertext), "ephemeral_pub_b64": b64(env.EphemeralPub), "nonce_b64": b64(env.Nonce),
-		}},
+		"envelopes":            envelopes,
 	}
 	if opts.Folder != "" {
 		body["collection_id"] = opts.Folder
 	}
+	vis := strings.TrimSpace(opts.Visibility)
+	if vis == "" {
+		vis = "private"
+	}
+	if vis == "shared" || len(shareUserIDs)+len(shareGroupIDs) > 0 {
+		if len(shareUserIDs)+len(shareGroupIDs) == 0 {
+			return fmt.Errorf("shared secrets require -share-user and/or -share-group")
+		}
+		body["visibility"] = "shared"
+		if len(shareUserIDs) > 0 {
+			body["share_user_ids"] = shareUserIDs
+		}
+		if len(shareGroupIDs) > 0 {
+			body["share_group_ids"] = shareGroupIDs
+		}
+	} else {
+		body["visibility"] = "private"
+	}
 	_, err = c.postJSON("/api/secrets", body)
 	return err
+}
+
+func (c *client) secretsUpdate(id string, in secretFlagInput) error {
+	if len(in.provided) == 0 || (len(in.provided) == 1 && in.provided["id"]) {
+		return fmt.Errorf("update requires at least one field flag")
+	}
+	sk, _, err := c.unlockSK()
+	if err != nil {
+		return err
+	}
+	defer zero(sk)
+	det, err := c.getJSON("/api/secrets/" + url.PathEscape(id))
+	if err != nil {
+		return err
+	}
+	dk, kv, err := openDKFromDetail(det, sk)
+	if err != nil {
+		return err
+	}
+	defer zero(dk)
+	titlePT, err := cryptocore.DecryptPayload(cryptocore.Ciphertext{
+		Nonce: mustB64(str(det["title_nonce_b64"])), Ciphertext: mustB64(str(det["title_ciphertext_b64"])), KeyVersion: kv,
+	}, dk, nil)
+	if err != nil {
+		return err
+	}
+	title := string(titlePT)
+	if in.provided["title"] {
+		title = in.title
+		if title == "" {
+			return fmt.Errorf("title cannot be empty")
+		}
+	}
+	bodyPT, err := cryptocore.DecryptPayload(cryptocore.Ciphertext{
+		Nonce: mustB64(str(det["nonce_b64"])), Ciphertext: mustB64(str(det["ciphertext_b64"])), KeyVersion: kv,
+	}, dk, nil)
+	if err != nil {
+		return err
+	}
+	var existing map[string]any
+	if err := json.Unmarshal(bodyPT, &existing); err != nil {
+		return err
+	}
+	if in.provided["username"] {
+		existing["username"] = in.username
+	}
+	if in.provided["password"] {
+		existing["password"] = in.password
+	}
+	if in.provided["urls"] || in.provided["url"] {
+		existing["urls"] = append(splitSemi(in.urlsFlag), []string(in.urlFlags)...)
+	}
+	if in.provided["notes"] {
+		existing["notes"] = in.notes
+	}
+	if in.provided["totp"] {
+		existing["totp_seed"] = in.totp
+	}
+	if in.provided["tags"] {
+		existing["tags"] = splitComma(in.tags)
+	}
+	if in.provided["favorite"] {
+		existing["favorite"] = in.favorite
+	}
+	if in.provided["ssh-private"] || in.provided["ssh-private-file"] ||
+		in.provided["ssh-public"] || in.provided["ssh-public-file"] ||
+		in.provided["s3-access"] || in.provided["s3-secret"] ||
+		in.provided["cert"] || in.provided["cert-file"] ||
+		in.provided["extra"] || in.provided["extra-file"] {
+		opts, err := secretOptsFromFlags(in, false)
+		if err != nil {
+			return err
+		}
+		merged, err := buildSecretPayload(opts)
+		if err != nil {
+			return err
+		}
+		existing["extra"] = patchExtraFields(existing["extra"], merged["extra"], in)
+	}
+	payload, err := json.Marshal(existing)
+	if err != nil {
+		return err
+	}
+	titleCT, err := cryptocore.EncryptPayload([]byte(title), dk, kv)
+	if err != nil {
+		return err
+	}
+	bodyCT, err := cryptocore.EncryptPayload(payload, dk, kv)
+	if err != nil {
+		return err
+	}
+	_, err = c.putJSON("/api/secrets/"+url.PathEscape(id), map[string]any{
+		"title_ciphertext_b64": b64(titleCT.Ciphertext),
+		"title_nonce_b64":      b64(titleCT.Nonce),
+		"ciphertext_b64":       b64(bodyCT.Ciphertext),
+		"nonce_b64":            b64(bodyCT.Nonce),
+		"key_version":          kv,
+	})
+	return err
+}
+
+func patchExtraFields(existing any, patch any, in secretFlagInput) []map[string]string {
+	cur := decodeExtra(existing)
+	add := decodeExtra(patch)
+	types := map[string]bool{}
+	if in.provided["extra"] || in.provided["extra-file"] {
+		return add
+	}
+	if in.provided["ssh-private"] || in.provided["ssh-private-file"] {
+		types["ssh_private_key"] = true
+	}
+	if in.provided["ssh-public"] || in.provided["ssh-public-file"] {
+		types["ssh_public_key"] = true
+	}
+	if in.provided["s3-access"] {
+		types["s3_access_key"] = true
+	}
+	if in.provided["s3-secret"] {
+		types["s3_secret_key"] = true
+	}
+	if in.provided["cert"] || in.provided["cert-file"] {
+		types["certificate"] = true
+	}
+	out := make([]map[string]string, 0, len(cur)+len(add))
+	for _, e := range cur {
+		if !types[e["type"]] {
+			out = append(out, e)
+		}
+	}
+	for _, e := range add {
+		if types[e["type"]] {
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
+func decodeExtra(v any) []map[string]string {
+	if v == nil {
+		return nil
+	}
+	b, err := json.Marshal(v)
+	if err != nil {
+		return nil
+	}
+	var out []map[string]string
+	_ = json.Unmarshal(b, &out)
+	return out
+}
+
+func openDKFromDetail(det map[string]any, sk []byte) ([]byte, uint32, error) {
+	env, ok := det["envelope"].(map[string]any)
+	if !ok {
+		return nil, 0, fmt.Errorf("no envelope")
+	}
+	dk, err := cryptocore.OpenDataKeyEnvelope(cryptocore.Envelope{
+		EphemeralPub: mustB64(str(env["ephemeral_pub_b64"])),
+		Nonce:        mustB64(str(env["nonce_b64"])),
+		Ciphertext:   mustB64(str(env["wrapped_dk_b64"])),
+	}, sk)
+	if err != nil {
+		return nil, 0, err
+	}
+	kv := uint32(det["key_version"].(float64))
+	return dk, kv, nil
+}
+
+func (c *client) buildShareEnvelopes(dk []byte, kv uint32, meID, mePub string, opts secretCreateOpts) ([]map[string]any, []string, []string, error) {
+	seen := map[string]bool{meID: true}
+	var envelopes []map[string]any
+	add := func(uid, pub string) error {
+		if uid == "" || seen[uid] || pub == "" {
+			return nil
+		}
+		env, err := cryptocore.SealDataKeyForRecipient(dk, mustB64(pub), kv)
+		if err != nil {
+			return err
+		}
+		envelopes = append(envelopes, map[string]any{
+			"user_id": uid, "key_version": kv,
+			"wrapped_dk_b64": b64(env.Ciphertext), "ephemeral_pub_b64": b64(env.EphemeralPub), "nonce_b64": b64(env.Nonce),
+		})
+		seen[uid] = true
+		return nil
+	}
+	if err := add(meID, mePub); err != nil {
+		return nil, nil, nil, err
+	}
+	vis := strings.TrimSpace(opts.Visibility)
+	shareUsers := opts.ShareUsers
+	shareGroups := opts.ShareGroups
+	if vis != "shared" && len(shareUsers)+len(shareGroups) == 0 {
+		return envelopes, nil, nil, nil
+	}
+	pkByUser := map[string]string{}
+	rawPKs, err := c.getRaw("/api/users/public-keys")
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	var pks []map[string]any
+	if err := json.Unmarshal(rawPKs, &pks); err != nil {
+		return nil, nil, nil, err
+	}
+	for _, row := range pks {
+		pkByUser[str(row["user_id"])] = str(row["public_key_b64"])
+	}
+	var shareUserIDs []string
+	for _, uid := range shareUsers {
+		uid = strings.TrimSpace(uid)
+		if uid == "" || uid == meID {
+			continue
+		}
+		pub := pkByUser[uid]
+		if pub == "" {
+			return nil, nil, nil, fmt.Errorf("share-user %q: no public key (not onboarded?)", uid)
+		}
+		if err := add(uid, pub); err != nil {
+			return nil, nil, nil, err
+		}
+		shareUserIDs = append(shareUserIDs, uid)
+	}
+	var shareGroupIDs []string
+	for _, gid := range shareGroups {
+		gid = strings.TrimSpace(gid)
+		if gid == "" {
+			continue
+		}
+		raw, err := c.getRaw("/api/groups/" + url.PathEscape(gid) + "/member-keys")
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		var members []map[string]any
+		if err := json.Unmarshal(raw, &members); err != nil {
+			return nil, nil, nil, err
+		}
+		for _, m := range members {
+			if err := add(str(m["user_id"]), str(m["public_key_b64"])); err != nil {
+				return nil, nil, nil, err
+			}
+		}
+		shareGroupIDs = append(shareGroupIDs, gid)
+	}
+	return envelopes, shareUserIDs, shareGroupIDs, nil
 }
 
 func (c *client) decryptTitle(sk []byte, it map[string]any) (string, error) {
@@ -592,6 +949,21 @@ func (c *client) do(method, path string, body any) (*http.Response, error) {
 
 func (c *client) postJSON(path string, body any) (map[string]any, error) {
 	res, err := c.do(http.MethodPost, path, body)
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+	var m map[string]any
+	_ = json.NewDecoder(res.Body).Decode(&m)
+	if res.StatusCode >= 300 {
+		return m, fmt.Errorf("%s: %v", res.Status, m["error"])
+	}
+	_ = c.saveCookies()
+	return m, nil
+}
+
+func (c *client) putJSON(path string, body any) (map[string]any, error) {
+	res, err := c.do(http.MethodPut, path, body)
 	if err != nil {
 		return nil, err
 	}

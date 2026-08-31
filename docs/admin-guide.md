@@ -9,8 +9,8 @@ Betrieb und Verwaltung der Instanz. Für den Alltag der Endanwender: [User Guide
 | Rolle (technisch) | Anzeige in der UI | Rechte (Auszug) |
 |-------------------|-------------------|-----------------|
 | `member` | Mitglied | Vault nur für eigene/geteilte Secrets |
-| `tenant_admin` | Organisations-Administrator | User, Gruppen, LDAP, SMTP, Policy, Audit, API-Keys, Escrow-Pubkey |
-| `platform_admin` | Plattform-Administrator | Tenants, Storage-Migration, plattformweite Übersicht |
+| `tenant_admin` | Organisations-Administrator | User, Gruppen, LDAP (eigenen Tenant), Recovery, Audit (Tenant) |
+| `platform_admin` | Plattform-Administrator | Instanz: Firmen-CA, Proxy, SMTP, Krypto/Policy, API-Keys, System, Tenants, Migration |
 | `auditor` | Auditor (nur Lesen) | Audit-Log einsehen, keine Schreibaktionen |
 
 Der erste User aus dem Setup-Wizard erhält **beide** Admin-Rollen (`tenant_admin` + `platform_admin`).
@@ -130,9 +130,9 @@ In der **Sidebar** unter **Administration** (sichtbar für `tenant_admin` / `pla
 | Untergruppe | Menüpunkte |
 |-------------|------------|
 | **Benutzer & Gruppen** | Benutzer, Gruppen |
-| **Verbindungen** | Firmen-CA, Zugriff & Proxy, LDAP, SMTP |
-| **Sicherheit** | Krypto & Policy, Recovery & Escrow, API-Keys |
-| **Plattform** | Tenants & Migration (nur Plattform-Admin), **System**, Audit |
+| **Verbindungen** | LDAP (Tenant-Admin); Firmen-CA, Zugriff & Proxy, SMTP (nur Plattform-Admin) |
+| **Sicherheit** | Recovery & Escrow (Tenant-Admin); Krypto & Policy, API-Keys (nur Plattform-Admin) |
+| **Plattform** | Audit (Tenant-Admin); Tenants & Migration, **System** (nur Plattform-Admin) |
 
 Topbar-Theme nutzt flache Inline-SVG-Icons (kein externes Icon-CDN). Jeder Unterpunkt öffnet den jeweiligen Abschnitt. Storage-Übersicht und Versionsinfo stehen unter **Plattform → System** (nicht mehr oben in jedem Admin-Panel).
 

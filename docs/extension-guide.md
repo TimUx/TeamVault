@@ -43,7 +43,7 @@ Lädt `teamvault-extension.zip` von `/downloads/` und entpackt es lokal. Danach 
 ## Nutzen
 
 1. Seite öffnen, die zur Secret-URL passt.
-2. Popup → Eintrag → **Fill** oder **Copy**.
-3. Ohne Domain-Match: Aktion wird blockiert (Phishing-Schutz).
+2. Popup → Eintrag filtern (Alle / Privat / Geteilt) → **Fill** oder **Copy**.
+3. Ohne URL im Secret: Fill/Copy erlaubt. Mit URL: Aktion nur bei Domain-Match (Phishing-Schutz).
 
 Admin: `scripts/pack-clients.ps1` erzeugt `dist/teamvault-extension.zip` → nach `<data-dir>/downloads/` kopieren.

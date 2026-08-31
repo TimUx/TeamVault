@@ -132,8 +132,8 @@ func (a *API) publicAccessView(r *http.Request) map[string]any {
 
 func (a *API) registerPublicAccess(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/public/config", a.handlePublicConfig)
-	mux.HandleFunc("GET /api/admin/public-access", a.requireAuth(a.requireAdmin(a.handleGetPublicAccess)))
-	mux.HandleFunc("PUT /api/admin/public-access", a.requireAuth(a.requireAdmin(a.handlePutPublicAccess)))
+	mux.HandleFunc("GET /api/admin/public-access", a.requireAuth(a.requirePlatformAdmin(a.handleGetPublicAccess)))
+	mux.HandleFunc("PUT /api/admin/public-access", a.requireAuth(a.requirePlatformAdmin(a.handlePutPublicAccess)))
 }
 
 func (a *API) handlePublicConfig(w http.ResponseWriter, r *http.Request) {

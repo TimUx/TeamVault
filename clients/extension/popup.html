@@ -20,6 +20,9 @@
     .row-item { display: flex; justify-content: space-between; gap: 0.4rem; padding: 0.4rem 0; border-bottom: 1px solid var(--bd); align-items: flex-start; }
     .title { flex: 1; min-width: 0; word-break: break-word; }
     .title small { color: #666; font-size: 0.75rem; }
+    .badge { display: inline-block; margin-left: 0.25rem; padding: 0 0.3rem; border-radius: 3px; font-size: 0.65rem; font-weight: 700; text-transform: uppercase; }
+    .badge.shared { background: #e8f4fc; color: #006699; }
+    .badge.private { background: #eee; color: #666; }
     .actions { display: flex; flex-direction: column; gap: 0.25rem; }
     .actions button { margin-top: 0; white-space: nowrap; }
     .toolbar { display: flex; flex-direction: column; gap: 0.35rem; margin-top: 0.5rem; }
@@ -51,6 +54,13 @@
       <p class="hint" id="tabHost"></p>
       <div class="toolbar">
         <input id="filter" type="search" placeholder="Suche Titel / Domain…" />
+        <label class="inline">Anzeige
+          <select id="visFilter">
+            <option value="all">Alle</option>
+            <option value="private">Privat</option>
+            <option value="shared">Geteilt</option>
+          </select>
+        </label>
         <label class="inline"><input id="matchHost" type="checkbox" /> Nur passende Domain</label>
         <span class="hint" id="matchHint"></span>
       </div>

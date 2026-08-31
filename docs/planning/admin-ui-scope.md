@@ -9,8 +9,8 @@
 
 | Rolle | Scope |
 |-------|-------|
-| `platform_admin` | Instanzweit: Tenants anlegen/deaktivieren, Storage-Migration, plattformweite Health |
-| `tenant_admin` | Tenant-Einstellungen, User, Gruppen, LDAP (pro Tenant), Recovery-Modus, Audit Tenant |
+| `platform_admin` | Instanzweit: Firmen-CA, Proxy, SMTP, Krypto/Policy, API-Keys, System, Tenants, Storage-Migration |
+| `tenant_admin` | Eigenen Tenant: User, Gruppen, LDAP-Verbindung, Recovery/Escrow, Audit |
 | `member` | Kein Admin-UI; Vault-UI |
 | `auditor` | Später (nicht MVP): read-only Audit |
 

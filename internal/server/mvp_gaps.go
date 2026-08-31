@@ -19,8 +19,8 @@ func (a *API) registerMVPGaps(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/admin/ldap/connections", a.requireAuth(a.requireAdmin(a.handlePutLDAPConn)))
 	mux.HandleFunc("DELETE /api/admin/ldap/connections/{id}", a.requireAuth(a.requireAdmin(a.handleDeleteLDAPConn)))
 	mux.HandleFunc("POST /api/admin/ldap/sync", a.requireAuth(a.requireAdmin(a.handleLDAPSync)))
-	mux.HandleFunc("GET /api/admin/mail/templates", a.requireAuth(a.requireAdmin(a.handleGetMailTemplates)))
-	mux.HandleFunc("PUT /api/admin/mail/templates", a.requireAuth(a.requireAdmin(a.handlePutMailTemplates)))
+	mux.HandleFunc("GET /api/admin/mail/templates", a.requireAuth(a.requirePlatformAdmin(a.handleGetMailTemplates)))
+	mux.HandleFunc("PUT /api/admin/mail/templates", a.requireAuth(a.requirePlatformAdmin(a.handlePutMailTemplates)))
 	mux.HandleFunc("POST /api/admin/users/{id}/password", a.requireAuth(a.requireAdmin(a.handleResetPassword)))
 	mux.HandleFunc("POST /api/admin/users/{id}/roles", a.requireAuth(a.requireAdmin(a.handleSetRoles)))
 	mux.HandleFunc("GET /api/policy/client", a.requireAuth(a.handleClientPolicy))
@@ -84,6 +84,10 @@ func (a *API) handlePutLDAPConn(w http.ResponseWriter, r *http.Request) {
 	found := false
 	for i := range b.LDAPConnections {
 		if b.LDAPConnections[i].ID == body.ID {
+			if !hasRole(sess.Roles, "platform_admin") && b.LDAPConnections[i].TenantID != string(sess.TenantID) {
+				writeErr(w, http.StatusForbidden, "forbidden")
+				return
+			}
 			b.LDAPConnections[i] = body
 			found = true
 			break
@@ -104,13 +108,25 @@ func (a *API) handlePutLDAPConn(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) handleDeleteLDAPConn(w http.ResponseWriter, r *http.Request) {
+	sess, _ := a.sessionFrom(r)
 	id := r.PathValue("id")
 	b := a.bundle()
 	next := b.LDAPConnections[:0]
+	found := false
 	for _, c := range b.LDAPConnections {
-		if c.ID != id {
-			next = append(next, c)
+		if c.ID == id {
+			found = true
+			if !hasRole(sess.Roles, "platform_admin") && c.TenantID != string(sess.TenantID) {
+				writeErr(w, http.StatusForbidden, "forbidden")
+				return
+			}
+			continue
 		}
+		next = append(next, c)
+	}
+	if !found {
+		writeErr(w, http.StatusNotFound, "not found")
+		return
 	}
 	b.LDAPConnections = next
 	if err := a.saveBundle(b); err != nil {
@@ -244,6 +260,10 @@ func (a *API) handleSetRoles(w http.ResponseWriter, r *http.Request) {
 	u, err := a.App.Vault.GetUser(r.Context(), sess.TenantID, store.UserID(r.PathValue("id")))
 	if err != nil {
 		writeErr(w, http.StatusNotFound, "user not found")
+		return
+	}
+	if !actorMayChangeUserRoles(sess.Roles, *u) {
+		writeErr(w, http.StatusForbidden, "cannot modify platform_admin")
 		return
 	}
 	raw, _ := json.Marshal(body.Roles)

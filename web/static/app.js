@@ -160,6 +160,7 @@ const ICO = {
   book: '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>',
   cert: '<rect x="6" y="3" width="12" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h3"/>',
   info: '<circle cx="12" cy="12" r="9"/><path d="M12 10v6M12 7h.01"/>',
+  more: '<circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/>',
 };
 
 function icon(name, cls) {
@@ -1035,6 +1036,31 @@ function isAdmin() {
   return roles.includes("tenant_admin") || roles.includes("platform_admin");
 }
 
+function isPlatformAdmin() {
+  return (vault.me?.roles || []).includes("platform_admin");
+}
+
+function isTenantAdminOnly() {
+  return isAdmin() && !isPlatformAdmin();
+}
+
+const PLATFORM_ADMIN_NAV = new Set([
+  "admin:trust", "admin:access", "admin:smtp", "admin:crypto",
+  "admin:apikeys", "admin:platform", "admin:system",
+]);
+
+function canAccessAdminNav(nav) {
+  if (isAuditorOnly()) return nav === "admin:audit";
+  if (!isAdmin()) return false;
+  if (PLATFORM_ADMIN_NAV.has(nav)) return isPlatformAdmin();
+  return true;
+}
+
+function defaultAdminNav() {
+  if (isAuditorOnly()) return "admin:audit";
+  return "admin:users";
+}
+
 function isAuditor() {
   return (vault.me?.roles || []).includes("auditor");
 }
@@ -1436,19 +1462,19 @@ function renderApp(app) {
             ${navLink("admin:groups", "group", "Gruppen", "admin-link", 'data-admin-only')}
           `)}
           ${navSubSection("admin-connect", "Verbindungen", `
-            ${navLink("admin:trust", "cert", "Firmen-CA", "admin-link", 'data-admin-only')}
-            ${navLink("admin:access", "network", "Zugriff &amp; Proxy", "admin-link", 'data-admin-only')}
+            ${navLink("admin:trust", "cert", "Firmen-CA", "admin-link", 'data-admin-only data-platform-only')}
+            ${navLink("admin:access", "network", "Zugriff &amp; Proxy", "admin-link", 'data-admin-only data-platform-only')}
             ${navLink("admin:ldap", "network", "LDAP", "admin-link", 'data-admin-only')}
-            ${navLink("admin:smtp", "mail", "SMTP", "admin-link", 'data-admin-only')}
+            ${navLink("admin:smtp", "mail", "SMTP", "admin-link", 'data-admin-only data-platform-only')}
           `)}
           ${navSubSection("admin-security", "Sicherheit", `
-            ${navLink("admin:crypto", "shield", "Krypto &amp; Policy", "admin-link", 'data-admin-only')}
+            ${navLink("admin:crypto", "shield", "Krypto &amp; Policy", "admin-link", 'data-admin-only data-platform-only')}
             ${navLink("admin:recovery", "lock", "Recovery &amp; Escrow", "admin-link", 'data-admin-only')}
-            ${navLink("admin:apikeys", "key", "API-Keys", "admin-link", 'data-admin-only')}
+            ${navLink("admin:apikeys", "key", "API-Keys", "admin-link", 'data-admin-only data-platform-only')}
           `)}
           ${navSubSection("admin-platform", "Plattform", `
-            ${navLink("admin:platform", "building", "Tenants &amp; Migration", "admin-link platform-link", 'data-admin-only hidden')}
-            ${navLink("admin:system", "info", "System", "admin-link")}
+            ${navLink("admin:platform", "building", "Tenants &amp; Migration", "admin-link platform-link", 'data-admin-only data-platform-only hidden')}
+            ${navLink("admin:system", "info", "System", "admin-link", 'data-admin-only data-platform-only')}
             ${navLink("admin:audit", "clipboard", "Audit", "admin-link")}
           `)}
         `, 'id="navAdminSection" hidden')}
@@ -1525,23 +1551,37 @@ function renderApp(app) {
                       </div>
                     </div>
                   </div>
-                  <div class="selection-bar selection-bar-compact" id="selBar">
-                    <label class="inline"><input type="checkbox" id="selAllVisible" /> Sichtbare</label>
-                    <span class="hint" id="selCount">0 ausgewählt</span>
-                    <button class="btn-ghost btn-sm" type="button" id="selClear">Auswahl aufheben</button>
-                    <button class="btn-ghost btn-sm" type="button" id="selAllLoaded">Alle geladenen</button>
+                  <div class="secrets-chrome-foot">
                     <span class="hint" id="sCount"></span>
-                  </div>
-                  <div class="row row-compact">
-                    <button class="btn-ghost btn-sm btn-with-ico" type="button" id="sMore" hidden>${btnLabel("chevron", "Mehr laden")}</button>
-                    <button class="btn-ghost btn-sm btn-with-ico" type="button" id="sExportTv">${btnLabel("download", "Export TeamVault")}</button>
-                    <button class="btn-ghost btn-sm btn-with-ico" type="button" id="sExportJson">${btnLabel("download", "Export Bitwarden")}</button>
-                    <button class="btn-ghost btn-sm btn-with-ico" type="button" id="sExportCsv">${btnLabel("download", "Export CSV")}</button>
-                    <button class="btn-ghost btn-sm btn-with-ico" type="button" id="sExportBak">${btnLabel("lock", "Export verschlüsselt")}</button>
+                    <div class="secrets-actions-wrap" id="sActionsWrap">
+                      <button type="button" class="btn-ghost btn-sm btn-with-ico" id="sActionsToggle" aria-expanded="false" aria-controls="sActionsMenu" aria-haspopup="true">
+                        ${btnLabel("more", "Aktionen")}
+                      </button>
+                      <div class="secrets-actions-menu panel-inset" id="sActionsMenu" hidden role="menu">
+                        <p class="secrets-actions-heading">Auswahl</p>
+                        <label class="secrets-actions-item inline"><input type="checkbox" id="selAllVisible" /> Alle sichtbaren</label>
+                        <button type="button" class="secrets-actions-item btn-ghost btn-sm" id="selAllLoaded" role="menuitem">Alle geladenen auswählen</button>
+                        <button type="button" class="secrets-actions-item btn-ghost btn-sm" id="selClear" role="menuitem">Auswahl aufheben</button>
+                        <p class="hint secrets-actions-meta" id="selCount">Keine Auswahl</p>
+                        <div class="secrets-actions-export" id="sExportGroup">
+                          <hr class="secrets-actions-divider" />
+                          <p class="secrets-actions-heading">Export</p>
+                          <p class="hint secrets-actions-hint">Gilt für die aktuelle Auswahl (Häkchen in der Liste).</p>
+                          <button type="button" class="secrets-actions-item btn-ghost btn-sm btn-with-ico" id="sExportTv" role="menuitem">${btnLabel("download", "TeamVault JSON")}</button>
+                          <button type="button" class="secrets-actions-item btn-ghost btn-sm btn-with-ico" id="sExportJson" role="menuitem">${btnLabel("download", "Bitwarden JSON")}</button>
+                          <button type="button" class="secrets-actions-item btn-ghost btn-sm btn-with-ico" id="sExportCsv" role="menuitem">${btnLabel("download", "CSV")}</button>
+                          <button type="button" class="secrets-actions-item btn-ghost btn-sm btn-with-ico" id="sExportBak" role="menuitem">${btnLabel("lock", "Verschlüsselt (.tvbak)")}</button>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
                 <div class="panel secrets-stage">
                   <div id="slist" class="list secrets-list"></div>
+                  <div class="secrets-load-more" id="sLoadMoreWrap" hidden>
+                    <p class="hint" id="sLoadMoreHint"></p>
+                    <button type="button" class="btn-ghost btn-sm" id="sMore">Weitere laden</button>
+                  </div>
                 </div>
               </div>
               <div class="secret-modal" id="sdetail" hidden role="dialog" aria-modal="true" aria-labelledby="dtitle">
@@ -1900,7 +1940,7 @@ function renderApp(app) {
                     <fieldset class="role-fieldset">
                       <legend>Rollen</legend>
                       <label class="inline" title="Vault nutzen, Secrets lesen und bearbeiten (Standard)"><input type="checkbox" id="ue_role_member" value="member" /> Mitglied</label>
-                      <label class="inline" title="Benutzer, Gruppen, LDAP, Policy, Audit, API-Keys"><input type="checkbox" id="ue_role_admin" value="tenant_admin" /> Organisations-Administrator</label>
+                      <label class="inline" title="Benutzer, Gruppen, LDAP und Recovery im eigenen Tenant"><input type="checkbox" id="ue_role_admin" value="tenant_admin" /> Organisations-Administrator</label>
                       <label class="inline" title="Audit-Log einsehen (ohne Schreibrechte)"><input type="checkbox" id="ue_role_auditor" value="auditor" /> Auditor (nur Lesen)</label>
                       <label class="inline" id="ue_role_plat_wrap" title="Tenants, Storage-Migration, plattformweite Übersicht"><input type="checkbox" id="ue_role_plat" value="platform_admin" /> Plattform-Administrator</label>
                     </fieldset>
@@ -1936,7 +1976,7 @@ function renderApp(app) {
                   </div>
                 </div>
                 <div class="admin-section" data-admin-section="ldap">
-                  <p class="hint">LDAP/AD nur für Login-Bind. Host muss zum Zertifikatsnamen (CN/SAN) passen. Die Firmen-CA liegt unter Administration → Firmen-CA.</p>
+                  <p class="hint">LDAP/AD nur für Login-Bind (tenant-spezifisch). Host muss zum Zertifikatsnamen (CN/SAN) passen. Die instanzweite Firmen-CA verwaltet der Plattform-Administrator.</p>
                   <label class="inline"><input id="ldap_en" type="checkbox" /> Aktiv</label>
                   <label>Host</label><input id="ldap_host" />
                   <label>Port</label><input id="ldap_port" type="number" placeholder="636 bei LDAPS" />
@@ -2192,7 +2232,7 @@ function renderApp(app) {
     });
     const adminSec = n.querySelector("#navAdminSection");
     if (adminSec) adminSec.hidden = true;
-    n.querySelectorAll("#sExportTv, #sExportJson, #sExportCsv, #sExportBak, #sMore").forEach((el) => {
+    n.querySelectorAll("#sExportGroup, #sMore, #sActionsWrap").forEach((el) => {
       if (el) el.hidden = true;
     });
     const accHint = n.querySelector("#offlineAccHint");
@@ -2234,11 +2274,45 @@ function renderApp(app) {
     }
   }
 
+  function syncAdminNavVisibility() {
+    const platform = isPlatformAdmin();
+    const admin = isAdmin();
+    n.querySelectorAll("[data-platform-only]").forEach((el) => {
+      el.hidden = !platform;
+    });
+    if (admin && !isAuditorOnly()) {
+      n.querySelectorAll("[data-admin-only]").forEach((el) => {
+        if (el.hasAttribute("data-platform-only") && !platform) {
+          el.hidden = true;
+          return;
+        }
+        if (el.classList.contains("platform-link") && !platform) {
+          el.hidden = true;
+          return;
+        }
+        el.hidden = false;
+      });
+      if (platform) {
+        const plat = n.querySelector("#plat");
+        if (plat) plat.hidden = false;
+        const platLink = n.querySelector(".platform-link");
+        if (platLink) platLink.hidden = false;
+      }
+    }
+    n.querySelectorAll(".sidebar-subsection[data-nav-subsection]").forEach((sub) => {
+      const visible = sub.querySelectorAll(".sidebar-link:not([hidden])");
+      sub.hidden = visible.length === 0;
+    });
+  }
+
   function navigateTo(nav) {
     if (!vault.sk) return;
     if (vault.offlineMode && offlineWriteNav(nav)) {
       announceA11y("Nur online verfügbar");
       return;
+    }
+    if (nav.startsWith("admin:") && !canAccessAdminNav(nav)) {
+      nav = defaultAdminNav();
     }
     expandNavSectionForRoute(nav);
     n.querySelectorAll(".sidebar-link").forEach((b) => {
@@ -2720,10 +2794,65 @@ function renderApp(app) {
     const visible = filterVisibleSecrets();
     const nSel = visible.filter((it) => vault.selectedIds.has(it.id)).length;
     const countEl = n.querySelector("#selCount");
-    if (countEl) countEl.textContent = nSel + " ausgewählt";
+    if (countEl) countEl.textContent = nSel ? `${nSel} ausgewählt` : "Keine Auswahl";
+    const sCount = n.querySelector("#sCount");
+    if (sCount) {
+      const scopeLabel = vault.ownershipFilter === "shared" ? "geteilt" : "privat";
+      const loaded = vault.secretsCache.length;
+      const total = vault.secretsTotal;
+      const extra = loaded < total ? ` · ${loaded}/${total} geladen` : "";
+      sCount.textContent = `${visible.length} ${scopeLabel}${extra}`;
+    }
     const all = n.querySelector("#selAllVisible");
     if (all) all.checked = visible.length > 0 && nSel === visible.length;
+    const moreWrap = n.querySelector("#sLoadMoreWrap");
+    const moreBtn = n.querySelector("#sMore");
+    const moreHint = n.querySelector("#sLoadMoreHint");
+    const hasMore = vault.secretsCache.length < vault.secretsTotal;
+    if (moreWrap) moreWrap.hidden = !hasMore || vault.offlineMode;
+    if (moreHint && hasMore) {
+      const rest = vault.secretsTotal - vault.secretsCache.length;
+      moreHint.textContent =
+        `Noch ${rest} Eintrag${rest === 1 ? "" : "e"} nicht geladen (${vault.secretsCache.length} von ${vault.secretsTotal}). ` +
+        "Bei vielen Secrets werden sie schrittweise vom Server geholt.";
+    }
+    if (moreBtn && hasMore) {
+      moreBtn.textContent = `Weitere ${Math.min(vault.pageLimit, restCount(vault))} laden`;
+    }
+    const toggle = n.querySelector("#sActionsToggle");
+    if (toggle) {
+      const badge = nSel > 0 ? ` (${nSel})` : "";
+      toggle.innerHTML = btnLabel("more", `Aktionen${badge}`);
+    }
   }
+
+  function restCount(v) {
+    return Math.max(0, v.secretsTotal - v.secretsCache.length);
+  }
+
+  function closeSecretsActionsMenu() {
+    const menu = n.querySelector("#sActionsMenu");
+    const toggle = n.querySelector("#sActionsToggle");
+    if (!menu || menu.hidden) return;
+    menu.hidden = true;
+    if (toggle) toggle.setAttribute("aria-expanded", "false");
+  }
+
+  const sActionsToggle = n.querySelector("#sActionsToggle");
+  if (sActionsToggle) {
+    sActionsToggle.onclick = (ev) => {
+      ev.stopPropagation();
+      const menu = n.querySelector("#sActionsMenu");
+      const open = menu && menu.hidden;
+      if (menu) menu.hidden = !open;
+      sActionsToggle.setAttribute("aria-expanded", open ? "true" : "false");
+    };
+  }
+  document.addEventListener("click", (ev) => {
+    const wrap = n.querySelector("#sActionsWrap");
+    if (!wrap || wrap.hidden) return;
+    if (!wrap.contains(ev.target)) closeSecretsActionsMenu();
+  });
 
   function bindSecretCheckbox(cb, id) {
     cb.checked = vault.selectedIds.has(id);
@@ -2920,10 +3049,7 @@ function renderApp(app) {
         n.querySelectorAll("[data-admin-only]").forEach((el) => { el.hidden = true; });
       } else {
         n.querySelector("#adminFull").hidden = false;
-        n.querySelectorAll("[data-admin-only]").forEach((el) => {
-          if (el.classList.contains("platform-link")) return;
-          el.hidden = false;
-        });
+        syncAdminNavVisibility();
       }
       try { await refreshAdmin(); } catch (e) { console.warn('refreshAdmin', e); }
     }
@@ -3819,10 +3945,6 @@ function renderApp(app) {
       bindShareBadge(list);
     }
 
-    const scopeLabel = vault.ownershipFilter === "shared" ? "geteilt" : "privat";
-    n.querySelector("#sCount").textContent =
-      `${visible.length} ${scopeLabel} · ${vault.secretsCache.length} geladen · ${vault.secretsTotal} gesamt`;
-    n.querySelector("#sMore").hidden = vault.secretsCache.length >= vault.secretsTotal;
     updateTagOptions();
     updateSelectionBar();
   }
@@ -4925,105 +5047,78 @@ function renderApp(app) {
       await paintAdminSystem(null);
       return;
     }
-    const ov = await api("/api/admin/overview");
-    vault.adminOverview = ov;
-    await paintAdminSystem(ov);
     const users = await api("/api/admin/users");
     paintUsersList(users);
     const groups = await api("/api/admin/groups");
     vault.groups = groups;
     paintGroupsWorkspace(users, groups);
     await refreshGroupShareUI();
-    const ldap = await api("/api/admin/ldap");
-    n.querySelector("#ldap_en").checked = !!ldap.enabled;
-    const ldapImport = n.querySelector("#ldapUserImport");
-    if (ldapImport) ldapImport.hidden = !ldap.enabled;
-    n.querySelector("#ldap_host").value = ldap.host || "";
-    n.querySelector("#ldap_port").value = ldap.port || "";
-    const ldapPort = Number(ldap.port) || 0;
-    n.querySelector("#ldap_tls").checked = !(ldap.host && ldapPort === 389 && !ldap.use_tls);
-    n.querySelector("#ldap_base").value = ldap.base_dn || "";
-    n.querySelector("#ldap_bind").value = ldap.bind_dn || "";
-    n.querySelector("#ldap_filter").value = ldap.user_filter || "";
-    n.querySelector("#ldap_skip_tls").checked = !!ldap.insecure_skip_verify;
-    const trust = await api("/api/admin/trust");
-    n.querySelector("#trust_ca_pem").value = trust.ca_cert_pem || "";
-    n.querySelector("#trust_ca_file").value = "";
-    paintTrustCAStatus();
-    try {
-      const pa = await api("/api/admin/public-access");
-      n.querySelector("#pa_base").value = pa.configured_base_path || "";
-      n.querySelector("#pa_url").value = pa.configured_public_url || "";
-      n.querySelector("#pa_trust").checked = !!(pa.configured_trust_fwd ?? pa.trust_forwarded);
-      n.querySelector("#pa_prefix").checked = !!pa.use_forwarded_prefix;
-      const ov = pa.env_overrides || {};
-      const hint = n.querySelector("#pa_env_hint");
-      if (hint) hint.hidden = !(ov.base_path || ov.trust_forwarded);
-      const eff = n.querySelector("#pa_effective");
-      if (eff) {
-        eff.textContent = `Aktiv: ${pa.public_url || "—"} · Pfad ${pa.base_path || "/"} · Proxy-Header ${pa.trust_forwarded ? "ja" : "nein"}`;
-      }
-    } catch (_) {}
-    const th = n.querySelector("#ldap_trust_hint");
-    if (th) {
-      th.textContent = trust.present
-        ? `Zentrale Firmen-CA aktiv (${trust.cert_count || 1} Zertifikat${(trust.cert_count || 1) === 1 ? "" : "e"}).`
-        : "Keine zentrale Firmen-CA — LDAPS prüft gegen System-CAs. Unter Firmen-CA hinterlegen.";
-    }
-    const mail = await api("/api/admin/mail");
-    n.querySelector("#mail_en").checked = !!mail.enabled;
-    n.querySelector("#mail_host").value = mail.host || "";
-    n.querySelector("#mail_port").value = mail.port || "";
-    n.querySelector("#mail_from").value = mail.from || "";
-    n.querySelector("#mail_user").value = mail.username || "";
-    const cryptoP = await api("/api/admin/crypto");
-    n.querySelector("#arg_mem").value = cryptoP.Memory || cryptoP.memory || 65536;
-    n.querySelector("#arg_time").value = cryptoP.Time || cryptoP.time || 3;
-    n.querySelector("#arg_threads").value = cryptoP.Threads || cryptoP.threads || 1;
-    try {
-      const presets = await api("/api/crypto/presets");
-      const row = n.querySelector("#presetRow");
-      row.innerHTML = (presets.presets || []).map((p) =>
-        `<button type="button" class="btn-ghost btn-sm" data-preset="${p.id}">${p.label}</button>`
-      ).join("");
-      row.querySelectorAll("[data-preset]").forEach((btn) => {
-        btn.onclick = () => {
-          const p = (presets.presets || []).find((x) => x.id === btn.dataset.preset);
-          if (!p) return;
-          n.querySelector("#arg_mem").value = p.memory_kib;
-          n.querySelector("#arg_time").value = p.time;
-          n.querySelector("#arg_threads").value = p.threads;
+
+    if (isPlatformAdmin()) {
+      const ov = await api("/api/admin/overview");
+      vault.adminOverview = ov;
+      await paintAdminSystem(ov);
+      const trust = await api("/api/admin/trust");
+      n.querySelector("#trust_ca_pem").value = trust.ca_cert_pem || "";
+      n.querySelector("#trust_ca_file").value = "";
+      paintTrustCAStatus();
+      try {
+        const pa = await api("/api/admin/public-access");
+        n.querySelector("#pa_base").value = pa.configured_base_path || "";
+        n.querySelector("#pa_url").value = pa.configured_public_url || "";
+        n.querySelector("#pa_trust").checked = !!(pa.configured_trust_fwd ?? pa.trust_forwarded);
+        n.querySelector("#pa_prefix").checked = !!pa.use_forwarded_prefix;
+        const envOv = pa.env_overrides || {};
+        const hint = n.querySelector("#pa_env_hint");
+        if (hint) hint.hidden = !(envOv.base_path || envOv.trust_forwarded);
+        const eff = n.querySelector("#pa_effective");
+        if (eff) {
+          eff.textContent = `Aktiv: ${pa.public_url || "—"} · Pfad ${pa.base_path || "/"} · Proxy-Header ${pa.trust_forwarded ? "ja" : "nein"}`;
+        }
+      } catch (_) {}
+      const mail = await api("/api/admin/mail");
+      n.querySelector("#mail_en").checked = !!mail.enabled;
+      n.querySelector("#mail_host").value = mail.host || "";
+      n.querySelector("#mail_port").value = mail.port || "";
+      n.querySelector("#mail_from").value = mail.from || "";
+      n.querySelector("#mail_user").value = mail.username || "";
+      const cryptoP = await api("/api/admin/crypto");
+      n.querySelector("#arg_mem").value = cryptoP.Memory || cryptoP.memory || 65536;
+      n.querySelector("#arg_time").value = cryptoP.Time || cryptoP.time || 3;
+      n.querySelector("#arg_threads").value = cryptoP.Threads || cryptoP.threads || 1;
+      try {
+        const presets = await api("/api/crypto/presets");
+        const row = n.querySelector("#presetRow");
+        row.innerHTML = (presets.presets || []).map((p) =>
+          `<button type="button" class="btn-ghost btn-sm" data-preset="${p.id}">${p.label}</button>`
+        ).join("");
+        row.querySelectorAll("[data-preset]").forEach((btn) => {
+          btn.onclick = () => {
+            const p = (presets.presets || []).find((x) => x.id === btn.dataset.preset);
+            if (!p) return;
+            n.querySelector("#arg_mem").value = p.memory_kib;
+            n.querySelector("#arg_time").value = p.time;
+            n.querySelector("#arg_threads").value = p.threads;
+          };
+        });
+      } catch (_) {}
+      const pol = await api("/api/admin/policy");
+      n.querySelector("#totp_req").checked = !!pol.totp_required;
+      n.querySelector("#admin_env_only").checked = !!pol.admin_secrets_envelope_only;
+      const offlineCache = n.querySelector("#offline_cache");
+      if (offlineCache) offlineCache.checked = pol.offline_cache_allowed !== false;
+      const keys = await api("/api/admin/api-keys");
+      n.querySelector("#klist").innerHTML = keys.map((k) => {
+        const scopeLabel = k.legacy_no_scopes ? "legacy (nur read)" : (k.scopes || []).join(", ") || "?";
+        return `<div class="list-row"><span>${k.name} [${scopeLabel}] ${k.revoked ? "(revoked)" : ""}</span>` +
+        (!k.revoked ? `<button class="btn-ghost" data-kr="${k.id}" type="button">Revoke</button>` : "") + `</div>`;
+      }).join("") || "<p class='hint'>Keine Keys</p>";
+      n.querySelector("#klist").querySelectorAll("[data-kr]").forEach((btn) => {
+        btn.onclick = async () => {
+          await api("/api/admin/api-keys/" + btn.dataset.kr + "/revoke", { method: "POST", body: "{}" });
+          await refreshAdmin();
         };
       });
-    } catch (_) {}
-    try {
-      const me = vault.me;
-      if (me?.recovery_mode) n.querySelector("#rec_mode").value = me.recovery_mode;
-    } catch (_) {}
-    const pol = await api("/api/admin/policy");
-    n.querySelector("#totp_req").checked = !!pol.totp_required;
-    n.querySelector("#admin_env_only").checked = !!pol.admin_secrets_envelope_only;
-    const offlineCache = n.querySelector("#offline_cache");
-    if (offlineCache) offlineCache.checked = pol.offline_cache_allowed !== false;
-    const auditRaw = await api("/api/admin/audit");
-    const audit = Array.isArray(auditRaw) ? auditRaw : (auditRaw.items || []);
-    n.querySelector("#alist").innerHTML = audit.slice(0, 30).map((e) =>
-      `<div>${e.created_at} · ${e.action} · ${e.actor_id} · ${e.resource_type}/${e.resource_id}</div>`
-    ).join("") || "<p>Keine Events</p>";
-    const keys = await api("/api/admin/api-keys");
-    n.querySelector("#klist").innerHTML = keys.map((k) => {
-      const scopeLabel = k.legacy_no_scopes ? "legacy (nur read)" : (k.scopes || []).join(", ") || "?";
-      return `<div class="list-row"><span>${k.name} [${scopeLabel}] ${k.revoked ? "(revoked)" : ""}</span>` +
-      (!k.revoked ? `<button class="btn-ghost" data-kr="${k.id}" type="button">Revoke</button>` : "") + `</div>`;
-    }).join("") || "<p class='hint'>Keine Keys</p>";
-    n.querySelector("#klist").querySelectorAll("[data-kr]").forEach((btn) => {
-      btn.onclick = async () => {
-        await api("/api/admin/api-keys/" + btn.dataset.kr + "/revoke", { method: "POST", body: "{}" });
-        await refreshAdmin();
-      };
-    });
-    const roles = vault.me?.roles || [];
-    if (roles.includes("platform_admin")) {
       n.querySelector("#plat").hidden = false;
       const platLink = n.querySelector(".platform-link");
       if (platLink) platLink.hidden = false;
@@ -5038,7 +5133,43 @@ function renderApp(app) {
           await refreshAdmin();
         };
       });
+    } else {
+      await paintAdminSystem(null);
     }
+
+    const ldap = await api("/api/admin/ldap");
+    n.querySelector("#ldap_en").checked = !!ldap.enabled;
+    const ldapImport = n.querySelector("#ldapUserImport");
+    if (ldapImport) ldapImport.hidden = !ldap.enabled;
+    n.querySelector("#ldap_host").value = ldap.host || "";
+    n.querySelector("#ldap_port").value = ldap.port || "";
+    const ldapPort = Number(ldap.port) || 0;
+    n.querySelector("#ldap_tls").checked = !(ldap.host && ldapPort === 389 && !ldap.use_tls);
+    n.querySelector("#ldap_base").value = ldap.base_dn || "";
+    n.querySelector("#ldap_bind").value = ldap.bind_dn || "";
+    n.querySelector("#ldap_filter").value = ldap.user_filter || "";
+    n.querySelector("#ldap_skip_tls").checked = !!ldap.insecure_skip_verify;
+    const th = n.querySelector("#ldap_trust_hint");
+    if (th) {
+      if (isPlatformAdmin()) {
+        const trust = vault.adminOverview ? { present: !!vault.adminOverview.ldap_enabled } : { present: false };
+        th.textContent = trust.present
+          ? "Zentrale Firmen-CA aktiv."
+          : "Keine zentrale Firmen-CA — LDAPS prüft gegen System-CAs. Unter Firmen-CA hinterlegen.";
+      } else {
+        th.textContent = "Firmen-CA und SMTP werden vom Plattform-Administrator verwaltet.";
+      }
+    }
+    try {
+      const me = vault.me;
+      if (me?.recovery_mode) n.querySelector("#rec_mode").value = me.recovery_mode;
+    } catch (_) {}
+    const auditRaw = await api("/api/admin/audit");
+    const audit = Array.isArray(auditRaw) ? auditRaw : (auditRaw.items || []);
+    n.querySelector("#alist").innerHTML = audit.slice(0, 30).map((e) =>
+      `<div>${e.created_at} · ${e.action} · ${e.actor_id} · ${e.resource_type}/${e.resource_id}</div>`
+    ).join("") || "<p>Keine Events</p>";
+    syncAdminNavVisibility();
   }
 
   let ldapSearchHits = [];

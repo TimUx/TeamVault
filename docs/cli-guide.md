@@ -48,6 +48,7 @@ tvcli -base https://IHRE-VAULT-URL whoami
 tvcli secrets list
 tvcli secrets get -id sec_…
 tvcli secrets create -title "VPN" -username alice
+tvcli secrets update -id sec_… -title "VPN neu" -notes "…"
 ```
 
 Master-Passwort wird bei Bedarf **nur lokal** abgefragt.

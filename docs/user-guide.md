@@ -161,12 +161,14 @@ Nach dem Parsen erscheint eine **Vorschau** — einzelne, mehrere oder alle Eint
 
 ### Export
 
-In der Secrets-Liste Einträge per Checkbox wählen (eines, mehrere, oder **Alle geladenen**). Ohne Auswahl gelten die **sichtbaren** Einträge (aktueller Tag-Filter UND/Suche).
+Über **Aktionen** (⋮) in der Secrets-Liste: Auswahl per Checkbox (einzeln, **Alle sichtbaren** oder **Alle geladenen**). Ohne Auswahl gelten die **sichtbaren** Einträge (aktueller Tag-Filter UND/Suche). Exportformate im gleichen Menü:
 
 - **Export TeamVault** — vollständiges JSON inkl. Extra-Felder
 - **Export Bitwarden** — Login-Subset, unverschlüsselt
 - **Export CSV** — Klartext
 - **Export verschlüsselt** — `.tvbak` mit eigenem Backup-Passwort (Argon2id)
+
+Lange Listen: am Listenende **Weitere laden** (paginiert, 200 Einträge pro Seite).
 
 Im Secret-Detail: **Dieses Secret exportieren**. Bestätigung, weil Klartext auf Disk landet (außer `.tvbak`). Es werden nur Einträge exportiert, die Sie entschlüsseln können — der Server sieht den Klartext nicht.
 

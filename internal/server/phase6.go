@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/teamvault/teamvault/internal/auth/ldapauth"
+	"github.com/teamvault/teamvault/internal/auth/session"
 	"github.com/teamvault/teamvault/internal/bootstrap"
 	"github.com/teamvault/teamvault/internal/configstore"
 	"github.com/teamvault/teamvault/internal/cryptocore"
@@ -20,28 +21,28 @@ import (
 )
 
 func (a *API) registerPhase6(mux *http.ServeMux) {
-	mux.HandleFunc("GET /api/admin/overview", a.requireAuth(a.requireAdmin(a.handleAdminOverview)))
+	mux.HandleFunc("GET /api/admin/overview", a.requireAuth(a.requirePlatformAdmin(a.handleAdminOverview)))
 	mux.HandleFunc("GET /api/admin/ldap", a.requireAuth(a.requireAdmin(a.handleGetLDAP)))
 	mux.HandleFunc("PUT /api/admin/ldap", a.requireAuth(a.requireAdmin(a.handlePutLDAP)))
 	mux.HandleFunc("POST /api/admin/ldap/test", a.requireAuth(a.requireAdmin(a.handleTestLDAP)))
 	mux.HandleFunc("GET /api/admin/ldap/users", a.requireAuth(a.requireAdmin(a.handleLDAPSearchUsers)))
 	mux.HandleFunc("POST /api/admin/ldap/users/import", a.requireAuth(a.requireAdmin(a.handleLDAPImportUsers)))
-	mux.HandleFunc("GET /api/admin/trust", a.requireAuth(a.requireAdmin(a.handleGetTrust)))
-	mux.HandleFunc("PUT /api/admin/trust", a.requireAuth(a.requireAdmin(a.handlePutTrust)))
-	mux.HandleFunc("GET /api/admin/mail", a.requireAuth(a.requireAdmin(a.handleGetMail)))
-	mux.HandleFunc("PUT /api/admin/mail", a.requireAuth(a.requireAdmin(a.handlePutMail)))
-	mux.HandleFunc("POST /api/admin/mail/test", a.requireAuth(a.requireAdmin(a.handleTestMail)))
-	mux.HandleFunc("GET /api/admin/crypto", a.requireAuth(a.requireAdmin(a.handleGetCrypto)))
-	mux.HandleFunc("PUT /api/admin/crypto", a.requireAuth(a.requireAdmin(a.handlePutCrypto)))
-	mux.HandleFunc("GET /api/admin/policy", a.requireAuth(a.requireAdmin(a.handleGetPolicy)))
-	mux.HandleFunc("PUT /api/admin/policy", a.requireAuth(a.requireAdmin(a.handlePutPolicy)))
+	mux.HandleFunc("GET /api/admin/trust", a.requireAuth(a.requirePlatformAdmin(a.handleGetTrust)))
+	mux.HandleFunc("PUT /api/admin/trust", a.requireAuth(a.requirePlatformAdmin(a.handlePutTrust)))
+	mux.HandleFunc("GET /api/admin/mail", a.requireAuth(a.requirePlatformAdmin(a.handleGetMail)))
+	mux.HandleFunc("PUT /api/admin/mail", a.requireAuth(a.requirePlatformAdmin(a.handlePutMail)))
+	mux.HandleFunc("POST /api/admin/mail/test", a.requireAuth(a.requirePlatformAdmin(a.handleTestMail)))
+	mux.HandleFunc("GET /api/admin/crypto", a.requireAuth(a.requirePlatformAdmin(a.handleGetCrypto)))
+	mux.HandleFunc("PUT /api/admin/crypto", a.requireAuth(a.requirePlatformAdmin(a.handlePutCrypto)))
+	mux.HandleFunc("GET /api/admin/policy", a.requireAuth(a.requirePlatformAdmin(a.handleGetPolicy)))
+	mux.HandleFunc("PUT /api/admin/policy", a.requireAuth(a.requirePlatformAdmin(a.handlePutPolicy)))
 	mux.HandleFunc("GET /api/admin/tenants", a.requireAuth(a.requirePlatformAdmin(a.handleListTenants)))
 	mux.HandleFunc("POST /api/admin/tenants", a.requireAuth(a.requirePlatformAdmin(a.handleCreateTenant)))
 	mux.HandleFunc("POST /api/admin/tenants/{id}/disable", a.requireAuth(a.requirePlatformAdmin(a.handleDisableTenant)))
 	mux.HandleFunc("GET /api/admin/audit", a.requireAuth(a.requireAdminOrAuditor(a.handleListAudit)))
-	mux.HandleFunc("GET /api/admin/api-keys", a.requireAuth(a.requireAdmin(a.handleListAPIKeys)))
-	mux.HandleFunc("POST /api/admin/api-keys", a.requireAuth(a.requireAdmin(a.handleCreateAPIKey)))
-	mux.HandleFunc("POST /api/admin/api-keys/{id}/revoke", a.requireAuth(a.requireAdmin(a.handleRevokeAPIKey)))
+	mux.HandleFunc("GET /api/admin/api-keys", a.requireAuth(a.requirePlatformAdmin(a.handleListAPIKeys)))
+	mux.HandleFunc("POST /api/admin/api-keys", a.requireAuth(a.requirePlatformAdmin(a.handleCreateAPIKey)))
+	mux.HandleFunc("POST /api/admin/api-keys/{id}/revoke", a.requireAuth(a.requirePlatformAdmin(a.handleRevokeAPIKey)))
 	mux.HandleFunc("GET /api/admin/storage", a.requireAuth(a.requirePlatformAdmin(a.handleGetStorage)))
 	mux.HandleFunc("POST /api/admin/storage/migrate", a.requireAuth(a.requirePlatformAdmin(a.handleMigrateStorage)))
 	mux.HandleFunc("GET /api/admin/backup", a.requireAuth(a.requirePlatformAdmin(a.handleBackupExport)))
@@ -88,7 +89,14 @@ func (a *API) handleAdminOverview(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) handleGetLDAP(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, instcfg.RedactLDAP(a.bundle().LDAP))
+	sess, _ := a.sessionFrom(r)
+	b := a.bundle()
+	if hasRole(sess.Roles, "platform_admin") {
+		writeJSON(w, http.StatusOK, instcfg.RedactLDAP(b.LDAP))
+		return
+	}
+	cfg := b.WithTrust(b.LDAPForTenant(string(sess.TenantID)))
+	writeJSON(w, http.StatusOK, instcfg.RedactLDAP(cfg))
 }
 
 func (a *API) handlePutLDAP(w http.ResponseWriter, r *http.Request) {
@@ -98,17 +106,80 @@ func (a *API) handlePutLDAP(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	if hasRole(sess.Roles, "platform_admin") {
+		a.putGlobalLDAP(w, r, sess, cfg)
+		return
+	}
+	a.putTenantLDAP(w, r, sess, cfg)
+}
+
+func (a *API) putGlobalLDAP(w http.ResponseWriter, r *http.Request, sess session.Session, cfg ldapauth.Config) {
 	b := a.bundle()
-	// Preserve password if client sent redacted placeholder.
 	if cfg.BindPassword == "***" || cfg.BindPassword == "" {
 		cfg.BindPassword = b.LDAP.BindPassword
 	}
-	cfg.CACertPEM = "" // instance trust store, not per-LDAP
+	cfg.CACertPEM = ""
 	if err := ldapauth.ValidateTLS(cfg); err != nil {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	b.LDAP = cfg
+	if err := a.saveBundle(b); err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if !a.appendAuditStrict(w, r, store.AuditEvent{
+		TenantID: sess.TenantID, ActorID: string(sess.UserID),
+		Action: "admin.ldap.update", ResourceType: "config", ResourceID: "ldap",
+	}) {
+		return
+	}
+	writeJSON(w, http.StatusOK, instcfg.RedactLDAP(cfg))
+}
+
+func (a *API) putTenantLDAP(w http.ResponseWriter, r *http.Request, sess session.Session, cfg ldapauth.Config) {
+	b := a.bundle()
+	tid := string(sess.TenantID)
+	var connID, existingPwd string
+	for _, c := range b.LDAPConnections {
+		if c.TenantID == tid {
+			connID = c.ID
+			existingPwd = c.BindPassword
+			break
+		}
+	}
+	if cfg.BindPassword == "***" || cfg.BindPassword == "" {
+		if existingPwd != "" {
+			cfg.BindPassword = existingPwd
+		} else {
+			cfg.BindPassword = b.LDAP.BindPassword
+		}
+	}
+	cfg.CACertPEM = ""
+	if err := ldapauth.ValidateTLS(cfg); err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if connID == "" {
+		connID = newID("ldap")
+	}
+	conn := instcfg.LDAPConnection{
+		ID:       connID,
+		TenantID: tid,
+		Name:     "default",
+		Config:   cfg,
+	}
+	found := false
+	for i := range b.LDAPConnections {
+		if b.LDAPConnections[i].ID == connID {
+			b.LDAPConnections[i] = conn
+			found = true
+			break
+		}
+	}
+	if !found {
+		b.LDAPConnections = append(b.LDAPConnections, conn)
+	}
 	if err := a.saveBundle(b); err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return

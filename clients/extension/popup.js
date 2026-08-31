@@ -224,12 +224,24 @@ async function fillTab(payload) {
   }
 }
 
+function urlHostsAllowed(it) {
+  const hosts = it.urlHosts || [];
+  const legacy = it.urlHost ? [it.urlHost] : [];
+  const all = hosts.length ? hosts : legacy;
+  if (!all.length) return true;
+  return !!(state.tabHost && all.some((h) => hostsMatch(h, state.tabHost)));
+}
+
 function paintList() {
   const list = document.getElementById("slist");
   const q = (document.getElementById("filter").value || "").trim().toLowerCase();
   const onlyHost = document.getElementById("matchHost").checked;
+  const visFilter = document.getElementById("visFilter").value || "all";
   list.innerHTML = "";
   let rows = state.cache.slice();
+  if (visFilter !== "all") {
+    rows = rows.filter((r) => (r.visibility || "private") === visFilter);
+  }
   if (onlyHost && state.tabHost) {
     rows = rows.filter((r) => (r.urlHosts || []).some((h) => hostsMatch(h, state.tabHost)) || (r.urlHost && hostsMatch(r.urlHost, state.tabHost)));
   }
@@ -251,6 +263,11 @@ function paintList() {
     const span = document.createElement("span");
     span.className = "title";
     span.textContent = it.title || it.id;
+    const vis = (it.visibility || "private") === "shared" ? "shared" : "private";
+    const visBadge = document.createElement("span");
+    visBadge.className = "badge " + vis;
+    visBadge.textContent = vis === "shared" ? "geteilt" : "privat";
+    span.appendChild(visBadge);
     if (it.urlHost) {
       const badge = document.createElement("small");
       badge.textContent = it.urlHost;
@@ -264,11 +281,7 @@ function paintList() {
     fill.textContent = "Fill";
     fill.onclick = async () => {
       try {
-        const hosts = it.urlHosts || [];
-        const legacy = it.urlHost ? [it.urlHost] : [];
-        const all = hosts.length ? hosts : legacy;
-        const match = state.tabHost && all.some((h) => hostsMatch(h, state.tabHost));
-        if (!match) {
+        if (!urlHostsAllowed(it)) {
           showErr("Fill blockiert: Secret-URL passt nicht zum Tab-Host (" + (state.tabHost || "?") + ").");
           return;
         }
@@ -284,11 +297,7 @@ function paintList() {
     copy.textContent = "Copy";
     copy.onclick = async () => {
       try {
-        const hosts = it.urlHosts || [];
-        const legacy = it.urlHost ? [it.urlHost] : [];
-        const all = hosts.length ? hosts : legacy;
-        const match = state.tabHost && all.some((h) => hostsMatch(h, state.tabHost));
-        if (!match) {
+        if (!urlHostsAllowed(it)) {
           showErr("Copy blockiert: Secret-URL passt nicht zum Tab-Host (" + (state.tabHost || "?") + ").");
           return;
         }
@@ -306,13 +315,31 @@ function paintList() {
   }
 }
 
+async function fetchAllSecrets() {
+  const pageSize = 200;
+  const all = [];
+  for (let offset = 0; ; offset += pageSize) {
+    const page = normalizeSecretsList(await apiFetch(`/api/secrets?limit=${pageSize}&offset=${offset}`));
+    all.push(...page.items);
+    if (!page.items.length || all.length >= page.total) break;
+  }
+  return all;
+}
+
 async function refresh() {
   showErr("");
-  const page = normalizeSecretsList(await apiFetch("/api/secrets?limit=200&offset=0"));
+  const items = await fetchAllSecrets();
   const cache = [];
-  for (const it of page.items) {
+  for (const it of items) {
     if (!it.has_access || !it.envelope) continue;
-    const entry = { id: it.id, title: it.id, urlHost: "", urlHosts: [], collection_id: it.collection_id || "" };
+    const entry = {
+      id: it.id,
+      title: it.id,
+      urlHost: "",
+      urlHosts: [],
+      collection_id: it.collection_id || "",
+      visibility: (it.visibility || "private") === "shared" ? "shared" : "private",
+    };
     try {
       const dk = openDK(it.envelope);
       const kv = it.envelope.key_version || it.key_version || 1;
@@ -361,5 +388,6 @@ async function refresh() {
 
 document.getElementById("filter").oninput = () => paintList();
 document.getElementById("matchHost").onchange = () => paintList();
+document.getElementById("visFilter").onchange = () => paintList();
 
 boot().catch((e) => showErr(e.message));

@@ -42,6 +42,7 @@ go run ./cmd/tvcli whoami
 go run ./cmd/tvcli secrets list
 go run ./cmd/tvcli secrets get -id sec_…
 go run ./cmd/tvcli secrets create -title "VPN" -username alice
+go run ./cmd/tvcli secrets update -id sec_… -title "VPN neu" -notes "…"
 go run ./cmd/tvcli secrets create -title "Git" -username git `
   -url https://git.example.local -ssh-private-file .\id_ed25519 -tags infra,git
 go run ./cmd/tvcli secrets create -title "S3" -s3-access AKIA… -s3-secret … `
@@ -52,7 +53,7 @@ $env:TEAMVAULT_API_KEY = "tvk_…"
 go run ./cmd/tvcli whoami
 ```
 
-`secrets create` Flags (Auswahl): `-urls`, `-url` (wiederholbar), `-notes`, `-totp`, `-tags`, `-favorite`, `-folder`, `-ssh-private[-file]`, `-ssh-public[-file]`, `-s3-access`, `-s3-secret`, `-cert[-file]`, `-extra` / `-extra-file` (`type=label:value`). `secrets get` gibt den Payload als JSON aus.
+`secrets create` Flags (Auswahl): `-urls`, `-url` (wiederholbar), `-notes`, `-totp`, `-tags`, `-favorite`, `-folder`, `-visibility private|shared`, `-share-user` / `-share-group` (wiederholbar), `-ssh-private[-file]`, `-ssh-public[-file]`, `-s3-access`, `-s3-secret`, `-cert[-file]`, `-extra` / `-extra-file` (`type=label:value`). `secrets update -id …` ändert nur gesetzte Felder. `secrets list` nutzt paginierte API-Antworten. `secrets get` gibt den Payload als JSON aus.
 
 ## Extension (MV3)
 
@@ -61,7 +62,7 @@ go run ./cmd/tvcli whoami
 1. Extensions → Entwicklermodus → „Entpackt laden“
 2. Ordner `clients/extension` wählen
 3. Server-URL setzen, Login, Master-Passwort → Secrets listen / Passwort kopieren / **Fill**
-4. **Fill** und **Copy** nur, wenn eine Secret-URL zum Tab-Host passt (sonst Block/Warnung)
+4. Filter **Alle / Privat / Geteilt**; Badge zeigt Sichtbarkeit. **Fill** und **Copy**: ohne URL immer; mit URL nur bei Tab-Domain-Match (Phishing-Schutz)
 
 `host_permissions` decken localhost ab. Für HTTPS-Server: optional_host_permissions (`https://*/*`) über die Extension-Details freigeben (oder beim ersten Zugriff erlauben).
 

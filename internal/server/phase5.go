@@ -322,6 +322,10 @@ func (a *API) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, http.StatusBadRequest, "roles required")
 			return
 		}
+		if !actorMayChangeUserRoles(sess.Roles, *u) {
+			writeErr(w, http.StatusForbidden, "cannot modify platform_admin")
+			return
+		}
 		for _, role := range body.Roles {
 			switch role {
 			case "member", "tenant_admin", "platform_admin", "auditor":
