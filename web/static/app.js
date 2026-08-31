@@ -1265,6 +1265,146 @@ function extraSupportsFile(type) {
   return type === "ssh_private_key" || type === "ssh_public_key" || type === "certificate";
 }
 
+function extraAddSelectHtml() {
+  return EXTRA_ADD_OPTIONS.map((o) => `<option value="${o.type}">${o.label}</option>`).join("");
+}
+
+function slotContainerHasType(slotsEl, type) {
+  return !!slotsEl?.querySelector(`[data-slot-type="${type}"]`);
+}
+
+/** Append an extra field row; optional prefill: { id, value, label, favorite }. */
+function addExtraSlot(slotsEl, type, prefill) {
+  const def = EXTRA_ADD_OPTIONS.find((o) => o.type === type);
+  if (!def || !slotsEl) return null;
+  if (def.singleton && slotContainerHasType(slotsEl, type)) {
+    throw new Error(def.label + " ist bereits hinzugefügt");
+  }
+  const pf = prefill && typeof prefill === "object" ? prefill : {};
+  const id = String(pf.id || newExtraId());
+  const row = document.createElement("div");
+  row.className = "extra-slot";
+  row.dataset.slotType = type;
+  row.dataset.slotId = id;
+  const label = def.label;
+  let body = "";
+  if (type === "url") {
+    body = `<label>Website (URL)</label><input type="url" class="slot-val" placeholder="https://…" />`;
+  } else if (type === "totp") {
+    body = `<label>TOTP-Seed (base32 oder otpauth://)</label><input class="slot-val" autocomplete="off" />`;
+  } else if (type === "notes") {
+    body = `<label>Notizen</label><textarea class="slot-val" rows="3"></textarea>`;
+  } else if (type === "tags") {
+    body = `<label>Tags (Komma)</label><input class="slot-val" placeholder="vpn, prod" />`;
+  } else if (type === "favorite") {
+    body = `<label class="inline"><input type="checkbox" class="slot-fav" /> Favorit</label>`;
+  } else if (type === "text" || type === "secret") {
+    const inpType = type === "secret" ? "password" : "text";
+    const lab = String(pf.label || label).replace(/"/g, "&quot;");
+    body = `<label>Bezeichnung</label><input class="slot-label" value="${lab}" />
+      <label>Wert</label><input type="${inpType}" class="slot-val" autocomplete="off" />`;
+  } else {
+    const multiline = isMultilineExtraType(type);
+    const secret = isSecretExtraType(type);
+    body = `<label>${label}</label>`;
+    if (multiline) {
+      body += `<textarea class="slot-val mono" rows="4" autocomplete="off"></textarea>`;
+    } else {
+      body += `<input type="${secret ? "password" : "text"}" class="slot-val" autocomplete="off" />`;
+    }
+    if (extraSupportsFile(type)) {
+      body += `<div class="row gen-row"><input type="file" class="slot-file" accept=".pem,.crt,.cer,.key,.pub,.txt,text/plain" />
+        <span class="hint slot-file-hint"></span></div>`;
+    }
+  }
+  row.innerHTML = body + `<div class="row"><button type="button" class="btn-ghost slot-remove">Entfernen</button></div>`;
+  row.querySelector(".slot-remove").onclick = () => row.remove();
+  const fileInp = row.querySelector(".slot-file");
+  if (fileInp) {
+    fileInp.onchange = async () => {
+      const f = fileInp.files && fileInp.files[0];
+      if (!f) return;
+      const text = await f.text();
+      row.querySelector(".slot-val").value = text;
+      const hint = row.querySelector(".slot-file-hint");
+      if (hint) hint.textContent = f.name + " geladen";
+    };
+  }
+  if (type === "favorite") {
+    const cb = row.querySelector(".slot-fav");
+    if (cb) cb.checked = !!pf.favorite;
+  } else if (pf.value != null && pf.value !== "") {
+    const val = row.querySelector(".slot-val");
+    if (val) val.value = String(pf.value);
+  }
+  slotsEl.appendChild(row);
+  return row;
+}
+
+/** Build payload from core fields + extra slots (same shape as create). */
+function collectPayloadFromSlots(slotsEl, core) {
+  const payload = {
+    username: String(core?.username || ""),
+    password: String(core?.password || ""),
+    urls: [],
+    notes: "",
+    totp_seed: "",
+    tags: [],
+    favorite: false,
+    extra: [],
+  };
+  (slotsEl ? slotsEl.querySelectorAll(".extra-slot") : []).forEach((row) => {
+    const type = row.dataset.slotType;
+    if (type === "url") {
+      const u = (row.querySelector(".slot-val")?.value || "").trim();
+      if (u) payload.urls.push(u);
+      return;
+    }
+    if (type === "totp") {
+      payload.totp_seed = (row.querySelector(".slot-val")?.value || "").trim();
+      return;
+    }
+    if (type === "notes") {
+      payload.notes = row.querySelector(".slot-val")?.value || "";
+      return;
+    }
+    if (type === "tags") {
+      payload.tags = mergeTags(payload.tags, parseTagsInput(row.querySelector(".slot-val")?.value));
+      return;
+    }
+    if (type === "favorite") {
+      payload.favorite = !!row.querySelector(".slot-fav")?.checked;
+      return;
+    }
+    const def = EXTRA_ADD_OPTIONS.find((o) => o.type === type);
+    const labelInp = row.querySelector(".slot-label");
+    const label = (labelInp?.value || def?.label || type).trim() || type;
+    const value = row.querySelector(".slot-val")?.value || "";
+    payload.extra.push({ id: row.dataset.slotId || newExtraId(), type, label, value });
+  });
+  payload.tags = mergeTags(payload.tags, parseTagsInput(core?.tagsInput));
+  return payload;
+}
+
+/** Fill slot container from an existing normalized payload. */
+function hydrateExtraSlots(slotsEl, payload) {
+  if (!slotsEl) return;
+  slotsEl.innerHTML = "";
+  const p = normalizeSecretPayload(payload);
+  for (const u of p.urls) addExtraSlot(slotsEl, "url", { value: u });
+  if (p.totp_seed) addExtraSlot(slotsEl, "totp", { value: p.totp_seed });
+  if (p.notes) addExtraSlot(slotsEl, "notes", { value: p.notes });
+  if (p.favorite) addExtraSlot(slotsEl, "favorite", { favorite: true });
+  for (const e of p.extra) {
+    const known = EXTRA_ADD_OPTIONS.some((o) => o.type === e.type);
+    addExtraSlot(slotsEl, known ? e.type : "text", {
+      id: e.id,
+      label: e.label,
+      value: e.value,
+    });
+  }
+}
+
 function announceA11y(msg) {
   const live = document.getElementById("a11yLive");
   if (!live || !msg) return;
@@ -1439,10 +1579,28 @@ function renderApp(app) {
                   </div>
                   <div id="deditForm" hidden>
                     <label>Titel</label><input id="edtitle" />
-                    <label>Tags</label><input id="edtags" placeholder="storage, prod (Komma)" />
+                    <label>Tags</label><input id="edtags" placeholder="storage, prod (Komma)" autocomplete="off" />
                     <label>Benutzername</label><input id="eduser" autocomplete="off" />
-                    <label>Passwort</label><input id="edpw" type="password" autocomplete="off" />
-                    <label>Notizen</label><textarea id="ednotes" rows="3"></textarea>
+                    <label>Passwort</label>
+                    <div class="row gen-row" style="margin-top:0.35rem">
+                      <input id="edpw" type="password" autocomplete="off" style="flex:1" />
+                      <button class="btn-ghost btn-sm btn-with-ico" type="button" id="edpwShow">${btnLabel("eye", "Anzeigen")}</button>
+                      <button class="btn-ghost btn-sm btn-with-ico" type="button" id="edpwGen">${btnLabel("spark", "Generator")}</button>
+                    </div>
+                    <div class="gen-opts hint">
+                      Länge <input id="edpwLen" type="number" min="12" max="64" value="20" style="width:4rem" />
+                      <label class="inline"><input id="edpwSym" type="checkbox" checked /> Symbole</label>
+                    </div>
+                    <div id="eextraSlots" class="extra-slots"></div>
+                    <div class="row extra-add-row">
+                      <label class="inline">Feld hinzufügen
+                        <select id="eextraAdd">
+                          <option value="">— wählen —</option>
+                          ${extraAddSelectHtml()}
+                        </select>
+                      </label>
+                      <button class="btn-ghost btn-sm" type="button" id="eextraAddBtn">Hinzufügen</button>
+                    </div>
                     <div class="row row-compact">
                       <button class="btn-accent btn-sm" type="button" id="dsave">Speichern</button>
                       <button class="btn-ghost btn-sm" type="button" id="dcancel">Abbrechen</button>
@@ -1502,18 +1660,7 @@ function renderApp(app) {
                   <label class="inline">Feld hinzufügen
                     <select id="sextraAdd">
                       <option value="">— wählen —</option>
-                      <option value="url">Website (URL)</option>
-                      <option value="totp">TOTP-Seed</option>
-                      <option value="notes">Notizen</option>
-                      <option value="tags">Tags</option>
-                      <option value="favorite">Favorit</option>
-                      <option value="ssh_private_key">SSH Private Key</option>
-                      <option value="ssh_public_key">SSH Public Key</option>
-                      <option value="s3_access_key">S3 Access Key</option>
-                      <option value="s3_secret_key">S3 Secret Key</option>
-                      <option value="certificate">Zertifikat (PEM)</option>
-                      <option value="text">Freitext</option>
-                      <option value="secret">Geheimnis (Custom)</option>
+                      ${extraAddSelectHtml()}
                     </select>
                   </label>
                   <button class="btn-ghost" type="button" id="sextraAddBtn">Hinzufügen</button>
@@ -2893,6 +3040,8 @@ function renderApp(app) {
     const dview = n.querySelector("#dview");
     if (editForm) editForm.hidden = true;
     if (dview) dview.hidden = false;
+    const editSlots = n.querySelector("#eextraSlots");
+    if (editSlots) editSlots.innerHTML = "";
     if (!shareEditorOpen) {
       currentSecret = null;
       currentSecretPayload = null;
@@ -2906,13 +3055,41 @@ function renderApp(app) {
     n.querySelector("#deditForm").hidden = true;
     n.querySelector("#dview").hidden = false;
   };
+  n.querySelector("#edpwGen").onclick = () => {
+    const len = Math.min(64, Math.max(12, parseInt(n.querySelector("#edpwLen").value, 10) || 20));
+    const symbols = n.querySelector("#edpwSym").checked;
+    n.querySelector("#edpw").type = "text";
+    n.querySelector("#edpw").value = generatePassword(len, { symbols });
+  };
+  n.querySelector("#edpwShow").onclick = () => {
+    const inp = n.querySelector("#edpw");
+    const show = inp.type === "password";
+    inp.type = show ? "text" : "password";
+    n.querySelector("#edpwShow").innerHTML = btnLabel("eye", show ? "Verbergen" : "Anzeigen");
+  };
+  n.querySelector("#eextraAddBtn").onclick = () => {
+    const err = n.querySelector("#derr");
+    err.hidden = true;
+    try {
+      const type = n.querySelector("#eextraAdd").value;
+      if (!type) throw new Error("Feldtyp wählen");
+      addExtraSlot(n.querySelector("#eextraSlots"), type);
+      n.querySelector("#eextraAdd").value = "";
+    } catch (e) {
+      err.hidden = false;
+      err.textContent = e.message;
+    }
+  };
   n.querySelector("#dedit").onclick = () => {
     if (!currentSecret || !currentSecretPayload) return;
     n.querySelector("#edtitle").value = currentSecretTitle || "";
     n.querySelector("#eduser").value = currentSecretPayload.username || "";
     n.querySelector("#edpw").value = currentSecretPayload.password || "";
+    n.querySelector("#edpw").type = "password";
+    n.querySelector("#edpwShow").innerHTML = btnLabel("eye", "Anzeigen");
     n.querySelector("#edtags").value = (currentSecretPayload.tags || []).join(", ");
-    n.querySelector("#ednotes").value = currentSecretPayload.notes || "";
+    n.querySelector("#eextraAdd").value = "";
+    hydrateExtraSlots(n.querySelector("#eextraSlots"), currentSecretPayload);
     n.querySelector("#dview").hidden = true;
     n.querySelector("#deditForm").hidden = false;
   };
@@ -2922,13 +3099,11 @@ function renderApp(app) {
       if (!currentSecret || !vault.sk) throw new Error("Kein Secret geladen");
       const title = n.querySelector("#edtitle").value.trim();
       if (!title) throw new Error("Titel erforderlich");
-      const payload = normalizeSecretPayload({
-        ...currentSecretPayload,
+      const payload = normalizeSecretPayload(collectPayloadFromSlots(n.querySelector("#eextraSlots"), {
         username: n.querySelector("#eduser").value,
         password: n.querySelector("#edpw").value,
-        tags: n.querySelector("#edtags").value.split(",").map((t) => t.trim()).filter(Boolean),
-        notes: n.querySelector("#ednotes").value,
-      });
+        tagsInput: n.querySelector("#edtags").value,
+      }));
       const kv = currentSecret.key_version;
       const dk = openDKFromEnvelope(currentSecret.envelope);
       const titleEnc = await TVCrypto.encryptTitle(title, dk, kv);
@@ -3112,110 +3287,16 @@ function renderApp(app) {
     n.querySelector("#spwShow").innerHTML = btnLabel("eye", show ? "Verbergen" : "Anzeigen");
   };
 
-  function createSlotHasType(type) {
-    return !!n.querySelector(`#sextraSlots [data-slot-type="${type}"]`);
-  }
-
-  function addCreateSlot(type) {
-    const def = EXTRA_ADD_OPTIONS.find((o) => o.type === type);
-    if (!def) return;
-    if (def.singleton && createSlotHasType(type)) {
-      throw new Error(def.label + " ist bereits hinzugefügt");
-    }
-    const slots = n.querySelector("#sextraSlots");
-    const id = newExtraId();
-    const row = document.createElement("div");
-    row.className = "extra-slot";
-    row.dataset.slotType = type;
-    row.dataset.slotId = id;
-    const label = def.label;
-    let body = "";
-    if (type === "url") {
-      body = `<label>Website (URL)</label><input type="url" class="slot-val" placeholder="https://…" />`;
-    } else if (type === "totp") {
-      body = `<label>TOTP-Seed (base32 oder otpauth://)</label><input class="slot-val" autocomplete="off" />`;
-    } else if (type === "notes") {
-      body = `<label>Notizen</label><textarea class="slot-val" rows="3"></textarea>`;
-    } else if (type === "tags") {
-      body = `<label>Tags (Komma)</label><input class="slot-val" placeholder="vpn, prod" />`;
-    } else if (type === "favorite") {
-      body = `<label class="inline"><input type="checkbox" class="slot-fav" /> Favorit</label>`;
-    } else if (type === "text" || type === "secret") {
-      const inpType = type === "secret" ? "password" : "text";
-      body = `<label>Bezeichnung</label><input class="slot-label" value="${label.replace(/"/g, "&quot;")}" />
-        <label>Wert</label><input type="${inpType}" class="slot-val" autocomplete="off" />`;
-    } else {
-      const multiline = isMultilineExtraType(type);
-      const secret = isSecretExtraType(type);
-      body = `<label>${label}</label>`;
-      if (multiline) {
-        body += `<textarea class="slot-val mono" rows="4" autocomplete="off"></textarea>`;
-      } else {
-        body += `<input type="${secret ? "password" : "text"}" class="slot-val" autocomplete="off" />`;
-      }
-      if (extraSupportsFile(type)) {
-        body += `<div class="row gen-row"><input type="file" class="slot-file" accept=".pem,.crt,.cer,.key,.pub,.txt,text/plain" />
-          <span class="hint slot-file-hint"></span></div>`;
-      }
-    }
-    row.innerHTML = body + `<div class="row"><button type="button" class="btn-ghost slot-remove">Entfernen</button></div>`;
-    row.querySelector(".slot-remove").onclick = () => row.remove();
-    const fileInp = row.querySelector(".slot-file");
-    if (fileInp) {
-      fileInp.onchange = async () => {
-        const f = fileInp.files && fileInp.files[0];
-        if (!f) return;
-        const text = await f.text();
-        row.querySelector(".slot-val").value = text;
-        const hint = row.querySelector(".slot-file-hint");
-        if (hint) hint.textContent = f.name + " geladen";
-      };
-    }
-    slots.appendChild(row);
+  function addCreateSlot(type, prefill) {
+    addExtraSlot(n.querySelector("#sextraSlots"), type, prefill);
   }
 
   function collectCreatePayload() {
-    const payload = {
+    return collectPayloadFromSlots(n.querySelector("#sextraSlots"), {
       username: n.querySelector("#suser").value,
       password: n.querySelector("#spw").value,
-      urls: [],
-      notes: "",
-      totp_seed: "",
-      tags: [],
-      favorite: false,
-      extra: [],
-    };
-    n.querySelectorAll("#sextraSlots .extra-slot").forEach((row) => {
-      const type = row.dataset.slotType;
-      if (type === "url") {
-        const u = (row.querySelector(".slot-val")?.value || "").trim();
-        if (u) payload.urls.push(u);
-        return;
-      }
-      if (type === "totp") {
-        payload.totp_seed = (row.querySelector(".slot-val")?.value || "").trim();
-        return;
-      }
-      if (type === "notes") {
-        payload.notes = row.querySelector(".slot-val")?.value || "";
-        return;
-      }
-      if (type === "tags") {
-        payload.tags = mergeTags(payload.tags, parseTagsInput(row.querySelector(".slot-val")?.value));
-        return;
-      }
-      if (type === "favorite") {
-        payload.favorite = !!row.querySelector(".slot-fav")?.checked;
-        return;
-      }
-      const def = EXTRA_ADD_OPTIONS.find((o) => o.type === type);
-      const labelInp = row.querySelector(".slot-label");
-      const label = (labelInp?.value || def?.label || type).trim() || type;
-      const value = row.querySelector(".slot-val")?.value || "";
-      payload.extra.push({ id: row.dataset.slotId || newExtraId(), type, label, value });
+      tagsInput: n.querySelector("#stagsIn")?.value,
     });
-    payload.tags = mergeTags(payload.tags, parseTagsInput(n.querySelector("#stagsIn")?.value));
-    return payload;
   }
 
   function resetCreateForm() {

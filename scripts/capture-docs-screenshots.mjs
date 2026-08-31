@@ -118,13 +118,30 @@ async function onboardIfNeeded(page) {
   await page.fill("#mpw2", MASTER_PW);
   await shot(page, "onboard.png");
   await page.click("#doOnboard");
-  await page.waitForSelector("#goApp", { timeout: 120000 });
-  if (await page.locator("#kitSaved").isVisible().catch(() => false)) {
-    await shot(page, "onboard-recovery-kit.png");
-    await page.check("#kitSaved");
+  try {
+    await page.waitForFunction(() => {
+      const go = document.querySelector("#goApp");
+      const unlock = document.querySelector("#unlock #mpw");
+      const vault = document.querySelector("#vaultui");
+      const err = document.querySelector("#err");
+      if (go || unlock || vault) return true;
+      if (err && !err.hidden && err.textContent) {
+        throw new Error(err.textContent.trim());
+      }
+      return false;
+    }, null, { timeout: 180000 });
+  } catch (e) {
+    await shot(page, "onboard-error.png", { fullPage: true });
+    throw e;
   }
-  await page.click("#goApp");
-  await page.waitForURL("**/app**");
+  if (await page.locator("#goApp").isVisible().catch(() => false)) {
+    if (await page.locator("#kitSaved").isVisible().catch(() => false)) {
+      await shot(page, "onboard-recovery-kit.png");
+      await page.check("#kitSaved");
+    }
+    await page.click("#goApp");
+    await page.waitForURL("**/app**");
+  }
 }
 
 async function seedSecrets(page) {
@@ -154,6 +171,12 @@ async function seedSecrets(page) {
   await page.fill("#stagsIn", "storage, infra");
   await page.fill("#suser", "pureuser");
   await page.fill("#spw", "demo-storage-pw!");
+  await page.selectOption("#sextraAdd", "url");
+  await page.click("#sextraAddBtn");
+  await page.locator('#sextraSlots [data-slot-type="url"] .slot-val').fill("https://pure.demo.local");
+  await page.selectOption("#sextraAdd", "notes");
+  await page.click("#sextraAddBtn");
+  await page.locator('#sextraSlots [data-slot-type="notes"] .slot-val').fill("Array-Login für Backup-Jobs");
   await page.click("#screate");
   await page.waitForSelector(".secrets-table tbody tr, .secrets-list .list-row, .secret-tile", { timeout: 30000 });
   await page.waitForTimeout(800);
@@ -390,6 +413,13 @@ async function main() {
   await page.waitForSelector("#accessPanel, #accessCurrent", { timeout: 15000 }).catch(() => {});
   await page.waitForTimeout(500);
   await shot(page, "vault-secret-detail.png");
+  await page.click("#dedit");
+  await page.waitForSelector("#deditForm:not([hidden])", { timeout: 10000 });
+  await page.waitForSelector("#eextraSlots .extra-slot", { timeout: 10000 });
+  await page.waitForTimeout(400);
+  await shot(page, "vault-secret-edit.png");
+  await page.click("#dcancel");
+  await page.waitForSelector("#dview:not([hidden])", { timeout: 5000 });
   await page.click("#sdetailClose");
 
   await page.click('[data-nav="admin:recovery"]');

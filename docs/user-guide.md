@@ -110,7 +110,9 @@ Titel und Payload werden vor dem Upload verschlüsselt; der Server speichert nur
 
 In der Liste **Öffnen** — Detail erscheint als **Modal** über der Liste (Schließen mit Button, Backdrop oder **Escape**). Klartext nur im Browser. Felder mit **Kopieren** / **Anzeigen**; Key/Zertifikat zusätzlich **Download**. Live-**TOTP** erscheint, wenn ein Seed hinterlegt ist. Mehrere Websites werden einzeln angezeigt.
 
-**Bearbeiten** im Modal: Titel, Benutzername, Passwort, Tags, Notizen — Speichern verschlüsselt clientseitig (`PUT /api/secrets/{id}`). Bei geteilten Secrets kann jeder mit Envelope speichern.
+**Bearbeiten** im Modal: dieselben Kernfelder wie beim Anlegen (Titel, Tags, Benutzername, Passwort inkl. Generator) sowie **Feld hinzufügen** für Website/URL, TOTP-Seed, Notizen, Favorit, SSH-Keys, S3, Zertifikat, Freitext/Geheimnis. Speichern verschlüsselt clientseitig (`PUT /api/secrets/{id}`). Bei geteilten Secrets kann jeder mit Envelope speichern.
+
+![Secret bearbeiten](images/vault-secret-edit.png)
 
 ![Secret-Detail (Modal)](images/vault-secret-detail.png)
 
