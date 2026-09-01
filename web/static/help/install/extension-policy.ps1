@@ -17,26 +17,48 @@ $pJson = ($policy | ConvertTo-Json -Compress -Depth 5)
 $sJson = ($sources | ConvertTo-Json -Compress)
 
 function Apply-Policy($hive) {
+  $any = $false
   foreach ($browser in @(
     @("$hive\Software\Policies\Google\Chrome", "Chrome"),
     @("$hive\Software\Policies\Microsoft\Edge", "Edge")
   )) {
-    New-Item -Path $browser[0] -Force | Out-Null
-    Set-ItemProperty -Path $browser[0] -Name "ExtensionSettings" -Value $pJson -Type String
-    Set-ItemProperty -Path $browser[0] -Name "ExtensionInstallSources" -Value $sJson -Type String
-    Write-Host "  $($browser[1]): $($browser[0])"
+    try {
+      if (-not (Test-Path -LiteralPath $browser[0])) {
+        New-Item -Path $browser[0] -Force | Out-Null
+      }
+      Set-ItemProperty -Path $browser[0] -Name "ExtensionSettings" -Value $pJson -Type String
+      Set-ItemProperty -Path $browser[0] -Name "ExtensionInstallSources" -Value $sJson -Type String
+      Write-Host "  OK: $($browser[1]) $($browser[0])" -ForegroundColor Green
+      $any = $true
+    } catch {
+      Write-Host "  Fehler $($browser[1]): $($_.Exception.Message)" -ForegroundColor Yellow
+    }
   }
+  return $any
 }
 
 $admin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
   [Security.Principal.WindowsBuiltInRole]::Administrator)
-if ($admin) {
-  Apply-Policy "HKLM:"
-  Write-Host "Richtlinie für alle Benutzer (HKLM) gesetzt." -ForegroundColor Green
-} else {
-  Apply-Policy "HKCU:"
-  Write-Host "Richtlinie nur für Sie (HKCU). Für alle Nutzer: als Administrator ausführen." -ForegroundColor Yellow
-}
-Write-Host ""
+
+Write-Host "TeamVault Extension — IT-Richtlinie" -ForegroundColor Cyan
 Write-Host "Extension-ID: $extId"
-Write-Host "Nutzer: $Base/help/extension → „Extension installieren“"
+Write-Host ""
+
+if ($admin) {
+  if (Apply-Policy "HKLM:") {
+    Write-Host ""
+    Write-Host "Richtlinie für alle Benutzer (HKLM) gesetzt." -ForegroundColor Green
+  } else {
+    throw "Keine Richtlinie konnte geschrieben werden."
+  }
+} else {
+  Write-Host "Nicht als Administrator — versuche nur HKCU …" -ForegroundColor Yellow
+  if (-not (Apply-Policy "HKCU:")) {
+    throw "Schreiben fehlgeschlagen. PowerShell als Administrator ausführen."
+  }
+  Write-Host ""
+  Write-Host "Nur für den aktuellen Benutzer (HKCU). Für alle PCs: als Administrator wiederholen." -ForegroundColor Yellow
+}
+
+Write-Host ""
+Write-Host "Nutzer: Browser neu starten, dann $Base/help/extension → Extension installieren"

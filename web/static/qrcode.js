@@ -211,14 +211,12 @@
   }
 
   function formatBits(mask) {
-    // ECC-M = 00
     const data = (0b00 << 3) | mask;
-    let rem = data << 10;
-    const gen = 0b10100110111;
-    for (let i = 14; i >= 10; i--) {
-      if (((rem >> i) & 1) !== 0) rem ^= gen << (i - 10);
+    let rem = data;
+    for (let i = 0; i < 10; i++) {
+      rem = (rem << 1) ^ ((rem >>> 9) * 0x537);
     }
-    return ((data << 10) | (rem & 0x3ff)) ^ 0b101010000010010;
+    return ((data << 10) | (rem & 0x3ff)) ^ 0x5412;
   }
 
   function drawFormat(m, size, bits) {
@@ -243,7 +241,7 @@
       const bit = (bits >> i) & 1;
       m[positions[i][1]][positions[i][0]] = bit;
     }
-    // second copy: bits 0–7 along top row right, bits 8–14 along left column bottom
+    // Second copy (ISO 18004): bits 0–7 on row 8; bits 8–14 on column 8.
     for (let i = 0; i < 8; i++) m[8][size - 1 - i] = (bits >> i) & 1;
     for (let i = 0; i < 7; i++) m[size - 7 + i][8] = (bits >> (8 + i)) & 1;
   }
@@ -276,7 +274,43 @@
     }
   }
 
-  function encode(text) {
+  function maskPenalty(m, size) {
+    let score = 0;
+    const dark = (x, y) => m[y][x];
+    for (let y = 0; y < size; y++) {
+      let run = 0;
+      let prev = dark(0, y);
+      for (let x = 0; x < size; x++) {
+        const cur = dark(x, y);
+        if (cur === prev) {
+          run++;
+          if (run === 5) score += 3;
+          else if (run > 5) score++;
+        } else {
+          run = 1;
+          prev = cur;
+        }
+      }
+    }
+    for (let x = 0; x < size; x++) {
+      let run = 0;
+      let prev = dark(x, 0);
+      for (let y = 0; y < size; y++) {
+        const cur = dark(x, y);
+        if (cur === prev) {
+          run++;
+          if (run === 5) score += 3;
+          else if (run > 5) score++;
+        } else {
+          run = 1;
+          prev = cur;
+        }
+      }
+    }
+    return score;
+  }
+
+  function encodeWithMask(text, mask) {
     const payload = utf8Bytes(text);
     const ver = pickVersion(payload.length);
     const [size, , , , aligns] = SPEC[ver];
@@ -300,7 +334,6 @@
       }
     }
 
-    // Reserve format areas
     for (let i = 0; i < 9; i++) {
       if (i < size) {
         if (m[8][i] === null) m[8][i] = 0;
@@ -339,13 +372,26 @@
       m[y][x] = codeBits[i] || 0;
     }
 
-    const mask = 0;
     for (const [x, y] of path) {
       if (applyMask(mask, x, y)) m[y][x] ^= 1;
     }
     drawFormat(m, size, formatBits(mask));
     if (ver >= 7) drawVersion(m, size, versionBits(ver));
-    return { m, size, ver };
+    return { m, size, ver, mask };
+  }
+
+  function encode(text) {
+    let best = null;
+    let bestScore = Infinity;
+    for (let mask = 0; mask < 8; mask++) {
+      const cand = encodeWithMask(text, mask);
+      const score = maskPenalty(cand.m, cand.size);
+      if (score < bestScore) {
+        bestScore = score;
+        best = cand;
+      }
+    }
+    return best;
   }
 
   function svg(text, opts) {
@@ -353,17 +399,21 @@
     const px = (opts && opts.size) || 200;
     const quiet = 4;
     const dim = size + quiet * 2;
-    const s = px / dim;
-    let d = "";
+    const modulePx = Math.max(1, Math.floor(px / dim));
+    const w = modulePx * dim;
+    let rects = "";
     for (let y = 0; y < size; y++) {
       for (let x = 0; x < size; x++) {
-        if (m[y][x]) d += `M${(x + quiet) * s},${(y + quiet) * s}h${s}v${s}h${-s}z`;
+        if (!m[y][x]) continue;
+        const ox = (x + quiet) * modulePx;
+        const oy = (y + quiet) * modulePx;
+        rects += `<rect x="${ox}" y="${oy}" width="${modulePx}" height="${modulePx}" fill="#111111"/>`;
       }
     }
     return (
-      `<svg xmlns="http://www.w3.org/2000/svg" width="${px}" height="${px}" viewBox="0 0 ${px} ${px}" role="img" aria-label="QR-Code">` +
+      `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${w}" viewBox="0 0 ${w} ${w}" role="img" aria-label="QR-Code">` +
       `<rect width="100%" height="100%" fill="#ffffff"/>` +
-      `<path fill="#111111" d="${d}"/></svg>`
+      `${rects}</svg>`
     );
   }
 

@@ -439,7 +439,9 @@ Sessions, Login-Rate-Limits und Passkey-Challenges liegen **im Prozessspeicher**
 
 ### Screenshots aktualisieren (Maintainer)
 
-Dokumentations-Screenshots liegen unter `docs/images/`. Neu erzeugen (Playwright + lokaler Dev-Server mit aktuellem `web/static`):
+Dokumentations-Screenshots liegen unter `docs/images/` (Spiegel: `web/static/help/img/`). Neu erzeugen (Playwright + lokaler Dev-Server mit aktuellem `web/static`):
+
+**Hinweis:** CLI- und Extension-Hilfeseiten zeigen keine Vollseiten-Screenshots mehr (vermeidet verschachtelte „Hilfe-in-Hilfe“-Bilder). Stattdessen interaktive Download-Widgets auf `/help/cli` und `/help/extension`; für Markdown-Guides wird `account-clients.png` (Ausschnitt **Konto → Clients**) erzeugt.
 
 ```bash
 ./scripts/capture-docs-screenshots.sh

@@ -91,31 +91,43 @@
       plat === "windows" ? data.install.extension_user_ps || data.install.extension_windows : data.install.extension_unix;
     root.innerHTML = `
       <div class="help-install-steps">
-        <p><strong>Schritt 1</strong> — Einmalig Einrichtung (automatisch):</p>
+        <p class="help-note warn"><strong>Wichtig:</strong> Chrome/Edge installieren <code>.crx</code> nur, wenn eine Browser-Richtlinie gesetzt ist (Schritt&nbsp;1). Ohne Richtlinie wird die Datei nur heruntergeladen — das ist erwartetes Browser-Verhalten, kein Fehler der Datei.</p>
+        <p><strong>Schritt 1</strong> — Einmalig Einrichtung (Browser-Richtlinie):</p>
         <div class="help-actions">
-          <button type="button" class="btn-accent" id="extUserInstallBtn">Einrichtung starten</button>
-          <button type="button" class="btn-ghost" data-copy-target="extInstallSnippet">Einzeiler kopieren</button>
+          <button type="button" class="btn-accent" id="extUserInstallBtn">Einzeiler kopieren</button>
         </div>
         <code class="onedliner" id="extInstallSnippet"></code>
-        <p class="hint">IT kann alternativ <a href="#it-policy">Richtlinie für alle PCs</a> ausrollen.</p>
-        <p><strong>Schritt 2</strong> — Extension installieren (wie aus dem Store):</p>
+        <p class="hint">PowerShell öffnen, einfügen, Enter. Bei <em>Registrierungszugriff verweigert</em>: IT muss Schritt&nbsp;1 zentral ausrollen (siehe unten) oder <a href="#fallback">Entwicklermodus</a>.</p>
+        <p><strong>Schritt 2</strong> — Extension installieren (nach erfolgreichem Schritt&nbsp;1 + Browser-Neustart):</p>
         <div class="help-actions">
           <a class="btn-accent" id="extCrxInstall" href="${crxUrl}">Extension installieren</a>
           <span class="hint">${fmtBytes(crx.size)} · ID <code>${ext.id || "—"}</code></span>
         </div>
-        <p class="hint">Chrome/Edge zeigen einen Installationsdialog — kein Entwicklermodus nötig, wenn Schritt 1 ausgeführt wurde.</p>
         <details class="help-dl-more" id="it-policy">
-          <summary>Für IT: Richtlinie für alle Nutzer</summary>
-          <p class="hint">Einmalig als Administrator (GPO/Intune möglich):</p>
+          <summary>Für IT: Richtlinie für alle Nutzer (Registry/GPO)</summary>
+          <p class="hint">Wenn Endanwender <code>HKCU\\Software\\Policies</code> nicht schreiben dürfen — einmalig als Administrator:</p>
           <code class="onedliner" id="extPolicySnippet"></code>
           <div class="help-actions">
             <button type="button" class="btn-ghost" data-copy-target="extPolicySnippet">IT-Einzeiler kopieren</button>
           </div>
+          <p class="hint">Alternativ GPO/Intune mit JSON-Vorlagen:</p>
+          <ul class="help-dl-list">
+            <li><a href="${absUrl(ext.policy_url || "/downloads/extension/chrome-policy.json")}" download>chrome-policy.json</a></li>
+            <li><a href="${absUrl(ext.install_sources_url || "/downloads/extension/chrome-install-sources.json")}" download>chrome-install-sources.json</a></li>
+          </ul>
+        </details>
+        <details class="help-dl-more" id="firefox">
+          <summary>Firefox</summary>
+          <p>TeamVault ist nicht im Mozilla-Store. Optionen:</p>
+          <ol class="help-steps-compact">
+            <li><strong>Test / einzelner PC:</strong> ZIP entpacken → <code>about:debugging#/runtime/this-firefox</code> → <em>Temporäres Add-on laden</em> → <code>manifest.json</code> (bis Browser-Neustart).</li>
+            <li><strong>Firma (dauerhaft):</strong> IT verteilt <a href="${ext.xpi ? absUrl(ext.xpi.url) : "#"}" ${ext.xpi ? "download" : ""}>teamvault-extension.xpi</a> per Firefox-<code>policies.json</code> (<a href="${absUrl("/downloads/extension/firefox-policy.json")}" download>Vorlage</a>, Add-on-ID <code>teamvault@local</code>).</li>
+          </ol>
         </details>
         <details class="help-dl-more">
-          <summary>Erweitert: ZIP / Firefox</summary>
+          <summary>Erweitert: ZIP / Entwicklermodus (Chrome)</summary>
           <p>ZIP (manuell entpacken): ${ext.zip ? `<a href="${absUrl(ext.zip.url)}" download>teamvault-extension.zip</a>` : "—"}</p>
-          <p>Firefox: XPI über Unternehmensrichtlinie oder temporär über about:debugging.</p>
+          <p>Einzeiler: <code class="inline-code">extension.ps1</code> — siehe Abschnitt <a href="#fallback">Fallback</a>.</p>
         </details>
       </div>`;
     const snip = root.querySelector("#extInstallSnippet");

@@ -21,6 +21,7 @@ var BundledArtifactNames = []string{
 	"extension/version.txt",
 	"extension/chrome-policy.json",
 	"extension/chrome-install-sources.json",
+	"extension/firefox-policy.json",
 }
 
 // Artifact describes one downloadable client file.
@@ -169,10 +170,6 @@ func BuildManifest(dir, publicBase string) Manifest {
 		UpdateURL:         updatePath,
 		PolicyURL:         "/downloads/extension/chrome-policy.json",
 		InstallSourcesURL: "/downloads/extension/chrome-install-sources.json",
-	}
-	if publicBase != "" {
-		// Full update URL for policy scripts / external tools.
-		_ = publicBase + updatePath
 	}
 	m.Install.CLIWindows = `$env:TEAMVAULT_URL='` + publicBase + `'; irm "$env:TEAMVAULT_URL/help/install/tvcli.ps1" | iex`
 	m.Install.CLIUnix = `curl -fsSL "` + publicBase + `/help/install/tvcli.sh" | TEAMVAULT_URL="` + publicBase + `" bash`

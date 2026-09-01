@@ -1041,6 +1041,7 @@ body.admin-modal-open { overflow: hidden; }
 .share-row .btn-sm { flex-shrink: 0; }
 .secrets-table .st-groups { color: var(--color-hint); }
 .secrets-table .st-share { width: 2.5rem; text-align: center; }
+.secrets-table .st-copy { width: auto; white-space: nowrap; }
 .secrets-table .st-act { text-align: right; white-space: nowrap; }
 .secrets-table .st-fav .fav-ico { width: 0.95rem; height: 0.95rem; color: var(--color-accent); }
 
@@ -1099,7 +1100,26 @@ body.admin-modal-open { overflow: hidden; }
   font-size: 0.8rem;
 }
 .secret-tile-tags { min-height: 1.25rem; }
+.secret-tile .sec-copy-actions { flex-wrap: wrap; }
 .secret-tile .btn-with-ico { align-self: flex-start; margin-top: auto; }
+
+.sec-copy-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  flex-shrink: 0;
+}
+.btn-icon-sm {
+  width: 2rem;
+  height: 2rem;
+  min-height: 2rem;
+}
+.btn-icon-sm .ico { width: 1rem; height: 1rem; }
+.btn-icon.sec-copy-btn.copied {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+.list-row .sec-copy-actions { flex-shrink: 0; }
 
 .secret-fields {
   display: flex;

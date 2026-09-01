@@ -453,6 +453,17 @@ function flashCopy(btn) {
   setTimeout(() => { btn.innerHTML = prev; btn.classList.remove("copied"); }, 1200);
 }
 
+function flashCopyIcon(btn) {
+  if (!btn) return;
+  btn.classList.add("copied");
+  const prev = btn.getAttribute("aria-label");
+  btn.setAttribute("aria-label", "Kopiert");
+  setTimeout(() => {
+    btn.classList.remove("copied");
+    if (prev) btn.setAttribute("aria-label", prev);
+  }, 1200);
+}
+
 async function mapPool(items, concurrency, fn) {
   const results = new Array(items.length);
   let next = 0;
@@ -2615,12 +2626,12 @@ function renderApp(app) {
       <div class="client-dl-card">
         <h4>Browser-Extension</h4>
         ${crx
-          ? `<p class="hint">Zuerst Einrichtung, dann normal installieren (ohne Entwicklermodus).</p>
+          ? `<p class="hint warn-text">Schritt 1: Browser-Richtlinie per PowerShell (siehe Hilfe). Ohne Richtlinie wird nur die .crx heruntergeladen.</p>
              <div class="row">
                <button type="button" class="btn-ghost btn-sm" id="extInstallCopy">Einrichtung (Einzeiler)</button>
                <a class="btn-accent" href="${tvPath(crx.url)}" id="extCrxBtn">Extension installieren</a>
              </div>
-             <p class="hint">Extension-ID: <code>${ext.id || "—"}</code> · <a href="${tvPath("/help/extension")}" target="_blank" rel="noopener">Anleitung</a></p>`
+             <p class="hint">Extension-ID: <code>${ext.id || "—"}</code> · <a href="${tvPath("/help/extension")}" target="_blank" rel="noopener">Anleitung</a> · <a href="${tvPath("/help/extension")}#fallback">Entwicklermodus</a></p>`
           : `<p class="hint">Extension noch nicht bereitgestellt.</p>`}
       </div>`;
     const cliBtn = root.querySelector("#cliInstallCopy");
@@ -2640,7 +2651,15 @@ function renderApp(app) {
     const otpUrl = res.otpauth_url || "";
     n.querySelector("#otpurl").textContent = otpUrl;
     const qr = n.querySelector("#otpQr");
-    if (otpUrl && globalThis.TVQR) TVQR.mount(qr, otpUrl, { size: 200 });
+    if (res.qr_data_url && qr) {
+      const img = document.createElement("img");
+      img.src = res.qr_data_url;
+      img.width = 200;
+      img.height = 200;
+      img.alt = "TOTP QR-Code";
+      qr.replaceChildren(img);
+      qr.hidden = false;
+    } else if (otpUrl && globalThis.TVQR) TVQR.mount(qr, otpUrl, { size: 200 });
     else if (qr) {
       qr.innerHTML = `<p class="hint">QR nicht verfügbar — bitte otpauth-URL kopieren.</p>`;
       qr.hidden = false;
@@ -3833,20 +3852,108 @@ function renderApp(app) {
       .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   }
 
+  function extraCopyIcon(type) {
+    switch (type) {
+      case "ssh_private_key":
+      case "ssh_public_key":
+        return "key";
+      case "s3_access_key":
+      case "s3_secret_key":
+        return "shield";
+      case "certificate":
+        return "cert";
+      case "totp":
+        return "rotate";
+      case "url":
+        return "open";
+      case "notes":
+      case "text":
+        return "clipboard";
+      default:
+        return "copy";
+    }
+  }
+
+  function buildCopyShortcuts(payload) {
+    const out = [];
+    if ((payload.username || "").trim()) {
+      out.push({ id: "username", label: "Benutzer", icon: "user" });
+    }
+    if ((payload.password || "").trim()) {
+      out.push({ id: "password", label: "Passwort", icon: "lock" });
+    }
+    if (payload.totp_seed) {
+      out.push({ id: "totp_seed", label: "TOTP-Seed", icon: "rotate" });
+    }
+    (payload.urls || []).forEach((url, i) => {
+      if ((url || "").trim()) {
+        out.push({
+          id: `url:${i}`,
+          label: payload.urls.length > 1 ? `Website ${i + 1}` : "Website",
+          icon: "open",
+        });
+      }
+    });
+    if ((payload.notes || "").trim()) {
+      out.push({ id: "notes", label: "Notizen", icon: "clipboard" });
+    }
+    (payload.extra || []).forEach((ex) => {
+      if (!(ex.value || "").trim()) return;
+      out.push({
+        id: `extra:${ex.id}`,
+        label: ex.label || ex.type || "Feld",
+        icon: extraCopyIcon(ex.type),
+      });
+    });
+    return out;
+  }
+
+  function payloadFieldValue(payload, fieldId) {
+    if (fieldId === "username") return payload.username || "";
+    if (fieldId === "password") return payload.password || "";
+    if (fieldId === "totp_seed") return payload.totp_seed || "";
+    if (fieldId === "notes") return payload.notes || "";
+    if (fieldId.startsWith("url:")) {
+      const i = parseInt(fieldId.slice(4), 10);
+      return (payload.urls || [])[i] || "";
+    }
+    if (fieldId.startsWith("extra:")) {
+      const id = fieldId.slice(6);
+      const ex = (payload.extra || []).find((e) => e.id === id);
+      return ex?.value || "";
+    }
+    return "";
+  }
+
+  async function loadSecretPayload(it) {
+    if (it._payload) return it._payload;
+    if (!it.has_access || !vault.sk) throw new Error("Kein Zugriff");
+    let det;
+    if (vault.offlineMode && vault.offlineSnapshot) {
+      det = (vault.offlineSnapshot.secrets || []).find((s) => s.id === it.id);
+      if (!det) throw new Error("Secret nicht in Offline-Kopie");
+    } else {
+      det = await api("/api/secrets/" + it.id);
+    }
+    const dk = openDKFromEnvelope(det.envelope);
+    const kv = det.key_version || (det.envelope && det.envelope.key_version) || 1;
+    const pt = await TVCrypto.decryptPayload(
+      TVCrypto.b64dec(det.ciphertext_b64),
+      TVCrypto.b64dec(det.nonce_b64),
+      dk, kv
+    );
+    dk.fill(0);
+    const payload = normalizeSecretPayload(JSON.parse(new TextDecoder().decode(pt)));
+    it._payload = payload;
+    it._copyShortcuts = buildCopyShortcuts(payload);
+    return payload;
+  }
+
   async function enrichSecretMeta(it) {
     if (it._metaLoaded) return;
     if (!it.has_access || !it.envelope || !vault.sk) return;
     try {
-      const det = await api("/api/secrets/" + it.id);
-      const dk = openDKFromEnvelope(det.envelope);
-      const kv = det.key_version || it.envelope.key_version || 1;
-      const pt = await TVCrypto.decryptPayload(
-        TVCrypto.b64dec(det.ciphertext_b64),
-        TVCrypto.b64dec(det.nonce_b64),
-        dk, kv
-      );
-      dk.fill(0);
-      const payload = normalizeSecretPayload(JSON.parse(new TextDecoder().decode(pt)));
+      const payload = await loadSecretPayload(it);
       it._username = payload.username || "";
       it._tags = payload.tags || [];
       it._favorite = !!payload.favorite;
@@ -3857,8 +3964,45 @@ function renderApp(app) {
       it._tags = [];
       it._favorite = false;
       it._url = "";
+      it._copyShortcuts = [];
       it._metaLoaded = true;
     }
+  }
+
+  function copyShortcutButtonsHtml(it) {
+    if (!it.has_access) return "";
+    const shortcuts = it._copyShortcuts || [];
+    if (!shortcuts.length) return "";
+    return `<span class="sec-copy-actions" role="group" aria-label="Schnell kopieren">${
+      shortcuts.map((s) =>
+        `<button type="button" class="btn-icon btn-icon-sm sec-copy-btn" data-copy-secret="${escHtml(it.id)}" data-copy-field="${escHtml(s.id)}" title="${escHtml(s.label)} kopieren" aria-label="${escHtml(s.label)} kopieren">${icon(s.icon)}</button>`
+      ).join("")
+    }</span>`;
+  }
+
+  function bindSecretCopyButtons(root) {
+    root.querySelectorAll("[data-copy-secret]").forEach((btn) => {
+      btn.onclick = async (ev) => {
+        ev.stopPropagation();
+        ev.preventDefault();
+        const secretId = btn.dataset.copySecret;
+        const fieldId = btn.dataset.copyField;
+        const it = vault.secretsCache.find((s) => s.id === secretId);
+        if (!it) return;
+        try {
+          btn.disabled = true;
+          const payload = await loadSecretPayload(it);
+          const val = payloadFieldValue(payload, fieldId);
+          if (!val) return;
+          await copyText(val);
+          flashCopyIcon(btn);
+        } catch (e) {
+          alert(e.message || String(e));
+        } finally {
+          btn.disabled = false;
+        }
+      };
+    });
   }
 
   function secretTitleLabel(it) {
@@ -3935,8 +4079,8 @@ function renderApp(app) {
     } else if (vault.viewMode === "table") {
       const sharedView = vault.ownershipFilter === "shared";
       const head = sharedView
-        ? `<th class="st-check"></th><th>Titel</th><th>Benutzer</th><th>Tags</th><th>Angelegt von</th><th>User</th><th>Gruppen</th><th class="st-share" title="Zugriff"> </th><th></th><th></th>`
-        : `<th class="st-check"></th><th>Titel</th><th>Benutzer</th><th>Tags</th><th class="st-share" title="Teilen"> </th><th></th><th></th>`;
+        ? `<th class="st-check"></th><th>Titel</th><th>Benutzer</th><th>Tags</th><th>Angelegt von</th><th>User</th><th>Gruppen</th><th class="st-share" title="Zugriff"> </th><th class="st-copy" title="Kopieren"> </th><th></th><th></th>`
+        : `<th class="st-check"></th><th>Titel</th><th>Benutzer</th><th>Tags</th><th class="st-share" title="Teilen"> </th><th class="st-copy" title="Kopieren"> </th><th></th><th></th>`;
       const table = el(`<table class="secrets-table"><thead><tr>${head}</tr></thead><tbody></tbody></table>`);
       const tbody = table.querySelector("tbody");
       for (const it of visible) {
@@ -3951,6 +4095,7 @@ function renderApp(app) {
             <td class="st-users muted">${escHtml((it.shared_users || []).join(", ") || "—")}</td>
             <td class="st-groups muted">${escHtml((it.shared_groups || []).join(", ") || "—")}</td>
             <td class="st-share">${shareBadgeButton(it)}</td>
+            <td class="st-copy">${copyShortcutButtonsHtml(it)}</td>
             <td class="st-fav">${it._favorite ? icon("star", "fav-ico") : ""}</td>
             <td class="st-act"><button type="button" class="btn-ghost btn-with-ico btn-sm">${btnLabel("open", "Öffnen")}</button></td>
           </tr>`);
@@ -3961,6 +4106,7 @@ function renderApp(app) {
             <td class="st-user">${escHtml(it._username || "—")}</td>
             <td class="st-tags"></td>
             <td class="st-share">${shareBadgeButton(it)}</td>
+            <td class="st-copy">${copyShortcutButtonsHtml(it)}</td>
             <td class="st-fav">${it._favorite ? icon("star", "fav-ico") : ""}</td>
             <td class="st-act"><button type="button" class="btn-ghost btn-with-ico btn-sm">${btnLabel("open", "Öffnen")}</button></td>
           </tr>`);
@@ -3978,6 +4124,7 @@ function renderApp(app) {
         tbody.appendChild(tr);
       }
       bindShareBadge(table);
+      bindSecretCopyButtons(table);
       list.appendChild(table);
     } else if (vault.viewMode === "tiles") {
       const grid = el(`<div class="secrets-tiles"></div>`);
@@ -3992,6 +4139,7 @@ function renderApp(app) {
           <h3 class="secret-tile-title"></h3>
           <p class="secret-tile-meta hint"></p>
           <div class="secret-tile-tags"></div>
+          ${copyShortcutButtonsHtml(it)}
           <button type="button" class="btn-ghost btn-with-ico btn-sm">${btnLabel("open", "Öffnen")}</button>
         </article>`);
         bindSecretCheckbox(tile.querySelector(".sec-check"), it.id);
@@ -4009,6 +4157,7 @@ function renderApp(app) {
         grid.appendChild(tile);
       }
       bindShareBadge(grid);
+      bindSecretCopyButtons(grid);
       list.appendChild(grid);
     } else {
       for (const it of visible) {
@@ -4016,6 +4165,7 @@ function renderApp(app) {
           <input type="checkbox" class="sec-check" ${it.has_access ? "" : "disabled"} />
           <span class="list-row-main"></span>
           ${shareBadgeButton(it)}
+          ${copyShortcutButtonsHtml(it)}
           <button class="btn-ghost btn-with-ico" type="button">${btnLabel("open", "Öffnen")}</button>
         </div>`);
         bindSecretCheckbox(row.querySelector(".sec-check"), it.id);
@@ -4035,6 +4185,7 @@ function renderApp(app) {
         list.appendChild(row);
       }
       bindShareBadge(list);
+      bindSecretCopyButtons(list);
     }
 
     updateTagOptions();

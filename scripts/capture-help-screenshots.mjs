@@ -17,10 +17,20 @@ if (process.env.TV_BROWSER_EXECUTABLE) launchOpts.executablePath = process.env.T
 const browser = await chromium.launch(launchOpts);
 const page = await browser.newPage({ viewport: { width: 1360, height: 900 }, locale: "de-DE" });
 
-async function shot(file) {
+async function shot(file, opts = {}) {
   const p = path.join(OUT, file);
-  await page.screenshot({ path: p, fullPage: true });
+  await page.screenshot({ path: p, fullPage: opts.fullPage ?? true });
   console.log("→", file);
+}
+
+async function shotElement(selector, file) {
+  const el = page.locator(selector).first();
+  await el.waitFor({ state: "visible", timeout: 20000 });
+  await el.scrollIntoViewIfNeeded();
+  await page.waitForTimeout(300);
+  const p = path.join(OUT, file);
+  await el.screenshot({ path: p });
+  console.log("→", file, `(element ${selector})`);
 }
 
 await page.goto(`${BASE}/help`);
@@ -36,10 +46,12 @@ await page.waitForSelector("#demoQr svg", { timeout: 15000 });
 await shot("help-account.png");
 
 await page.goto(`${BASE}/help/cli`);
-await shot("help-cli.png");
+await page.waitForSelector("#clientDlCli .help-actions, #clientDlCli .help-note", { timeout: 15000 }).catch(() => {});
+await shotElement("#clientDlCli", "help-cli.png");
 
 await page.goto(`${BASE}/help/extension`);
-await shot("help-extension.png");
+await page.waitForSelector("#clientDlExt .help-install-steps, #clientDlExt .help-note", { timeout: 15000 }).catch(() => {});
+await shotElement("#clientDlExt", "help-extension.png");
 
 for (const f of ["help.png", "help-vault.png", "help-account.png", "help-cli.png", "help-extension.png"]) {
   fs.copyFileSync(path.join(OUT, f), path.join(HELP, f));

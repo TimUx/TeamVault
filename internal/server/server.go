@@ -1,10 +1,12 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"image/png"
 	"io"
 	"net"
 	"net/http"
@@ -734,9 +736,16 @@ func (a *API) handleTOTPSetup(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{
+	out := map[string]string{
 		"secret": key.Secret(), "otpauth_url": key.URL(),
-	})
+	}
+	if img, err := key.Image(200, 200); err == nil {
+		var buf bytes.Buffer
+		if err := png.Encode(&buf, img); err == nil {
+			out["qr_data_url"] = "data:image/png;base64," + base64.StdEncoding.EncodeToString(buf.Bytes())
+		}
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 func (a *API) handleTOTPEnable(w http.ResponseWriter, r *http.Request) {

@@ -2,20 +2,22 @@
 
 Step-by-step für Endanwender. Interaktive Fassung: **`/help/extension`** auf Ihrer Instanz.
 
-![Hilfe Extension](images/help-extension.png)
+![Konto → Clients](images/account-clients.png)
 
 ## Installation (normal, empfohlen)
 
-Ohne Entwicklermodus: einmal kurz einrichten, danach wie aus dem Browser-Store installieren.
+Ohne Entwicklermodus — aber **nur mit Browser-Richtlinie**. Chrome/Edge installieren `.crx` nicht aus dem Download-Ordner; der Installationsdialog erscheint nur, wenn `ExtensionSettings` und `ExtensionInstallSources` gesetzt sind.
 
 1. **`/help/extension`** oder **Konto → Clients** öffnen.
-2. **Schritt 1 — Einrichtung:** PowerShell-Einzeiler ausführen (setzt Browser-Richtlinie für Ihren Benutzer):
+2. **Schritt 1 — Einrichtung:** PowerShell-Einzeiler (setzt Richtlinie unter HKCU):
 
 ```powershell
 $env:TEAMVAULT_URL='https://IHRE-VAULT-URL'; irm "$env:TEAMVAULT_URL/help/install/extension-user.ps1" | iex
 ```
 
-3. **Schritt 2 — Installieren:** Auf **Extension installieren** klicken (lädt `.crx` von `/downloads/`). Chrome/Edge zeigen den üblichen Installationsdialog.
+**Fehler „Registrierungszugriff unzulässig“:** Ihre Firmen-GPO blockiert `HKCU\Software\Policies`. → IT muss Schritt 1 zentral ausführen (siehe unten) oder Sie nutzen [Entwicklermodus](#erweitert-entwicklermodus-fallback).
+
+3. **Schritt 2 — Installieren:** Chrome/Edge **neu starten**, dann **Extension installieren** klicken. Erst jetzt erscheint der Installationsdialog.
 
 **IT (alle PCs):** Einmalig als Administrator:
 
@@ -23,7 +25,7 @@ $env:TEAMVAULT_URL='https://IHRE-VAULT-URL'; irm "$env:TEAMVAULT_URL/help/instal
 $env:TEAMVAULT_URL='https://IHRE-VAULT-URL'; irm "$env:TEAMVAULT_URL/help/install/extension-policy.ps1" | iex
 ```
 
-Richtlinien-Vorlagen liegen auch unter `/downloads/extension/chrome-policy.json` und `chrome-install-sources.json`.
+Richtlinien-Vorlagen: `/downloads/extension/chrome-policy.json`, `chrome-install-sources.json`.
 
 ### Wenn PowerShell blockiert ist (Antimalware / Firmenrichtlinie)
 
@@ -45,7 +47,24 @@ Wenn auch das blockiert wird: **IT** rollt die Vorlagen von `/downloads/extensio
 curl -fsSL "https://IHRE-VAULT-URL/help/install/extension-user.sh" | TEAMVAULT_URL="https://IHRE-VAULT-URL" bash
 ```
 
-Chrome/Edge unter Linux benötigen ebenfalls IT-Richtlinien. Firefox: XPI über `policies.json` oder temporär `about:debugging`.
+Chrome/Edge unter Linux benötigen ebenfalls IT-Richtlinien.
+
+## Firefox
+
+TeamVault ist nicht im Mozilla-Add-on-Store (internes, selbst gehostetes Add-on, ID `teamvault@local`).
+
+### Temporär (ein PC, Test)
+
+1. `teamvault-extension.zip` von `/downloads/` entpacken.
+2. `about:debugging#/runtime/this-firefox` → **Temporäres Add-on laden** → `manifest.json` im Ordner wählen.
+3. Gilt bis zum nächsten Firefox-Neustart.
+
+### Dauerhaft (Unternehmen)
+
+IT legt eine Firefox-[`policies.json`](https://mozilla.github.io/policy-templates/) ab, z. B. mit Vorlage `/downloads/extension/firefox-policy.json`:
+
+- `Extensions.Install` → URL zu `https://IHRE-VAULT-URL/downloads/teamvault-extension.xpi`
+- oft zusätzlich `xpinstall.signatures.required` = `false` (nur Enterprise-Policies)
 
 ## Erweitert: Entwicklermodus (Fallback)
 

@@ -69,6 +69,9 @@ func TestOnboardAndTOTP(t *testing.T) {
 	if secret == "" {
 		t.Fatal(setup)
 	}
+	if qr, _ := setup["qr_data_url"].(string); qr == "" || len(qr) < 64 {
+		t.Fatalf("missing qr_data_url: %v", setup)
+	}
 	// enable with a code — generate via totp lib in test by validating roundtrip through enable may fail timing
 	// Skip enable if we can't generate; instead verify setup stored
 	keys := getJSONCookie(t, ts.URL+"/api/vault/keys", jar)

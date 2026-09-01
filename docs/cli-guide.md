@@ -2,7 +2,7 @@
 
 Step-by-step für Endanwender. Interaktive Fassung auf der laufenden Instanz: **`/help/cli`**.
 
-![Hilfe CLI](images/help-cli.png)
+![Konto → Clients](images/account-clients.png)
 
 ## Installation
 

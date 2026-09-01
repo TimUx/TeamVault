@@ -28,16 +28,25 @@
           <a href="#fallback">Fallback</a>
           <a href="#nutzen">Nutzen</a>
         </nav>
-        <figure class="help-figure">
-          <img src="/help/img/help-extension.png" alt="Extension-Hilfe: normale Installation" width="1100" height="720" loading="lazy" />
-          <figcaption>Einrichtung und „Extension installieren“ — ohne Entwicklermodus</figcaption>
-        </figure>
 
         <h2 id="install">Installation</h2>
+        <div class="help-step help-step-warn">
+          <h3>Voraussetzung Chrome / Edge</h3>
+          <p>Die normale Installation braucht eine <strong>Browser-Richtlinie</strong> (<code>ExtensionSettings</code> + <code>ExtensionInstallSources</code>). Ohne diese Richtlinie lädt der Browser die <code>.crx</code> nur herunter — er installiert sie nicht.</p>
+          <p>In Firmenumgebungen blockiert die GPO oft Schreibzugriff auf <code>HKCU\Software\Policies</code>. Dann muss die <strong>IT</strong> die Richtlinie zentral setzen (HKLM/GPO/Intune) oder Sie nutzen den <a href="#fallback">Entwicklermodus</a>.</p>
+        </div>
         <div class="help-step">
           <h3>Normal installieren (empfohlen)</h3>
-          <p>Kein Entwicklermodus: einmal kurz einrichten, danach wie aus dem Browser-Store installieren.</p>
+          <p>Einmal Einrichtung, Browser neu starten, dann installieren — ohne Entwicklermodus.</p>
           <div id="clientDlExt"></div>
+        </div>
+        <div class="help-step" id="firefox">
+          <h3>Firefox</h3>
+          <p>TeamVault liegt nicht im Mozilla-Add-on-Store. Zwei Wege:</p>
+          <ol>
+            <li><strong>Temporär (Test):</strong> ZIP entpacken (<a href="/downloads/teamvault-extension.zip">teamvault-extension.zip</a>) → <code>about:debugging#/runtime/this-firefox</code> → <em>Temporäres Add-on laden</em> → <code>manifest.json</code> im entpackten Ordner. Gilt bis zum nächsten Firefox-Neustart.</li>
+            <li><strong>Dauerhaft (Firma):</strong> IT verteilt <a href="/downloads/teamvault-extension.xpi">teamvault-extension.xpi</a> per Firefox-<code>policies.json</code> (Vorlage: <a href="/downloads/extension/firefox-policy.json">firefox-policy.json</a>, Add-on-ID <code>teamvault@local</code>). Oft nötig: <code>xpinstall.signatures.required</code> = <code>false</code> in den Policies.</li>
+          </ol>
         </div>
         <div class="help-step" id="fallback">
           <h3>Erweitert: Entwicklermodus (Fallback)</h3>

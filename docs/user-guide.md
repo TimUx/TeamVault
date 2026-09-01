@@ -235,7 +235,7 @@ Voraussetzungen: HTTPS oder `localhost` (Service Worker / PWA). Details: [Instal
 
 Kurzanleitung in der App: Sidebar **Hilfe** bzw. Login **Hilfe** → **Browser-Extension**, oder direkt `/help/extension`. Markdown: [`docs/extension-guide.md`](extension-guide.md).
 
-![Hilfe Extension](images/help-extension.png)
+![Konto → Clients](images/account-clients.png)
 
 Kurz: Einmal **Einrichtung** (PowerShell-Einzeiler), dann **Extension installieren** wie aus dem Store — Server-URL → Login/Unlock → auf passender Website **Fill** / **Copy** (nur bei Domain-Match).
 
@@ -245,7 +245,7 @@ In der App: **Konto → Clients** — Einrichtungs-Einzeiler und **Extension ins
 
 Kurzanleitung: **Hilfe → CLI** bzw. `/help/cli`. Markdown: [`docs/cli-guide.md`](cli-guide.md).
 
-![Hilfe CLI](images/help-cli.png)
+![Konto → Clients](images/account-clients.png)
 
 In der App: **Konto → Clients** — plattformgerechter Download und PowerShell/Bash-Einzeiler.
 

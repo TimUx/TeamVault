@@ -142,7 +142,20 @@ func writePolicies(outDir, extID, base string) error {
 		return err
 	}
 	sources, _ := json.MarshalIndent([]string{base + "/*"}, "", "  ")
-	return os.WriteFile(filepath.Join(sub, "chrome-install-sources.json"), append(sources, '\n'), 0o644)
+	if err := os.WriteFile(filepath.Join(sub, "chrome-install-sources.json"), append(sources, '\n'), 0o644); err != nil {
+		return err
+	}
+	xpiURL := base + "/downloads/teamvault-extension.xpi"
+	firefoxPolicy := map[string]any{
+		"policies": map[string]any{
+			"xpinstall.signatures.required": false,
+			"Extensions": map[string]any{
+				"Install": []string{xpiURL},
+			},
+		},
+	}
+	fb, _ := json.MarshalIndent(firefoxPolicy, "", "  ")
+	return os.WriteFile(filepath.Join(sub, "firefox-policy.json"), append(fb, '\n'), 0o644)
 }
 
 func fatal(err error) {

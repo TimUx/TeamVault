@@ -94,6 +94,16 @@ async function shot(page, file, opts = {}) {
   console.log("  →", file);
 }
 
+async function shotElement(page, selector, file, opts = {}) {
+  const el = page.locator(selector).first();
+  await el.waitFor({ state: "visible", timeout: opts.timeout ?? 20000 });
+  await el.scrollIntoViewIfNeeded();
+  if (opts.waitMs) await page.waitForTimeout(opts.waitMs);
+  const target = path.join(OUT, file);
+  await el.screenshot({ path: target });
+  console.log("  →", file, `(element ${selector})`);
+}
+
 async function waitAppReady(page) {
   await page.waitForSelector("#vaultui", { state: "visible", timeout: 60000 });
 }
@@ -332,7 +342,7 @@ async function main() {
     await page.waitForSelector("#clientDownloadsApp .client-dl-card", { timeout: 20000 });
     await page.locator("#clientDownloadsApp").scrollIntoViewIfNeeded();
     await page.waitForTimeout(600);
-    await shot(page, "account-clients.png", { fullPage: true });
+    await shotElement(page, "#clientDownloadsApp", "account-clients.png", { waitMs: 200 });
   } catch (e) {
     console.warn("account-clients screenshot skipped:", e.message);
   }
@@ -506,13 +516,11 @@ async function main() {
   await page.waitForSelector("#demoQr svg, #demoQr .hint", { timeout: 10000 }).catch(() => {});
   await shot(page, "help-account.png", { fullPage: true });
   await page.goto(`${BASE}/help/extension`);
-  await page.waitForSelector("h1", { timeout: 15000 });
-  await page.waitForTimeout(3000);
-  await shot(page, "help-extension.png", { fullPage: true });
+  await page.waitForSelector("#clientDlExt .help-install-steps, #clientDlExt .help-note", { timeout: 15000 }).catch(() => {});
+  await shotElement(page, "#clientDlExt", "help-extension.png", { waitMs: 400 });
   await page.goto(`${BASE}/help/cli`);
-  await page.waitForSelector("h1", { timeout: 15000 });
-  await page.waitForTimeout(1500);
-  await shot(page, "help-cli.png", { fullPage: true });
+  await page.waitForSelector("#clientDlCli .help-actions, #clientDlCli .help-note", { timeout: 15000 }).catch(() => {});
+  await shotElement(page, "#clientDlCli", "help-cli.png", { waitMs: 400 });
 
   await page.goto(`${BASE}/app`);
   await unlockVault(page);
