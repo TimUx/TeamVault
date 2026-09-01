@@ -1542,6 +1542,10 @@ function renderApp(app) {
           `)}
         `, 'id="navAdminSection" hidden')}
       </nav>
+      <div class="app-sidebar-foot">
+        <p class="offline-sync-bar hint" id="offlineSyncBar" hidden role="status"></p>
+        <button class="btn-ghost btn-with-ico btn-sm" type="button" id="out">${btnLabel("logout", "Abmelden")}</button>
+      </div>
     </aside>
 
     <div class="app-main">
@@ -2182,8 +2186,8 @@ function renderApp(app) {
           </div>
         </div>
       </div>
+
       <footer class="app-statusbar" id="appStatusbar">
-        <p class="offline-sync-bar hint" id="offlineSyncBar" hidden role="status"></p>
         <div class="app-statusbar-inner">
           <div class="app-statusbar-session" id="statusSession">
             <span class="status-user" id="statusUser">Lade…</span>
@@ -2191,10 +2195,7 @@ function renderApp(app) {
             <span class="status-pill" id="statusTotp" hidden>TOTP</span>
             <span class="status-pill status-pill-offline" id="statusOffline" hidden>Offline</span>
           </div>
-          <div class="app-statusbar-end">
-            <span class="about-line" id="about"></span>
-            <button class="btn-ghost btn-with-ico btn-sm" type="button" id="out">${btnLabel("logout", "Abmelden")}</button>
-          </div>
+          <span class="about-line" id="about"></span>
         </div>
       </footer>
     </div>

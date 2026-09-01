@@ -6,7 +6,7 @@ const TV_SW_BASE = (() => {
   return i >= 0 ? p.slice(0, i) : "";
 })();
 
-const CACHE = "teamvault-shell-v17";
+const CACHE = "teamvault-shell-v19";
 const PRECACHE = [
   "/",
   "/index.html",
