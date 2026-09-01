@@ -23,6 +23,8 @@ dist/
 # Not required for the server image (static UI is under web/)
 docs/
 clients/
+!clients/extension/
+!clients/extension/**
 scripts/
 *.md
 SECURITY-REVIEW-CHECKLIST.md
