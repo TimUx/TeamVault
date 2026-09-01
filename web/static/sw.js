@@ -6,7 +6,8 @@ const TV_SW_BASE = (() => {
   return i >= 0 ? p.slice(0, i) : "";
 })();
 
-const CACHE = "teamvault-shell-v22";
+const CACHE = "teamvault-shell-v23";
+const NETWORK_FIRST = ["/styles.css", "/app.js"].map((path) => TV_SW_BASE + path);
 const PRECACHE = [
   "/",
   "/index.html",
@@ -72,6 +73,17 @@ self.addEventListener("fetch", (event) => {
 
   event.respondWith(
     caches.match(req).then((cached) => {
+      if (NETWORK_FIRST.includes(url.pathname)) {
+        return fetch(req)
+          .then((res) => {
+            if (res && res.status === 200) {
+              const copy = res.clone();
+              caches.open(CACHE).then((cache) => cache.put(req, copy));
+            }
+            return res;
+          })
+          .catch(() => cached);
+      }
       if (cached) return cached;
       return fetch(req).then((res) => {
         if (!res || res.status !== 200) return res;

@@ -2195,7 +2195,9 @@ function renderApp(app) {
             <span class="status-pill" id="statusTotp" hidden>TOTP</span>
             <span class="status-pill status-pill-offline" id="statusOffline" hidden>Offline</span>
           </div>
-          <span class="about-line" id="about"></span>
+          <div class="app-statusbar-end">
+            <span class="about-line" id="about"></span>
+          </div>
         </div>
       </footer>
     </div>
