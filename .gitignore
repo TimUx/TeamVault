@@ -28,7 +28,10 @@ unlock-docs-shot.key
 # Not published to GitHub (modules via GOPROXY; internal CA/CI stay off this remote)
 /vendor/
 /certs/
-/.gitea/
+# Gitea: only Actions workflows are versioned; other local Gitea config stays untracked
+/.gitea/*
+!/.gitea/workflows/
+!/.gitea/workflows/**
 scripts/goproxy-corp.ps1
 scripts/go-env.ps1
 scripts/mirror-oci-to-gitea.ps1

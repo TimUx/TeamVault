@@ -29,6 +29,8 @@ Die Skripte laden das Binary von `https://…/downloads/` (Admin muss die Dateie
 
 Admin-Build: `scripts/build-tvcli.ps1` bzw. `scripts/pack-clients.ps1` → nach `<data-dir>/downloads/` kopieren.
 
+CI: Bei Release-Tags (`v*`) bauen `.github/workflows/tvcli.yml` (GitHub) bzw. `.gitea/workflows/tvcli.yml` (Gitea) die vier Standalone-Binaries und hängen sie an das Release.
+
 ## Einrichten
 
 ```powershell
