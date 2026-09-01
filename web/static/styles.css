@@ -193,6 +193,7 @@ button {
   background: color-mix(in srgb, var(--color-ok) 10%, transparent);
 }
 .onboard-success .hint { margin-top: 0.35rem; }
+.onboard-success .hint-box { margin: 0.65rem 0 0; }
 .onboard-checklist {
   margin: 0.75rem 0 1rem;
   padding-left: 1.25rem;
@@ -229,6 +230,59 @@ button {
 .error { color: var(--color-primary); margin-top: 0.75rem; white-space: pre-wrap; }
 .ok { color: var(--color-ok); margin-top: 0.75rem; }
 .hint { font-size: 0.85rem; color: var(--color-hint); margin-top: 0.35rem; }
+.hint-box {
+  display: flex;
+  gap: 0.65rem;
+  align-items: flex-start;
+  margin: 0 0 1rem;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid color-mix(in srgb, var(--color-accent) 30%, var(--color-border));
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--color-accent) 9%, var(--color-surface));
+  font-size: 0.85rem;
+  line-height: 1.45;
+  color: var(--color-text);
+  box-sizing: border-box;
+}
+.hint-box[hidden] { display: none !important; }
+.hint-box-icon {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.35rem;
+  height: 1.35rem;
+  margin-top: 0.05rem;
+  color: var(--color-accent);
+}
+.hint-box-icon .hint-box-ico {
+  width: 1.35rem;
+  height: 1.35rem;
+}
+.hint-box-body {
+  flex: 1;
+  min-width: 0;
+  color: var(--color-text);
+}
+.hint-box-body p { margin: 0; }
+.hint-box-body p + p { margin-top: 0.45rem; }
+.hint-box-body a { color: var(--color-accent); }
+.hint-box-body code {
+  font-size: 0.82em;
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--color-border) 55%, transparent);
+}
+.panel > .hint-box:first-child,
+.panel > h1 + .hint-box,
+.panel > h2 + .hint-box { margin-top: 0; }
+.panel > h1 + .hint-box { margin-bottom: 1.25rem; }
+.lock-card > .hint-box { margin-bottom: 0.75rem; }
+.hint-box-compact {
+  margin-bottom: 0.5rem;
+  padding: 0.55rem 0.65rem;
+  font-size: 0.8rem;
+}
 .mono {
   font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
   font-size: 0.85rem;
@@ -273,21 +327,20 @@ textarea { resize: vertical; min-height: 4rem; }
 
 /* —— App shell: sidebar + topbar (HaushaltsRadar-inspired) —— */
 body.app-wide {
-  overflow: hidden;
-  height: 100vh;
+  overflow-x: hidden;
 }
 body.app-wide > .top {
   display: none;
 }
+body.app-wide #aboutFoot {
+  display: none !important;
+}
 body.app-wide main#app {
-  display: block;
   max-width: none;
   width: 100%;
-  height: 100%;
   margin: 0;
   padding: 0;
-  min-height: 0;
-  overflow: hidden;
+  min-height: 100vh;
   box-sizing: border-box;
 }
 
@@ -296,20 +349,22 @@ body.app-wide main#app {
   flex-direction: row;
   align-items: stretch;
   width: 100%;
-  height: 100%;
-  min-height: 0;
-  overflow: hidden;
+  min-height: 100vh;
 }
 .app-sidebar {
   width: var(--drawer-width);
   flex-shrink: 0;
-  min-height: 0;
   background: var(--color-surface);
   border-right: 1px solid var(--color-border);
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  position: sticky;
+  top: 0;
+  height: 100vh;
   z-index: 30;
+}
+.app-sidebar[hidden] {
+  display: none !important;
 }
 .app-sidebar-brand {
   padding: 1rem 1rem 0.75rem;
@@ -545,6 +600,7 @@ h1 .heading-ico,
 
 .app-statusbar {
   flex-shrink: 0;
+  margin-top: auto;
   width: 100%;
   box-sizing: border-box;
   border-top: 1px solid var(--color-border);
@@ -552,10 +608,11 @@ h1 .heading-ico,
   padding: 0.55rem 1.15rem 0.65rem;
 }
 .app-statusbar-inner {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, max-content);
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 0.5rem 1rem;
+  justify-content: space-between;
+  gap: 0.5rem 1.25rem;
   width: 100%;
   min-width: 0;
   box-sizing: border-box;
@@ -599,10 +656,12 @@ h1 .heading-ico,
 .app-statusbar-end {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   justify-content: flex-end;
   gap: 0.5rem 0.85rem;
   min-width: 0;
   max-width: 100%;
+  margin-left: auto;
 }
 .app-statusbar .about-line {
   margin: 0;
@@ -624,13 +683,11 @@ h1 .heading-ico,
 }
 
 .app-main {
-  flex: 1 1 auto;
+  flex: 1;
   min-width: 0;
-  min-height: 0;
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  overflow: hidden;
   background: var(--color-bg);
 }
 .offline-sync-bar {
@@ -685,13 +742,8 @@ h1 .heading-ico,
   gap: 0.5rem;
 }
 .app-content {
-  flex: 1 1 auto;
-  min-height: 0;
-  min-width: 0;
-  overflow-y: auto;
-  overflow-x: hidden;
   width: 100%;
-  max-width: none;
+  max-width: min(96vw, 1400px);
   padding: 1rem 1.25rem 2.5rem;
   box-sizing: border-box;
 }

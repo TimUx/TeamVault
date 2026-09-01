@@ -168,6 +168,27 @@ function icon(name, cls) {
   return `<svg class="ico${cls ? " " + cls : ""}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${body}</svg>`;
 }
 
+/** Info callout with icon — for explanatory hints (not status lines or inline labels). */
+function hintBox(bodyHtml, opts = {}) {
+  const { id, hidden, className } = opts;
+  let cls = "hint-box";
+  if (className) cls += " " + className;
+  let attrs = `class="${cls}" role="note"`;
+  if (id) attrs += ` id="${id}"`;
+  if (hidden) attrs += " hidden";
+  return `<div ${attrs}>
+    <span class="hint-box-icon" aria-hidden="true">${icon("info", "hint-box-ico")}</span>
+    <div class="hint-box-body">${bodyHtml}</div>
+  </div>`;
+}
+
+function setHintBox(el, html) {
+  if (!el) return;
+  const body = el.querySelector(".hint-box-body") || el;
+  if (String(html).includes("<")) body.innerHTML = html;
+  else body.textContent = html;
+}
+
 function navLink(nav, icoName, label, extraClass, attrs) {
   const cls = ["sidebar-link", extraClass].filter(Boolean).join(" ");
   const extra = attrs ? " " + attrs : "";
@@ -556,8 +577,8 @@ function stepView(repaint) {
   if (state.step === 0) {
     const n = el(`<div>
       <h1>Willkommen bei TeamVault</h1>
-      <p class="lead">Zero-Knowledge Passwortmanager. Secrets werden nur clientseitig entschlüsselt. Genau ein Bootstrap-Secret entsperrt die Config.</p>
-      <p class="hint">Der erste Admin ist immer lokal authentifiziert (Schutz vor LDAP-Aussperrung).</p>
+      ${hintBox("Zero-Knowledge Passwortmanager. Secrets werden nur clientseitig entschlüsselt. Genau ein Bootstrap-Secret entsperrt die Config.")}
+      ${hintBox("Der erste Admin ist immer lokal authentifiziert (Schutz vor LDAP-Aussperrung).")}
       <div class="row"><button class="btn-accent" type="button">Weiter</button></div>
     </div>`);
     n.querySelector("button").onclick = () => { state.step = 1; repaint(); };
@@ -625,7 +646,7 @@ function stepView(repaint) {
   if (state.step === 3) {
     const n = el(`<div>
       <h1>Argon2id-Parameter</h1>
-      <p class="hint">Clientseitige Vault-KDF (Master-Passwort). Login-Hash ist getrennt.</p>
+      ${hintBox("Clientseitige Vault-KDF (Master-Passwort). Login-Hash ist getrennt.")}
       <label>Memory (KiB)</label><input id="mem" type="number" />
       <label>Time (Iterationen)</label><input id="time" type="number" />
       <label>Parallelism</label><input id="par" type="number" />
@@ -655,7 +676,7 @@ function stepView(repaint) {
         <option value="admin_escrow">Admin-Escrow</option>
       </select>
       <label class="inline"><input id="escrow" type="checkbox" /> Escrow als Option erlauben</label>
-      <p class="hint">Escrow-Shares werden nicht im Wizard erzeugt — erst in der Admin-UI nach Login.</p>
+      ${hintBox("Escrow-Shares werden nicht im Wizard erzeugt — erst in der Admin-UI nach Login.")}
       <div class="row">
         <button class="btn-ghost" type="button" data-b>Zurück</button>
         <button class="btn-accent" type="button" data-n>Weiter</button>
@@ -674,7 +695,7 @@ function stepView(repaint) {
   // commit
   const n = el(`<div>
     <h1>Review & Commit</h1>
-    <p class="lead">Atomarer Commit — danach ist das System initialisiert.</p>
+    ${hintBox("Atomarer Commit — danach ist das System initialisiert.")}
     <pre class="hint" id="sum"></pre>
     <div class="error" id="err" hidden></div>
     <div class="ok" id="ok" hidden></div>
@@ -713,12 +734,12 @@ function stepView(repaint) {
 function renderLogin(app) {
   const n = el(`<div class="panel">
     <h1>Login</h1>
-    <p class="lead">Login-Passwort oder Passkey. Zum Entschlüsseln des Vaults brauchen Sie weiterhin Ihr Master-Passwort.</p>
+    ${hintBox("Login-Passwort oder Passkey. Zum Entschlüsseln des Vaults brauchen Sie weiterhin Ihr Master-Passwort.")}
     <label>Organisation</label>
     <select id="slug" autocomplete="organization" disabled>
       <option value="">Lade Organisationen…</option>
     </select>
-    <p class="hint">Bestehende Mandanten — Auswahl für diesen Login.</p>
+    ${hintBox("Bestehende Mandanten — Auswahl für diesen Login.")}
     <label>Username</label><input id="user" autocomplete="username" />
     <label>Passwort</label><input id="pw" type="password" autocomplete="current-password" />
     <label>TOTP (falls aktiv)</label><input id="totp" inputmode="numeric" autocomplete="one-time-code" />
@@ -729,7 +750,7 @@ function renderLogin(app) {
     </div>
     <div id="offlineLogin" class="offline-login" hidden>
       <hr />
-      <p class="hint">Ohne Netzwerk: gespeicherte verschlüsselte Kopie mit Master-Passwort entsperren (kein Login, kein TOTP).</p>
+      ${hintBox("Ohne Netzwerk: gespeicherte verschlüsselte Kopie mit Master-Passwort entsperren (kein Login, kein TOTP).")}
       <p class="error" id="offlineExpired" hidden role="alert"></p>
       <button class="btn-ghost btn-with-ico" type="button" id="doOffline">${btnLabel("unlock", "Offline entsperren")}</button>
     </div>
@@ -817,7 +838,7 @@ function renderLogin(app) {
     }
   };
   (async () => {
-    if (!global.TVOfflineStore?.isAvailable()) return;
+    if (!window.TVOfflineStore?.isAvailable()) return;
     try {
       const valid = await TVOfflineStore.listSnapshots({ validOnly: true });
       const all = await TVOfflineStore.listSnapshots({ validOnly: false });
@@ -928,7 +949,7 @@ function renderOnboard(app) {
     setStepper(1, false);
     panel.innerHTML = `
       <h1>Vault-Onboarding</h1>
-      <p class="lead">Legen Sie Ihr persönliches Master-Passwort fest. Es wird nur im Browser verwendet (Zero-Knowledge) — der Server sieht es nie.</p>
+      ${hintBox("Legen Sie Ihr persönliches Master-Passwort fest. Es wird nur im Browser verwendet (Zero-Knowledge) — der Server sieht es nie.")}
       <label>Master-Passwort (≥12 Zeichen)</label>
       <input id="mpw" type="password" autocomplete="new-password" />
       <label>Wiederholen</label>
@@ -1004,7 +1025,7 @@ function renderOnboard(app) {
     setStepper(2, escrowMode);
     const kitSection = escrowMode ? "" : `
       <h2>Recovery-Kit sichern</h2>
-      <p class="hint">Dieses Kit wird nur einmal angezeigt. Ohne Kit und ohne Master-Passwort sind Ihre Secrets nicht wiederherstellbar.</p>
+      ${hintBox("Dieses Kit wird nur einmal angezeigt. Ohne Kit und ohne Master-Passwort sind Ihre Secrets nicht wiederherstellbar.")}
       <ol class="onboard-checklist">
         <li>Recovery-Kit <strong>kopieren</strong> oder als Datei <strong>herunterladen</strong></li>
         <li>An einem sicheren Ort aufbewahren (Passwort-Manager, Tresor, …)</li>
@@ -1021,8 +1042,8 @@ function renderOnboard(app) {
       <div class="onboard-success">
         <strong>Schlüssel wurden erfolgreich erzeugt.</strong>
         ${escrowMode
-          ? "<p class='hint'>Ihr privater Schlüssel liegt verschlüsselt auf dem Server. Wiederherstellung erfolgt über den Admin-Escrow.</p>"
-          : "<p class='hint'>Bevor Sie fortfahren, sichern Sie bitte Ihr Recovery-Kit.</p>"}
+          ? hintBox("Ihr privater Schlüssel liegt verschlüsselt auf dem Server. Wiederherstellung erfolgt über den Admin-Escrow.")
+          : hintBox("Bevor Sie fortfahren, sichern Sie bitte Ihr Recovery-Kit.")}
       </div>
       ${kitSection}
       <div class="error" id="err" hidden></div>
@@ -1562,7 +1583,7 @@ function renderApp(app) {
         <div id="lockOverlay" class="lock-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="lockTitle">
           <div class="lock-card">
             <h1 id="lockTitle">${icon("lock", "heading-ico")} Vault gesperrt</h1>
-            <p class="lead">Idle-Timeout. Master-Passwort erneut eingeben (bleibt nur im Speicher).</p>
+            ${hintBox("Idle-Timeout. Master-Passwort erneut eingeben (bleibt nur im Speicher).")}
             <label for="lockMpw">Master-Passwort</label>
             <input id="lockMpw" type="password" autocomplete="current-password" />
             <div class="error" id="lockErr" hidden role="alert"></div>
@@ -1572,8 +1593,8 @@ function renderApp(app) {
 
         <div class="panel app-unlock-panel" id="unlock">
           <h1>${icon("unlock", "heading-ico")} Vault entsperren</h1>
-          <p class="lead" id="unlockLead">Master-Passwort bleibt im Browser (Zero-Knowledge).</p>
-          <p class="hint" id="offlineUnlockHint" hidden>Offline: nur Master-Passwort — kein Login und kein TOTP.</p>
+          ${hintBox("Master-Passwort bleibt im Browser (Zero-Knowledge).", { id: "unlockLead" })}
+          ${hintBox("Offline: nur Master-Passwort — kein Login und kein TOTP.", { id: "offlineUnlockHint", hidden: true })}
           <label id="offlineSnapLabel" hidden for="offlineSnap">Gespeicherte Offline-Kopie</label>
           <select id="offlineSnap" hidden></select>
           <label>Master-Passwort</label><input id="mpw" type="password" autocomplete="current-password" />
@@ -1627,7 +1648,7 @@ function renderApp(app) {
                         <div class="secrets-actions-export" id="sExportGroup">
                           <hr class="secrets-actions-divider" />
                           <p class="secrets-actions-heading">Export</p>
-                          <p class="hint secrets-actions-hint">Gilt für die aktuelle Auswahl (Häkchen in der Liste).</p>
+                          ${hintBox("Gilt für die aktuelle Auswahl (Häkchen in der Liste).", { className: "hint-box-compact" })}
                           <button type="button" class="secrets-actions-item btn-ghost btn-sm btn-with-ico" id="sExportTv" role="menuitem">${btnLabel("download", "TeamVault JSON")}</button>
                           <button type="button" class="secrets-actions-item btn-ghost btn-sm btn-with-ico" id="sExportJson" role="menuitem">${btnLabel("download", "Bitwarden JSON")}</button>
                           <button type="button" class="secrets-actions-item btn-ghost btn-sm btn-with-ico" id="sExportCsv" role="menuitem">${btnLabel("download", "CSV")}</button>
@@ -1660,7 +1681,7 @@ function renderApp(app) {
                     <p class="hint" id="drec"></p>
                     <div id="accessPanel" class="access-panel" hidden>
                       <h3 class="access-panel-title">Zugriff</h3>
-                      <p class="hint">Klicken oder per Drag &amp; Drop hinzufügen. Entfernen rotiert den Datenschlüssel.</p>
+                      ${hintBox("Klicken oder per Drag &amp; Drop hinzufügen. Entfernen rotiert den Datenschlüssel.")}
                       <div class="access-workspace">
                         <div class="panel-inset access-col">
                           <h3>Verfügbar</h3>
@@ -1718,7 +1739,7 @@ function renderApp(app) {
                     <button class="btn-ghost btn-sm" type="button" id="shareAccessClose">Schließen</button>
                   </div>
                   <p class="hint" id="shareAccessSubtitle"></p>
-                  <p class="hint">Klicken oder per Drag &amp; Drop hinzufügen. Entfernen rotiert den Datenschlüssel.</p>
+                  ${hintBox("Klicken oder per Drag &amp; Drop hinzufügen. Entfernen rotiert den Datenschlüssel.")}
                   <div class="access-workspace">
                     <div class="panel-inset access-col">
                       <h3>Verfügbar</h3>
@@ -1737,7 +1758,7 @@ function renderApp(app) {
 
             <div class="vault-section" data-vault="create">
               <div class="panel">
-                <p class="hint">Privat = nur Sie unter „Meine Secrets“. Geteilt = Team-Eintrag unter „Geteilte Secrets“ (nicht unter Meine Secrets); alle Berechtigten können bearbeiten.</p>
+                ${hintBox("Privat = nur Sie unter „Meine Secrets“. Geteilt = Team-Eintrag unter „Geteilte Secrets“ (nicht unter Meine Secrets); alle Berechtigten können bearbeiten.")}
                 <div class="panel-tabs" role="tablist" aria-label="Secret-Typ" id="svisTabs">
                   <button type="button" class="panel-tab active" role="tab" data-svis="private" aria-selected="true">Privat</button>
                   <button type="button" class="panel-tab" role="tab" data-svis="shared" aria-selected="false">Geteilt</button>
@@ -1769,7 +1790,7 @@ function renderApp(app) {
                 <div id="sshareWrap" hidden>
                   <label>Teilen mit Usern</label>
                   <select id="screateUsers" multiple size="4"></select>
-                  <p class="hint">Strg/Cmd-Klick für Mehrfachauswahl. Mindestens ein User oder eine Gruppe.</p>
+                  ${hintBox("Strg/Cmd-Klick für Mehrfachauswahl. Mindestens ein User oder eine Gruppe.")}
                   <div id="screateGroupsWrap" hidden>
                     <label>Gruppen</label>
                     <select id="screateGroups" multiple size="3"></select>
@@ -1782,7 +1803,7 @@ function renderApp(app) {
 
             <div class="vault-section" data-vault="import">
               <div class="panel">
-                <p class="hint">Unterstützt: TeamVault JSON/.tvbak, Bitwarden JSON, KeePass XML, KeePassXC/Chrome/Firefox/LastPass/1Password-CSV, Proton Pass JSON, 1Password 1PUX (<code>export.data</code>). Parsing und Verschlüsselung nur im Browser.</p>
+                ${hintBox("Unterstützt: TeamVault JSON/.tvbak, Bitwarden JSON, KeePass XML, KeePassXC/Chrome/Firefox/LastPass/1Password-CSV, Proton Pass JSON, 1Password 1PUX (<code>export.data</code>). Parsing und Verschlüsselung nur im Browser.")}
                 <input id="simport" type="file" accept=".json,.csv,.xml,.tvbak,text/csv,application/json,text/xml" />
                 <div id="simportPwWrap" hidden>
                   <label>Backup-Passwort</label>
@@ -1812,13 +1833,13 @@ function renderApp(app) {
 
             <div class="vault-section" data-vault="backup">
               <div class="panel" data-panel-group="backup">
-                <p class="hint">Clientseitige Sicherung — der Server sieht keinen Klartext.</p>
+                ${hintBox("Clientseitige Sicherung — der Server sieht keinen Klartext.")}
                 <div class="panel-tabs" role="tablist" aria-label="Sicherung">
                   <button type="button" class="panel-tab active" role="tab" data-panel-tab="export" aria-selected="true">Sicherung erstellen</button>
                   <button type="button" class="panel-tab" role="tab" data-panel-tab="restore" aria-selected="false">Wiederherstellen</button>
                 </div>
                 <div class="panel-tab-pane active" role="tabpanel" data-panel-pane="export">
-                  <p class="hint">Alle Secrets, die Sie entschlüsseln können, als <code>.tvbak</code> (Argon2id + AES-GCM). Backup-Passwort mindestens 12 Zeichen — getrennt vom Master-Passwort wählen.</p>
+                  ${hintBox("Alle Secrets, die Sie entschlüsseln können, als <code>.tvbak</code> (Argon2id + AES-GCM). Backup-Passwort mindestens 12 Zeichen — getrennt vom Master-Passwort wählen.")}
                   <label>Backup-Passwort</label>
                   <input id="bak_pw" type="password" autocomplete="new-password" />
                   <label>Wiederholen</label>
@@ -1828,7 +1849,7 @@ function renderApp(app) {
                   </div>
                 </div>
                 <div class="panel-tab-pane" role="tabpanel" data-panel-pane="restore" hidden>
-                  <p class="hint">TeamVault-Sicherung (<code>.tvbak</code>) oder Klartext-Export. Einträge werden als neue Secrets angelegt (kein Überschreiben bestehender IDs).</p>
+                  ${hintBox("TeamVault-Sicherung (<code>.tvbak</code>) oder Klartext-Export. Einträge werden als neue Secrets angelegt (kein Überschreiben bestehender IDs).")}
                   <input id="bak_file" type="file" accept=".tvbak,.json,application/json" />
                   <label>Backup-Passwort (bei .tvbak)</label>
                   <input id="bak_restore_pw" type="password" autocomplete="off" />
@@ -1845,7 +1866,7 @@ function renderApp(app) {
 
           <div class="app-tab" data-pane="account">
             <div class="panel account-panel" data-panel-group="account">
-              <p class="hint">Login-Absicherung und Geräte-Kopie — der Vault bleibt Master-Passwort-pflichtig.</p>
+              ${hintBox("Login-Absicherung und Geräte-Kopie — der Vault bleibt Master-Passwort-pflichtig.")}
               <div class="panel-tabs" role="tablist" aria-label="Konto-Bereiche">
                 <button type="button" class="panel-tab active" role="tab" data-panel-tab="totp" aria-selected="true">TOTP</button>
                 <button type="button" class="panel-tab" role="tab" data-panel-tab="passkeys" aria-selected="false">Passkeys</button>
@@ -1856,11 +1877,11 @@ function renderApp(app) {
               </div>
 
               <div class="panel-tab-pane active" role="tabpanel" data-panel-pane="totp">
-                <p class="hint">Zwei-Faktor per Authenticator-App (nur Login). QR-Code kommt vom Server (scannbar).</p>
+                ${hintBox("Zwei-Faktor per Authenticator-App (nur Login). QR-Code kommt vom Server (scannbar).")}
                 <div class="row">
                   <button class="btn-accent" type="button" id="totpSetup">TOTP einrichten</button>
                 </div>
-                <p class="hint" id="totpSetupHint" hidden>Nach dem Scannen den <strong>aktuellen</strong> 6-stelligen Code eingeben. „TOTP einrichten“ nicht erneut klicken — sonst stimmt der Authenticator-Eintrag nicht mehr.</p>
+                ${hintBox("Nach dem Scannen den <strong>aktuellen</strong> 6-stelligen Code eingeben. „TOTP einrichten“ nicht erneut klicken — sonst stimmt der Authenticator-Eintrag nicht mehr.", { id: "totpSetupHint", hidden: true })}
                 <div id="totpbox" hidden>
                   <div class="totp-setup-grid">
                     <div class="totp-qr-wrap" id="otpQr" aria-live="polite"></div>
@@ -1881,7 +1902,7 @@ function renderApp(app) {
               </div>
 
               <div class="panel-tab-pane" role="tabpanel" data-panel-pane="passkeys" hidden>
-                <p class="hint">Passkeys werden vom Browser bzw. Betriebssystem eingerichtet (Windows Hello, Face ID, Sicherheitsschlüssel). TeamVault erzeugt dafür keinen eigenen QR.</p>
+                ${hintBox("Passkeys werden vom Browser bzw. Betriebssystem eingerichtet (Windows Hello, Face ID, Sicherheitsschlüssel). TeamVault erzeugt dafür keinen eigenen QR.")}
                 <label>Name</label><input id="pkname" value="Mein Passkey" />
                 <div id="pklist" class="list"></div>
                 <div class="row"><button class="btn-accent" type="button" id="pkreg">Registrieren</button></div>
@@ -1889,14 +1910,14 @@ function renderApp(app) {
               </div>
 
               <div class="panel-tab-pane" role="tabpanel" data-panel-pane="login" hidden>
-                <p class="hint">Nur bei lokalem Auth-Backend. LDAP-User ändern das Passwort in AD.</p>
+                ${hintBox("Nur bei lokalem Auth-Backend. LDAP-User ändern das Passwort in AD.")}
                 <label>Aktuelles Login-Passwort</label><input id="lpw_cur" type="password" autocomplete="current-password" />
                 <label>Neues Login-Passwort (≥12)</label><input id="lpw_new" type="password" autocomplete="new-password" />
                 <div class="row"><button class="btn-accent" type="button" id="lpw_save">Login-Passwort speichern</button></div>
               </div>
 
               <div class="panel-tab-pane" role="tabpanel" data-panel-pane="master" hidden>
-                <p class="hint">Clientseitig: Private Key wird neu versiegelt; Server speichert nur Ciphertexte. Recovery-Kit / Escrow wird mit erneuert.</p>
+                ${hintBox("Clientseitig: Private Key wird neu versiegelt; Server speichert nur Ciphertexte. Recovery-Kit / Escrow wird mit erneuert.")}
                 <label>Aktuelles Master-Passwort</label><input id="mpw_cur" type="password" autocomplete="current-password" />
                 <label>Neues Master-Passwort</label><input id="mpw_new" type="password" autocomplete="new-password" />
                 <label>Recovery-Kit speichern (bei user_kit)</label><input id="mpw_kit" type="text" readonly placeholder="wird erzeugt…" />
@@ -1904,7 +1925,7 @@ function renderApp(app) {
               </div>
 
               <div class="panel-tab-pane" role="tabpanel" data-panel-pane="offline" hidden>
-                <p class="hint" id="offlineAccHint">Verschlüsselte Kopie für Offline-Lesen (30 Tage, nur Ciphertext). Schreiben bleibt online.</p>
+                ${hintBox("Verschlüsselte Kopie für Offline-Lesen (30 Tage, nur Ciphertext). Schreiben bleibt online.", { id: "offlineAccHint" })}
                 <p class="hint" id="offlineAccStatus">—</p>
                 <label class="inline"><input id="offline_optin" type="checkbox" /> Offline-Kopie nach Entsperren aktualisieren</label>
                 <div class="row">
@@ -1914,9 +1935,9 @@ function renderApp(app) {
               </div>
 
               <div class="panel-tab-pane" role="tabpanel" data-panel-pane="clients" hidden>
-                <p class="hint">CLI und Browser-Extension von dieser Instanz — Zero-Knowledge bleibt erhalten (Entschlüsselung nur lokal).</p>
+                ${hintBox("CLI und Browser-Extension von dieser Instanz — Zero-Knowledge bleibt erhalten (Entschlüsselung nur lokal).")}
                 <div id="clientDownloadsApp" class="client-dl-grid"></div>
-                <p class="hint">Ausführliche Anleitung: <a href="${tvPath("/help/cli")}" target="_blank" rel="noopener">CLI</a> · <a href="${tvPath("/help/extension")}" target="_blank" rel="noopener">Extension</a></p>
+                ${hintBox(`Ausführliche Anleitung: <a href="${tvPath("/help/cli")}" target="_blank" rel="noopener">CLI</a> · <a href="${tvPath("/help/extension")}" target="_blank" rel="noopener">Extension</a>`)}
               </div>
 
               <div class="error" id="acc_err" hidden></div>
@@ -1941,7 +1962,7 @@ function renderApp(app) {
                   <div class="hint" id="udisable_hint" hidden></div>
                   <div id="ldapUserImport" class="panel-inset" hidden>
                     <h3 class="admin-subhead">LDAP-Verzeichnis</h3>
-                    <p class="hint">User vor der ersten Anmeldung importieren — danach in Gruppen zuweisen.</p>
+                    ${hintBox("User vor der ersten Anmeldung importieren — danach in Gruppen zuweisen.")}
                     <div class="row">
                       <input id="ldap_user_q" placeholder="Suche (mind. 2 Zeichen)…" />
                       <button class="btn-ghost" type="button" id="ldap_user_search">Suchen</button>
@@ -1956,7 +1977,7 @@ function renderApp(app) {
                   <div class="groups-workspace">
                     <aside class="groups-pool panel-inset">
                       <h3>User</h3>
-                      <p class="hint">Aktive User in eine Gruppe ziehen.</p>
+                      ${hintBox("Aktive User in eine Gruppe ziehen.")}
                       <div id="userPool" class="drag-pool"></div>
                     </aside>
                     <div class="groups-board">
@@ -2020,7 +2041,7 @@ function renderApp(app) {
                   </div>
                 </div>
                 <div class="admin-section" data-admin-section="trust">
-                  <p class="hint">Instanzweites Firmen-Root-Zertifikat (PEM). Gilt für LDAPS, SMTP und spätere TLS-Verbindungen (z. B. interne Dienste). Mehrere Zertifikate in einer Datei sind möglich (Root + Zwischen-CAs).</p>
+                  ${hintBox("Instanzweites Firmen-Root-Zertifikat (PEM). Gilt für LDAPS, SMTP und spätere TLS-Verbindungen (z. B. interne Dienste). Mehrere Zertifikate in einer Datei sind möglich (Root + Zwischen-CAs).")}
                   <label>Firmen-Root-Zertifikat (PEM)</label>
                   <input id="trust_ca_file" type="file" accept=".pem,.crt,.cer,.txt,application/x-pem-file,application/x-x509-ca-cert" />
                   <textarea id="trust_ca_pem" rows="8" class="mono" placeholder="-----BEGIN CERTIFICATE-----"></textarea>
@@ -2031,8 +2052,8 @@ function renderApp(app) {
                   </div>
                 </div>
                 <div class="admin-section" data-admin-section="access">
-                  <p class="hint">Öffentlicher Zugriff: Domain, Subdomain oder Unterpfad. Standalone ohne Proxy: Felder leer lassen, „Proxy-Header vertrauen“ aus.</p>
-                  <p class="hint" id="pa_env_hint" hidden>Einige Werte werden durch Umgebungsvariablen überschrieben (Container-Bootstrap).</p>
+                  ${hintBox("Öffentlicher Zugriff: Domain, Subdomain oder Unterpfad. Standalone ohne Proxy: Felder leer lassen, „Proxy-Header vertrauen“ aus.")}
+                  ${hintBox("Einige Werte werden durch Umgebungsvariablen überschrieben (Container-Bootstrap).", { id: "pa_env_hint", hidden: true })}
                   <label>URL-Pfad-Präfix</label>
                   <input id="pa_base" placeholder="/vault (leer = Domain-Root)" />
                   <label>Öffentliche URL (optional)</label>
@@ -2045,7 +2066,7 @@ function renderApp(app) {
                   </div>
                 </div>
                 <div class="admin-section" data-admin-section="ldap">
-                  <p class="hint">LDAP/AD nur für Login-Bind (tenant-spezifisch). Host muss zum Zertifikatsnamen (CN/SAN) passen. Die instanzweite Firmen-CA verwaltet der Plattform-Administrator.</p>
+                  ${hintBox("LDAP/AD nur für Login-Bind (tenant-spezifisch). Host muss zum Zertifikatsnamen (CN/SAN) passen. Die instanzweite Firmen-CA verwaltet der Plattform-Administrator.")}
                   <label class="inline"><input id="ldap_en" type="checkbox" /> Aktiv</label>
                   <label>Host</label><input id="ldap_host" />
                   <label>Port</label><input id="ldap_port" type="number" placeholder="636 bei LDAPS" />
@@ -2056,14 +2077,14 @@ function renderApp(app) {
                   <label>User-Filter</label><input id="ldap_filter" placeholder="(uid=%s)" />
                   <p class="hint" id="ldap_trust_hint"></p>
                   <label class="inline"><input id="ldap_skip_tls" type="checkbox" /> TLS-Zertifikatsfehler ignorieren</label>
-                  <p class="hint">Unsicher: Signatur und Hostname werden nicht geprüft. Nur wenn keine Firmen-CA hinterlegt werden kann. Anschließend Test-Bind nutzen.</p>
+                  ${hintBox("Unsicher: Signatur und Hostname werden nicht geprüft. Nur wenn keine Firmen-CA hinterlegt werden kann. Anschließend Test-Bind nutzen.")}
                   <div class="row">
                     <button class="btn-accent" type="button" id="ldap_save">LDAP speichern</button>
                     <button class="btn-ghost" type="button" id="ldap_test">Test-Bind</button>
                   </div>
                 </div>
                 <div class="admin-section" data-admin-section="smtp">
-                  <p class="hint">SMTP-TLS nutzt die zentrale Firmen-CA (Administration → Firmen-CA).</p>
+                  ${hintBox("SMTP-TLS nutzt die zentrale Firmen-CA (Administration → Firmen-CA).")}
                   <label class="inline"><input id="mail_en" type="checkbox" /> Aktiv</label>
                   <label>Host</label><input id="mail_host" />
                   <label>Port</label><input id="mail_port" type="number" />
@@ -2081,7 +2102,7 @@ function renderApp(app) {
                     <button type="button" class="panel-tab" role="tab" data-panel-tab="policy" aria-selected="false">Policy</button>
                   </div>
                   <div class="panel-tab-pane active" role="tabpanel" data-panel-pane="kdf">
-                    <p class="hint">Argon2id-Presets (Vault-KDF):</p>
+                    ${hintBox("Argon2id-Presets (Vault-KDF):")}
                     <div class="preset-row" id="presetRow"></div>
                     <label>Argon2 Memory (KiB)</label><input id="arg_mem" type="number" />
                     <label>Argon2 Time</label><input id="arg_time" type="number" />
@@ -2091,7 +2112,7 @@ function renderApp(app) {
                     </div>
                   </div>
                   <div class="panel-tab-pane" role="tabpanel" data-panel-pane="policy" hidden>
-                    <p class="hint">Tenant-Policy für Login und Vault-Verhalten.</p>
+                    ${hintBox("Tenant-Policy für Login und Vault-Verhalten.")}
                     <label class="inline"><input id="totp_req" type="checkbox" /> TOTP Pflicht (Hinweis nach Login)</label>
                     <label class="inline"><input id="admin_env_only" type="checkbox" /> Admins: Secret-Liste nur mit Envelope</label>
                     <label class="inline"><input id="offline_cache" type="checkbox" checked /> Offline-Vault-Cache erlauben (Ciphertext auf Geräten)</label>
@@ -2106,7 +2127,7 @@ function renderApp(app) {
                     <button type="button" class="panel-tab" role="tab" data-panel-tab="escrow" aria-selected="false">Escrow / Shamir</button>
                   </div>
                   <div class="panel-tab-pane active" role="tabpanel" data-panel-pane="mode">
-                    <p class="hint">Wechsel erzwingt Re-Onboarding aller User. Bestätigung: <code>REONBOARD</code></p>
+                    ${hintBox("Wechsel erzwingt Re-Onboarding aller User. Bestätigung: <code>REONBOARD</code>")}
                     <label>Modus</label>
                     <select id="rec_mode">
                       <option value="user_kit">User Recovery-Kit</option>
@@ -2117,7 +2138,7 @@ function renderApp(app) {
                     <div class="row"><button class="btn-danger" type="button" id="rec_save">Recovery-Modus ändern</button></div>
                   </div>
                   <div class="panel-tab-pane" role="tabpanel" data-panel-pane="escrow" hidden>
-                    <p class="hint">Privater Escrow-Key wird nur im Browser gesplittet (secrets.js). Server speichert nur den Public Key. Alternativ: <code>tvcli escrow-split</code>.</p>
+                    ${hintBox("Privater Escrow-Key wird nur im Browser gesplittet (secrets.js). Server speichert nur den Public Key. Alternativ: <code>tvcli escrow-split</code>.")}
                     <label>Shamir k</label><input id="shamir_k" type="number" value="3" />
                     <label>Shamir n</label><input id="shamir_n" type="number" value="5" />
                     <div class="ok" id="escrow_out" hidden></div>
@@ -2125,7 +2146,7 @@ function renderApp(app) {
                   </div>
                 </div>
                 <div class="admin-section" data-admin-section="apikeys">
-                  <p class="hint">Scopes: <code>read</code> (GET allowlist), <code>vault</code> (Secret-Schreibaktionen), <code>admin</code> (/api/admin/*). User-Rollen gelten zusätzlich.</p>
+                  ${hintBox("Scopes: <code>read</code> (GET allowlist), <code>vault</code> (Secret-Schreibaktionen), <code>admin</code> (/api/admin/*). User-Rollen gelten zusätzlich.")}
                   <div id="klist" class="list"></div>
                   <label>Name</label><input id="kname" />
                   <label class="inline"><input id="kscope_read" type="checkbox" checked /> read</label>
@@ -2141,14 +2162,14 @@ function renderApp(app) {
                     <button type="button" class="panel-tab" role="tab" data-panel-tab="instance" aria-selected="false">Instanz-Backup</button>
                   </div>
                   <div class="panel-tab-pane active" role="tabpanel" data-panel-pane="tenants">
-                    <p class="hint">Tenants anlegen und verwalten (Plattform-Administrator).</p>
+                    ${hintBox("Tenants anlegen und verwalten (Plattform-Administrator).")}
                     <div id="tlist" class="list"></div>
                     <label>Name</label><input id="tname" />
                     <label>Slug</label><input id="tslug" />
                     <div class="row"><button class="btn-accent" type="button" id="tcreate">Tenant anlegen</button></div>
                   </div>
                   <div class="panel-tab-pane" role="tabpanel" data-panel-pane="migrate" hidden>
-                    <p class="hint">Exportiert nur Ciphertext. Bestätigung: MIGRATE</p>
+                    ${hintBox("Exportiert nur Ciphertext. Bestätigung: MIGRATE")}
                     <label>Ziel-Backend</label>
                     <select id="mig_backend"><option value="json">json</option><option value="sqlite">sqlite</option></select>
                     <label>DSN / Pfad</label><input id="mig_dsn" placeholder="leer = data/vault-migrated.*" />
@@ -2156,7 +2177,7 @@ function renderApp(app) {
                     <div class="row"><button class="btn-danger" type="button" id="mig_go">Migrieren</button></div>
                   </div>
                   <div class="panel-tab-pane" role="tabpanel" data-panel-pane="instance" hidden>
-                    <p class="hint">Snapshot enthält nur Ciphertext + Metadaten (Tenants, User, Gruppen, Secrets, Passkeys). Unlock-Keyfile und Recovery-Kits <strong>nicht</strong> in dieser Datei — separat sichern. Restore mit <code>RESTORE</code> ersetzt den gesamten Vault-Store. Danach neu anmelden, falls User-IDs abweichen.</p>
+                    ${hintBox("Snapshot enthält nur Ciphertext + Metadaten (Tenants, User, Gruppen, Secrets, Passkeys). Unlock-Keyfile und Recovery-Kits <strong>nicht</strong> in dieser Datei — separat sichern. Restore mit <code>RESTORE</code> ersetzt den gesamten Vault-Store. Danach neu anmelden, falls User-IDs abweichen.")}
                     <div class="row">
                       <button class="btn-accent btn-with-ico" type="button" id="inst_bak_dl">${btnLabel("download", "Snapshot herunterladen")}</button>
                     </div>
@@ -2177,7 +2198,7 @@ function renderApp(app) {
               </div>
               <div class="admin-section" data-admin-section="system">
                 <h2>System &amp; Instanz</h2>
-                <p class="hint">Storage, Vault-Gesundheit und angebundene Dienste.</p>
+                ${hintBox("Storage, Vault-Gesundheit und angebundene Dienste.")}
                 <dl class="system-overview" id="sysOverview"></dl>
                 <h3 class="admin-subhead">Version</h3>
                 <p class="hint" id="sysVersion">—</p>
@@ -2321,7 +2342,7 @@ function renderApp(app) {
     });
     const accHint = n.querySelector("#offlineAccHint");
     if (accHint) {
-      accHint.textContent = "Im Offline-Modus nur Lesen. Online anmelden für Synchronisation und Einstellungen.";
+      setHintBox(accHint, "Im Offline-Modus nur Lesen. Online anmelden für Synchronisation und Einstellungen.");
     }
     const optIn = n.querySelector("#offline_optin");
     const syncBtn = n.querySelector("#offline_sync");
@@ -2345,7 +2366,7 @@ function renderApp(app) {
       status.textContent = "Vom Administrator deaktiviert.";
       optIn.checked = false;
       optIn.disabled = true;
-      if (hint) hint.textContent = "Offline-Cache ist für diesen Mandanten nicht erlaubt.";
+      if (hint) setHintBox(hint, "Offline-Cache ist für diesen Mandanten nicht erlaubt.");
       return;
     }
     optIn.disabled = vault.offlineMode;
@@ -2677,24 +2698,24 @@ function renderApp(app) {
       <div class="client-dl-card">
         <h4>CLI (tvcli)</h4>
         ${rec
-          ? `<p class="hint">Empfohlen: ${rec.platform}/${rec.arch}</p>
+          ? `${hintBox(`Empfohlen: ${rec.platform}/${rec.arch}`)}
              <div class="row">
                <a class="btn-accent" href="${tvPath(rec.url)}" download>tvcli herunterladen</a>
                <button type="button" class="btn-ghost btn-sm" id="cliInstallCopy">Einzeiler kopieren</button>
              </div>
              <ul class="client-dl-links">${cliLinks}</ul>`
-          : `<p class="hint">CLI-Binaries noch nicht bereitgestellt.</p>`}
+          : hintBox("CLI-Binaries noch nicht bereitgestellt.")}
       </div>
       <div class="client-dl-card">
         <h4>Browser-Extension</h4>
         ${crx
-          ? `<p class="hint warn-text">Schritt 1: Browser-Richtlinie per PowerShell (siehe Hilfe). Ohne Richtlinie wird nur die .crx heruntergeladen.</p>
+          ? `${hintBox("Schritt 1: Browser-Richtlinie per PowerShell (siehe Hilfe). Ohne Richtlinie wird nur die .crx heruntergeladen.")}
              <div class="row">
                <button type="button" class="btn-ghost btn-sm" id="extInstallCopy">Einrichtung (Einzeiler)</button>
                <a class="btn-accent" href="${tvPath(crx.url)}" id="extCrxBtn">Extension installieren</a>
              </div>
-             <p class="hint">Extension-ID: <code>${ext.id || "—"}</code> · <a href="${tvPath("/help/extension")}" target="_blank" rel="noopener">Anleitung</a> · <a href="${tvPath("/help/extension")}#fallback">Entwicklermodus</a></p>`
-          : `<p class="hint">Extension noch nicht bereitgestellt.</p>`}
+             ${hintBox(`Extension-ID: <code>${ext.id || "—"}</code> · <a href="${tvPath("/help/extension")}" target="_blank" rel="noopener">Anleitung</a> · <a href="${tvPath("/help/extension")}#fallback">Entwicklermodus</a>`)}`
+          : hintBox("Extension noch nicht bereitgestellt.")}
       </div>`;
     const cliBtn = root.querySelector("#cliInstallCopy");
     if (cliBtn && cliInstall) {
@@ -2726,7 +2747,7 @@ function renderApp(app) {
         qr.hidden = false;
       } else if (otpUrl && globalThis.TVQR) TVQR.mount(qr, otpUrl, { size: 200 });
       else if (qr) {
-        qr.innerHTML = `<p class="hint">QR nicht verfügbar — bitte otpauth-URL kopieren.</p>`;
+        qr.innerHTML = hintBox("QR nicht verfügbar — bitte otpauth-URL kopieren.");
         qr.hidden = false;
       }
       const sec = n.querySelector("#otpSecret");
@@ -3101,7 +3122,7 @@ function renderApp(app) {
 
   async function syncOfflineSnapshot(opts = {}) {
     const silent = !!opts.silent;
-    if (!global.TVOfflineStore?.isAvailable()) return;
+    if (!window.TVOfflineStore?.isAvailable()) return;
     if (vault.offlineMode || !vault.sk || !vault.me) return;
     if (!offlinePolicyAllowed()) return;
     if (!TVOfflineStore.getOptIn()) return;
