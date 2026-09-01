@@ -1503,8 +1503,8 @@ function announceA11y(msg) {
 
 function renderApp(app) {
   document.body.classList.add("app-wide");
+  const backdrop = el(`<div class="sidebar-backdrop" id="sidebarBackdrop"></div>`);
   const n = el(`<div class="app-frame">
-    <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
     <aside class="app-sidebar" id="appSidebar" hidden>
       <div class="app-sidebar-brand">${icon("shield", "brand-ico")} <span>TeamVault</span></div>
       <nav class="app-sidebar-nav" id="appSidebarNav">
@@ -2202,6 +2202,7 @@ function renderApp(app) {
       </footer>
     </div>
   </div>`);
+  app.appendChild(backdrop);
   app.appendChild(n);
   const live = document.createElement("div");
   live.id = "a11yLive";
@@ -2293,7 +2294,7 @@ function renderApp(app) {
 
   function closeMobileNav() {
     n.querySelector("#appSidebar").classList.remove("open");
-    n.querySelector("#sidebarBackdrop").classList.remove("open");
+    backdrop.classList.remove("open");
     const mt = n.querySelector("#menuToggle");
     if (mt) mt.setAttribute("aria-expanded", "false");
   }
@@ -2552,10 +2553,10 @@ function renderApp(app) {
   initSidebarSections();
   n.querySelector("#menuToggle").onclick = () => {
     n.querySelector("#appSidebar").classList.add("open");
-    n.querySelector("#sidebarBackdrop").classList.add("open");
+    backdrop.classList.add("open");
     n.querySelector("#menuToggle").setAttribute("aria-expanded", "true");
   };
-  n.querySelector("#sidebarBackdrop").onclick = () => closeMobileNav();
+  backdrop.onclick = () => closeMobileNav();
   document.addEventListener("keydown", (ev) => {
     if (ev.key === "Escape") closeMobileNav();
   });
