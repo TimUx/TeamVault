@@ -1,18 +1,16 @@
-# TeamVault CI — Gitea Actions (ubuntu runner)
+# TeamVault CI — Gitea Actions (lightweight checks only)
+#
+# Container images and release binaries are built on GitHub Actions and synced
+# to Gitea (registry + release assets). This workflow only runs repo checks.
 #
 # Prerequisites:
 #   - Act-Runner label "ubuntu-latest"
-#   - Mirrored base images in Gitea registry (laptop: scripts/mirror-oci-to-gitea.ps1):
+#   - Mirrored base images for optional docker test (scripts/mirror-oci-to-gitea.ps1):
 #       {registry}/cc-3.3/golang:1.23.3-bookworm
 #       {registry}/cc-3.3/distroless-static:nonroot
-#       {registry}/cc-3.3/trivy:latest
-#   - vendor/ + certs/ committed (no outbound module/TLS downloads in CI)
+#   - certs/ committed for Corporate CA in docker builds
 #
-# Optional secrets/vars:
-#   - secrets.REGISTRY_TOKEN / REGISTRY_USER / ACT_RUN_TOKEN
-#   - vars.REGISTRY
-#
-# No actions/* from github.com — act cannot clone them through the corp proxy.
+# Optional secrets/vars: REGISTRY_TOKEN, REGISTRY_USER, ACT_RUN_TOKEN, REGISTRY
 
 name: CI
 
@@ -30,7 +28,6 @@ concurrency:
 
 env:
   CGO_ENABLED: "0"
-  # Classic builder: avoids BuildKit oauth TLS to the registry (x509 unknown authority)
   DOCKER_BUILDKIT: "0"
   REGISTRY: ${{ vars.REGISTRY || 'git.example.internal' }}
   BASE_REGISTRY: ${{ vars.REGISTRY || 'git.example.internal' }}/cc-3.3
@@ -55,7 +52,6 @@ jobs:
           git clone --no-checkout "http://oauth2:${ACT_TOKEN}@gitea:3000/${{ gitea.repository }}.git" .
           git checkout --force "${{ gitea.sha }}"
           test -f go.mod
-          test -f vendor/modules.txt
           test -f certs/corp-ca-bundle.crt
 
       - name: cryptocore.js checksum sync
@@ -84,14 +80,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # One cert per file for update-ca-certificates
           if [ -d /usr/local/share/ca-certificates ]; then
             cp certs/corp-root-ca.crt /usr/local/share/ca-certificates/corp-root-ca.crt
             cp certs/corp-issuing-ca-02.crt /usr/local/share/ca-certificates/corp-issuing-ca-02.crt
             update-ca-certificates || true
           fi
-          # act_runner + docker.sock: host cannot see job $PWD binds.
-          # Seed a named volume via stdin, then copy into host certs.d.
           docker pull "${BASE_REGISTRY}/golang:1.23.3-bookworm"
           docker volume create teamvault-ci-certs >/dev/null
           docker run --rm -i \
@@ -109,178 +102,12 @@ jobs:
         run: |
           set -euo pipefail
           docker pull "${BASE_REGISTRY}/golang:1.23.3-bookworm"
+          docker pull "${BASE_REGISTRY}/distroless-static:nonroot"
           docker build \
             --pull=false \
             --target test \
             --build-arg "GO_IMAGE=${BASE_REGISTRY}/golang:1.23.3-bookworm" \
             --build-arg "RUNTIME_IMAGE=${BASE_REGISTRY}/distroless-static:nonroot" \
+            --build-arg "GOPROXY=https://proxy.golang.org,direct" \
             -f Dockerfile \
             .
-
-  docker:
-    name: Docker package
-    needs: test
-    if: >-
-      gitea.event_name == 'workflow_dispatch' ||
-      (gitea.event_name == 'push' &&
-        (gitea.ref == 'refs/heads/main' || startsWith(gitea.ref, 'refs/tags/v')))
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        shell: bash
-        env:
-          ACT_TOKEN: ${{ secrets.ACT_RUN_TOKEN || gitea.token }}
-        run: |
-          set -euo pipefail
-          git clone --no-checkout "http://oauth2:${ACT_TOKEN}@gitea:3000/${{ gitea.repository }}.git" .
-          git checkout --force "${{ gitea.sha }}"
-          test -f go.mod
-          test -f certs/corp-ca-bundle.crt
-
-      - name: Resolve registry and image names
-        id: meta
-        shell: bash
-        run: |
-          set -euo pipefail
-          REGISTRY="${REGISTRY:-git.example.internal}"
-          case "${REGISTRY}" in
-            gitea|gitea:*|localhost|127.0.0.1) REGISTRY="git.example.internal" ;;
-          esac
-          REPO_LC="$(echo '${{ gitea.repository }}' | tr '[:upper:]' '[:lower:]')"
-          IMAGE="${REGISTRY}/${REPO_LC}"
-
-          SHA_SHORT="$(echo '${{ gitea.sha }}' | cut -c1-7)"
-          TAGS=("${IMAGE}:sha-${SHA_SHORT}")
-
-          if [ '${{ gitea.ref }}' = 'refs/heads/main' ]; then
-            TAGS+=("${IMAGE}:latest" "${IMAGE}:main")
-          fi
-          if [[ '${{ gitea.ref }}' == refs/tags/v* ]]; then
-            VER='${{ gitea.ref_name }}'
-            TAGS+=("${IMAGE}:${VER}" "${IMAGE}:${VER#v}")
-          fi
-
-          {
-            echo "registry=${REGISTRY}"
-            echo "image=${IMAGE}"
-            echo "tags<<EOF"
-            printf '%s\n' "${TAGS[@]}"
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
-
-          echo "Registry: ${REGISTRY}"
-          echo "Image:    ${IMAGE}"
-          echo "Tags:"
-          printf '  - %s\n' "${TAGS[@]}"
-
-      - name: Login to Gitea container registry
-        shell: bash
-        env:
-          REGISTRY_USER: ${{ secrets.REGISTRY_USER || gitea.actor }}
-          REGISTRY_TOKEN: ${{ secrets.REGISTRY_TOKEN || gitea.token }}
-        run: |
-          set -euo pipefail
-          REGISTRY="${REGISTRY:-git.example.internal}"
-          case "${REGISTRY}" in
-            gitea|gitea:*|localhost|127.0.0.1) REGISTRY="git.example.internal" ;;
-          esac
-          if [ -z "${REGISTRY_TOKEN}" ]; then
-            echo "Missing registry token" >&2
-            exit 1
-          fi
-          echo "docker login ${REGISTRY} as ${REGISTRY_USER}"
-          echo "${REGISTRY_TOKEN}" | docker login "${REGISTRY}" -u "${REGISTRY_USER}" --password-stdin
-
-      - name: Trust Corporate CA for Docker
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [ -d /usr/local/share/ca-certificates ]; then
-            cp certs/corp-root-ca.crt /usr/local/share/ca-certificates/corp-root-ca.crt
-            cp certs/corp-issuing-ca-02.crt /usr/local/share/ca-certificates/corp-issuing-ca-02.crt
-            update-ca-certificates || true
-          fi
-          docker pull "${BASE_REGISTRY}/golang:1.23.3-bookworm"
-          docker volume create teamvault-ci-certs >/dev/null
-          docker run --rm -i \
-            -v teamvault-ci-certs:/out \
-            "${BASE_REGISTRY}/golang:1.23.3-bookworm" \
-            bash -c 'cat > /out/ca.crt' < certs/corp-ca-bundle.crt
-          docker run --rm \
-            -v teamvault-ci-certs:/in:ro \
-            -v /etc/docker/certs.d:/certs.d \
-            "${BASE_REGISTRY}/golang:1.23.3-bookworm" \
-            bash -c "mkdir -p '/certs.d/${REGISTRY}' && cp /in/ca.crt '/certs.d/${REGISTRY}/ca.crt' && test -f '/certs.d/${REGISTRY}/ca.crt' && ls -la '/certs.d/${REGISTRY}'"
-
-      - name: Build image
-        shell: bash
-        run: |
-          set -euo pipefail
-          PRIMARY="$(echo '${{ steps.meta.outputs.tags }}' | head -n1)"
-          VER="$(git describe --tags --always --dirty 2>/dev/null || echo '${{ gitea.sha }}' | cut -c1-7)"
-          COMMIT="$(echo '${{ gitea.sha }}' | cut -c1-7)"
-          docker pull "${BASE_REGISTRY}/golang:1.23.3-bookworm"
-          docker pull "${BASE_REGISTRY}/distroless-static:nonroot"
-          docker build \
-            --pull=false \
-            --build-arg "GO_IMAGE=${BASE_REGISTRY}/golang:1.23.3-bookworm" \
-            --build-arg "RUNTIME_IMAGE=${BASE_REGISTRY}/distroless-static:nonroot" \
-            --build-arg "VERSION=${VER}" \
-            --build-arg "COMMIT=${COMMIT}" \
-            -t "${PRIMARY}" \
-            -f Dockerfile \
-            .
-          while IFS= read -r tag; do
-            [ -n "${tag}" ] || continue
-            docker tag "${PRIMARY}" "${tag}"
-          done <<< '${{ steps.meta.outputs.tags }}'
-
-      - name: Push package
-        shell: bash
-        run: |
-          set -euo pipefail
-          while IFS= read -r tag; do
-            [ -n "${tag}" ] || continue
-            echo "Pushing ${tag}"
-            docker push "${tag}"
-          done <<< '${{ steps.meta.outputs.tags }}'
-
-      - name: Container image scan (Trivy)
-        shell: bash
-        run: |
-          set -euo pipefail
-          PRIMARY="$(echo '${{ steps.meta.outputs.tags }}' | head -n1)"
-          docker pull "${BASE_REGISTRY}/trivy:latest"
-          # Vulnerability DBs mirrored to Gitea (scripts/mirror-oci-to-gitea.ps1 -Only trivy-db)
-          set +e
-          out="$(docker run --rm \
-            -v /var/run/docker.sock:/var/run/docker.sock \
-            "${BASE_REGISTRY}/trivy:latest" image \
-            --exit-code 1 \
-            --severity CRITICAL,HIGH \
-            --ignore-unfixed \
-            --db-repository "${BASE_REGISTRY}/trivy-db:2" \
-            --java-db-repository "${BASE_REGISTRY}/trivy-java-db:1" \
-            "${PRIMARY}" 2>&1)"
-          code=$?
-          set -e
-          echo "${out}"
-          if echo "${out}" | grep -qiE 'no vulnerability database|database .*not found|failed to (download|open) (the )?db|first run cannot skip|cache (dir|directory)|DB error'; then
-            echo "WARN: Trivy DB unavailable — gate skipped (image already pushed)"
-            exit 0
-          fi
-          exit "${code}"
-
-      - name: Summary
-        if: always()
-        shell: bash
-        run: |
-          echo "### TeamVault container package" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo '```' >> "$GITHUB_STEP_SUMMARY"
-          echo '${{ steps.meta.outputs.tags }}' >> "$GITHUB_STEP_SUMMARY"
-          echo '```' >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "Pull example:" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "\`docker pull ${{ steps.meta.outputs.image }}:latest\`" >> "$GITHUB_STEP_SUMMARY"

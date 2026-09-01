@@ -31,7 +31,7 @@ In der Web-App: **Konto → Clients** oder Hilfe **`/help/cli`** — Download un
 
 Admin-Build: `scripts/build-tvcli.ps1` bzw. `scripts/pack-clients.ps1` → nach `<data-dir>/downloads/` kopieren.
 
-CI: Bei Release-Tags (`v*`) bauen `.github/workflows/tvcli.yml` (GitHub) bzw. `.gitea/workflows/tvcli.yml` (Gitea) die vier Standalone-Binaries und hängen sie an das Release.
+CI (Tag `v*`): `.github/workflows/tvcli.yml` baut die vier Standalone-Binaries und veröffentlicht sie am GitHub-Release (Gitea: Assets von GitHub spiegeln).
 
 ## Einrichten
 
