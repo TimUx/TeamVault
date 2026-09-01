@@ -115,6 +115,12 @@ main:not(#app) {
   margin: 2rem auto;
   padding: 0 1rem 3rem;
 }
+body:not(.app-wide) main#app {
+  max-width: 640px;
+  margin: 2rem auto;
+  padding: 0 1rem 3rem;
+  width: auto;
+}
 h1 { font-size: 1.35rem; margin: 0 0 0.5rem; font-weight: 650; letter-spacing: -0.02em; }
 h2 { font-size: 1.05rem; margin: 1.25rem 0 0.5rem; font-weight: 650; }
 .lead { color: var(--color-lead); margin: 0 0 1.5rem; line-height: 1.45; }
@@ -267,7 +273,8 @@ textarea { resize: vertical; min-height: 4rem; }
 
 /* —— App shell: sidebar + topbar (HaushaltsRadar-inspired) —— */
 body.app-wide {
-  overflow-x: hidden;
+  overflow: hidden;
+  height: 100vh;
 }
 body.app-wide > .top {
   display: none;
@@ -276,9 +283,11 @@ body.app-wide main#app {
   display: block;
   max-width: none;
   width: 100%;
+  height: 100%;
   margin: 0;
   padding: 0;
-  min-height: 100vh;
+  min-height: 0;
+  overflow: hidden;
   box-sizing: border-box;
 }
 
@@ -287,19 +296,19 @@ body.app-wide main#app {
   flex-direction: row;
   align-items: stretch;
   width: 100%;
-  min-height: 100vh;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
 }
 .app-sidebar {
   width: var(--drawer-width);
   flex-shrink: 0;
-  position: sticky;
-  top: 0;
-  align-self: flex-start;
-  height: 100vh;
+  min-height: 0;
   background: var(--color-surface);
   border-right: 1px solid var(--color-border);
   display: flex;
   flex-direction: column;
+  overflow: hidden;
   z-index: 30;
 }
 .app-sidebar-brand {
@@ -536,7 +545,6 @@ h1 .heading-ico,
 
 .app-statusbar {
   flex-shrink: 0;
-  margin-top: auto;
   width: 100%;
   box-sizing: border-box;
   border-top: 1px solid var(--color-border);
@@ -616,13 +624,13 @@ h1 .heading-ico,
 }
 
 .app-main {
-  flex: 1 1 0%;
-  width: 0;
+  flex: 1 1 auto;
   min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  min-height: 100vh;
+  overflow: hidden;
   background: var(--color-bg);
 }
 .offline-sync-bar {
@@ -664,8 +672,6 @@ h1 .heading-ico,
   padding: 0 1.15rem;
   background: var(--color-navbar-bg);
   border-bottom: 1px solid var(--color-border);
-  position: sticky;
-  top: 0;
   z-index: 20;
 }
 .app-topbar h1 {
@@ -680,7 +686,10 @@ h1 .heading-ico,
 }
 .app-content {
   flex: 1 1 auto;
-  display: block;
+  min-height: 0;
+  min-width: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
   width: 100%;
   max-width: none;
   padding: 1rem 1.25rem 2.5rem;
@@ -692,7 +701,7 @@ h1 .heading-ico,
   display: flex;
   flex-direction: column;
   gap: 0.65rem;
-  min-height: calc(100vh - var(--topbar-height) - 5rem);
+  min-height: 0;
 }
 .vault-chrome {
   background: var(--color-bg);
@@ -1075,8 +1084,8 @@ body.admin-modal-open { overflow: hidden; }
 
 #unlock.app-unlock-panel {
   box-sizing: border-box;
-  width: min(440px, 100%);
-  max-width: 100%;
+  max-width: 440px;
+  width: 100%;
   margin: 2rem auto;
 }
 
