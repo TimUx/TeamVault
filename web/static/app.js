@@ -1049,6 +1049,10 @@ const PLATFORM_ADMIN_NAV = new Set([
   "admin:apikeys", "admin:platform", "admin:system",
 ]);
 
+const PLATFORM_ADMIN_SECTIONS = new Set([
+  "trust", "access", "smtp", "crypto", "apikeys", "platform", "system",
+]);
+
 function canAccessAdminNav(nav) {
   if (isAuditorOnly()) return nav === "admin:audit";
   if (!isAdmin()) return false;
@@ -1475,7 +1479,7 @@ function renderApp(app) {
           ${navSubSection("admin-platform", "Plattform", `
             ${navLink("admin:platform", "building", "Tenants &amp; Migration", "admin-link platform-link", 'data-admin-only data-platform-only hidden')}
             ${navLink("admin:system", "info", "System", "admin-link", 'data-admin-only data-platform-only')}
-            ${navLink("admin:audit", "clipboard", "Audit", "admin-link")}
+            ${navLink("admin:audit", "clipboard", "Audit", "admin-link", 'data-admin-only')}
           `)}
         `, 'id="navAdminSection" hidden')}
       </nav>
@@ -2282,32 +2286,32 @@ function renderApp(app) {
   }
 
   function syncAdminNavVisibility() {
-    const platform = isPlatformAdmin();
-    const admin = isAdmin();
-    n.querySelectorAll("[data-platform-only]").forEach((el) => {
-      el.hidden = !platform;
+    const navAdmin = n.querySelector("#navAdminSection");
+    if (navAdmin) navAdmin.hidden = !canSeeAdminNav();
+
+    n.querySelectorAll(".sidebar-link[data-nav]").forEach((el) => {
+      const nav = el.dataset.nav || "";
+      if (!nav.startsWith("admin:")) return;
+      el.hidden = !canAccessAdminNav(nav);
     });
-    if (admin && !isAuditorOnly()) {
-      n.querySelectorAll("[data-admin-only]").forEach((el) => {
-        if (el.hasAttribute("data-platform-only") && !platform) {
-          el.hidden = true;
-          return;
-        }
-        if (el.classList.contains("platform-link") && !platform) {
-          el.hidden = true;
-          return;
-        }
-        el.hidden = false;
-      });
-      if (platform) {
-        const plat = n.querySelector("#plat");
-        if (plat) plat.hidden = false;
-        const platLink = n.querySelector(".platform-link");
-        if (platLink) platLink.hidden = false;
+
+    const platform = isPlatformAdmin();
+    const plat = n.querySelector("#plat");
+    if (plat) plat.hidden = !platform;
+    n.querySelectorAll(".admin-section[data-admin-section]").forEach((sec) => {
+      const id = sec.dataset.adminSection;
+      if (!id) return;
+      if (PLATFORM_ADMIN_SECTIONS.has(id)) {
+        sec.hidden = !platform;
+      } else if (id === "audit") {
+        sec.hidden = !(isAuditor() || isAdmin());
+      } else {
+        sec.hidden = isAuditorOnly() || !isAdmin();
       }
-    }
+    });
+
     n.querySelectorAll(".sidebar-subsection[data-nav-subsection]").forEach((sub) => {
-      const visible = sub.querySelectorAll(".sidebar-link:not([hidden])");
+      const visible = sub.querySelectorAll(".sidebar-link[data-nav]:not([hidden])");
       sub.hidden = visible.length === 0;
     });
   }
@@ -2433,6 +2437,7 @@ function renderApp(app) {
       if (me.needs_vault_onboard) { tvGo("/onboard"); return; }
       vault.me = me;
       n.querySelector("#info").textContent = formatSessionInfo(me);
+      syncAdminNavVisibility();
       try {
         vault.policy = await api("/api/policy/client");
         vault.idleMin = vault.policy.unlock_idle_minutes || 15;
