@@ -340,6 +340,54 @@ function formatSessionInfo(me) {
   return line;
 }
 
+function paintSessionBar(root, data) {
+  const session = root.querySelector("#statusSession");
+  const legacy = root.querySelector("#info");
+  if (!session) {
+    if (legacy) {
+      if (data?.expired) legacy.textContent = "Offline-Kopie abgelaufen";
+      else if (data?.snapshot) legacy.textContent = formatOfflineSessionInfo(data.snapshot);
+      else if (data?.me) legacy.textContent = formatSessionInfo(data.me);
+    }
+    return;
+  }
+  const userEl = root.querySelector("#statusUser");
+  const tenantEl = root.querySelector("#statusTenant");
+  const totpEl = root.querySelector("#statusTotp");
+  const offlineEl = root.querySelector("#statusOffline");
+  if (!userEl) return;
+  if (data?.expired) {
+    userEl.textContent = "Offline-Kopie abgelaufen";
+    if (tenantEl) tenantEl.hidden = true;
+    if (totpEl) totpEl.hidden = true;
+    if (offlineEl) offlineEl.hidden = true;
+    return;
+  }
+  if (data?.snapshot) {
+    const snap = data.snapshot;
+    userEl.textContent = snap.username || "—";
+    const tenant = snap.tenant_name || snap.tenant_slug || snap.tenant_id || "";
+    if (tenantEl) {
+      tenantEl.textContent = tenant;
+      tenantEl.hidden = !tenant;
+    }
+    if (totpEl) totpEl.hidden = true;
+    if (offlineEl) offlineEl.hidden = false;
+    return;
+  }
+  if (data?.me) {
+    const me = data.me;
+    userEl.textContent = me.username || "—";
+    const tenant = me.tenant_name || me.tenant_slug || me.tenant_id || "";
+    if (tenantEl) {
+      tenantEl.textContent = tenant;
+      tenantEl.hidden = !tenant;
+    }
+    if (totpEl) totpEl.hidden = !me.totp_enabled;
+    if (offlineEl) offlineEl.hidden = true;
+  }
+}
+
 let aboutCache = null;
 
 async function loadAboutInfo() {
@@ -1494,12 +1542,6 @@ function renderApp(app) {
           `)}
         `, 'id="navAdminSection" hidden')}
       </nav>
-      <div class="app-sidebar-foot">
-        <p class="offline-sync-bar hint" id="offlineSyncBar" hidden role="status"></p>
-        <p class="hint" id="info">Lade…</p>
-        <p class="hint about-line" id="about"></p>
-        <button class="btn-ghost btn-with-ico" type="button" id="out">${btnLabel("logout", "Logout")}</button>
-      </div>
     </aside>
 
     <div class="app-main">
@@ -1810,10 +1852,11 @@ function renderApp(app) {
               </div>
 
               <div class="panel-tab-pane active" role="tabpanel" data-panel-pane="totp">
-                <p class="hint">Zwei-Faktor per Authenticator-App (nur Login). QR wird lokal im Browser erzeugt.</p>
+                <p class="hint">Zwei-Faktor per Authenticator-App (nur Login). QR-Code kommt vom Server (scannbar).</p>
                 <div class="row">
                   <button class="btn-accent" type="button" id="totpSetup">TOTP einrichten</button>
                 </div>
+                <p class="hint" id="totpSetupHint" hidden>Nach dem Scannen den <strong>aktuellen</strong> 6-stelligen Code eingeben. „TOTP einrichten“ nicht erneut klicken — sonst stimmt der Authenticator-Eintrag nicht mehr.</p>
                 <div id="totpbox" hidden>
                   <div class="totp-setup-grid">
                     <div class="totp-qr-wrap" id="otpQr" aria-live="polite"></div>
@@ -2139,6 +2182,21 @@ function renderApp(app) {
           </div>
         </div>
       </div>
+      <footer class="app-statusbar" id="appStatusbar">
+        <p class="offline-sync-bar hint" id="offlineSyncBar" hidden role="status"></p>
+        <div class="app-statusbar-inner">
+          <div class="app-statusbar-session" id="statusSession">
+            <span class="status-user" id="statusUser">Lade…</span>
+            <span class="status-tenant" id="statusTenant" hidden></span>
+            <span class="status-pill" id="statusTotp" hidden>TOTP</span>
+            <span class="status-pill status-pill-offline" id="statusOffline" hidden>Offline</span>
+          </div>
+          <div class="app-statusbar-end">
+            <span class="about-line" id="about"></span>
+            <button class="btn-ghost btn-with-ico btn-sm" type="button" id="out">${btnLabel("logout", "Abmelden")}</button>
+          </div>
+        </div>
+      </footer>
     </div>
   </div>`);
   app.appendChild(n);
@@ -2406,7 +2464,7 @@ function renderApp(app) {
     };
     pick();
     sel.onchange = pick;
-    n.querySelector("#info").textContent = formatOfflineSessionInfo(vault.offlineSnapshot);
+    paintSessionBar(n, { snapshot: vault.offlineSnapshot });
   }
 
   async function showOfflineExpiredMessage() {
@@ -2418,7 +2476,7 @@ function renderApp(app) {
       err.textContent =
         "Offline-Kopie abgelaufen (max. 30 Tage). Bitte online anmelden und unter Konto → Offline-Vault neu synchronisieren.";
     }
-    n.querySelector("#info").textContent = "Offline-Kopie abgelaufen";
+    paintSessionBar(n, { expired: true });
   }
 
   async function initAppSession() {
@@ -2447,7 +2505,7 @@ function renderApp(app) {
       const me = await api("/api/me");
       if (me.needs_vault_onboard) { tvGo("/onboard"); return; }
       vault.me = me;
-      n.querySelector("#info").textContent = formatSessionInfo(me);
+      paintSessionBar(n, { me });
       syncAdminNavVisibility();
       try {
         vault.policy = await api("/api/policy/client");
@@ -2645,29 +2703,44 @@ function renderApp(app) {
   }
 
   n.querySelector("#totpSetup").onclick = async () => {
+    const setupBtn = n.querySelector("#totpSetup");
     const box = n.querySelector("#totpbox"); box.hidden = false;
-    const res = await api("/api/totp/setup", { method: "POST", body: "{}" });
-    totpSecretPlain = res.secret || "";
-    const otpUrl = res.otpauth_url || "";
-    n.querySelector("#otpurl").textContent = otpUrl;
-    const qr = n.querySelector("#otpQr");
-    if (res.qr_data_url && qr) {
-      const img = document.createElement("img");
-      img.src = res.qr_data_url;
-      img.width = 200;
-      img.height = 200;
-      img.alt = "TOTP QR-Code";
-      qr.replaceChildren(img);
-      qr.hidden = false;
-    } else if (otpUrl && globalThis.TVQR) TVQR.mount(qr, otpUrl, { size: 200 });
-    else if (qr) {
-      qr.innerHTML = `<p class="hint">QR nicht verfügbar — bitte otpauth-URL kopieren.</p>`;
-      qr.hidden = false;
+    const terr = n.querySelector("#terr"); terr.hidden = true;
+    try {
+      const res = await api("/api/totp/setup", { method: "POST", body: "{}" });
+      totpSecretPlain = res.secret || "";
+      const otpUrl = res.otpauth_url || "";
+      n.querySelector("#otpurl").textContent = otpUrl;
+      const qr = n.querySelector("#otpQr");
+      if (res.qr_data_url && qr) {
+        const img = document.createElement("img");
+        img.src = res.qr_data_url;
+        img.width = 200;
+        img.height = 200;
+        img.alt = "TOTP QR-Code";
+        qr.replaceChildren(img);
+        qr.hidden = false;
+      } else if (otpUrl && globalThis.TVQR) TVQR.mount(qr, otpUrl, { size: 200 });
+      else if (qr) {
+        qr.innerHTML = `<p class="hint">QR nicht verfügbar — bitte otpauth-URL kopieren.</p>`;
+        qr.hidden = false;
+      }
+      const sec = n.querySelector("#otpSecret");
+      sec.hidden = true;
+      sec.textContent = "";
+      n.querySelector("#otpReveal").textContent = "Secret kurz anzeigen";
+      const hint = n.querySelector("#totpSetupHint");
+      if (hint) hint.hidden = false;
+      if (setupBtn) {
+        setupBtn.disabled = true;
+        setupBtn.title = "Bereits eingerichtet — zuerst Code bestätigen oder Seite neu laden";
+      }
+      n.querySelector("#code")?.focus();
+    } catch (e) {
+      const terr = n.querySelector("#terr");
+      terr.hidden = false;
+      terr.textContent = e.message;
     }
-    const sec = n.querySelector("#otpSecret");
-    sec.hidden = true;
-    sec.textContent = "";
-    n.querySelector("#otpReveal").textContent = "Secret kurz anzeigen";
   };
   n.querySelector("#otpCopy").onclick = async (ev) => {
     await copyText(n.querySelector("#otpurl").textContent);
@@ -2725,12 +2798,16 @@ function renderApp(app) {
     }
   };
   n.querySelector("#en").onclick = async () => {
+    const terr = n.querySelector("#terr"); terr.hidden = true;
     try {
-      await api("/api/totp/enable", { method: "POST", body: JSON.stringify({ code: n.querySelector("#code").value.trim() }) });
+      const code = String(n.querySelector("#code").value || "").replace(/\s+/g, "").replace(/\D/g, "");
+      if (code.length !== 6) throw new Error("Bitte den 6-stelligen Code eingeben");
+      await api("/api/totp/enable", { method: "POST", body: JSON.stringify({ code }) });
       totpSecretPlain = "";
       location.reload();
     } catch (e) {
-      const terr = n.querySelector("#terr"); terr.hidden = false; terr.textContent = e.message;
+      terr.hidden = false;
+      terr.textContent = e.message;
     }
   };
 
@@ -3114,7 +3191,7 @@ function renderApp(app) {
     n.querySelector("#vaultui").hidden = false;
     n.querySelector("#appSidebar").hidden = false;
     n.querySelector("#mpw").value = "";
-    n.querySelector("#info").textContent = formatOfflineSessionInfo(snap);
+    paintSessionBar(n, { snapshot: snap });
     vault.secretsCache = (snap.secrets || []).map((it) => ({ ...it }));
     vault.secretsTotal = vault.secretsCache.length;
     vault.secretsOffset = vault.secretsCache.length;
@@ -3128,7 +3205,7 @@ function renderApp(app) {
   async function afterUnlock() {
     try {
       vault.me = await api("/api/me");
-      n.querySelector("#info").textContent = formatSessionInfo(vault.me);
+      paintSessionBar(n, { me: vault.me });
     } catch (_) {}
     try {
       const pol = await api("/api/policy/client");

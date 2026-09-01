@@ -763,7 +763,11 @@ func (a *API) handleTOTPEnable(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	sec, err := a.openTOTP(u.TotpSecretEnc)
-	if err != nil || !totp.Validate(body.Code, sec) {
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "totp setup unavailable — bitte erneut einrichten")
+		return
+	}
+	if len(u.TotpSecretEnc) == 0 || !totp.Validate(body.Code, sec) {
 		writeErr(w, http.StatusBadRequest, "invalid totp code")
 		return
 	}

@@ -4,6 +4,8 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"strings"
+	"time"
+	"unicode"
 
 	"github.com/pquerna/otp"
 	"github.com/pquerna/otp/totp"
@@ -20,8 +22,35 @@ func GenerateSecret(issuer, account string) (*otp.Key, error) {
 	})
 }
 
+// NormalizeCode strips spaces and non-digits (authenticator paste quirks).
+func NormalizeCode(code string) string {
+	var b strings.Builder
+	for _, r := range strings.TrimSpace(code) {
+		if unicode.IsDigit(r) {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+
 func Validate(code, secret string) bool {
-	return totp.Validate(code, secret)
+	code = NormalizeCode(code)
+	secret = strings.TrimSpace(secret)
+	if code == "" || secret == "" {
+		return false
+	}
+	ok, err := totp.ValidateCustom(
+		code,
+		secret,
+		time.Now().UTC(),
+		totp.ValidateOpts{
+			Period:    30,
+			Skew:      2,
+			Digits:    otp.DigitsSix,
+			Algorithm: otp.AlgorithmSHA1,
+		},
+	)
+	return err == nil && ok
 }
 
 // LegacySeal encodes the TOTP shared secret as base64 (Phase 4; migrate via SealWith).

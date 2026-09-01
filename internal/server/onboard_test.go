@@ -8,7 +8,9 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"testing"
+	"time"
 
+	"github.com/pquerna/otp/totp"
 	"github.com/teamvault/teamvault/internal/bootstrap"
 	"github.com/teamvault/teamvault/internal/cryptocore"
 	"github.com/teamvault/teamvault/internal/server"
@@ -72,8 +74,19 @@ func TestOnboardAndTOTP(t *testing.T) {
 	if qr, _ := setup["qr_data_url"].(string); qr == "" || len(qr) < 64 {
 		t.Fatalf("missing qr_data_url: %v", setup)
 	}
-	// enable with a code — generate via totp lib in test by validating roundtrip through enable may fail timing
-	// Skip enable if we can't generate; instead verify setup stored
+	code, err := totp.GenerateCode(secret, time.Now().UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
+	enable := postJSONCookie(t, ts.URL+"/api/totp/enable", map[string]string{"code": code}, jar)
+	if enable["status"] != "enabled" {
+		t.Fatalf("enable: %v", enable)
+	}
+	me2 := getJSONCookie(t, ts.URL+"/api/me", jar)
+	if me2["totp_enabled"] != true {
+		t.Fatalf("me after enable: %v", me2)
+	}
+	// verify setup stored
 	keys := getJSONCookie(t, ts.URL+"/api/vault/keys", jar)
 	if keys["public_key_b64"] == "" {
 		t.Fatal(keys)
