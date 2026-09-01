@@ -362,51 +362,11 @@ function formatSessionInfo(me) {
 }
 
 function paintSessionBar(root, data) {
-  const session = root.querySelector("#statusSession");
-  const legacy = root.querySelector("#info");
-  if (!session) {
-    if (legacy) {
-      if (data?.expired) legacy.textContent = "Offline-Kopie abgelaufen";
-      else if (data?.snapshot) legacy.textContent = formatOfflineSessionInfo(data.snapshot);
-      else if (data?.me) legacy.textContent = formatSessionInfo(data.me);
-    }
-    return;
-  }
-  const userEl = root.querySelector("#statusUser");
-  const tenantEl = root.querySelector("#statusTenant");
-  const totpEl = root.querySelector("#statusTotp");
-  const offlineEl = root.querySelector("#statusOffline");
-  if (!userEl) return;
-  if (data?.expired) {
-    userEl.textContent = "Offline-Kopie abgelaufen";
-    if (tenantEl) tenantEl.hidden = true;
-    if (totpEl) totpEl.hidden = true;
-    if (offlineEl) offlineEl.hidden = true;
-    return;
-  }
-  if (data?.snapshot) {
-    const snap = data.snapshot;
-    userEl.textContent = snap.username || "—";
-    const tenant = snap.tenant_name || snap.tenant_slug || snap.tenant_id || "";
-    if (tenantEl) {
-      tenantEl.textContent = tenant;
-      tenantEl.hidden = !tenant;
-    }
-    if (totpEl) totpEl.hidden = true;
-    if (offlineEl) offlineEl.hidden = false;
-    return;
-  }
-  if (data?.me) {
-    const me = data.me;
-    userEl.textContent = me.username || "—";
-    const tenant = me.tenant_name || me.tenant_slug || me.tenant_id || "";
-    if (tenantEl) {
-      tenantEl.textContent = tenant;
-      tenantEl.hidden = !tenant;
-    }
-    if (totpEl) totpEl.hidden = !me.totp_enabled;
-    if (offlineEl) offlineEl.hidden = true;
-  }
+  const info = root.querySelector("#info");
+  if (!info) return;
+  if (data?.expired) info.textContent = "Offline-Kopie abgelaufen";
+  else if (data?.snapshot) info.textContent = formatOfflineSessionInfo(data.snapshot);
+  else if (data?.me) info.textContent = formatSessionInfo(data.me);
 }
 
 let aboutCache = null;
@@ -1524,9 +1484,9 @@ function announceA11y(msg) {
 
 function renderApp(app) {
   document.body.classList.add("app-wide");
-  const backdrop = el(`<div class="sidebar-backdrop" id="sidebarBackdrop"></div>`);
   const n = el(`<div class="app-frame">
-    <aside class="app-sidebar" id="appSidebar" hidden>
+    <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+    <aside class="app-sidebar" id="appSidebar">
       <div class="app-sidebar-brand">${icon("shield", "brand-ico")} <span>TeamVault</span></div>
       <nav class="app-sidebar-nav" id="appSidebarNav">
         ${navSection("vault", "Vault", `
@@ -1565,6 +1525,8 @@ function renderApp(app) {
       </nav>
       <div class="app-sidebar-foot">
         <p class="offline-sync-bar hint" id="offlineSyncBar" hidden role="status"></p>
+        <p class="hint" id="info">Lade…</p>
+        <p class="hint about-line" id="about"></p>
         <button class="btn-ghost btn-with-ico btn-sm" type="button" id="out">${btnLabel("logout", "Abmelden")}</button>
       </div>
     </aside>
@@ -2207,24 +2169,10 @@ function renderApp(app) {
           </div>
         </div>
       </div>
-
-      <footer class="app-statusbar" id="appStatusbar">
-        <div class="app-statusbar-inner">
-          <div class="app-statusbar-session" id="statusSession">
-            <span class="status-user" id="statusUser">Lade…</span>
-            <span class="status-tenant" id="statusTenant" hidden></span>
-            <span class="status-pill" id="statusTotp" hidden>TOTP</span>
-            <span class="status-pill status-pill-offline" id="statusOffline" hidden>Offline</span>
-          </div>
-          <div class="app-statusbar-end">
-            <span class="about-line" id="about"></span>
-          </div>
-        </div>
-      </footer>
     </div>
   </div>`);
-  app.appendChild(backdrop);
   app.appendChild(n);
+  const backdrop = n.querySelector("#sidebarBackdrop");
   const live = document.createElement("div");
   live.id = "a11yLive";
   live.className = "visually-hidden";
@@ -3214,7 +3162,6 @@ function renderApp(app) {
     n.querySelector("#unlock").hidden = true;
     n.querySelector("#lockOverlay").hidden = true;
     n.querySelector("#vaultui").hidden = false;
-    n.querySelector("#appSidebar").hidden = false;
     n.querySelector("#mpw").value = "";
     paintSessionBar(n, { snapshot: snap });
     vault.secretsCache = (snap.secrets || []).map((it) => ({ ...it }));
@@ -3251,7 +3198,6 @@ function renderApp(app) {
       lockOv._escLock = null;
     }
     n.querySelector("#vaultui").hidden = false;
-    n.querySelector("#appSidebar").hidden = false;
     n.querySelector("#mpw").value = "";
     n.querySelector("#lockMpw").value = "";
     if (canSeeAdminNav()) {
