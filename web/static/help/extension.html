@@ -25,39 +25,35 @@
         <p class="lead">Fill und Copy im Browser — Entschlüsselung nur in der Extension (Zero-Knowledge).</p>
         <nav class="help-toc">
           <a href="#install">Installation</a>
+          <a href="#fallback">Fallback</a>
           <a href="#nutzen">Nutzen</a>
         </nav>
         <figure class="help-figure">
-          <img src="/help/img/help-extension.png" alt="Extension-Hilfe" width="1100" height="720" loading="lazy" />
-          <figcaption>Installations-Einzeiler und Nutzungshinweise</figcaption>
+          <img src="/help/img/help-extension.png" alt="Extension-Hilfe: normale Installation" width="1100" height="720" loading="lazy" />
+          <figcaption>Einrichtung und „Extension installieren“ — ohne Entwicklermodus</figcaption>
         </figure>
 
         <h2 id="install">Installation</h2>
         <div class="help-step">
-          <h3>Einzeiler (Windows PowerShell)</h3>
-          <code class="onedliner" id="cmdWin"></code>
+          <h3>Normal installieren (empfohlen)</h3>
+          <p>Kein Entwicklermodus: einmal kurz einrichten, danach wie aus dem Browser-Store installieren.</p>
+          <div id="clientDlExt"></div>
+        </div>
+        <div class="help-step" id="fallback">
+          <h3>Erweitert: Entwicklermodus (Fallback)</h3>
+          <p>Nur wenn die normale Installation nicht möglich ist (z.&nbsp;B. ohne Browser-Richtlinie):</p>
+          <p class="hint">ZIP entpacken und manuell laden — Einzeiler:</p>
+          <code class="onedliner" id="cmdZipWin"></code>
           <div class="help-actions">
-            <button type="button" class="btn-accent" data-copy="cmdWin">Kopieren</button>
+            <button type="button" class="btn-ghost" data-copy="cmdZipWin">Windows-ZIP kopieren</button>
           </div>
-        </div>
-        <div class="help-step">
-          <h3>Einzeiler (Linux / macOS)</h3>
-          <code class="onedliner" id="cmdUnix"></code>
+          <code class="onedliner" id="cmdZipUnix"></code>
           <div class="help-actions">
-            <button type="button" class="btn-accent" data-copy="cmdUnix">Kopieren</button>
+            <button type="button" class="btn-ghost" data-copy="cmdZipUnix">Linux/macOS-ZIP kopieren</button>
           </div>
-        </div>
-        <div class="help-step">
-          <h3>Chrome / Edge (manuell)</h3>
           <ol>
-            <li>Extension-Ordner bereitlegen.</li>
-            <li><code>chrome://extensions</code> bzw. <code>edge://extensions</code> → Entwicklermodus → <strong>Entpackte Erweiterung laden</strong>.</li>
-          </ol>
-        </div>
-        <div class="help-step">
-          <h3>Firefox (manuell)</h3>
-          <ol>
-            <li><code>about:debugging#/runtime/this-firefox</code> → temporäres Add-on laden → <code>manifest.json</code>.</li>
+            <li>Chrome/Edge: <code>chrome://extensions</code> → Entwicklermodus → <strong>Entpackte Erweiterung laden</strong>.</li>
+            <li>Firefox: <code>about:debugging#/runtime/this-firefox</code> → temporäres Add-on.</li>
           </ol>
         </div>
 
@@ -81,13 +77,14 @@
           </ol>
           <p class="help-note">Secrets ohne URL: Fill/Copy immer erlaubt. Mit URL: nur bei Domain-Match (Phishing-Schutz).</p>
         </div>
-        <p class="help-note"><strong>Admin:</strong> ZIP nach <code>&lt;data-dir&gt;/downloads/teamvault-extension.zip</code> legen.</p>
+        <p class="help-note">In der Web-App: <strong>Konto → Clients</strong> — gleiche Downloads und Einzeiler.</p>
         <footer class="help-foot" id="aboutFoot"></footer>
       </main>
     </div>
   </div>
   <script src="/help/tv-base.js"></script>
   <script src="/help/nav.js"></script>
+  <script src="/help/client-downloads.js"></script>
   <script src="/help/extension.js"></script>
 </body>
 </html>

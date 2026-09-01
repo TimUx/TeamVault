@@ -126,12 +126,18 @@ async function onboardIfNeeded(page) {
       const err = document.querySelector("#err");
       if (go || unlock || vault) return true;
       if (err && !err.hidden && err.textContent) {
-        throw new Error(err.textContent.trim());
+        const msg = err.textContent.trim();
+        if (/already onboarded|bereits/i.test(msg)) return true;
+        throw new Error(msg);
       }
       return false;
     }, null, { timeout: 180000 });
   } catch (e) {
     await shot(page, "onboard-error.png", { fullPage: true });
+    if (/already onboarded|bereits/i.test(String(e.message || e))) {
+      await page.goto(`${BASE}/app`);
+      return;
+    }
     throw e;
   }
   if (await page.locator("#goApp").isVisible().catch(() => false)) {
@@ -227,6 +233,7 @@ async function main() {
     viewport: VIEWPORT,
     locale: "de-DE",
     colorScheme: "light",
+    serviceWorkers: "block",
   });
   const page = await context.newPage();
 
@@ -293,19 +300,41 @@ async function main() {
 
   await unlockVault(page);
   await page.click('[data-nav="account"]');
-  await page.waitForSelector('[data-panel-tab="totp"], #totpSetup', { timeout: 15000 });
+  await page.waitForSelector('[data-panel-pane="totp"]', { timeout: 15000 });
   await shot(page, "account.png", { fullPage: true });
-  await page.click('[data-panel-tab="totp"]').catch(() => {});
+  const totpTab = page.locator('[data-panel-tab="totp"]');
+  if ((await totpTab.getAttribute("aria-selected")) !== "true") {
+    await totpTab.click();
+  }
+  await page.waitForSelector('[data-panel-pane="totp"]:not([hidden]) #totpSetup', { state: "visible", timeout: 15000 });
+  await page.locator("#totpSetup").scrollIntoViewIfNeeded();
   await page.click("#totpSetup");
   await page.waitForSelector("#otpQr svg, #otpurl", { timeout: 15000 }).catch(() => {});
   await page.waitForTimeout(400);
   await shot(page, "account-totp.png", { fullPage: true });
-  await page.click('[data-panel-tab="offline"]').catch(() => {});
+  await page.click('[data-panel-tab="offline"]');
+  await page.waitForSelector('[data-panel-pane="offline"]:not([hidden])', { timeout: 10000 }).catch(() => {});
   const offlineOpt = page.locator("#offline_optin");
   if (await offlineOpt.count()) {
     await offlineOpt.check();
     await page.waitForTimeout(300);
     await shot(page, "account-offline.png", { fullPage: true });
+  }
+
+  try {
+    await page.click('[data-nav="account"]');
+    await page.waitForSelector('[data-panel-group="account"]', { timeout: 15000 });
+    await page.evaluate(() => {
+      const btn = document.querySelector('[data-panel-group="account"] [data-panel-tab="clients"]');
+      if (!btn) throw new Error("clients tab missing");
+      btn.click();
+    });
+    await page.waitForSelector("#clientDownloadsApp .client-dl-card", { timeout: 20000 });
+    await page.locator("#clientDownloadsApp").scrollIntoViewIfNeeded();
+    await page.waitForTimeout(600);
+    await shot(page, "account-clients.png", { fullPage: true });
+  } catch (e) {
+    console.warn("account-clients screenshot skipped:", e.message);
   }
 
   console.log("Admin…");
@@ -468,6 +497,8 @@ async function main() {
 
   console.log("Help & theme…");
   await page.goto(`${BASE}/help`);
+  await page.waitForSelector("#clientDlCli .help-actions, #clientDlCli .help-note", { timeout: 15000 }).catch(() => {});
+  await page.waitForTimeout(500);
   await shot(page, "help.png", { fullPage: true });
   await page.goto(`${BASE}/help/vault`);
   await shot(page, "help-vault.png", { fullPage: true });
@@ -475,8 +506,12 @@ async function main() {
   await page.waitForSelector("#demoQr svg, #demoQr .hint", { timeout: 10000 }).catch(() => {});
   await shot(page, "help-account.png", { fullPage: true });
   await page.goto(`${BASE}/help/extension`);
+  await page.waitForSelector("h1", { timeout: 15000 });
+  await page.waitForTimeout(3000);
   await shot(page, "help-extension.png", { fullPage: true });
   await page.goto(`${BASE}/help/cli`);
+  await page.waitForSelector("h1", { timeout: 15000 });
+  await page.waitForTimeout(1500);
   await shot(page, "help-cli.png", { fullPage: true });
 
   await page.goto(`${BASE}/app`);

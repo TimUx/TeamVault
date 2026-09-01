@@ -279,3 +279,12 @@
 /* legacy class still used by old markup during transition */
 .help-wrap { max-width: 56rem; margin: 0 auto; padding: 1.5rem 1.25rem 3rem; }
 .help-nav { display: none; }
+.help-dl-list { margin: 0.5rem 0 0.75rem; padding-left: 1.25rem; }
+.help-dl-more { margin-top: 0.65rem; font-size: 0.9rem; }
+.help-dl-more summary { cursor: pointer; font-weight: 600; }
+.help-install-steps { display: flex; flex-direction: column; gap: 0.5rem; }
+.help-install-steps .help-actions { margin: 0.25rem 0; }
+.help-note.warn { color: var(--color-primary, #a70240); }
+.help-steps-compact { margin: 0.65rem 0 0 1.25rem; }
+.help-client-embed { margin-top: 0.75rem; }
+.help-client-embed + .help-client-embed { margin-top: 1rem; padding-top: 1rem; border-top: 1px dashed var(--color-border); }

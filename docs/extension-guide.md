@@ -4,35 +4,62 @@ Step-by-step für Endanwender. Interaktive Fassung: **`/help/extension`** auf Ih
 
 ![Hilfe Extension](images/help-extension.png)
 
-## Installation
+## Installation (normal, empfohlen)
 
-### Einzeiler
+Ohne Entwicklermodus: einmal kurz einrichten, danach wie aus dem Browser-Store installieren.
 
-**Windows:**
+1. **`/help/extension`** oder **Konto → Clients** öffnen.
+2. **Schritt 1 — Einrichtung:** PowerShell-Einzeiler ausführen (setzt Browser-Richtlinie für Ihren Benutzer):
+
+```powershell
+$env:TEAMVAULT_URL='https://IHRE-VAULT-URL'; irm "$env:TEAMVAULT_URL/help/install/extension-user.ps1" | iex
+```
+
+3. **Schritt 2 — Installieren:** Auf **Extension installieren** klicken (lädt `.crx` von `/downloads/`). Chrome/Edge zeigen den üblichen Installationsdialog.
+
+**IT (alle PCs):** Einmalig als Administrator:
+
+```powershell
+$env:TEAMVAULT_URL='https://IHRE-VAULT-URL'; irm "$env:TEAMVAULT_URL/help/install/extension-policy.ps1" | iex
+```
+
+Richtlinien-Vorlagen liegen auch unter `/downloads/extension/chrome-policy.json` und `chrome-install-sources.json`.
+
+### Wenn PowerShell blockiert ist (Antimalware / Firmenrichtlinie)
+
+`irm … | iex` wird in vielen Umgebungen von Antimalware oder App-Control blockiert — das ist normal.
+
+**Endanwender (Schritt 2):** In `/help/extension` oder **Konto → Clients** auf **Extension installieren** klicken — dafür ist kein PowerShell nötig, sobald die Browser-Richtlinie gesetzt ist.
+
+**Schritt 1 ohne Pipe:**
+
+1. Im Browser `$Base/help/install/extension-user.ps1` öffnen → **Speichern unter**
+2. In einer PowerShell (nicht als Pipe):  
+   `$env:TEAMVAULT_URL='https://IHRE-VAULT-URL'; powershell -NoProfile -ExecutionPolicy Bypass -File .\extension-user.ps1`
+
+Wenn auch das blockiert wird: **IT** rollt die Vorlagen von `/downloads/extension/chrome-policy.json` und `chrome-install-sources.json` per GPO/Intune aus (ohne Skript).
+
+### Linux / macOS
+
+```bash
+curl -fsSL "https://IHRE-VAULT-URL/help/install/extension-user.sh" | TEAMVAULT_URL="https://IHRE-VAULT-URL" bash
+```
+
+Chrome/Edge unter Linux benötigen ebenfalls IT-Richtlinien. Firefox: XPI über `policies.json` oder temporär `about:debugging`.
+
+## Erweitert: Entwicklermodus (Fallback)
+
+Nur wenn die normale Installation nicht möglich ist:
 
 ```powershell
 $env:TEAMVAULT_URL='https://IHRE-VAULT-URL'; irm "$env:TEAMVAULT_URL/help/install/extension.ps1" | iex
 ```
 
-**Linux / macOS:**
-
 ```bash
 curl -fsSL "https://IHRE-VAULT-URL/help/install/extension.sh" | TEAMVAULT_URL="https://IHRE-VAULT-URL" bash
 ```
 
-Lädt `teamvault-extension.zip` von `/downloads/` und entpackt es lokal. Danach Extension im Browser „entpackt laden“.
-
-### Chrome / Edge (manuell)
-
-1. Ordner mit `manifest.json` bereitlegen (Einzeiler oder Git: `clients/extension`).
-2. `chrome://extensions` / `edge://extensions` → Entwicklermodus → **Entpackte Erweiterung laden**.
-3. Ordner wählen.
-
-### Firefox (manuell)
-
-1. `about:debugging#/runtime/this-firefox`
-2. **Temporäres Add-on laden** → `manifest.json`
-3. Hinweis: nach Firefox-Neustart erneut laden (ohne signiertes XPI).
+Lädt `teamvault-extension.zip`, entpackt lokal, dann **Entpackte Erweiterung laden** in `chrome://extensions`.
 
 ## Einrichten
 
@@ -46,4 +73,4 @@ Lädt `teamvault-extension.zip` von `/downloads/` und entpackt es lokal. Danach 
 2. Popup → Eintrag filtern (Alle / Privat / Geteilt) → **Fill** oder **Copy**.
 3. Ohne URL im Secret: Fill/Copy erlaubt. Mit URL: Aktion nur bei Domain-Match (Phishing-Schutz).
 
-Admin: `scripts/pack-clients.ps1` erzeugt `dist/teamvault-extension.zip` → nach `<data-dir>/downloads/` kopieren.
+Admin: `scripts/pack-clients.ps1` erzeugt CLI + Extension-Artefakte (`dist/`) → im Docker-Image unter `/opt/teamvault/bundled-downloads`.

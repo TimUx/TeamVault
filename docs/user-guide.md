@@ -237,13 +237,17 @@ Kurzanleitung in der App: Sidebar **Hilfe** bzw. Login **Hilfe** → **Browser-E
 
 ![Hilfe Extension](images/help-extension.png)
 
-Kurz: Extension laden → Server-URL → Login/Unlock → auf passender Website **Fill** / **Copy** (nur bei Domain-Match).
+Kurz: Einmal **Einrichtung** (PowerShell-Einzeiler), dann **Extension installieren** wie aus dem Store — Server-URL → Login/Unlock → auf passender Website **Fill** / **Copy** (nur bei Domain-Match).
+
+In der App: **Konto → Clients** — Einrichtungs-Einzeiler und **Extension installieren** (`.crx`).
 
 ## 8. CLI (`tvcli`)
 
 Kurzanleitung: **Hilfe → CLI** bzw. `/help/cli`. Markdown: [`docs/cli-guide.md`](cli-guide.md).
 
 ![Hilfe CLI](images/help-cli.png)
+
+In der App: **Konto → Clients** — plattformgerechter Download und PowerShell/Bash-Einzeiler.
 
 Einzeiler und Alltagsbefehle stehen dort. API-Keys brauchen mindestens einen Scope:
 
@@ -289,7 +293,7 @@ Nur `read` → keine Admin- oder Schreibaktionen. Cookie-Login ohne API-Key ist 
 | Secret „kein Zugriff“ | Noch nicht geteilt oder Rechte entzogen |
 | Fill/Copy blockiert | Secret-URL passt nicht zum Tab-Host |
 | Import leer / Format? | Vorschau prüfen; KeePass nur XML (kein `.kdbx`); `.tvbak` braucht Backup-Passwort |
-| CLI/Extension-Install | `/help/cli` bzw. `/help/extension`; Admin muss `/downloads/` befüllen |
+| CLI/Extension-Install | **Konto → Clients** oder `/help/cli` / `/help/extension` (Docker-Image liefert `/downloads/` mit) |
 | Offline-Kopie abgelaufen | Erneut online anmelden und synchronisieren (TTL 30 Tage) |
 | „Offline vom Administrator deaktiviert“ | Admin → Krypto & Policy → Offline-Cache erlauben |
 

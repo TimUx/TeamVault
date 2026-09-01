@@ -1791,6 +1791,7 @@ function renderApp(app) {
                 <button type="button" class="panel-tab" role="tab" data-panel-tab="login" aria-selected="false">Login-Passwort</button>
                 <button type="button" class="panel-tab" role="tab" data-panel-tab="master" aria-selected="false">Master-Passwort</button>
                 <button type="button" class="panel-tab" role="tab" data-panel-tab="offline" aria-selected="false">Offline-Vault</button>
+                <button type="button" class="panel-tab" role="tab" data-panel-tab="clients" aria-selected="false">Clients</button>
               </div>
 
               <div class="panel-tab-pane active" role="tabpanel" data-panel-pane="totp">
@@ -1848,6 +1849,12 @@ function renderApp(app) {
                   <button class="btn-ghost btn-sm" type="button" id="offline_sync">Jetzt synchronisieren</button>
                   <button class="btn-ghost btn-sm" type="button" id="offline_wipe">Offline-Kopie löschen</button>
                 </div>
+              </div>
+
+              <div class="panel-tab-pane" role="tabpanel" data-panel-pane="clients" hidden>
+                <p class="hint">CLI und Browser-Extension von dieser Instanz — Zero-Knowledge bleibt erhalten (Entschlüsselung nur lokal).</p>
+                <div id="clientDownloadsApp" class="client-dl-grid"></div>
+                <p class="hint">Ausführliche Anleitung: <a href="${tvPath("/help/cli")}" target="_blank" rel="noopener">CLI</a> · <a href="${tvPath("/help/extension")}" target="_blank" rel="noopener">Extension</a></p>
               </div>
 
               <div class="error" id="acc_err" hidden></div>
@@ -2538,8 +2545,88 @@ function renderApp(app) {
     onShow(tab) {
       if (tab === "passkeys") refreshPasskeys().catch(() => {});
       if (tab === "offline") updateOfflineAccountUI(vault.offlineSnapshot);
+      if (tab === "clients") refreshClientDownloadsUI().catch(() => {});
     },
   });
+
+  function fmtClientBytes(n) {
+    if (!n) return "";
+    if (n < 1024) return n + " B";
+    if (n < 1024 * 1024) return (n / 1024).toFixed(1) + " KB";
+    return (n / (1024 * 1024)).toFixed(1) + " MB";
+  }
+  function detectClientPlatform() {
+    const ua = navigator.userAgent || "";
+    const plat = (navigator.userAgentData && navigator.userAgentData.platform) || "";
+    const s = (plat + " " + ua).toLowerCase();
+    if (s.includes("win")) return "windows";
+    return "linux";
+  }
+  function detectClientArch() {
+    const ua = navigator.userAgent || "";
+    return /arm64|aarch64/i.test(ua) ? "arm64" : "amd64";
+  }
+  function pickClientCLI(cli, platform, arch) {
+    return (
+      cli.find((c) => c.platform === platform && c.arch === arch) ||
+      cli.find((c) => c.platform === platform) ||
+      cli[0]
+    );
+  }
+  async function copyClientText(text, btn) {
+    await copyText(text);
+    if (btn) flashCopy(btn);
+  }
+  async function refreshClientDownloadsUI() {
+    const root = n.querySelector("#clientDownloadsApp");
+    if (!root) return;
+    root.innerHTML = "<p class='hint'>Lade Downloads…</p>";
+    const res = await fetch(tvPath("/api/client-downloads"), { credentials: "include" });
+    if (!res.ok) throw new Error("Downloads nicht verfügbar");
+    const data = await res.json();
+    const plat = detectClientPlatform();
+    const arch = detectClientArch();
+    const cli = data.cli || [];
+    const rec = pickClientCLI(cli, plat, arch);
+    const cliLinks = cli.map((c) =>
+      `<li><a href="${tvPath(c.url)}" download>${c.name}</a> <span class="hint">(${fmtClientBytes(c.size)})</span></li>`
+    ).join("");
+    const ext = data.extension || {};
+    const crx = ext.crx;
+    const cliInstall = plat === "windows" ? data.install.cli_windows : data.install.cli_unix;
+    const extInstall = plat === "windows" ? (data.install.extension_user_ps || data.install.extension_windows) : data.install.extension_unix;
+    root.innerHTML = `
+      <div class="client-dl-card">
+        <h4>CLI (tvcli)</h4>
+        ${rec
+          ? `<p class="hint">Empfohlen: ${rec.platform}/${rec.arch}</p>
+             <div class="row">
+               <a class="btn-accent" href="${tvPath(rec.url)}" download>tvcli herunterladen</a>
+               <button type="button" class="btn-ghost btn-sm" id="cliInstallCopy">Einzeiler kopieren</button>
+             </div>
+             <ul class="client-dl-links">${cliLinks}</ul>`
+          : `<p class="hint">CLI-Binaries noch nicht bereitgestellt.</p>`}
+      </div>
+      <div class="client-dl-card">
+        <h4>Browser-Extension</h4>
+        ${crx
+          ? `<p class="hint">Zuerst Einrichtung, dann normal installieren (ohne Entwicklermodus).</p>
+             <div class="row">
+               <button type="button" class="btn-ghost btn-sm" id="extInstallCopy">Einrichtung (Einzeiler)</button>
+               <a class="btn-accent" href="${tvPath(crx.url)}" id="extCrxBtn">Extension installieren</a>
+             </div>
+             <p class="hint">Extension-ID: <code>${ext.id || "—"}</code> · <a href="${tvPath("/help/extension")}" target="_blank" rel="noopener">Anleitung</a></p>`
+          : `<p class="hint">Extension noch nicht bereitgestellt.</p>`}
+      </div>`;
+    const cliBtn = root.querySelector("#cliInstallCopy");
+    if (cliBtn && cliInstall) {
+      cliBtn.onclick = () => copyClientText(cliInstall, cliBtn);
+    }
+    const extBtn = root.querySelector("#extInstallCopy");
+    if (extBtn && extInstall) {
+      extBtn.onclick = () => copyClientText(extInstall, extBtn);
+    }
+  }
 
   n.querySelector("#totpSetup").onclick = async () => {
     const box = n.querySelector("#totpbox"); box.hidden = false;

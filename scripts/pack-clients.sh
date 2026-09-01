@@ -6,14 +6,12 @@ cd "$ROOT"
 
 ./scripts/build-tvcli.sh
 
-EXT="$ROOT/clients/extension"
-OUT="$ROOT/dist/teamvault-extension.zip"
-rm -f "$OUT"
-( cd "$EXT" && zip -qr "$OUT" . )
+echo "Packing extension (crx/xpi)…"
+go run ./cmd/pack-extension
 
 echo ""
 echo "Fertig. Nach <data-dir>/downloads/ kopieren, z.B.:"
 echo "  mkdir -p data/downloads"
 echo "  cp dist/tvcli-* data/downloads/"
-echo "  cp dist/teamvault-extension.zip data/downloads/"
-echo "ZIP: $OUT"
+echo "  cp dist/teamvault-extension.* data/downloads/"
+echo "  cp -r dist/extension data/downloads/"

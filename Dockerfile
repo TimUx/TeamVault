@@ -29,6 +29,28 @@ RUN if [ -f vendor/modules.txt ]; then \
 FROM build AS test
 RUN export GOFLAGS="$(cat /tmp/goflags)"; go test ./... && go vet ./...
 
+FROM build AS clients
+ARG VERSION=dev
+ARG COMMIT=none
+RUN export GOFLAGS="$(cat /tmp/goflags)" CGO_ENABLED=0 && \
+    mkdir -p /out/downloads && \
+    build_tvcli() { \
+      goos="$1"; goarch="$2"; suffix="$3"; \
+      name="tvcli-${goos}-${goarch}${suffix}"; \
+      GOOS="$goos" GOARCH="$goarch" go build -trimpath \
+        -ldflags="-s -w -X main.version=${VERSION} -X main.commit=${COMMIT}" \
+        -o "/out/downloads/${name}" ./cmd/tvcli; \
+    } && \
+    build_tvcli linux amd64 "" && \
+    build_tvcli linux arm64 "" && \
+    build_tvcli windows amd64 ".exe" && \
+    build_tvcli windows arm64 ".exe" && \
+    go build -trimpath -o /out/pack-extension ./cmd/pack-extension && \
+    TV_EXTENSION_UPDATE_BASE=https://teamvault.local /out/pack-extension && \
+    mkdir -p /out/downloads && \
+    cp dist/teamvault-extension.* /out/downloads/ && \
+    cp -r dist/extension /out/downloads/
+
 FROM build AS bin
 ARG VERSION=dev
 ARG COMMIT=none
@@ -42,10 +64,12 @@ FROM ${RUNTIME_IMAGE}
 WORKDIR /data
 
 COPY --from=bin /out/teamvault /usr/local/bin/teamvault
+COPY --from=clients /out/downloads /opt/teamvault/bundled-downloads
 
 ENV TEAMVAULT_ADDR=:8080 \
     TEAMVAULT_DATA_DIR=/data \
-    TEAMVAULT_MASTER_UNLOCK_KEY_FILE=/run/secrets/teamvault_unlock
+    TEAMVAULT_MASTER_UNLOCK_KEY_FILE=/run/secrets/teamvault_unlock \
+    TEAMVAULT_BUNDLED_DOWNLOADS=/opt/teamvault/bundled-downloads
 
 EXPOSE 8080
 VOLUME ["/data"]

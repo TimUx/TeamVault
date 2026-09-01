@@ -24,6 +24,7 @@
         <h1>CLI installieren &amp; nutzen</h1>
         <p class="lead"><code>tvcli</code> spricht Ihre TeamVault-Instanz an. Secrets werden nur lokal entschlüsselt (Zero-Knowledge).</p>
         <nav class="help-toc">
+          <a href="#download">Download</a>
           <a href="#install">Installation</a>
           <a href="#nutzen">Nutzen</a>
         </nav>
@@ -32,8 +33,12 @@
           <figcaption>Einzeiler und Alltagsbefehle für tvcli</figcaption>
         </figure>
 
-        <h2 id="install">Installation (Einzeiler)</h2>
-        <p>Voraussetzung: Admin hat die Binaries unter <code>/downloads/</code> abgelegt.</p>
+        <h2 id="install">Installation</h2>
+        <div class="help-step" id="download">
+          <h3>Aus der App / von dieser Instanz</h3>
+          <p>Die CLI-Binaries liegen auf dem Server bereit — Download oder Einzeiler-Installation:</p>
+          <div id="clientDlCli"></div>
+        </div>
         <div class="help-step">
           <h3>Windows (PowerShell)</h3>
           <code class="onedliner" id="cmdWin"></code>
@@ -78,13 +83,14 @@ tvcli secrets create -title "VPN" -username alice
 tvcli secrets update -id sec_… -title "VPN neu"</code>
           <p class="help-note">Master-Passwort wird nur lokal abgefragt — nicht an den Server gesendet.</p>
         </div>
-        <p class="help-note"><strong>Admin:</strong> Binaries mit <code>scripts/build-tvcli.ps1</code> bauen und nach <code>&lt;data-dir&gt;/downloads/</code> kopieren.</p>
+        <p class="help-note"><strong>Image/Docker:</strong> CLI, Extension (.crx) und Policy-Vorlagen sind im Server-Image enthalten und werden beim Start nach <code>/downloads/</code> bereitgestellt. Manuell: <code>scripts/pack-clients.ps1</code>.</p>
         <footer class="help-foot" id="aboutFoot"></footer>
       </main>
     </div>
   </div>
   <script src="/help/tv-base.js"></script>
   <script src="/help/nav.js"></script>
+  <script src="/help/client-downloads.js"></script>
   <script src="/help/cli.js"></script>
 </body>
 </html>

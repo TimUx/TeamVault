@@ -7,13 +7,14 @@
   };
   set("baseUrl", base);
   set(
-    "cmdWin",
+    "cmdZipWin",
     `$env:TEAMVAULT_URL='${base}'; irm "$env:TEAMVAULT_URL/help/install/extension.ps1" | iex`
   );
   set(
-    "cmdUnix",
+    "cmdZipUnix",
     `curl -fsSL "${base}/help/install/extension.sh" | TEAMVAULT_URL="${base}" bash`
   );
+  if (typeof tvInitClientDownloads === "function") tvInitClientDownloads("extension");
   document.querySelectorAll("[data-copy]").forEach((btn) => {
     btn.addEventListener("click", async () => {
       const el = document.getElementById(btn.getAttribute("data-copy"));

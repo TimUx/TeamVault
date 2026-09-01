@@ -13,16 +13,21 @@ if [[ ! -f "$SECRETS/unlock" ]]; then
   chmod 644 "$SECRETS/unlock"
 fi
 
+echo "Packing client artifacts for screenshots…"
+(cd "$ROOT" && go run ./cmd/pack-extension && ./scripts/build-tvcli.sh)
+
 docker rm -f "$CONTAINER" 2>/dev/null || true
 
 docker run -d --name "$CONTAINER" \
   -v "$ROOT:/src" \
+  -v "$ROOT/dist:/bundled:ro" \
   -v "$DATA:/data" \
   -v "$SECRETS/unlock:/run/secrets/teamvault_unlock:ro" \
   -p "${PORT}:8099" \
   -e TEAMVAULT_ADDR=:8099 \
   -e TEAMVAULT_DATA_DIR=/data \
   -e TEAMVAULT_MASTER_UNLOCK_KEY_FILE=/run/secrets/teamvault_unlock \
+  -e TEAMVAULT_BUNDLED_DOWNLOADS=/bundled \
   golang:1.23.3 sh -c 'cd /src && go run ./cmd/teamvault'
 
 cleanup() { docker rm -f "$CONTAINER" 2>/dev/null || true; }

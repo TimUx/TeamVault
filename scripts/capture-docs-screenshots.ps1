@@ -24,7 +24,18 @@ $env:TEAMVAULT_ADDR = ":$Port"
 $env:TEAMVAULT_DATA_DIR = $Data
 $env:TEAMVAULT_MASTER_UNLOCK_KEY_FILE = Join-Path $Secrets "unlock"
 
-$server = Start-Process -FilePath "go" -ArgumentList "run", "./cmd/teamvault" `
+Write-Host "Packing client artifacts for screenshots..."
+go run ./cmd/pack-extension
+& "$PSScriptRoot\build-tvcli.ps1"
+$env:TEAMVAULT_BUNDLED_DOWNLOADS = Join-Path $Root "dist"
+
+$serverBin = Join-Path $env:LOCALAPPDATA "teamvault-screenshot-server.exe"
+if (Test-Path $serverBin) { Remove-Item -Force $serverBin }
+Write-Host "Building server binary for fresh go:embed…"
+go build -a -trimpath -o $serverBin ./cmd/teamvault
+if ($LASTEXITCODE -ne 0) { throw "go build failed" }
+
+$server = Start-Process -FilePath $serverBin `
   -WorkingDirectory $Root -PassThru -WindowStyle Hidden
 try {
   $deadline = (Get-Date).AddMinutes(2)

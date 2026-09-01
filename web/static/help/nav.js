@@ -45,6 +45,15 @@
           <div class="help-sec-title">Clients</div>
           ${link("/help/cli", "CLI (tvcli)", active === "cli")}
           ${link("/help/extension", "Browser-Extension", active === "extension")}
+          ${active === "extension" ? `
+            <a class="help-side-link sub" href="#install">Installation</a>
+            <a class="help-side-link sub" href="#fallback">Fallback</a>
+            <a class="help-side-link sub" href="#nutzen">Fill &amp; Copy</a>
+          ` : ""}
+          ${active === "cli" ? `
+            <a class="help-side-link sub" href="#install">Installation</a>
+            <a class="help-side-link sub" href="#nutzen">Befehle</a>
+          ` : ""}
         </div>
         <div class="help-sec">
           <div class="help-sec-title">App</div>

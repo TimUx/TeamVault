@@ -1273,6 +1273,12 @@ body.admin-modal-open { overflow: hidden; }
 }
 .panel-tab-pane { margin-top: 0.25rem; }
 .panel-tab-pane[hidden] { display: none !important; }
+.client-dl-grid { display: grid; gap: 1rem; margin-top: 0.75rem; }
+@media (min-width: 720px) { .client-dl-grid { grid-template-columns: 1fr 1fr; } }
+.client-dl-card { border: 1px solid var(--color-border); border-radius: 6px; padding: 1rem 1.1rem; background: var(--color-surface); }
+.client-dl-card h4 { margin: 0 0 0.5rem; font-size: 1rem; }
+.client-dl-card .row { margin-top: 0.65rem; flex-wrap: wrap; gap: 0.5rem; }
+.client-dl-links { margin: 0.5rem 0 0; padding-left: 1.1rem; font-size: 0.9rem; }
 
 .totp-setup-grid {
   display: grid;

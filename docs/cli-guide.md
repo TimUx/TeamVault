@@ -20,7 +20,9 @@ $env:TEAMVAULT_URL='https://IHRE-VAULT-URL'; irm "$env:TEAMVAULT_URL/help/instal
 curl -fsSL "https://IHRE-VAULT-URL/help/install/tvcli.sh" | TEAMVAULT_URL="https://IHRE-VAULT-URL" bash
 ```
 
-Die Skripte laden das Binary von `https://…/downloads/` (Admin muss die Dateien dort ablegen).
+Die Skripte laden das Binary von `https://…/downloads/` (im Docker-Image automatisch bereitgestellt).
+
+In der Web-App: **Konto → Clients** oder Hilfe **`/help/cli`** — Download und Installations-Einzeiler für Ihre Instanz.
 
 ### Manuell
 

@@ -301,18 +301,24 @@ Unlock-Key nie ins Image legen.
 
 ### 4.1 Client-Downloads (CLI & Extension)
 
-Die Hilfe unter **`/help`** (Login-Header und Sidebar **Hilfe**) bietet Einzeiler-Installationen:
+**Docker-Image:** `tvcli` (vier Plattformen), `teamvault-extension.crx` / `.zip` / `.xpi` sowie Policy-Vorlagen (`extension/updates.xml`, `chrome-policy.json`, …) sind im Image unter `/opt/teamvault/bundled-downloads/` enthalten. Beim Serverstart werden fehlende oder ältere Dateien nach **`<data-dir>/downloads/`** kopiert und unter **`/downloads/`** ausgeliefert.
+
+**Web-App:** Nutzer finden Downloads unter **Konto → Clients**; die Hilfe unter **`/help/cli`** und **`/help/extension`** zeigt dieselben Buttons und Installations-Einzeiler.
+
+**Extension (normal):** Nutzer führen einmal `extension-user.ps1` aus (setzt `ExtensionSettings` + `ExtensionInstallSources` für Chrome/Edge), danach klicken sie auf **Extension installieren**. IT kann stattdessen `extension-policy.ps1` zentral (HKLM/GPO) ausrollen.
 
 ![Hilfe Übersicht](images/help.png)
 
-Dafür Binaries/ZIP nach **`<data-dir>/downloads/`** legen (Server legt den Ordner beim Start an, ausgeliefert unter `/downloads/`):
+**Manuell / Dev ohne Image-Bundle** — nach `scripts/pack-clients.ps1`:
 
 ```powershell
-.\scripts\pack-clients.ps1
 New-Item -ItemType Directory -Force data\downloads | Out-Null
 Copy-Item dist\tvcli-* data\downloads\
-Copy-Item dist\teamvault-extension.zip data\downloads\
+Copy-Item dist\teamvault-extension.* data\downloads\
+Copy-Item -Recurse dist\extension data\downloads\
 ```
+
+Optional: `TEAMVAULT_BUNDLED_DOWNLOADS` auf ein anderes Quellverzeichnis setzen.
 
 Danach funktionieren z. B.:
 
@@ -439,7 +445,30 @@ Dokumentations-Screenshots liegen unter `docs/images/`. Neu erzeugen (Playwright
 ./scripts/capture-docs-screenshots.sh
 ```
 
-Windows (ohne Docker):
+Windows (ohne Docker) — **wenn `.ps1` lokal durch Antimalware blockiert wird**, Server und Screenshots manuell:
+
+```bash
+# Client-Artefakte (ohne PowerShell)
+go run ./cmd/pack-extension
+./scripts/build-tvcli.sh   # oder nur Linux-Binaries im CI
+
+# Server starten (eigenes Terminal)
+export TEAMVAULT_ADDR=:8099 TEAMVAULT_DATA_DIR=./data
+export TEAMVAULT_MASTER_UNLOCK_KEY_FILE=./secrets/unlock
+export TEAMVAULT_BUNDLED_DOWNLOADS=./dist
+go run ./cmd/teamvault
+
+# Screenshots (zweites Terminal)
+TV_URL=http://127.0.0.1:8099 node scripts/capture-docs-screenshots.mjs
+```
+
+Alternativ mit Docker (empfohlen, kein lokales `.ps1`):
+
+```bash
+./scripts/capture-docs-screenshots.sh
+```
+
+Windows mit PowerShell (nur wenn nicht blockiert):
 
 ```powershell
 ./scripts/capture-docs-screenshots.ps1

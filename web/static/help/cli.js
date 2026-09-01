@@ -19,6 +19,9 @@
     "cmdKey",
     `# PowerShell\n$env:TEAMVAULT_API_KEY='tvk_…'\ntvcli -base ${base} whoami\n\n# Bash\nexport TEAMVAULT_API_KEY=tvk_…\ntvcli -base ${base} whoami`
   );
+  const dlLink = document.getElementById("dlLink");
+  if (dlLink) dlLink.href = base + "/downloads/";
+  if (typeof tvInitClientDownloads === "function") tvInitClientDownloads("cli");
   document.querySelectorAll("[data-copy]").forEach((btn) => {
     btn.addEventListener("click", async () => {
       const el = document.getElementById(btn.getAttribute("data-copy"));

@@ -7,16 +7,32 @@
     "default_popup": "popup.html",
     "default_title": "TeamVault"
   },
-  "permissions": ["storage", "clipboardWrite", "activeTab", "scripting"],
-  "host_permissions": ["http://127.0.0.1/*", "http://localhost/*"],
-  "optional_host_permissions": ["https://*/*", "http://*/*"],
+  "permissions": [
+    "storage",
+    "clipboardWrite",
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [
+    "http://127.0.0.1/*",
+    "http://localhost/*"
+  ],
+  "optional_host_permissions": [
+    "https://*/*",
+    "http://*/*"
+  ],
   "background": {
     "service_worker": "background.js"
   },
   "content_scripts": [
     {
-      "matches": ["http://*/*", "https://*/*"],
-      "js": ["content.js"],
+      "matches": [
+        "http://*/*",
+        "https://*/*"
+      ],
+      "js": [
+        "content.js"
+      ],
       "run_at": "document_idle"
     }
   ],
@@ -28,5 +44,6 @@
       "id": "teamvault@local",
       "strict_min_version": "109.0"
     }
-  }
+  },
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAoUtZs96V7FxYhtfqFHIJk0+D7peF/IPoiCbQUCP0WEjyMGN+QfU9zCle3xXhaC5ytpGdgM5jvehI/LYEe4XW+5BAc0RE5NvSGsyDiWl4itQhO+IktZ2FA8sWpq+JsTsqjW06dij8sdqWj3UQyQNFVW8uM41/P3WidyRQR1Y7GtrOdsjn7GrDc8DufDBpSesLc73vfCxT+o9C7lAQpfBOSB4zKrZ8iN+6c6ntYZdQzI376wI71crZoVD2X7ThL5vGKoAQyaOzN+i80ps+DO6hKTqbaIvc4FWqE/WKDKnMAcPtnBFs2h/48+bsgCfZf5H1D5BFp2k7h6iNTcMRc+WqbQIDAQAB"
 }
