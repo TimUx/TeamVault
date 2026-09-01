@@ -1,50 +1,40 @@
-# Gitea Actions (act_runner)
+# Gitea (Mirror-Remote)
 
-## Build-Strategie
+TeamVault nutzt **Gitea nur als internes Git-Remote** und für Container-Registry/Releases im Firmennetz. **Keine Gitea Actions** — alle Builds laufen auf GitHub.
 
-| Artefakt | Quelle | Gitea |
-|----------|--------|-------|
-| **Server-Binaries** (`teamvault-*`) | GitHub Actions `release.yml` | Release-Assets von GitHub spiegeln |
-| **CLI** (`tvcli-*`) | GitHub Actions `tvcli.yml` | Release-Assets von GitHub spiegeln |
-| **Container-Image** | GitHub Actions `docker.yml` → GHCR | Nach Tag: Image nach `git.example.internal/cc-3.3/teamvault` syncen |
-| **Go-Module** | `go mod` / GOPROXY (GitHub CI) | **nicht** als `vendor/` im Repo |
+## Was auf Gitea liegt
 
-`vendor/` und Go-Toolchain-Generic-Packages gehören **nicht** auf Gitea — spart ~270 MB Repo-/Package-Speicher.
+| Artefakt | Quelle |
+|----------|--------|
+| Git (`main`, Tags) | Push von Entwickler-Clients |
+| **Container-Image** `cc-3.3/teamvault` | Nach Release von **GHCR** syncen |
+| **Release-Binaries** | Von **GitHub Releases** spiegeln |
 
-## Workflow
+## GitHub CI (einzige Build-Pipeline)
 
-- [`workflows/ci.yml`](workflows/ci.yml) — leichte Checks (cryptocore-Sync, `go test` via Docker + Module-Proxy)
-- [`workflows/mirror-base-images.yml`](workflows/mirror-base-images.yml) — optionaler Runner-Spiegel für Base-Images
+- `.github/workflows/ci.yml` — Tests (PR/`main`)
+- `.github/workflows/docker.yml` — Image → `ghcr.io/timux/teamvault`
+- `.github/workflows/release.yml` — `teamvault-*` Binaries
+- `.github/workflows/tvcli.yml` — `tvcli-*` Binaries
 
-Kein Image-Build und kein tvcli-Build auf Gitea (benötigt `actions/*` von github.com, das der Runner nicht zuverlässig erreicht).
+## Nach jedem Release-Tag (`v*`)
 
-## Base-Images (nur für CI-Tests auf dem Runner)
+1. GitHub Actions abwarten (Release, tvcli, Docker grün)
+2. Release-Assets von GitHub nach Gitea kopieren
+3. Image `ghcr.io/timux/teamvault:<version>` nach `git.example.internal/cc-3.3/teamvault` taggen/pushen
 
-Lokal mit Corp-Proxy spiegeln (kein Docker Desktop nötig):
-
-```powershell
-.\scripts\mirror-oci-to-gitea.ps1
-```
-
-| Image | Ziel |
-|-------|------|
-| `golang:1.23.3-bookworm` | `git.example.internal/cc-3.3/golang:1.23.3-bookworm` |
-| `distroless/static-debian12:nonroot` | `…/cc-3.3/distroless-static:nonroot` |
-| `aquasec/trivy:latest` | `…/cc-3.3/trivy:latest` (optional) |
-
-## Secrets / Vars
-
-| Name | Zweck |
-|------|--------|
-| `REGISTRY_TOKEN` | PAT mit `write:package` |
-| `REGISTRY_USER` | Registry-Login |
-| `ACT_RUN_TOKEN` | Git-Clone im Runner (Fallback: Job-Token) |
-| `REGISTRY` | Registry-Hostname überschreiben |
-
-## Deploy-Image
+## Deploy
 
 ```bash
 docker pull git.example.internal/cc-3.3/teamvault:1.3.13
 ```
 
-Nach jedem Release-Tag: GHCR-Image und GitHub-Release-Assets nach Gitea synchronisieren.
+## Optional: Base-Images lokal spiegeln
+
+Nur noch relevant, wenn andere Projekte im `cc-3.3`-Namespace Images ohne Internet bauen. Für TeamVault selbst nicht nötig:
+
+```powershell
+.\scripts\mirror-oci-to-gitea.ps1
+```
+
+`vendor/` und Go-Toolchain-Packages gehören **nicht** auf Gitea.
