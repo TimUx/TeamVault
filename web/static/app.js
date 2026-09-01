@@ -340,15 +340,10 @@ function ensureHeaderControls() {
 
 function formatAboutLine(info) {
   const product = (info && info.product) || "TeamVault";
-  let version = String((info && info.version) || "dev");
-  const commit = info && info.commit && info.commit !== "none" ? String(info.commit) : "";
+  const raw = String((info && info.version) || "dev").trim();
   const developer = (info && info.developer) || "Timo Braun";
-  const semver = version.match(/^v?(\d+\.\d+\.\d+)/);
-  if (semver) {
-    version = "v" + semver[1];
-  } else if (commit && version !== "dev") {
-    version = version + " (" + commit.slice(0, 7) + ")";
-  }
+  const semver = raw.match(/^v?(\d+\.\d+\.\d+)(?:[-+].*)?$/i);
+  const version = semver ? `v${semver[1]}` : "dev";
   return `${product} ${version} · Entwickler: ${developer}`;
 }
 
@@ -1525,8 +1520,6 @@ function renderApp(app) {
       </nav>
       <div class="app-sidebar-foot">
         <p class="offline-sync-bar hint" id="offlineSyncBar" hidden role="status"></p>
-        <p class="hint" id="info">Lade…</p>
-        <p class="hint about-line" id="about"></p>
         <button class="btn-ghost btn-with-ico btn-sm" type="button" id="out">${btnLabel("logout", "Abmelden")}</button>
       </div>
     </aside>
@@ -2169,6 +2162,13 @@ function renderApp(app) {
           </div>
         </div>
       </div>
+
+      <footer class="app-footer">
+        <div class="app-footer-inner">
+          <p class="app-footer-session hint" id="info">Lade…</p>
+          <p class="app-footer-about about-line" id="about"></p>
+        </div>
+      </footer>
     </div>
   </div>`);
   app.appendChild(n);

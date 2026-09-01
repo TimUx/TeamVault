@@ -327,7 +327,8 @@ textarea { resize: vertical; min-height: 4rem; }
 
 /* —— App shell: sidebar + topbar (HaushaltsRadar-inspired) —— */
 body.app-wide {
-  overflow-x: hidden;
+  overflow: hidden;
+  height: 100vh;
 }
 body.app-wide > .top {
   display: none;
@@ -339,16 +340,20 @@ body.app-wide main,
 body.app-wide main#app {
   max-width: none;
   width: 100%;
+  height: 100%;
   margin: 0;
   padding: 0;
-  min-height: 100vh;
+  min-height: 0;
+  overflow: hidden;
   box-sizing: border-box;
 }
 
 .app-frame {
   display: flex;
-  min-height: 100vh;
   width: 100%;
+  height: 100vh;
+  min-height: 0;
+  overflow: hidden;
 }
 .app-sidebar {
   width: var(--drawer-width);
@@ -364,13 +369,6 @@ body.app-wide main#app {
 }
 .app-sidebar[hidden] {
   display: none !important;
-}
-.app-sidebar-foot .hint { margin: 0; font-size: 0.75rem; }
-.app-sidebar-foot .about-line {
-  margin: 0;
-  color: var(--color-hint);
-  font-size: 0.7rem;
-  line-height: 1.35;
 }
 .app-sidebar-brand {
   padding: 1rem 1rem 0.75rem;
@@ -614,8 +612,10 @@ h1 .heading-ico,
 .app-main {
   flex: 1 1 0;
   min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
   background: var(--color-bg);
 }
 .offline-sync-bar {
@@ -670,19 +670,54 @@ h1 .heading-ico,
   gap: 0.5rem;
 }
 .app-content {
-  flex: 1;
-  padding: 1rem 1.25rem 2.5rem;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 1rem 1.25rem 1.5rem;
   max-width: min(96vw, 1400px);
   width: 100%;
   box-sizing: border-box;
 }
 .app-content .panel { box-shadow: none; }
 
+.app-footer {
+  flex-shrink: 0;
+  width: 100%;
+  box-sizing: border-box;
+  border-top: 1px solid var(--color-border);
+  background: var(--color-surface);
+  padding: 0.55rem 1.15rem 0.65rem;
+}
+.app-footer-inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1.25rem;
+  width: 100%;
+  min-width: 0;
+}
+.app-footer-session {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--color-text);
+  min-width: 0;
+}
+.app-footer-about {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--color-hint);
+  line-height: 1.35;
+  text-align: right;
+  min-width: 0;
+}
+
 .secrets-workspace {
   display: flex;
   flex-direction: column;
   gap: 0.65rem;
-  min-height: calc(100vh - var(--topbar-height) - 5rem);
+  min-height: 0;
 }
 .vault-chrome {
   background: var(--color-bg);
