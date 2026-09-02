@@ -17,18 +17,21 @@ TeamVault nutzt **Gitea nur als internes Git-Remote** und für Container-Registr
 - `.github/workflows/release.yml` — `teamvault-*` Binaries
 - `.github/workflows/tvcli.yml` — `tvcli-*` Binaries
 
-## Git-Spiegelung GitHub → Gitea (optional, automatisch)
+## Git-Spiegelung GitHub → Gitea (lokal)
 
-Workflow `docs.yml` kann nach Docs-/Hilfe-Updates `main` und neue Tags nach Gitea pushen.
+Gitea ist **nicht aus dem Internet** erreichbar — GitHub Actions können nicht direkt nach Gitea pushen. Nach CI/Release auf GitHub vom Firmennetz aus spiegeln:
 
-**GitHub Repository (TimUx/TeamVault):**
+```powershell
+.\scripts\sync-github-to-gitea.ps1
+```
 
-| Einstellung | Wert |
-|-------------|------|
-| Variable `GITEA_SYNC_ENABLED` | `true` |
-| Secret `GITEA_PUSH_URL` | `https://<user>:<token>@git.example.internal/git/CC-3.3/TeamVault.git` |
+Das Skript holt `main` + Tags von `github` (über CONNECT-Proxy `127.0.0.1:18081`) und pusht nach `origin` (Gitea, ohne Proxy).
 
-Token: Gitea → Einstellungen → Zugriffstoken (Schreibzugriff auf Repo). Ohne diese Einstellungen bleibt der manuelle Push von Entwickler-Clients nötig.
+Typischer Ablauf nach Docs-Workflow oder Release:
+
+1. GitHub Actions auf `main` / neuem Tag abwarten
+2. Lokal: `.\scripts\sync-github-to-gitea.ps1`
+3. Optional: Container-Image und Release-Binaries wie unten
 
 ## Nach jedem Release-Tag (`v*`)
 

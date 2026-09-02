@@ -448,7 +448,7 @@ Sessions, Login-Rate-Limits und Passkey-Challenges liegen **im Prozessspeicher**
 | Nur `docs/*.md` (Markdown-Guides) | Kein Release — Hilfe in der App unverändert |
 | `workflow_dispatch` | Manuell: Screenshots ja/nein |
 
-Nach erfolgreichem Lauf: Commit `docs: refresh screenshots… [skip ci]`, optional neuer Tag. Mit Repository-Variable `GITEA_SYNC_ENABLED=true` und Secret `GITEA_PUSH_URL` wird `main` + Tags nach Gitea gespiegelt (siehe [`.gitea/README.md`](../.gitea/README.md)).
+Nach erfolgreichem Lauf auf GitHub: Commit `docs: refresh screenshots… [skip ci]`, optional neuer Patch-Tag. **Gitea-Spiegelung lokal:** `.\scripts\sync-github-to-gitea.ps1` (Gitea nicht von GitHub aus erreichbar — siehe [`.gitea/README.md`](../.gitea/README.md)).
 
 Dokumentations-Screenshots liegen unter `docs/images/` (Spiegel: `web/static/help/img/`). Lokal neu erzeugen (Playwright + Dev-Server):
 

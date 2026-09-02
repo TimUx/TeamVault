@@ -1,4 +1,5 @@
-# Regenerate docs screenshots, commit updates, patch-release when online help changes, sync Gitea.
+# Regenerate docs screenshots, commit updates, patch-release when online help changes.
+# Gitea sync: run scripts/sync-github-to-gitea.ps1 locally (Gitea not reachable from GitHub).
 name: Docs & Screenshots
 
 on:
@@ -128,20 +129,4 @@ EOF
           git push origin HEAD:main
           if [ "${{ steps.release.outputs.needs_release }}" = "true" ] && [ -n "${{ steps.release.outputs.new_tag }}" ]; then
             git push origin "${{ steps.release.outputs.new_tag }}"
-          fi
-
-      - name: Sync to Gitea
-        if: vars.GITEA_SYNC_ENABLED == 'true' && (steps.commit.outputs.committed == 'true' || steps.release.outputs.needs_release == 'true')
-        env:
-          GITEA_PUSH_URL: ${{ secrets.GITEA_PUSH_URL }}
-        run: |
-          set -euo pipefail
-          if [ -z "${GITEA_PUSH_URL:-}" ]; then
-            echo "GITEA_PUSH_URL secret missing — skip Gitea sync." >&2
-            exit 1
-          fi
-          git remote add gitea "$GITEA_PUSH_URL"
-          git push gitea HEAD:main
-          if [ "${{ steps.release.outputs.needs_release }}" = "true" ] && [ -n "${{ steps.release.outputs.new_tag }}" ]; then
-            git push gitea "${{ steps.release.outputs.new_tag }}"
           fi
