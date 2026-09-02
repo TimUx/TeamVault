@@ -74,7 +74,7 @@
         <div class="help-step">
           <h3>Schritt 2 · Login &amp; Unlock</h3>
           <ol>
-            <li>Tenant, Benutzer, Login (Passwort/Passkey/TOTP wie in der Web-App).</li>
+            <li>Tenant, Benutzer, Login-Passwort; optional TOTP im selben Formular (Web-App: zweiter Schritt mit sechs Ziffernfeldern).</li>
             <li>Master-Passwort — nur lokal in der Extension.</li>
           </ol>
         </div>
@@ -84,9 +84,9 @@
             <li>Website öffnen, die zur Secret-URL passt (falls URLs hinterlegt).</li>
             <li>Popup → optional <strong>Alle / Privat / Geteilt</strong> filtern → Eintrag → <strong>Fill</strong> oder <strong>Copy</strong>.</li>
           </ol>
-          <p class="help-note">Secrets ohne URL: Fill/Copy immer erlaubt. Mit URL: nur bei Domain-Match (Phishing-Schutz).</p>
+          <p class="help-note">Secrets ohne URL: Fill/Copy immer erlaubt. Mit URL: nur bei <strong>exakter Origin-Match</strong> (Schema, Host und Port — Phishing-Schutz).</p>
         </div>
-        <p class="help-note">In der Web-App: <strong>Konto → Clients</strong> — gleiche Downloads und Einzeiler.</p>
+        <p class="help-note">In der Web-App: <strong>Konto → Clients</strong> — gleiche Downloads und Einzeiler (wenn Extension-Integration aktiviert).</p>
         <footer class="help-foot" id="aboutFoot"></footer>
       </main>
     </div>

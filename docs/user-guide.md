@@ -11,7 +11,7 @@ Version und Entwickler (Timo Braun) sehen Sie unten in der App bzw. unter Login.
 
 | Geheimnis | Zweck |
 |-----------|--------|
-| **Login-Passwort** (oder Passkey + optional TOTP) | Session beim Server |
+| **Login-Passwort** (oder Passkey; bei TOTP: zweiter Login-Schritt) | Session beim Server |
 | **Master-Passwort** | Entschlüsselt Ihren privaten Schlüssel **nur im Browser** |
 
 Der Server sieht niemals Ihr Master-Passwort und niemals Klartext-Secrets (Zero-Knowledge).
@@ -19,8 +19,9 @@ Der Server sieht niemals Ihr Master-Passwort und niemals Klartext-Secrets (Zero-
 ## 2. Erste Anmeldung
 
 1. URL Ihrer Instanz öffnen → **Login**
-2. **Organisation** (Dropdown der Mandanten), Username, Login-Passwort (TOTP falls aktiv)
-3. Optional **Passkey** statt Passwort (wenn registriert)
+2. **Schritt 1:** **Organisation** (Dropdown der Mandanten), Username, Login-Passwort — optional **Passkey** statt Passwort
+3. **Schritt 2 (nur bei aktivem TOTP):** Nach erfolgreicher Prüfung von Passwort oder Passkey erscheint ein zweiter Schritt mit **sechs Einzelfeldern** für den Authenticator-Code. Ohne eingerichtetes TOTP entfällt dieser Schritt.
+4. **Login-Passwort (lokal):** mindestens 16 Zeichen, Groß- und Kleinbuchstaben, Ziffer, Sonderzeichen, **keine Umlaute** (LDAP-User nutzen ihr AD-Passwort)
 
 Die zuletzt gewählte Organisation wird im Browser gemerkt. Bei genau einem Mandanten ist dieser vorausgewählt.
 
@@ -63,13 +64,14 @@ Nach dem Entsperren: linke **Sidebar** mit Icons. Unter Vault getrennt:
 |------|--------|
 | **Meine Secrets** | Private Secrets (nur Sie) — `visibility=private` |
 | **Geteilte Secrets** | Team-Secrets mit User-/Gruppen-Freigabe — `visibility=shared` (auch wenn Sie der Anleger sind) |
+| **Favoriten** | Von Ihnen markierte Einträge (Stern in der Liste; nur lokal im Browser gespeichert) |
 | **Neu anlegen** | Formular für einen neuen Eintrag |
 | **Import** | Dateien aus anderen Passwortmanagern übernehmen |
 | **Sicherung** | Verschlüsselte `.tvbak`-Backup / Wiederherstellen |
 
 Kein vermischter „Alle“-Eintrag. Clientseitige **Suche** (Titel, Tags, Benutzer, Gruppen) und **Tag**-Filter (Mehrfach, UND) gelten jeweils für die aktive Ansicht. In der Liste können Sie Einträge per Checkbox für den Export auswählen.
 
-**Ansicht:** Standard ist **Tabelle**; Umschalter Liste / Tabelle / Kacheln (Preference lokal im Browser). Tabelle und Kacheln laden zusätzlich Benutzer, Tags, **freigegebene Gruppen** und Favorit; Liste zeigt Titel, Benutzer, Tags und Gruppen kompakt.
+**Ansicht:** Standard ist **Tabelle**; Umschalter Liste / Tabelle / Kacheln (Preference lokal im Browser). **Sortierung** in der Toolbar: A–Z, Z–A oder zuletzt bearbeitet. Tabelle und Kacheln laden zusätzlich Benutzer, Tags, **freigegebene Gruppen** und Favorit; Liste zeigt Titel, Benutzer, Tags und Gruppen kompakt. Favoriten erscheinen in allen Listen oben in einer Gruppe **Favoriten** (Stern-Toggle pro Zeile).
 
 ![Meine Secrets – Tabelle (Standard)](images/vault-secrets-table.png)
 
@@ -198,7 +200,7 @@ Sidebar **Konto**:
 
 1. **TOTP einrichten** → QR scannen (lokal im Browser erzeugt, kein CDN) oder otpauth-URL/**Secret** in die Authenticator-App übernehmen  
 2. Code bestätigen → **Aktivieren**  
-3. Beim nächsten Login Feld **TOTP** ausfüllen  
+3. Beim nächsten Login: zuerst Organisation, Username und Passwort (oder Passkey), danach — **nur wenn TOTP aktiv ist** — der zweite Schritt mit sechs Ziffernfeldern (Auto-Weiter, Einfügen per Paste möglich)
 
 Online-Hilfe mit Beispiel-QR: `/help/account`. TOTP schützt das Login, **nicht** die Vault-Entschlüsselung.
 
@@ -237,9 +239,9 @@ Kurzanleitung in der App: Sidebar **Hilfe** bzw. Login **Hilfe** → **Browser-E
 
 ![Konto → Clients](images/account-clients.png)
 
-Kurz: Einmal **Einrichtung** (PowerShell-Einzeiler), dann **Extension installieren** wie aus dem Store — Server-URL → Login/Unlock → auf passender Website **Fill** / **Copy** (nur bei Domain-Match).
+Kurz: Einmal **Einrichtung** (PowerShell-Einzeiler), dann **Extension installieren** wie aus dem Store — Server-URL → Login/Unlock → auf passender Website **Fill** / **Copy** (nur bei exakter Origin-Match: Schema, Host und Port).
 
-In der App: **Konto → Clients** — Einrichtungs-Einzeiler und **Extension installieren** (`.crx`).
+In der App: **Konto → Clients** — Einrichtungs-Einzeiler und **Extension installieren** (`.crx`), sofern der Plattform-Administrator die Extension-Integration aktiviert hat (Standard: ausgeblendet; Downloads unter `/downloads/` bleiben für IT verfügbar).
 
 ## 8. CLI (`tvcli`)
 
@@ -247,7 +249,7 @@ Kurzanleitung: **Hilfe → CLI** bzw. `/help/cli`. Markdown: [`docs/cli-guide.md
 
 ![Konto → Clients](images/account-clients.png)
 
-In der App: **Konto → Clients** — plattformgerechter Download und PowerShell/Bash-Einzeiler.
+In der App: **Konto → Clients** — plattformgerechter Download und PowerShell/Bash-Einzeiler, sofern die CLI-Integration aktiviert ist (Standard: ausgeblendet).
 
 Einzeiler und Alltagsbefehle stehen dort. API-Keys brauchen mindestens einen Scope:
 
@@ -267,7 +269,7 @@ Nur `read` → keine Admin- oder Schreibaktionen. Cookie-Login ohne API-Key ist 
 - Login-Passwort ≠ Master-Passwort  
 - Nach Teilen nur notwendige Personen; bei Austritt Admin um Entzug/Rotation bitten  
 - Öffentliche/geteilte Rechner: nach Nutzung **Logout** und Browser schließen  
-- Phishing: nur die bekannte Firmen-URL verwenden; Extension Fill/Copy nur bei Host-Match  
+- Phishing: nur die bekannte Firmen-URL verwenden; Extension Fill/Copy nur bei exakter Origin-Match (Schema+Host+Port)  
 - Klartext-Export (JSON/CSV) sicher ablegen und zeitnah löschen  
 - `.tvbak` und Backup-Passwort getrennt vom Unlock-Key und Master-Passwort aufbewahren  
 
@@ -288,12 +290,15 @@ Nur `read` → keine Admin- oder Schreibaktionen. Cookie-Login ohne API-Key ist 
 | Problem | Tipp |
 |---------|------|
 | Login ok, Vault nicht | Master-Passwort / Caps-Lock; Idle-Sperre |
+| TOTP-Schritt erscheint nicht | TOTP erst unter Konto einrichten und aktivieren |
+| TOTP-Code abgelehnt | Uhrzeit synchronisieren; Code erneut eingeben; **Zurück** und neu anmelden wenn abgelaufen (ca. 5 Min.) |
 | Recovery nötig | Kit + Anleitung des Admins (Escrow vs. User-Kit) |
 | Passkey fehlt | Neu registrieren; Gerät/OS-Support prüfen |
 | Secret „kein Zugriff“ | Noch nicht geteilt oder Rechte entzogen |
-| Fill/Copy blockiert | Secret-URL passt nicht zum Tab-Host |
+| Fill/Copy blockiert | Secret-URL passt nicht zur Tab-Origin (Schema/Host/Port) |
 | Import leer / Format? | Vorschau prüfen; KeePass nur XML (kein `.kdbx`); `.tvbak` braucht Backup-Passwort |
-| CLI/Extension-Install | **Konto → Clients** oder `/help/cli` / `/help/extension` (Docker-Image liefert `/downloads/` mit) |
+| CLI/Extension in App fehlt | Plattform-Admin → Krypto & Policy → Integration anzeigen; Downloads weiter unter `/downloads/` |
+| CLI/Extension-Install | **Konto → Clients** (wenn aktiv) oder `/help/cli` / `/help/extension` |
 | Offline-Kopie abgelaufen | Erneut online anmelden und synchronisieren (TTL 30 Tage) |
 | „Offline vom Administrator deaktiviert“ | Admin → Krypto & Policy → Offline-Cache erlauben |
 

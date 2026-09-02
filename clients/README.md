@@ -64,7 +64,7 @@ go run ./cmd/tvcli whoami
 1. Extensions → Entwicklermodus → „Entpackt laden“
 2. Ordner `clients/extension` wählen
 3. Server-URL setzen, Login, Master-Passwort → Secrets listen / Passwort kopieren / **Fill**
-4. Filter **Alle / Privat / Geteilt**; Badge zeigt Sichtbarkeit. **Fill** und **Copy**: ohne URL immer; mit URL nur bei Tab-Domain-Match (Phishing-Schutz)
+4. Filter **Alle / Privat / Geteilt**; Badge zeigt Sichtbarkeit. **Fill** und **Copy**: ohne URL immer; mit URL nur bei **exakter Origin-Match** (Schema+Host+Port — Phishing-Schutz)
 
 `host_permissions` decken localhost ab. Für HTTPS-Server: optional_host_permissions (`https://*/*`) über die Extension-Details freigeben (oder beim ersten Zugriff erlauben).
 
@@ -108,6 +108,6 @@ Browser: Admin-UI „Escrow-Keypair + Shares“ (vendored `secrets.js-grempe`).
 Nach Unlock listet das Popup Secrets; Einträge mit passender URL-Host zur aktiven Tab-Domain stehen oben.
 
 - **Fill** — Username/Passwort (und TOTP-Feld, falls erkannt) im aktiven Tab via Content-Script; Keys bleiben nur im Popup.
-- **Copy** — Passwort in die Zwischenablage; ebenfalls nur bei Host-Match (wie Fill).
-- Domain-Match: Host der Secret-URL vs. Tab-Hostname (inkl. Subdomains).
+- **Copy** — Passwort in die Zwischenablage; ebenfalls nur bei Origin-Match (wie Fill).
+- Origin-Match: `scheme://host:port` der Secret-URL vs. Tab-Origin (kein Subdomain-Fallback über Port/Schema hinweg).
 - Form-Heuristik in `content.js`: username/email, password, otp/totp/mfa; React-freundliches Value-Setzen.

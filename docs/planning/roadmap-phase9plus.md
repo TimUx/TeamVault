@@ -112,7 +112,7 @@ Vanilla-JS refactor in Module ok; **kein** Pflicht-React in Phase 10.
 | # | Arbeitspaket | Abhängigkeit |
 |---|--------------|--------------|
 | 12.1 | Payload-Felder: URL, TOTP-Seed (clientverschlüsselt), Tags | **umgesetzt** |
-| 12.2 | Ordner / Favoriten (Metadaten ciphertext oder client-index) | **umgesetzt** |
+| 12.2 | Favoriten (client-localStorage) + Sortierung A–Z/Z–A/Recent | **umgesetzt** |
 | 12.3 | Gruppen-Share: UI wählt Gruppe → Envelopes für alle Member | **umgesetzt** |
 | 12.4 | Recovery-Moduswechsel + Pflicht-Re-Onboarding (OQ-03) | Audit + Bestätigung |
 | 12.5 | Rolle `auditor` (read-only Audit) | OQ-08 / teilweise |

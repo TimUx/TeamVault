@@ -8,7 +8,7 @@
 
 ## 1. Problem
 
-TeamVault ist heute ein **Online-Vault**: Login (lokal/LDAP + optional TOTP) braucht den Server, Unlock holt `encrypted_private_key` per API, Secrets kommen paginiert vom Server. Ohne Firmennetz / ohne Route zur Instanz gibt es keinen Zugriff.
+TeamVault ist heute ein **Online-Vault**: Login (lokal/LDAP + ggf. TOTP im zweiten Schritt) braucht den Server, Unlock holt `encrypted_private_key` per API, Secrets kommen paginiert vom Server. Ohne Firmennetz / ohne Route zur Instanz gibt es keinen Zugriff.
 
 Bestehende Näherungen reichen nicht:
 

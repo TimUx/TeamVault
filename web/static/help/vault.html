@@ -25,13 +25,14 @@
         <p class="lead">Secrets anlegen, teilen und importieren — Ver-/Entschlüsselung nur im Browser (Zero-Knowledge).</p>
         <nav class="help-toc" aria-label="Auf dieser Seite">
           <a href="#anlegen">Anlegen</a>
+          <a href="#liste">Liste &amp; Favoriten</a>
           <a href="#teilen">Teilen</a>
           <a href="#import">Import</a>
         </nav>
 
         <figure class="help-figure">
           <img src="/help/img/nav-sidebar.png" alt="Sidebar Navigation" width="1100" height="720" loading="lazy" />
-          <figcaption>Sidebar: Meine Secrets, Geteilte Secrets, Neu anlegen, Import, Sicherung</figcaption>
+          <figcaption>Sidebar: Meine Secrets, Geteilte Secrets, Favoriten, Neu anlegen, Import, Sicherung</figcaption>
         </figure>
 
         <h2 id="anlegen">Secret anlegen</h2>
@@ -64,6 +65,16 @@
           </table>
         </div>
 
+        <h2 id="liste">Liste, Sortierung &amp; Favoriten</h2>
+        <div class="help-step">
+          <ul>
+            <li><strong>Ansicht:</strong> Tabelle (Standard), Liste oder Kacheln — Umschalter in der Toolbar.</li>
+            <li><strong>Sortierung:</strong> A–Z, Z–A oder zuletzt bearbeitet.</li>
+            <li><strong>Favoriten:</strong> Stern in der Zeile markiert Einträge; Sidebar <strong>Favoriten</strong> zeigt nur diese. Favoriten werden <em>pro Browser</em> lokal gespeichert (nicht auf dem Server).</li>
+            <li><strong>Suche &amp; Tags:</strong> clientseitig in der aktiven Liste (Meine / Geteilte / Favoriten).</li>
+          </ul>
+        </div>
+
         <h2 id="bearbeiten">Secret bearbeiten</h2>
         <p>Im Detail-Modal <strong>Bearbeiten</strong>: dieselben Felder wie beim Anlegen (Titel, Tags, Benutzer/Passwort inkl. Generator) sowie <strong>Feld hinzufügen</strong> für URL, TOTP, Notizen, Keys usw. Vorhandene Zusatzfelder werden vorausgefüllt und können geändert oder entfernt werden.</p>
         <figure class="help-figure">
@@ -92,7 +103,7 @@
             <li>Der Datenschlüssel wird rotiert; der alte Umschlag wird ungültig.</li>
             <li>Ohne verbleibende Freigaben wird das Secret wieder <strong>privat</strong>.</li>
           </ol>
-          <p class="help-note"><strong>Import</strong> legt Secrets immer als privat an. Neue Gruppenmitglieder erhalten Gruppen-Secrets automatisch nachgeteilt, sobald jemand mit Zugriff den Vault entsperrt hat (Zero-Knowledge).</p>
+          <p class="help-note"><strong>Import</strong> legt Secrets immer als privat an. Neue Gruppenmitglieder erhalten Gruppen-Secrets über einen <strong>Catch-up-Hinweis</strong> — nicht still beim Unlock. Jemand mit Zugriff bestätigt die Empfängerliste inkl. TOFU-Fingerprint (Zero-Knowledge).</p>
         </div>
         <figure class="help-figure">
           <img src="/help/img/vault-shared.png" alt="Geteilte Secrets" width="1100" height="720" loading="lazy" />

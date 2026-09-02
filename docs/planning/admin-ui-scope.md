@@ -124,7 +124,13 @@ Autorisierung = lokal. LDAP-Gruppenmitgliedschaften werden im MVP **komplett ign
 ### 2.14 2FA Policy
 
 - TOTP Pflicht/Optional (Phase 4, Pflicht-Baseline für Prod)
+- Web-Login: TOTP im **zweiten Schritt** nach Passwort/Passkey (sechs Ziffernfelder); nur wenn User TOTP aktiv hat
 - Passkeys: nicht im ersten Prod-Release (OQ-20); später nur Login, nie Vault-Unlock (OQ-04)
+
+### 2.15 Client-Integration (Plattform-Policy)
+
+- **CLI-Integration anzeigen** / **Browser-Extension-Integration anzeigen** — steuert Sichtbarkeit in Konto, Hilfe und Nav (Default: aus)
+- `/downloads/` und IT-Rollout unabhängig davon (Air-Gap-freundlich)
 
 ---
 

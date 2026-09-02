@@ -8,7 +8,7 @@ Step-by-step für Endanwender. Interaktive Fassung: **`/help/extension`** auf Ih
 
 Ohne Entwicklermodus — aber **nur mit Browser-Richtlinie**. Chrome/Edge installieren `.crx` nicht aus dem Download-Ordner; der Installationsdialog erscheint nur, wenn `ExtensionSettings` und `ExtensionInstallSources` gesetzt sind.
 
-1. **`/help/extension`** oder **Konto → Clients** öffnen.
+1. **`/help/extension`** oder **Konto → Clients** öffnen (sichtbar nur bei aktivierter Extension-Integration; `/downloads/` unabhängig davon).
 2. **Schritt 1 — Einrichtung:** PowerShell-Einzeiler (setzt Richtlinie unter HKCU):
 
 ```powershell
@@ -84,12 +84,14 @@ Lädt `teamvault-extension.zip`, entpackt lokal, dann **Entpackte Erweiterung la
 
 1. Popup öffnen → Server-URL = Ihre TeamVault-URL.
 2. Bei HTTPS: optionale Host-Berechtigung für die Domain erlauben.
-3. Login (Tenant / User / Passwort) → Master-Passwort (nur lokal).
+3. Login (Tenant / User / Passwort, optional TOTP im selben Formular) → Master-Passwort (nur lokal).
+
+Die Web-App trennt TOTP in einen zweiten Schritt; die Extension sendet TOTP optional zusammen mit Passwort.
 
 ## Nutzen
 
 1. Seite öffnen, die zur Secret-URL passt.
 2. Popup → Eintrag filtern (Alle / Privat / Geteilt) → **Fill** oder **Copy**.
-3. Ohne URL im Secret: Fill/Copy erlaubt. Mit URL: Aktion nur bei Domain-Match (Phishing-Schutz).
+3. Ohne URL im Secret: Fill/Copy erlaubt. Mit URL: Aktion nur bei **exakter Origin-Match** (Schema, Host und Port — Phishing-Schutz).
 
 Admin: `scripts/pack-clients.ps1` erzeugt CLI + Extension-Artefakte (`dist/`) → im Docker-Image unter `/opt/teamvault/bundled-downloads`.

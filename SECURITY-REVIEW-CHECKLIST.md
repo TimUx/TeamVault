@@ -18,6 +18,7 @@ Vor dem Betrieb mit echten Zugangsdaten: externes Audit + internes Walkthrough g
 - [x] LDAP nur Login-Bind; Autorisierung lokal
 - [x] Disabled User/Tenant blockiert Login auch bei gültigem LDAP
 - [x] TOTP-Secrets at-rest nur als undurchsichtige Blobs; Codes nicht geloggt
+- [x] Web-Login: TOTP nur im zweiten Schritt bei aktivem 2FA; kurzlebiges Pending-Token
 - [x] Session-Cookies HttpOnly; Idle-/Session-Timeouts konfiguriert (OQ-17)
 - [x] Onboarding-Gate: ohne Vault-Keys kein Secret-Zugriff
 - [x] API-Key Scope `read` blockiert Admin/Mutationen; `vault` nur Secret-/Vault-Mutationen; alle API-Keys von TOTP/WebAuthn/Passwort-Wechsel ausgeschlossen; Legacy-Keys ohne Scopes nur read-only GET

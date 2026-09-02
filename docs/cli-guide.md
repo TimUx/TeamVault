@@ -22,7 +22,7 @@ curl -fsSL "https://IHRE-VAULT-URL/help/install/tvcli.sh" | TEAMVAULT_URL="https
 
 Die Skripte laden das Binary von `https://…/downloads/` (im Docker-Image automatisch bereitgestellt).
 
-In der Web-App: **Konto → Clients** oder Hilfe **`/help/cli`** — Download und Installations-Einzeiler für Ihre Instanz.
+In der Web-App: **Konto → Clients** oder Hilfe **`/help/cli`** — Download und Installations-Einzeiler für Ihre Instanz (sichtbar nur, wenn der Plattform-Administrator die CLI-Integration aktiviert hat; `/downloads/` bleibt immer verfügbar).
 
 ### Manuell
 
@@ -38,6 +38,8 @@ CI (Tag `v*`): `.github/workflows/tvcli.yml` baut die vier Standalone-Binaries u
 ```powershell
 tvcli -base https://IHRE-VAULT-URL login -tenant demo -user admin
 ```
+
+Bei aktivem TOTP wird der Code interaktiv abgefragt (optional leer lassen, wenn kein TOTP eingerichtet). Alternativ kann der Code im selben Login-Request mitgegeben werden — die Web-App nutzt dagegen einen **zweiten Schritt** nach Passwort/Passkey.
 
 Oder API-Key (Admin → API-Keys, Scope `read` / `vault`):
 

@@ -239,6 +239,7 @@ Sidebar **Administration → Krypto & Policy**:
 
 - Argon2-Defaults / Presets für neue Onboardings
 - TOTP-Pflicht (Hinweis/Policy nach Login)
+- **CLI-Integration anzeigen** / **Browser-Extension-Integration anzeigen** (Plattform-Administrator): steuert, ob **Konto → Clients** und die Hilfe-Einträge CLI/Extension sichtbar sind. Default: aus (GPO-/Rollout-Gründe). Downloads unter `/downloads/` bleiben unabhängig davon erreichbar.
 - **Offline-Vault-Cache erlauben:** Mandantenweit Opt-in für clientseitige Ciphertext-Kopie (IndexedDB, 30 Tage TTL). Aus = Nutzer können keine Offline-Kopie anlegen; bestehende Kopien auf Geräten werden beim nächsten Online-Besuch nicht mehr aktualisiert.
 - Idle-Lock der Vault-Session (Default 15 min) — nur Client-Unlock
 - **Admins: Secret-Liste nur mit Envelope** (`admin_secrets_envelope_only`): Wenn aktiv, sehen Tenant-Admins in der Secret-Liste nur Einträge, für die sie selbst ein Envelope haben (Inventar-Metadaten anderer Secrets ausgeblendet). Default: aus — Admins sehen alle Secret-Metadaten (IDs, Title-Ciphertext), Klartext bleibt Zero-Knowledge-geschützt.

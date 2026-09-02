@@ -44,7 +44,7 @@
             <li><strong>TOTP einrichten</strong> klicken — der Server erzeugt ein Secret; der Browser zeigt einen <strong>QR-Code lokal</strong> (kein externes CDN) und die otpauth-URL.</li>
             <li>Authenticator-App (Microsoft Authenticator, Google Authenticator, Aegis, …) öffnen → Konto hinzufügen → QR scannen <em>oder</em> Secret/otpauth manuell einfügen.</li>
             <li>Den aktuellen 6-stelligen Code unter <strong>Code bestätigen</strong> eintragen → <strong>Aktivieren</strong>.</li>
-            <li>Beim nächsten Login erscheint das Feld <strong>TOTP</strong>.</li>
+            <li>Beim nächsten Login: zuerst Organisation, Username und Passwort (oder Passkey). Ist TOTP aktiv, folgt ein <strong>zweiter Schritt</strong> mit sechs Einzelfeldern für den Authenticator-Code.</li>
           </ol>
         </div>
 
@@ -105,15 +105,16 @@
         <h2 id="login">Beim Login nutzen</h2>
         <figure class="help-figure">
           <img src="/help/img/login.png" alt="Login-Formular" width="1100" height="720" loading="lazy" />
-          <figcaption>Login: Organisation, Username, Passwort oder Passkey, optional TOTP</figcaption>
+          <figcaption>Login Schritt 1: Organisation, Username, Passwort oder Passkey</figcaption>
         </figure>
         <div class="help-step">
+          <h3>Zwei Schritte (Web-App)</h3>
           <ol>
-            <li><strong>Organisation</strong> wählen (bei mehreren Mandanten).</li>
-            <li>Mit <strong>Login-Passwort</strong> + ggf. <strong>TOTP</strong> — oder Button <strong>Passkey</strong>.</li>
+            <li><strong>Schritt 1:</strong> <strong>Organisation</strong> wählen, Username, <strong>Login-Passwort</strong> (lokal: mindestens 16 Zeichen, Groß-/Klein, Ziffer, Sonderzeichen, keine Umlaute) — oder Button <strong>Passkey</strong>.</li>
+            <li><strong>Schritt 2 (nur bei aktivem TOTP):</strong> Sechs Einzelfelder für den Authenticator-Code — Auto-Weiter beim Tippen, Einfügen per Paste möglich. <strong>Zurück</strong> kehrt zu Schritt 1.</li>
             <li>Danach Vault mit dem <strong>Master-Passwort</strong> entsperren (oder Onboarding beim ersten Mal).</li>
           </ol>
-          <p class="help-note">Passkey ersetzt nur das Login — ohne Master-Passwort kein Vault-Zugriff.</p>
+          <p class="help-note">Ohne eingerichtetes TOTP entfällt Schritt 2. Passkey ersetzt nur das Login — ohne Master-Passwort kein Vault-Zugriff. CLI und Extension können TOTP optional im selben Formular mitschicken.</p>
         </div>
 
         <footer class="help-foot" id="aboutFoot"></footer>

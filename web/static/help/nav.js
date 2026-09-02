@@ -47,6 +47,7 @@
           ${link("/help/vault", "Anlegen, Teilen, Import", active === "vault")}
           ${active === "vault" ? `
             <a class="help-side-link sub" href="#anlegen">Anlegen</a>
+            <a class="help-side-link sub" href="#liste">Liste &amp; Favoriten</a>
             <a class="help-side-link sub" href="#teilen">Teilen</a>
             <a class="help-side-link sub" href="#import">Import</a>
           ` : ""}

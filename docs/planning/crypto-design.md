@@ -178,7 +178,9 @@ Server-seitiger Hash-Update; **kein** Einfluss auf Vault-Keys (außer User wähl
 
 ## 6. 2FA (TOTP)
 
-- TOTP schützt den **Login** (zweite Stufe nach Login-Passwort/LDAP), nicht die Datenverschlüsselung.
+- TOTP schützt den **Login** (zweite Stufe nach Login-Passwort/LDAP/Passkey), nicht die Datenverschlüsselung.
+- Web-UI: nach erfolgreicher Passwort-/Passkey-Prüfung erscheint bei aktivem TOTP ein zweiter Schritt mit sechs Ziffernfeldern; kurzlebiges `login_token` (ca. 5 Min.) bindet die Stufen.
+- CLI/Extension: TOTP optional im selben Request (`totp_code`) — Abwärtskompatibilität.
 - Nach erfolgreichem 2FA: Session wie bisher; Vault weiterhin nur mit Master-Passwort entsperrbar.
 - TOTP-Secret: serverseitig nur verschlüsselt at-rest in Config-/User-Store (mit Server-Config-Key nach Unlock) – **nicht** mit User-MK, damit Login-2FA vor Vault-Unlock greift.
 - Tenant-Policy: 2FA optional / Pflicht.

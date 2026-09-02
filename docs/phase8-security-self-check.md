@@ -9,4 +9,4 @@
 | Extension | SK nur Popup-Memory; Service Worker hält keine Keys; Fill/Copy Host-Gate | OK |
 | CLI | Master-Passwort nur lokal (Prompt); Session-Cookie 0600 | OK |
 
-**Hinweis:** Autofill über Content-Script ist produktiv; Fill und Copy nur bei Secret-URL↔Tab-Host-Match.
+**Hinweis:** Autofill über Content-Script ist produktiv; Fill und Copy nur bei Secret-URL↔Tab-**Origin**-Match (Schema+Host+Port).
