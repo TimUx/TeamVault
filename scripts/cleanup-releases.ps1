@@ -50,7 +50,7 @@ $gitCurl = "C:\Users\tbrau\AppData\Local\Programs\Git\mingw64\bin\curl.exe"
 try {
   & $gitCurl -fsSL --max-time 20 --proxy $proxy "https://api.github.com/zen" | Out-Null
 } catch {
-  Write-Warning "GitHub API not reachable via proxy — release delete may fail; tag batch push will still be attempted."
+  Write-Warning "GitHub API not reachable via proxy - release delete may fail; tag batch push will still be attempted."
 }
 
 if (-not $GitHubOnly) {
@@ -70,7 +70,8 @@ $ghH = Get-BasicAuthHeader "github.com"
 $ghAuth = $ghH.Authorization
 $page = 1
 do {
-  $json = & $gitCurl -fsSL --max-time 60 --proxy $proxy -H "Authorization: $ghAuth" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/TimUx/TeamVault/releases?per_page=100&page=$page"
+  $ghUrl = "https://api.github.com/repos/TimUx/TeamVault/releases?per_page=100" + "&page=$page"
+  $json = & $gitCurl -fsSL --max-time 60 --proxy $proxy -H "Authorization: $ghAuth" -H "Accept: application/vnd.github+json" $ghUrl
   $rels = $json | ConvertFrom-Json
   foreach ($rel in $rels) {
     if ($tagsToDrop -contains $rel.tag_name) {
