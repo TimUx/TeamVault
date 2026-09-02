@@ -49,8 +49,10 @@ RUN --mount=type=secret,id=tv_extension_pem,required=false \
     build_tvcli linux arm64 "" && \
     build_tvcli windows amd64 ".exe" && \
     build_tvcli windows arm64 ".exe" && \
-    if [ -s /run/secrets/tv_extension_pem ]; then \
-      export TV_EXTENSION_PEM="$(cat /run/secrets/tv_extension_pem)"; \
+    if [ -n "${TV_EXTENSION_PEM:-}" ]; then
+      # Decode base64 secret
+      echo "${TV_EXTENSION_PEM}" | base64 -d > /tmp/key.pem
+      export TV_EXTENSION_PEM="$(cat /tmp/key.pem)"
     fi && \
     export TV_EXTENSION_REQUIRE_KEY="${REQUIRE_EXTENSION_KEY}" && \
     go build -trimpath -o /out/pack-extension ./cmd/pack-extension && \
