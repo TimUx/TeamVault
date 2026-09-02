@@ -166,17 +166,33 @@ func TestFindingStage2ScopesOriginShareGroup(t *testing.T) {
 		"key_version":          2,
 		"envelopes":            []map[string]any{envAPI(adminUID, env2)},
 	}, adminJar)
-	zero(newDK)
 
-	// B1: group-member-keys requires envelope
+	// B1: secret group-member-keys requires envelope + existing group share
 	status, _ := getJSONCookieStatus(t, ts.URL+"/api/secrets/"+sid+"/group-member-keys?group_id="+gid, aliceJar)
 	if status != http.StatusForbidden {
 		t.Fatalf("group-member-keys without envelope: want 403 got %d", status)
 	}
-	keys := getJSONListCookie(t, ts.URL+"/api/secrets/"+sid+"/group-member-keys?group_id="+gid, adminJar)
-	if len(keys) != 1 || keys[0]["user_id"] != aliceID {
-		t.Fatalf("group-member-keys: %v", keys)
+	status, _ = getJSONCookieStatus(t, ts.URL+"/api/secrets/"+sid+"/group-member-keys?group_id="+gid, adminJar)
+	if status != http.StatusForbidden {
+		t.Fatalf("group-member-keys before group share: want 403 got %d", status)
 	}
+	keys := getJSONListCookie(t, ts.URL+"/api/groups/"+gid+"/member-keys", adminJar)
+	if len(keys) != 1 || keys[0]["user_id"] != aliceID {
+		t.Fatalf("group member-keys: %v", keys)
+	}
+	envAlice, err := cryptocore.SealDataKeyForRecipient(newDK, aliceKP.Public[:], 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	postJSONCookie(t, ts.URL+"/api/secrets/"+sid+"/share-group", map[string]any{
+		"group_id":  gid,
+		"envelopes": []map[string]any{envAPI(aliceID, envAlice)},
+	}, adminJar)
+	keys = getJSONListCookie(t, ts.URL+"/api/secrets/"+sid+"/group-member-keys?group_id="+gid, adminJar)
+	if len(keys) != 1 || keys[0]["user_id"] != aliceID {
+		t.Fatalf("group-member-keys after share: %v", keys)
+	}
+	zero(newDK)
 
 	// B3: share to non-onboarded bob rejected
 	fakePub := make([]byte, 32)
