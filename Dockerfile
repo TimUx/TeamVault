@@ -57,7 +57,7 @@ RUN --mount=type=secret,id=tv_extension_pem,required=false \
     TV_EXTENSION_UPDATE_BASE=https://teamvault.local /out/pack-extension && \
     cp dist/teamvault-extension.* /out/downloads/ && \
     cp -r dist/extension /out/downloads/
-    
+
 FROM build AS bin
 ARG VERSION=dev
 ARG COMMIT=none
