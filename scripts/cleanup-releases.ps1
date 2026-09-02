@@ -47,7 +47,11 @@ if (-not $Apply) {
 Start-CorpConnectProxyIfNeeded
 $proxy = $script:CorpConnectProxyUrl
 $gitCurl = "C:\Users\tbrau\AppData\Local\Programs\Git\mingw64\bin\curl.exe"
-& $gitCurl -fsSL --max-time 20 --proxy $proxy "https://api.github.com/zen" | Out-Null
+try {
+  & $gitCurl -fsSL --max-time 20 --proxy $proxy "https://api.github.com/zen" | Out-Null
+} catch {
+  Write-Warning "GitHub API not reachable via proxy — release delete may fail; tag batch push will still be attempted."
+}
 
 if (-not $GitHubOnly) {
   # --- Gitea releases ---
@@ -87,7 +91,8 @@ Write-Host "GitHub: batch delete $($delRefs.Count) tags..."
 git -c "http.proxy=$proxy" push github @delRefs
 
 foreach ($tag in $tagsToDrop) {
-  if (git rev-parse --verify "refs/tags/$tag" 2>$null) {
+  git rev-parse --verify "refs/tags/$tag" 2>$null | Out-Null
+  if ($LASTEXITCODE -eq 0) {
     git tag -d $tag | Out-Null
   }
 }
