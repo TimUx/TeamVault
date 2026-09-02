@@ -43,10 +43,14 @@ type API struct {
 
 func New(app *bootstrap.Result) *API {
 	hours := 8
+	idleMin := 15
 	if app != nil && app.Config != nil {
 		b := instcfg.Load(app.Config)
 		if b.Policy.SessionHours > 0 {
 			hours = b.Policy.SessionHours
+		}
+		if b.Policy.UnlockIdleMinutes > 0 {
+			idleMin = b.Policy.UnlockIdleMinutes
 		}
 	}
 	ttl := time.Duration(hours) * time.Hour
@@ -57,6 +61,7 @@ func New(app *bootstrap.Result) *API {
 		pendingLogins: newPendingLoginStore(),
 		escrowReplace: map[store.TenantID]escrowReplacePending{},
 	}
+	api.Sessions.SetIdle(time.Duration(idleMin) * time.Minute)
 	go api.ldapSyncLoop()
 	return api
 }
@@ -416,6 +421,11 @@ func (a *API) handleLogin(w http.ResponseWriter, r *http.Request) {
 		a.handleLoginTOTPStep(w, r, req.LoginToken, req.TOTPCode, ip)
 		return
 	}
+	userKey := strings.ToLower(strings.TrimSpace(req.TenantSlug)) + ":" + strings.ToLower(strings.TrimSpace(req.Username))
+	if userKey != ":" && !a.loginRL.allow("login:user:"+userKey, 10, time.Minute) {
+		writeErr(w, http.StatusTooManyRequests, "too many login attempts")
+		return
+	}
 	tenant, err := a.App.Vault.GetTenantBySlug(r.Context(), req.TenantSlug)
 	if err != nil {
 		writeErr(w, http.StatusUnauthorized, "invalid credentials")
@@ -548,6 +558,8 @@ func (a *API) handleLoginTOTPStep(w http.ResponseWriter, r *http.Request, loginT
 func (a *API) writeLoginSuccess(w http.ResponseWriter, r *http.Request, user *store.UserRecord, tenant *store.Tenant) {
 	var roles []string
 	_ = json.Unmarshal([]byte(user.RolesJSON), &roles)
+	// Single active cookie session per user: revoke prior logins (stolen-session / shared-device hygiene).
+	a.Sessions.DeleteByUser(user.ID)
 	sess := a.Sessions.Create(user.ID, tenant.ID, user.Username, roles)
 	a.setSessionCookie(w, r, sess)
 	writeJSON(w, http.StatusOK, map[string]any{

@@ -363,7 +363,7 @@ func (a *API) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleUserAccessibleSecrets lists secret IDs where the user still has a key envelope (meta only).
-// After disable, admins must rotate those secrets client-side (Zero-Knowledge — no auto-rotate).
+// After disable, admins must rotate those secrets client-side (Zero-Knowledge â€” no auto-rotate).
 func (a *API) handleUserAccessibleSecrets(w http.ResponseWriter, r *http.Request) {
 	sess, _ := a.sessionFrom(r)
 	uid := store.UserID(r.PathValue("id"))
@@ -637,7 +637,8 @@ type createSecretReq struct {
 	Envelopes          []envelopeIn `json:"envelopes"`
 	ShareUserIDs       []string     `json:"share_user_ids,omitempty"`
 	ShareGroupIDs      []string     `json:"share_group_ids,omitempty"`
-	Visibility         string       `json:"visibility,omitempty"` // private | shared
+	ShareCapability    string       `json:"share_capability,omitempty"` // read|write|share|admin; default write
+	Visibility         string       `json:"visibility,omitempty"`       // private | shared
 	DropUserIDs        []string     `json:"drop_user_ids,omitempty"`
 	DropGroupIDs       []string     `json:"drop_group_ids,omitempty"`
 }
@@ -739,6 +740,7 @@ func (a *API) handleCreateSecret(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	shareCap := store.NormalizeCapability(req.ShareCapability)
 	for _, uid := range req.ShareUserIDs {
 		uid = strings.TrimSpace(uid)
 		if uid == "" || uid == string(sess.UserID) {
@@ -750,6 +752,7 @@ func (a *API) handleCreateSecret(w http.ResponseWriter, r *http.Request) {
 		}
 		if err := a.App.Vault.PutSecretDirectShare(r.Context(), store.SecretDirectShare{
 			TenantID: sess.TenantID, SecretID: id, UserID: store.UserID(uid),
+			Capability: shareCap,
 		}); err != nil {
 			writeErr(w, http.StatusInternalServerError, err.Error())
 			return
@@ -762,6 +765,7 @@ func (a *API) handleCreateSecret(w http.ResponseWriter, r *http.Request) {
 		}
 		if err := a.App.Vault.PutSecretGroupShare(r.Context(), store.SecretGroupShare{
 			TenantID: sess.TenantID, SecretID: id, GroupID: store.GroupID(gid),
+			Capability: shareCap,
 		}); err != nil {
 			writeErr(w, http.StatusInternalServerError, err.Error())
 			return
@@ -850,7 +854,7 @@ func (a *API) handleListSecrets(w http.ResponseWriter, r *http.Request) {
 		}
 		if !access {
 			if adminSeeAll && (hasRole(sess.Roles, "tenant_admin") || hasRole(sess.Roles, "platform_admin")) {
-				// Admin inventory (title ciphertext only — no envelope in response).
+				// Admin inventory (title ciphertext only â€” no envelope in response).
 			} else {
 				continue
 			}
@@ -985,9 +989,10 @@ func (a *API) handleSecretAccess(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	type namedID struct {
-		ID       string `json:"id"`
-		Username string `json:"username,omitempty"`
-		Name     string `json:"name,omitempty"`
+		ID         string `json:"id"`
+		Username   string `json:"username,omitempty"`
+		Name       string `json:"name,omitempty"`
+		Capability string `json:"capability,omitempty"`
 	}
 	ownerName := shareCtx.usernameByID[meta.CreatedBy]
 	sharedUsers := make([]namedID, 0, len(dShares))
@@ -996,6 +1001,7 @@ func (a *API) handleSecretAccess(w http.ResponseWriter, r *http.Request) {
 		sharedUserSet[string(sh.UserID)] = true
 		sharedUsers = append(sharedUsers, namedID{
 			ID: string(sh.UserID), Username: shareCtx.usernameByID[sh.UserID],
+			Capability: store.NormalizeCapability(sh.Capability),
 		})
 	}
 	sharedGroups := make([]namedID, 0, len(gShares))
@@ -1004,6 +1010,7 @@ func (a *API) handleSecretAccess(w http.ResponseWriter, r *http.Request) {
 		sharedGroupSet[string(sh.GroupID)] = true
 		sharedGroups = append(sharedGroups, namedID{
 			ID: string(sh.GroupID), Name: shareCtx.groupNameByID[sh.GroupID],
+			Capability: store.NormalizeCapability(sh.Capability),
 		})
 	}
 	pks, err := a.App.Vault.ListUsers(r.Context(), sess.TenantID, store.UserQuery{Limit: 10000})
@@ -1043,8 +1050,9 @@ func (a *API) handleSecretAccess(w http.ResponseWriter, r *http.Request) {
 		availGroups = append(availGroups, namedID{ID: string(g.ID), Name: g.Name})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"owner":            namedID{ID: string(meta.CreatedBy), Username: ownerName},
+		"owner":            namedID{ID: string(meta.CreatedBy), Username: ownerName, Capability: store.CapAdmin},
 		"visibility":       string(store.NormalizeVisibility(meta.Visibility)),
+		"my_capability":    a.callerEffectiveCapability(r, sess.TenantID, id, sess.UserID),
 		"shared_users":     sharedUsers,
 		"shared_groups":    sharedGroups,
 		"available_users":  availUsers,
@@ -1073,6 +1081,46 @@ func (a *API) callerIsSecretOwner(r *http.Request, tenant store.TenantID, secret
 	return meta.CreatedBy == user
 }
 
+// callerEffectiveCapability returns the caller's max capability on the secret.
+// Owners are CapAdmin. Direct + group shares contribute; envelope alone is CapRead for GET.
+func (a *API) callerEffectiveCapability(r *http.Request, tenant store.TenantID, secret store.SecretID, user store.UserID) string {
+	if a.callerIsSecretOwner(r, tenant, secret, user) {
+		return store.CapAdmin
+	}
+	best := ""
+	if directs, err := a.App.Vault.ListSecretDirectShares(r.Context(), tenant, secret); err == nil {
+		for _, sh := range directs {
+			if sh.UserID == user && store.CapRank(sh.Capability) > store.CapRank(best) {
+				best = store.NormalizeCapability(sh.Capability)
+			}
+		}
+	}
+	if groups, err := a.App.Vault.ListUserGroups(r.Context(), tenant, user); err == nil {
+		shares, _ := a.App.Vault.ListSecretGroupShares(r.Context(), tenant, secret)
+		inGroup := map[store.GroupID]bool{}
+		for _, g := range groups {
+			inGroup[g] = true
+		}
+		for _, sh := range shares {
+			if inGroup[sh.GroupID] && store.CapRank(sh.Capability) > store.CapRank(best) {
+				best = store.NormalizeCapability(sh.Capability)
+			}
+		}
+	}
+	if best != "" {
+		return best
+	}
+	if a.callerHasEnvelope(r, tenant, secret, user) {
+		return store.CapRead
+	}
+	return ""
+}
+
+func (a *API) requireSecretCap(r *http.Request, tenant store.TenantID, secret store.SecretID, user store.UserID, want string) bool {
+	have := a.callerEffectiveCapability(r, tenant, secret, user)
+	return have != "" && store.CapAtLeast(have, want)
+}
+
 func (a *API) secretSharedWithGroup(r *http.Request, tenant store.TenantID, secret store.SecretID, group store.GroupID) bool {
 	shares, err := a.App.Vault.ListSecretGroupShares(r.Context(), tenant, secret)
 	if err != nil {
@@ -1093,15 +1141,22 @@ func (a *API) handleShareSecret(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusForbidden, "no access envelope")
 		return
 	}
-	if !a.callerIsSecretOwner(r, sess.TenantID, id, sess.UserID) {
-		writeErr(w, http.StatusForbidden, "owner required")
+	if !a.requireSecretCap(r, sess.TenantID, id, sess.UserID, store.CapShare) {
+		writeErr(w, http.StatusForbidden, "share capability required")
 		return
 	}
 	var body struct {
-		Envelopes []envelopeIn `json:"envelopes"`
+		Envelopes  []envelopeIn `json:"envelopes"`
+		Capability string       `json:"capability"`
 	}
 	if err := readJSON(r, &body); err != nil {
 		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	cap := store.NormalizeCapability(body.Capability)
+	have := a.callerEffectiveCapability(r, sess.TenantID, id, sess.UserID)
+	if !store.CapAtLeast(have, cap) {
+		writeErr(w, http.StatusForbidden, "cannot grant capability above own")
 		return
 	}
 	blob, err := a.App.Vault.GetSecretCiphertext(r.Context(), sess.TenantID, id)
@@ -1136,6 +1191,7 @@ func (a *API) handleShareSecret(w http.ResponseWriter, r *http.Request) {
 		if e.UserID != string(sess.UserID) {
 			directs = append(directs, store.SecretDirectShare{
 				TenantID: sess.TenantID, SecretID: id, UserID: store.UserID(e.UserID),
+				Capability: cap,
 			})
 		}
 	}
@@ -1168,6 +1224,10 @@ func (a *API) handleUpdateSecret(w http.ResponseWriter, r *http.Request) {
 	id := store.SecretID(r.PathValue("id"))
 	if !a.callerHasEnvelope(r, sess.TenantID, id, sess.UserID) {
 		writeErr(w, http.StatusForbidden, "no access envelope")
+		return
+	}
+	if !a.requireSecretCap(r, sess.TenantID, id, sess.UserID, store.CapWrite) {
+		writeErr(w, http.StatusForbidden, "write capability required")
 		return
 	}
 	var req struct {
@@ -1246,8 +1306,8 @@ func (a *API) handleRotateSecret(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusForbidden, "no access envelope")
 		return
 	}
-	if !a.callerIsSecretOwner(r, sess.TenantID, id, sess.UserID) {
-		writeErr(w, http.StatusForbidden, "owner required")
+	if !a.requireSecretCap(r, sess.TenantID, id, sess.UserID, store.CapAdmin) {
+		writeErr(w, http.StatusForbidden, "admin capability required")
 		return
 	}
 	var req createSecretReq
@@ -1358,8 +1418,8 @@ func (a *API) handleDeleteSecret(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusForbidden, "no access envelope")
 		return
 	}
-	if !a.callerIsSecretOwner(r, sess.TenantID, id, sess.UserID) {
-		writeErr(w, http.StatusForbidden, "owner required")
+	if !a.requireSecretCap(r, sess.TenantID, id, sess.UserID, store.CapAdmin) {
+		writeErr(w, http.StatusForbidden, "admin capability required")
 		return
 	}
 	if err := a.App.Vault.DeleteSecret(r.Context(), sess.TenantID, id); err != nil {

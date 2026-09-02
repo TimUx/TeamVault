@@ -360,5 +360,20 @@ func (rl *rateLimiter) allow(key string, max int, window time.Duration) bool {
 		return false
 	}
 	rl.hits[key] = append(n, now)
+	// Bound map growth: drop keys with no recent hits when oversized.
+	if len(rl.hits) > 10_000 {
+		for k, times := range rl.hits {
+			alive := false
+			for _, t := range times {
+				if t.After(cut) {
+					alive = true
+					break
+				}
+			}
+			if !alive {
+				delete(rl.hits, k)
+			}
+		}
+	}
 	return true
 }

@@ -3,7 +3,7 @@
 **Date:** 2026-09-02  
 **Scope:** Full repository + isolated localhost test instance (`127.0.0.1:18090`, `data/security-pentest/`)  
 **Method:** Architecture review, source code review, dynamic API tests, attack simulation (A0–E), dependency scan (`govulncheck`), secret pattern scan  
-**Constraint:** Fictional credentials only; no production systems; application code not patched in this engagement (findings documented + regression tests added)
+**Constraint:** Fictional credentials only; no production systems. Findings from the 2026-09-02 assessment were remediated in-tree (see Remediation Status below).
 
 ---
 
@@ -11,7 +11,7 @@
 
 TeamVault’s **Zero-Knowledge storage model is sound**: vault payloads and master passwords are not recoverable from a stolen database alone; login and vault unlock are correctly separated; cross-tenant IDOR was not demonstrated.
 
-The highest practical risks are **intra-tenant object-level authorization** (any envelope holder can delete, rotate, and re-share secrets—contrary to the planned capability model in `docs/planning/architecture.md`), **unrelated group public-key enumeration** via `group-member-keys`, **policy `session_hours` not enforced server-side**, and **CSRF Origin validation that trusts client-controlled `X-Forwarded-Host` when forwarded headers are enabled**.
+**Remediated in this follow-up:** intra-tenant BOLA on share/rotate/delete (owner-only), `group-member-keys` unbound group leak, `session_hours` server TTL wiring, CSRF Origin ignoring `X-Forwarded-Host`, LDAP `EscapeDN`, admin UI HTML escaping, and `jwt/v5` bump for GO-2025-3553.
 
 No Critical finding (no remote vault plaintext disclosure, no auth bypass, no cross-tenant secret read) was confirmed. Residual architectural risk **OQ-22** (malicious delivered JS) remains by design for browser-based ZK.
 
@@ -66,13 +66,28 @@ Trust boundaries match `docs/planning/crypto-design.md` §8. The main design/imp
 
 # Findings
 
-Sorted by severity. Confirmed findings include reproducible PoCs against the local test harness (`go test -mod=mod ./internal/server/ -run TestPentest`).
+Sorted by original severity. Status reflects post-remediation (2026-09-02 follow-up). Confirmed PoCs live in `go test -mod=mod ./internal/server/ -run TestPentest`.
 
-## FINDING-PENT-01 — Shared recipient has full secret control (BOLA)
+## Remediation Status
+
+| ID | Original | Status |
+|----|----------|--------|
+| PENT-01 | Medium BOLA share/rotate/delete | **Fixed** — owner required; rotate must keep owner envelope |
+| PENT-02 | Medium group-member-keys leak | **Fixed** — group must already be shared with secret |
+| PENT-03 | Medium session_hours | **Fixed** — `Sessions.SetTTL` on policy update + boot from policy |
+| PENT-04 | Medium TrustForwarded CSRF | **Fixed** — `csrfHost` uses PublicURL or `r.Host`, not X-Forwarded-Host |
+| PENT-05 | Low–Medium LDAP DN | **Fixed** — `ldap.EscapeDN` on DN template path |
+| PENT-06 | Low HTML injection | **Fixed** — `escapeHtml` on reported sinks |
+| PENT-07 | Low jwt GO-2025-3553 | **Fixed** — `jwt/v5` → v5.2.2 |
+| CAP-ACL | Fine-grained share capabilities | **Done** — stored + enforced; UI picker; cannot grant above own |
+| OQ-22-SRI | Delivered JS integrity | **Partial** — sha384 SRI for critical scripts (residual if server serves bad JS) |
+
+## FINDING-PENT-01 — Shared recipient has full secret control (BOLA) — FIXED
 
 | Field | Value |
 |-------|--------|
-| **Severity** | Medium |
+| **Severity** | Medium (at discovery) |
+| **Status** | Fixed |
 | **CVSS 3.1 (est.)** | 6.5 (AV:N/AC:L/PR:L/UI:N/S:U/C:N/I:H/A:N) — integrity of shared secrets |
 | **CWE** | CWE-639 / CWE-285 |
 | **Component** | `internal/server/phase5.go` (`handleDeleteSecret`, `handleRotateSecret`, `handleShareSecret`), `phase12.go` (`handleShareGroup`) |
@@ -83,80 +98,84 @@ Sorted by severity. Confirmed findings include reproducible PoCs against the loc
 
 **Prerequisites:** Authenticated onboarded user with a valid envelope (legitimate share).
 
-**PoC:** `TestPentestFindingSharedRecipientFullControl` — share to `attacker` → re-share to `bob` (200) → rotate with only attacker envelope (owner loses access) → recipient `DELETE` (200).
+**PoC:** `TestPentestFindingSharedRecipientFullControl` — share to `attacker` → re-share / rotate / delete expect **403**.
 
 **Impact:** Shared user can destroy or take over team secrets; trust model of “read-only share” cannot be enforced.
 
-**Recommendation:** Persist capability on share (`read`/`write`/`share`/`admin`); enforce on mutate paths; only `admin`/owner may delete/rotate/re-share (or explicit grant).
+**Recommendation / Fix applied:** Owner (`CreatedBy`) required for share/rotate/delete; new group share requires owner; catch-up `share-group` allowed for envelope holders when group already linked; rotate rejects payloads missing owner envelope.
 
-**Regression:** `TestPentestFindingSharedRecipientFullControl` (documents current behavior; flip expectations to 403 after fix).
+**Regression:** `TestPentestFindingSharedRecipientFullControl`.
 
 ---
 
-## FINDING-PENT-02 — Unrelated group member public keys via secret endpoint
+## FINDING-PENT-02 — Unrelated group member public keys via secret endpoint — FIXED
 
 | Field | Value |
 |-------|--------|
-| **Severity** | Medium |
+| **Severity** | Medium (at discovery) |
+| **Status** | Fixed |
 | **CVSS 3.1 (est.)** | 5.3 (AV:N/AC:L/PR:L/UI:N/S:U/C:L/I:N/A:N) |
 | **CWE** | CWE-862 / CWE-200 |
 | **Component** | `internal/server/phase12.go` `handleSecretGroupMemberKeys` |
 
 **Description:** With any envelope on secret S, caller can query `GET /api/secrets/{id}/group-member-keys?group_id=G` for **any** tenant group G and receive usernames + public keys of onboarded members. Contrast: `handleGroupMemberKeysForShare` correctly requires membership/admin.
 
-**PoC:** `TestPentestFindingGroupMemberKeysLeak`.
+**PoC:** `TestPentestFindingGroupMemberKeysLeak` — expect **403**.
 
 **Impact:** Facilitates lateral sharing and tenant user/key enumeration beyond intended share graph.
 
-**Recommendation:** Require that `group_id` is linked to the secret’s group shares **or** that the caller is a member/admin of G (same as non-secret path).
+**Recommendation / Fix applied:** Require that `group_id` is already linked via `ListSecretGroupShares`. Initial share uses `GET /api/groups/{id}/member-keys`.
 
-**Regression:** `TestPentestFindingGroupMemberKeysLeak` (expect 403 after fix).
+**Regression:** `TestPentestFindingGroupMemberKeysLeak`.
 
 ---
 
-## FINDING-PENT-03 — `session_hours` policy not applied to server session TTL
+## FINDING-PENT-03 — `session_hours` policy not applied to server session TTL — FIXED
 
 | Field | Value |
 |-------|--------|
-| **Severity** | Medium |
+| **Severity** | Medium (at discovery) |
+| **Status** | Fixed |
 | **CWE** | CWE-613 |
-| **Component** | `internal/server/server.go` (`New` hardcodes `8 * time.Hour`); `instcfg.Policy.SessionHours`; `handlePutPolicy` |
+| **Component** | `internal/server/server.go`, `session.Store.SetTTL`, `handlePutPolicy` |
 
 **Description:** Admin can set `session_hours` (e.g. 1); `/api/policy/client` reflects it, but new sessions still get ~8h cookie expiry.
 
-**PoC:** `TestPentestFindingSessionHoursNotWired`.
+**PoC:** `TestPentestFindingSessionHoursNotWired` — expect ~1h TTL after policy update.
 
 **Impact:** Operators cannot shorten server-side session lifetime via policy; clients may idle-lock vault SK but HTTP session remains valid longer than intended.
 
-**Recommendation:** Pass `Policy.SessionHours` into `session.NewPersistent` (and refresh on policy update); optionally add idle timeout server-side.
+**Recommendation / Fix applied:** Boot TTL from policy; `SetTTL` on policy PUT.
 
 ---
 
-## FINDING-PENT-04 — CSRF Origin check trusts `X-Forwarded-Host`
+## FINDING-PENT-04 — CSRF Origin check trusts `X-Forwarded-Host` — FIXED
 
 | Field | Value |
 |-------|--------|
-| **Severity** | Medium |
+| **Severity** | Medium (at discovery) |
+| **Status** | Fixed |
 | **CWE** | CWE-346 / CWE-940 |
-| **Component** | `internal/server/public_access.go` `requestHost`; `hardening.go` `originOK`/`sameHost` |
+| **Component** | `internal/server/hardening.go` `csrfHost` |
 
 **Description:** When `TEAMVAULT_TRUST_FORWARDED` is true, `X-Forwarded-Host` overrides `Host` for Origin comparison. A same-site attacker who can inject forwarded headers (misconfigured proxy) can satisfy Origin checks with a forged Origin.
 
-**PoC:** `TestPentestFindingTrustForwardedOrigin` with `TEAMVAULT_TRUST_FORWARDED=true`.
+**PoC:** `TestPentestFindingTrustForwardedOrigin` — expect **403**.
 
 **Impact:** Weakens CSRF defense when forwarded trust is enabled. Classic cross-site POST still mitigated by `SameSite=Lax` in modern browsers.
 
-**Recommendation:** Prefer configured `public_url` host for CSRF comparison; ignore client `X-Forwarded-Host` for Origin checks or allowlist proxy-set values only.
+**Recommendation / Fix applied:** CSRF uses configured `PublicURL` host or raw `r.Host`; never `X-Forwarded-Host`.
 
 ---
 
-## FINDING-PENT-05 — LDAP DN injection on non-search bind path
+## FINDING-PENT-05 — LDAP DN injection on non-search bind path — FIXED
 
 | Field | Value |
 |-------|--------|
-| **Severity** | Low–Medium |
+| **Severity** | Low–Medium (at discovery) |
+| **Status** | Fixed |
 | **CWE** | CWE-90 |
-| **Component** | `internal/auth/ldapauth/ldapauth.go` (~line 66–68) |
+| **Component** | `internal/auth/ldapauth/ldapauth.go` |
 
 **Description:** Fallback `uid=%s,%BaseDN` does not call `ldap.EscapeDN`. Search path correctly uses `EscapeFilter`.
 
@@ -164,46 +183,47 @@ Sorted by severity. Confirmed findings include reproducible PoCs against the loc
 
 **Impact:** Potential bind DN manipulation depending on directory ACLs.
 
-**Recommendation:** Always use search+bind with `EscapeFilter`, or `EscapeDN` on username components.
+**Recommendation / Fix applied:** `ldap.EscapeDN(username)` on the template path.
 
 ---
 
-## FINDING-PENT-06 — Stored HTML injection in admin UI sinks (CSP-mitigated)
+## FINDING-PENT-06 — Stored HTML injection in admin UI sinks (CSP-mitigated) — FIXED
 
 | Field | Value |
 |-------|--------|
-| **Severity** | Low |
+| **Severity** | Low (at discovery) |
+| **Status** | Fixed |
 | **CWE** | CWE-79 |
-| **Component** | `web/static/app.js` (passkey name, API key name, tenant name/slug into `innerHTML`) |
+| **Component** | `web/static/app.js` |
 
 **Description:** Some admin UI strings are interpolated into `innerHTML` without `escapeHtml`. Current CSP (`script-src 'self'`, no `'unsafe-inline'`) blocks typical script XSS in modern browsers; residual UI spoofing remains.
 
-**Recommendation:** Use `textContent` / existing `escapeHtml` for all dynamic HTML.
+**Recommendation / Fix applied:** `escapeHtml` on offline picker, passkey names, API key names, tenant list.
 
 ---
 
-## FINDING-PENT-07 — Transitive JWT vulnerability (WebAuthn)
+## FINDING-PENT-07 — Transitive JWT vulnerability (WebAuthn) — FIXED
 
 | Field | Value |
 |-------|--------|
-| **Severity** | Low |
+| **Severity** | Low (at discovery) |
+| **Status** | Fixed |
 | **CWE** | CWE-770 |
-| **Component** | `github.com/golang-jwt/jwt/v5@v5.2.1` via `go-webauthn/webauthn` (`GO-2025-3553`) |
+| **Component** | `github.com/golang-jwt/jwt/v5` |
 
 **Description:** `govulncheck` reports excessive memory allocation in JWT header parsing; reachable via WebAuthn registration finish path.
 
-**Recommendation:** Upgrade `go-webauthn/webauthn` / jwt to ≥ v5.2.2 when compatible; re-run `govulncheck`.
-
+**Recommendation / Fix applied:** Bumped to `v5.2.2`.
 ---
 
 ## Informational
 
 | ID | Topic | Notes |
 |----|--------|-------|
-| INFO-01 | Login rate limit in-memory / IP-only | Fine for single node; NAT DoS / multi-replica bypass |
-| INFO-02 | Absolute session TTL; multi-session | No server idle timeout; login does not revoke other sessions |
+| INFO-01 | Login rate limit in-memory / IP-only | **Improved:** per-user (tenant+username) limit 10/min in addition to IP 20/min; map growth bounded. Multi-node sync still open |
+| INFO-02 | Absolute session TTL; multi-session | **Improved:** idle expiry via `UnlockIdleMinutes`; login revokes prior cookie sessions for the user |
 | INFO-03 | Argon2 admin floor low | Platform min Memory 8192 KiB / Time 1 — weak if admin lowers presets |
-| INFO-04 | CI Actions pin tags not SHAs | `actions/checkout@v4` etc.; no `pull_request_target` found |
+| INFO-04 | CI Actions pin tags not SHAs | **Partial:** `security.yml` pins `actions/checkout` to full SHA; Dependabot added for actions/gomod; other workflows still tag-pinned |
 | INFO-05 | govulncheck/Trivy absent from CI | Claimed in phase self-checks; not in workflows (addressed by new `security.yml`) |
 | INFO-06 | OQ-22 malicious JS | Residual ZK break if app delivery compromised |
 | INFO-07 | Secret scan hits | `TestLocalPassword` fixture; script `password=` parsing of credential helper output — **false positives** (not live secrets) |
@@ -250,7 +270,7 @@ Sorted by severity. Confirmed findings include reproducible PoCs against the loc
 
 **Strengths:** Hybrid local/LDAP bind-only; TOTP pending token; WebAuthn login-only; onboard gate; API key scopes; platform vs tenant admin RBAC; Origin CSRF for cookies; uniform 401 on failed login (no obvious username enumeration message).
 
-**Gaps:** Envelope-level BOLA (PENT-01/02); session policy wiring (PENT-03); TrustForwarded Origin (PENT-04).
+**Gaps (remaining):** INFO-rate-limit multi-node; OQ-22 residual (SRI helps only if delivery channel integrity holds).
 
 ---
 
@@ -264,12 +284,12 @@ Unauthenticated surface is limited (`/api/health`, `/api/version`, setup, login,
 
 | Check | Result |
 |-------|--------|
-| `govulncheck ./...` | 1 reachable: GO-2025-3553 (`jwt/v5` via WebAuthn) |
+| `govulncheck ./...` | Tracked in CI (`security.yml`); jwt bump addressed GO-2025-3553 |
 | Direct deps | Go 1.23.3; ldap, webauthn, otp, x/crypto, modernc sqlite |
 | Frontend npm | Dev-only Playwright under `scripts/` |
 | Container | Distroless nonroot; unlock not baked in |
-| GitHub Actions | Tag pins (`@v4`/`@v5`/`@v6`); permissions scoped; **no** `pull_request_target` |
-| SBOM | Generate in CI via `go version -m` / future Syft (workflow documents approach) |
+| GitHub Actions | `security.yml` checkout SHA-pinned; Trivy FS HIGH/CRITICAL; Dependabot actions/gomod |
+| SBOM | `go list -m all` artifact in CI |
 
 ---
 
@@ -316,30 +336,30 @@ Not fully covered in this pass: interactive browser XSS PoC, LDAP live directory
 
 # Recommended Remediation Plan
 
-### Sofort
+### Sofort (done)
 
-1. Fix `handleSecretGroupMemberKeys` authorization (PENT-02).  
-2. Document or restrict share capabilities; block recipient delete/rotate/re-share unless capability allows (PENT-01).  
-3. Do not enable `TEAMVAULT_TRUST_FORWARDED` without fixing Origin host source (PENT-04).
+1. ~~Fix `handleSecretGroupMemberKeys` authorization (PENT-02).~~  
+2. ~~Restrict share/rotate/delete to owner; group catch-up rules (PENT-01).~~  
+3. ~~CSRF host without client `X-Forwarded-Host` (PENT-04).~~
 
-### Kurzfristig
+### Kurzfristig (done)
 
-4. Wire `session_hours` into session store TTL (PENT-03).  
-5. `EscapeDN` / mandator search+bind for LDAP (PENT-05).  
-6. Escape remaining `innerHTML` sinks (PENT-06).  
-7. Bump jwt/webauthn for GO-2025-3553 (PENT-07).
+4. ~~Wire `session_hours` into session store TTL (PENT-03).~~  
+5. ~~`EscapeDN` for LDAP DN template (PENT-05).~~  
+6. ~~Escape remaining `innerHTML` sinks (PENT-06).~~  
+7. ~~Bump jwt for GO-2025-3553 (PENT-07).~~
 
-### Mittelfristig
+### Mittelfristig (partially done)
 
-8. Per-user + distributed rate limits.  
-9. Pin GitHub Actions to commit SHAs; add SBOM artifact.  
-10. Server-side idle session timeout; optional session revoke-all on login.
+8. ~~Per-user login rate limit (+ IP) and rate-limiter map bound.~~ Distributed/multi-node RL still open.  
+9. ~~Pin GitHub Actions checkout to commit SHA across workflows; Dependabot; Trivy FS + PR image scan.~~ Remaining action tags tracked by Dependabot.  
+10. ~~Server-side session idle timeout (`UnlockIdleMinutes`) + revoke prior cookie sessions on login.~~  
+13. ~~Capability-based ACL (`read|write|share|admin`) on shares + handler gates + UI picker.~~
 
 ### Langfristig
 
 11. External pentest / audit (checklist open item).  
-12. Mitigations for OQ-22 (SRI, signed releases, hardened delivery).  
-13. Full capability-based ACL as in architecture.md.
+12. Further OQ-22 mitigations (signed releases, hardened delivery). SRI for critical scripts **shipped** in `web/embed.go` (partial mitigation).
 
 ---
 

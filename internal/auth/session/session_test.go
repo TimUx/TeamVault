@@ -30,3 +30,17 @@ func TestDeleteByUserAndTenant(t *testing.T) {
 		t.Fatal("cara in other tenant should remain")
 	}
 }
+
+func TestIdleTimeout(t *testing.T) {
+	s := New(time.Hour)
+	s.SetIdle(50 * time.Millisecond)
+	sess := s.Create("usr_a", "ten_1", "alice", []string{"member"})
+	if _, ok := s.Get(sess.ID); !ok {
+		t.Fatal("fresh session should be valid")
+	}
+	time.Sleep(80 * time.Millisecond)
+	if _, ok := s.Get(sess.ID); ok {
+		t.Fatal("idle session should expire")
+	}
+}
+

@@ -77,10 +77,11 @@ func (s *Store) ShareSecret(ctx context.Context, envelopes []store.KeyEnvelope, 
 		if share.SecretID == "" || share.UserID == "" {
 			return errors.New("secret_id and user_id required")
 		}
+		cap := store.NormalizeCapability(share.Capability)
 		if _, err := tx.ExecContext(ctx, `
-INSERT INTO secret_direct_shares(tenant_id, secret_id, user_id) VALUES(?,?,?)
-ON CONFLICT(tenant_id, secret_id, user_id) DO NOTHING`,
-			share.TenantID, share.SecretID, share.UserID); err != nil {
+INSERT INTO secret_direct_shares(tenant_id, secret_id, user_id, capability) VALUES(?,?,?,?)
+ON CONFLICT(tenant_id, secret_id, user_id) DO UPDATE SET capability=excluded.capability`,
+			share.TenantID, share.SecretID, share.UserID, cap); err != nil {
 			return err
 		}
 	}
@@ -111,9 +112,9 @@ func (s *Store) ShareSecretGroup(ctx context.Context, envelopes []store.KeyEnvel
 		}
 	}
 	if _, err := tx.ExecContext(ctx, `
-INSERT INTO secret_group_shares(tenant_id, secret_id, group_id) VALUES(?,?,?)
-ON CONFLICT(tenant_id, secret_id, group_id) DO NOTHING`,
-		group.TenantID, group.SecretID, group.GroupID); err != nil {
+INSERT INTO secret_group_shares(tenant_id, secret_id, group_id, capability) VALUES(?,?,?,?)
+ON CONFLICT(tenant_id, secret_id, group_id) DO UPDATE SET capability=excluded.capability`,
+		group.TenantID, group.SecretID, group.GroupID, store.NormalizeCapability(group.Capability)); err != nil {
 		return err
 	}
 	if err := insertAuditTx(ctx, tx, audit); err != nil {

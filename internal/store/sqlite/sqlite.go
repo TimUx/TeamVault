@@ -16,7 +16,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const schemaVersion = 7
+const schemaVersion = 8
 
 type Store struct {
 	db *sql.DB
@@ -163,12 +163,14 @@ CREATE TABLE IF NOT EXISTS secret_direct_shares (
   tenant_id TEXT NOT NULL,
   secret_id TEXT NOT NULL,
   user_id TEXT NOT NULL,
+  capability TEXT NOT NULL DEFAULT 'write',
   PRIMARY KEY (tenant_id, secret_id, user_id)
 );
 CREATE TABLE IF NOT EXISTS secret_group_shares (
   tenant_id TEXT NOT NULL,
   secret_id TEXT NOT NULL,
   group_id TEXT NOT NULL,
+  capability TEXT NOT NULL DEFAULT 'write',
   PRIMARY KEY (tenant_id, secret_id, group_id)
 );
 `)
@@ -192,14 +194,18 @@ CREATE TABLE IF NOT EXISTS secret_group_shares (
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_webauthn_cred ON webauthn_credentials(tenant_id, credential_id)`,
 		`CREATE TABLE IF NOT EXISTS secret_direct_shares (
   tenant_id TEXT NOT NULL, secret_id TEXT NOT NULL, user_id TEXT NOT NULL,
+  capability TEXT NOT NULL DEFAULT 'write',
   PRIMARY KEY (tenant_id, secret_id, user_id)
 )`,
 		`CREATE TABLE IF NOT EXISTS secret_group_shares (
   tenant_id TEXT NOT NULL, secret_id TEXT NOT NULL, group_id TEXT NOT NULL,
+  capability TEXT NOT NULL DEFAULT 'write',
   PRIMARY KEY (tenant_id, secret_id, group_id)
 )`,
 		`ALTER TABLE secrets ADD COLUMN visibility TEXT NOT NULL DEFAULT 'private'`,
 		`ALTER TABLE users ADD COLUMN kdf_params_json TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE secret_direct_shares ADD COLUMN capability TEXT NOT NULL DEFAULT 'write'`,
+		`ALTER TABLE secret_group_shares ADD COLUMN capability TEXT NOT NULL DEFAULT 'write'`,
 	} {
 		_, _ = s.db.Exec(q)
 	}
@@ -1017,10 +1023,11 @@ func (s *Store) PutSecretDirectShare(ctx context.Context, share store.SecretDire
 	if share.SecretID == "" || share.UserID == "" {
 		return errors.New("secret_id and user_id required")
 	}
+	cap := store.NormalizeCapability(share.Capability)
 	_, err := s.db.ExecContext(ctx, `
-INSERT INTO secret_direct_shares(tenant_id, secret_id, user_id) VALUES(?,?,?)
-ON CONFLICT(tenant_id, secret_id, user_id) DO NOTHING`,
-		share.TenantID, share.SecretID, share.UserID)
+INSERT INTO secret_direct_shares(tenant_id, secret_id, user_id, capability) VALUES(?,?,?,?)
+ON CONFLICT(tenant_id, secret_id, user_id) DO UPDATE SET capability=excluded.capability`,
+		share.TenantID, share.SecretID, share.UserID, cap)
 	return err
 }
 
@@ -1039,7 +1046,7 @@ func (s *Store) ListSecretDirectShares(ctx context.Context, tenant store.TenantI
 		return nil, err
 	}
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT tenant_id, secret_id, user_id FROM secret_direct_shares WHERE tenant_id = ? AND secret_id = ? ORDER BY user_id`,
+		`SELECT tenant_id, secret_id, user_id, capability FROM secret_direct_shares WHERE tenant_id = ? AND secret_id = ? ORDER BY user_id`,
 		tenant, secret)
 	if err != nil {
 		return nil, err
@@ -1048,9 +1055,10 @@ func (s *Store) ListSecretDirectShares(ctx context.Context, tenant store.TenantI
 	var out []store.SecretDirectShare
 	for rows.Next() {
 		var sh store.SecretDirectShare
-		if err := rows.Scan(&sh.TenantID, &sh.SecretID, &sh.UserID); err != nil {
+		if err := rows.Scan(&sh.TenantID, &sh.SecretID, &sh.UserID, &sh.Capability); err != nil {
 			return nil, err
 		}
+		sh.Capability = store.NormalizeCapability(sh.Capability)
 		out = append(out, sh)
 	}
 	return out, rows.Err()
@@ -1061,7 +1069,7 @@ func (s *Store) ListSecretDirectSharesByTenant(ctx context.Context, tenant store
 		return nil, err
 	}
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT tenant_id, secret_id, user_id FROM secret_direct_shares WHERE tenant_id = ?`, tenant)
+		`SELECT tenant_id, secret_id, user_id, capability FROM secret_direct_shares WHERE tenant_id = ?`, tenant)
 	if err != nil {
 		return nil, err
 	}
@@ -1069,9 +1077,10 @@ func (s *Store) ListSecretDirectSharesByTenant(ctx context.Context, tenant store
 	var out []store.SecretDirectShare
 	for rows.Next() {
 		var sh store.SecretDirectShare
-		if err := rows.Scan(&sh.TenantID, &sh.SecretID, &sh.UserID); err != nil {
+		if err := rows.Scan(&sh.TenantID, &sh.SecretID, &sh.UserID, &sh.Capability); err != nil {
 			return nil, err
 		}
+		sh.Capability = store.NormalizeCapability(sh.Capability)
 		out = append(out, sh)
 	}
 	return out, rows.Err()
@@ -1084,10 +1093,11 @@ func (s *Store) PutSecretGroupShare(ctx context.Context, share store.SecretGroup
 	if share.SecretID == "" || share.GroupID == "" {
 		return errors.New("secret_id and group_id required")
 	}
+	cap := store.NormalizeCapability(share.Capability)
 	_, err := s.db.ExecContext(ctx, `
-INSERT INTO secret_group_shares(tenant_id, secret_id, group_id) VALUES(?,?,?)
-ON CONFLICT(tenant_id, secret_id, group_id) DO NOTHING`,
-		share.TenantID, share.SecretID, share.GroupID)
+INSERT INTO secret_group_shares(tenant_id, secret_id, group_id, capability) VALUES(?,?,?,?)
+ON CONFLICT(tenant_id, secret_id, group_id) DO UPDATE SET capability=excluded.capability`,
+		share.TenantID, share.SecretID, share.GroupID, cap)
 	return err
 }
 
@@ -1106,7 +1116,7 @@ func (s *Store) ListSecretGroupShares(ctx context.Context, tenant store.TenantID
 		return nil, err
 	}
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT tenant_id, secret_id, group_id FROM secret_group_shares WHERE tenant_id = ? AND secret_id = ? ORDER BY group_id`,
+		`SELECT tenant_id, secret_id, group_id, capability FROM secret_group_shares WHERE tenant_id = ? AND secret_id = ? ORDER BY group_id`,
 		tenant, secret)
 	if err != nil {
 		return nil, err
@@ -1115,9 +1125,10 @@ func (s *Store) ListSecretGroupShares(ctx context.Context, tenant store.TenantID
 	var out []store.SecretGroupShare
 	for rows.Next() {
 		var sh store.SecretGroupShare
-		if err := rows.Scan(&sh.TenantID, &sh.SecretID, &sh.GroupID); err != nil {
+		if err := rows.Scan(&sh.TenantID, &sh.SecretID, &sh.GroupID, &sh.Capability); err != nil {
 			return nil, err
 		}
+		sh.Capability = store.NormalizeCapability(sh.Capability)
 		out = append(out, sh)
 	}
 	return out, rows.Err()
@@ -1128,7 +1139,7 @@ func (s *Store) ListSecretGroupSharesByTenant(ctx context.Context, tenant store.
 		return nil, err
 	}
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT tenant_id, secret_id, group_id FROM secret_group_shares WHERE tenant_id = ?`, tenant)
+		`SELECT tenant_id, secret_id, group_id, capability FROM secret_group_shares WHERE tenant_id = ?`, tenant)
 	if err != nil {
 		return nil, err
 	}
@@ -1136,9 +1147,10 @@ func (s *Store) ListSecretGroupSharesByTenant(ctx context.Context, tenant store.
 	var out []store.SecretGroupShare
 	for rows.Next() {
 		var sh store.SecretGroupShare
-		if err := rows.Scan(&sh.TenantID, &sh.SecretID, &sh.GroupID); err != nil {
+		if err := rows.Scan(&sh.TenantID, &sh.SecretID, &sh.GroupID, &sh.Capability); err != nil {
 			return nil, err
 		}
+		sh.Capability = store.NormalizeCapability(sh.Capability)
 		out = append(out, sh)
 	}
 	return out, rows.Err()
@@ -1149,7 +1161,7 @@ func (s *Store) ListSecretGroupSharesByGroup(ctx context.Context, tenant store.T
 		return nil, err
 	}
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT tenant_id, secret_id, group_id FROM secret_group_shares WHERE tenant_id = ? AND group_id = ?`,
+		`SELECT tenant_id, secret_id, group_id, capability FROM secret_group_shares WHERE tenant_id = ? AND group_id = ?`,
 		tenant, group)
 	if err != nil {
 		return nil, err
@@ -1158,9 +1170,10 @@ func (s *Store) ListSecretGroupSharesByGroup(ctx context.Context, tenant store.T
 	var out []store.SecretGroupShare
 	for rows.Next() {
 		var sh store.SecretGroupShare
-		if err := rows.Scan(&sh.TenantID, &sh.SecretID, &sh.GroupID); err != nil {
+		if err := rows.Scan(&sh.TenantID, &sh.SecretID, &sh.GroupID, &sh.Capability); err != nil {
 			return nil, err
 		}
+		sh.Capability = store.NormalizeCapability(sh.Capability)
 		out = append(out, sh)
 	}
 	return out, rows.Err()

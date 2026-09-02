@@ -1018,10 +1018,21 @@ body.admin-modal-open { overflow: hidden; }
 .access-chip.owner { cursor: default; opacity: 0.9; }
 .access-chip.dragging { opacity: 0.45; }
 .access-chip .chip-meta { font-size: 0.75rem; color: var(--color-text-muted); }
+.access-chip.access-chip-disabled { opacity: 0.55; cursor: not-allowed; }
 .access-chip button {
   flex-shrink: 0;
   padding: 0.15rem 0.45rem;
   font-size: 0.8rem;
+}
+.access-cap-pick {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.65rem 0 0.85rem;
+}
+.access-cap-pick select {
+  min-width: 10rem;
 }
 .access-list.drag-over {
   border-color: var(--color-accent);

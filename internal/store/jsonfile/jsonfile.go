@@ -798,11 +798,13 @@ func (s *Store) PutSecretDirectShare(_ context.Context, share store.SecretDirect
 	if share.SecretID == "" || share.UserID == "" {
 		return errors.New("secret_id and user_id required")
 	}
+	share.Capability = store.NormalizeCapability(share.Capability)
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	for _, sh := range s.data.DirectShares {
+	for i, sh := range s.data.DirectShares {
 		if sh.TenantID == share.TenantID && sh.SecretID == share.SecretID && sh.UserID == share.UserID {
-			return nil
+			s.data.DirectShares[i] = share
+			return s.flush()
 		}
 	}
 	s.data.DirectShares = append(s.data.DirectShares, share)
@@ -862,11 +864,13 @@ func (s *Store) PutSecretGroupShare(_ context.Context, share store.SecretGroupSh
 	if share.SecretID == "" || share.GroupID == "" {
 		return errors.New("secret_id and group_id required")
 	}
+	share.Capability = store.NormalizeCapability(share.Capability)
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	for _, sh := range s.data.GroupShares {
+	for i, sh := range s.data.GroupShares {
 		if sh.TenantID == share.TenantID && sh.SecretID == share.SecretID && sh.GroupID == share.GroupID {
-			return nil
+			s.data.GroupShares[i] = share
+			return s.flush()
 		}
 	}
 	s.data.GroupShares = append(s.data.GroupShares, share)

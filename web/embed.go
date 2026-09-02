@@ -2,7 +2,9 @@ package web
 
 import (
 	"bytes"
+	"crypto/sha512"
 	"embed"
+	"encoding/base64"
 	"encoding/json"
 	"io/fs"
 	"net/http"
@@ -25,6 +27,7 @@ func HandlerFor(baseFn func(*http.Request) string) http.Handler {
 	}
 	fileServer := http.FileServer(http.FS(sub))
 	indexHTML, _ := fs.ReadFile(sub, "index.html")
+	sri := buildScriptSRI(sub)
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		base := NormalizeBasePath(baseFn(r))
@@ -34,7 +37,7 @@ func HandlerFor(baseFn func(*http.Request) string) http.Handler {
 			serveManifest(w, base)
 			return
 		case "/", "/setup", "/login", "/onboard", "/app":
-			serveIndex(w, indexHTML, base)
+			serveIndex(w, indexHTML, base, sri)
 			return
 		case "/help", "/help/":
 			serveHelp(w, sub, "help/index.html", base)
@@ -56,9 +59,63 @@ func HandlerFor(baseFn func(*http.Request) string) http.Handler {
 	})
 }
 
-func serveIndex(w http.ResponseWriter, indexHTML []byte, base string) {
+func serveIndex(w http.ResponseWriter, indexHTML []byte, base string, sri map[string]string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_, _ = w.Write(InjectBase(indexHTML, base))
+	out := InjectBase(indexHTML, base)
+	out = injectScriptIntegrity(out, sri)
+	_, _ = w.Write(out)
+}
+
+// buildScriptSRI computes sha384 Subresource Integrity hashes for critical same-origin scripts (OQ-22).
+func buildScriptSRI(sub fs.FS) map[string]string {
+	out := map[string]string{}
+	for _, name := range []string{"cryptocore.js", "app.js", "vault-io.js", "offline-store.js"} {
+		raw, err := fs.ReadFile(sub, name)
+		if err != nil {
+			continue
+		}
+		sum := sha512.Sum384(raw)
+		out[name] = "sha384-" + base64.StdEncoding.EncodeToString(sum[:])
+	}
+	return out
+}
+
+func injectScriptIntegrity(html []byte, sri map[string]string) []byte {
+	if len(sri) == 0 {
+		return html
+	}
+	s := string(html)
+	for name, hash := range sri {
+		token := `/` + name + `"`
+		var b strings.Builder
+		rest := s
+		for {
+			i := strings.Index(rest, token)
+			if i < 0 {
+				b.WriteString(rest)
+				break
+			}
+			start := strings.LastIndex(rest[:i], "src=")
+			if start < 0 || i-start > 96 {
+				b.WriteString(rest[:i+len(token)])
+				rest = rest[i+len(token):]
+				continue
+			}
+			chunk := rest[start : i+len(token)]
+			if strings.Contains(chunk, "integrity=") {
+				b.WriteString(rest[:i+len(token)])
+				rest = rest[i+len(token):]
+				continue
+			}
+			b.WriteString(rest[:start])
+			// chunk is like src="/cryptocore.js" — insert integrity before closing quote of src value end.
+			b.WriteString(chunk[:len(chunk)-1])
+			b.WriteString(`" integrity="` + hash + `" crossorigin="anonymous"`)
+			rest = rest[i+len(token):]
+		}
+		s = b.String()
+	}
+	return []byte(s)
 }
 
 func serveHelp(w http.ResponseWriter, sub fs.FS, name, base string) {

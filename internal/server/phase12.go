@@ -274,8 +274,9 @@ func (a *API) handleShareGroup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		GroupID   string       `json:"group_id"`
-		Envelopes []envelopeIn `json:"envelopes"`
+		GroupID    string       `json:"group_id"`
+		Envelopes  []envelopeIn `json:"envelopes"`
+		Capability string       `json:"capability"`
 	}
 	if err := readJSON(r, &body); err != nil {
 		writeErr(w, http.StatusBadRequest, err.Error())
@@ -287,8 +288,36 @@ func (a *API) handleShareGroup(w http.ResponseWriter, r *http.Request) {
 	}
 	gid := store.GroupID(body.GroupID)
 	alreadyShared := a.secretSharedWithGroup(r, sess.TenantID, id, gid)
-	if !alreadyShared && !a.callerIsSecretOwner(r, sess.TenantID, id, sess.UserID) {
-		writeErr(w, http.StatusForbidden, "owner required to share with new group")
+	if alreadyShared {
+		// Catch-up: envelope + existing group share is enough.
+	} else if !a.requireSecretCap(r, sess.TenantID, id, sess.UserID, store.CapShare) {
+		writeErr(w, http.StatusForbidden, "share capability required")
+		return
+	}
+	var cap string
+	if body.Capability != "" {
+		cap = store.NormalizeCapability(body.Capability)
+	} else if alreadyShared {
+		// Preserve existing group capability on catch-up.
+		cap = store.CapWrite
+		if shares, err := a.App.Vault.ListSecretGroupShares(r.Context(), sess.TenantID, id); err == nil {
+			for _, sh := range shares {
+				if sh.GroupID == gid {
+					cap = store.NormalizeCapability(sh.Capability)
+					break
+				}
+			}
+		}
+	} else {
+		cap = store.NormalizeCapability(body.Capability)
+	}
+	have := a.callerEffectiveCapability(r, sess.TenantID, id, sess.UserID)
+	if !alreadyShared && !store.CapAtLeast(have, cap) {
+		writeErr(w, http.StatusForbidden, "cannot grant capability above own")
+		return
+	}
+	if alreadyShared && body.Capability != "" && !store.CapAtLeast(have, store.NormalizeCapability(body.Capability)) {
+		writeErr(w, http.StatusForbidden, "cannot grant capability above own")
 		return
 	}
 	members, err := a.App.Vault.ListGroupMembers(r.Context(), sess.TenantID, gid)
@@ -336,7 +365,7 @@ func (a *API) handleShareGroup(w http.ResponseWriter, r *http.Request) {
 	audit := a.mutationAudit(r, sess, "secret.share_group", "secret", string(id))
 	audit.Metadata, _ = json.Marshal(map[string]string{"group_id": body.GroupID})
 	if err := a.App.Vault.ShareSecretGroup(r.Context(), envs, store.SecretGroupShare{
-		TenantID: sess.TenantID, SecretID: id, GroupID: gid,
+		TenantID: sess.TenantID, SecretID: id, GroupID: gid, Capability: cap,
 	}, &audit); err != nil {
 		if errors.Is(err, store.ErrRevokedEnvelope) {
 			writeErr(w, http.StatusConflict, "cannot revive revoked envelope")

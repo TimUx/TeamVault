@@ -24,9 +24,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        # Pin full commit SHA (tag v4 tip as of 2026-07-16).
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Set up Go
+        # Tag pin; SHA-pin alongside Dependabot when network allows verifying tags.
         uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
@@ -54,9 +56,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Set up Go
+        # Tag pin; SHA-pin alongside Dependabot when network allows verifying tags.
         uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
@@ -73,13 +76,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Scan for high-risk secret patterns
         run: |
           set -euo pipefail
-          # Fail on private key material or cloud-looking tokens in tracked source.
-          # Test fixtures (Password1234!!!!) and credential-helper parsing are allowlisted via path filters.
           if git grep -nE 'BEGIN (RSA |OPENSSH |EC )?PRIVATE KEY|AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{22,}' \
             -- ':!vendor/**' ':!*.sum' ':!go.sum' ':!SECURITY-REPORT.md'; then
             echo "Potential secret material found"
@@ -92,9 +93,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Set up Go
+        # Tag pin; SHA-pin alongside Dependabot when network allows verifying tags.
         uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
@@ -111,3 +113,20 @@ jobs:
           name: sbom-go-modules
           path: sbom-go-modules.txt
           retention-days: 30
+
+  trivy-fs:
+    name: Trivy filesystem scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Run Trivy (fs, HIGH/CRITICAL)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          ignore-unfixed: true
+          skip-dirs: vendor,data,.git

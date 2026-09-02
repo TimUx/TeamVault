@@ -1876,6 +1876,14 @@ function renderApp(app) {
                     <div id="accessPanel" class="access-panel" hidden>
                       <h3 class="access-panel-title">Zugriff</h3>
                       ${hintBox("Klicken oder per Drag &amp; Drop hinzufügen. Entfernen rotiert den Datenschlüssel.")}
+                      <label class="inline access-cap-pick">Rechte für neue Freigaben
+                        <select id="dShareCap" aria-label="Rechte für neue Freigaben">
+                          <option value="read">Lesen</option>
+                          <option value="write" selected>Bearbeiten</option>
+                          <option value="share">Teilen</option>
+                          <option value="admin">Verwalten</option>
+                        </select>
+                      </label>
                       <div class="access-workspace">
                         <div class="panel-inset access-col">
                           <h3>Verfügbar</h3>
@@ -1934,6 +1942,14 @@ function renderApp(app) {
                   </div>
                   <p class="hint" id="shareAccessSubtitle"></p>
                   ${hintBox("Klicken oder per Drag &amp; Drop hinzufügen. Entfernen rotiert den Datenschlüssel.")}
+                  <label class="inline access-cap-pick">Rechte für neue Freigaben
+                    <select id="smShareCap" aria-label="Rechte für neue Freigaben">
+                      <option value="read">Lesen</option>
+                      <option value="write" selected>Bearbeiten</option>
+                      <option value="share">Teilen</option>
+                      <option value="admin">Verwalten</option>
+                    </select>
+                  </label>
                   <div class="access-workspace">
                     <div class="panel-inset access-col">
                       <h3>Verfügbar</h3>
@@ -1952,7 +1968,7 @@ function renderApp(app) {
 
             <div class="vault-section" data-vault="create">
               <div class="panel">
-                ${hintBox("Privat = nur Sie unter „Meine Secrets“. Geteilt = Team-Eintrag unter „Geteilte Secrets“ (nicht unter Meine Secrets); alle Berechtigten können bearbeiten.")}
+                ${hintBox("Privat = nur Sie unter „Meine Secrets“. Geteilt = Team-Eintrag unter „Geteilte Secrets“; Rechte der Empfänger unten wählbar (Standard: Bearbeiten).")}
                 <div class="panel-tabs" role="tablist" aria-label="Secret-Typ" id="svisTabs">
                   <button type="button" class="panel-tab active" role="tab" data-svis="private" aria-selected="true">Privat</button>
                   <button type="button" class="panel-tab" role="tab" data-svis="shared" aria-selected="false">Geteilt</button>
@@ -1989,6 +2005,14 @@ function renderApp(app) {
                     <label>Gruppen</label>
                     <select id="screateGroups" multiple size="3"></select>
                   </div>
+                  <label class="inline access-cap-pick">Rechte der Empfänger
+                    <select id="screateCap" aria-label="Rechte der Empfänger">
+                      <option value="read">Lesen</option>
+                      <option value="write" selected>Bearbeiten</option>
+                      <option value="share">Teilen</option>
+                      <option value="admin">Verwalten</option>
+                    </select>
+                  </label>
                 </div>
                 <div class="error" id="serr" hidden></div>
                 <div class="row"><button class="btn-accent btn-with-ico" type="button" id="screate">${btnLabel("save", "Speichern (clientseitig verschlüsselt)")}</button></div>
@@ -4121,6 +4145,11 @@ function renderApp(app) {
     };
     if (shareUserIds.length) body.share_user_ids = shareUserIds;
     if (shareGroupIds.length) body.share_group_ids = shareGroupIds;
+    if (shareUserIds.length || shareGroupIds.length) {
+      const capEl = n.querySelector("#screateCap");
+      const cap = (shareOpts && shareOpts.capability) || (capEl && capEl.value) || "write";
+      body.share_capability = normalizeShareCap(cap);
+    }
     await api("/api/secrets", { method: "POST", body: JSON.stringify(body) });
     return body.visibility;
   }
@@ -4910,11 +4939,12 @@ function renderApp(app) {
       const exportOne = n.querySelector("#sExportOne");
       const accessPanel = n.querySelector("#accessPanel");
       const offlineDetail = !!vault.offlineMode;
-      if (editBtn) editBtn.hidden = offlineDetail;
-      if (delBtn) delBtn.hidden = offlineDetail;
       if (exportOne) exportOne.hidden = offlineDetail;
       if (accessPanel) accessPanel.hidden = offlineDetail;
-      if (!offlineDetail) {
+      if (offlineDetail) {
+        if (editBtn) editBtn.hidden = true;
+        if (delBtn) delBtn.hidden = true;
+      } else {
         await renderAccessPanel("detail");
       }
     } catch (e) {
@@ -4942,6 +4972,40 @@ function renderApp(app) {
   let accessFilterModal = "";
   let shareEditorOpen = false;
   let shareEditorPreserveDetail = false;
+
+  function normalizeShareCap(c) {
+    const v = String(c || "").toLowerCase().trim();
+    if (v === "read" || v === "share" || v === "admin") return v;
+    return "write";
+  }
+
+  function capLabel(c) {
+    switch (normalizeShareCap(c)) {
+      case "read": return "Lesen";
+      case "share": return "Teilen";
+      case "admin": return "Verwalten";
+      default: return "Bearbeiten";
+    }
+  }
+
+  function capRank(c) {
+    switch (normalizeShareCap(c)) {
+      case "read": return 1;
+      case "write": return 2;
+      case "share": return 3;
+      case "admin": return 4;
+      default: return 0;
+    }
+  }
+
+  function capAtLeast(have, want) {
+    return capRank(have) >= capRank(want);
+  }
+
+  function selectedShareCapability(kind) {
+    const id = kind === "modal" ? "#smShareCap" : "#dShareCap";
+    return normalizeShareCap(n.querySelector(id)?.value || "write");
+  }
 
   function accessPanelTargets(kind) {
     if (kind === "modal") {
@@ -5016,31 +5080,39 @@ function renderApp(app) {
       const owner = access.owner || {};
       curParts.push(`<div class="access-chip owner"><span>${escHtml(owner.username || owner.id || "Eigentümer")} <span class="chip-meta">Eigentümer</span></span></div>`);
       (access.shared_users || []).forEach((u) => {
-        curParts.push(`<div class="access-chip" data-kind="user" data-id="${escHtml(u.id)}"><span>${escHtml(u.username)} <span class="chip-meta">User</span></span><button type="button" class="btn-ghost btn-sm" data-drop-user="${escHtml(u.id)}">Entfernen</button></div>`);
+        const cap = normalizeShareCap(u.capability || "write");
+        curParts.push(`<div class="access-chip" data-kind="user" data-id="${escHtml(u.id)}"><span>${escHtml(u.username)} <span class="chip-meta">User · ${escHtml(capLabel(cap))}</span></span><button type="button" class="btn-ghost btn-sm" data-drop-user="${escHtml(u.id)}">Entfernen</button></div>`);
       });
       (access.shared_groups || []).forEach((g) => {
-        curParts.push(`<div class="access-chip" data-kind="group" data-id="${escHtml(g.id)}"><span>${escHtml(g.name)} <span class="chip-meta">Gruppe</span></span><button type="button" class="btn-ghost btn-sm" data-drop-group="${escHtml(g.id)}">Entfernen</button></div>`);
+        const cap = normalizeShareCap(g.capability || "write");
+        curParts.push(`<div class="access-chip" data-kind="group" data-id="${escHtml(g.id)}"><span>${escHtml(g.name)} <span class="chip-meta">Gruppe · ${escHtml(capLabel(cap))}</span></span><button type="button" class="btn-ghost btn-sm" data-drop-group="${escHtml(g.id)}">Entfernen</button></div>`);
       });
       curEl.innerHTML = curParts.join("");
 
+      const myCap = access.my_capability || "";
+      const canShare = capAtLeast(myCap, "share");
+      const canAdmin = capAtLeast(myCap, "admin");
       availEl.querySelectorAll(".access-chip[data-kind]").forEach((el) => {
         wireAccessChip(el, el.dataset.kind, el.dataset.id, el.textContent.trim());
         el.addEventListener("click", async () => {
-          if (accessDnDBusy) return;
+          if (accessDnDBusy || !canShare) return;
           try {
-            if (el.dataset.kind === "user") await shareSecretWithUser(el.dataset.id);
-            else if (el.dataset.kind === "group") await shareSecretWithGroup(el.dataset.id);
+            if (el.dataset.kind === "user") await shareSecretWithUser(el.dataset.id, selectedShareCapability(t.kind));
+            else if (el.dataset.kind === "group") await shareSecretWithGroup(el.dataset.id, selectedShareCapability(t.kind));
           } catch (e) {
             if (errEl) { errEl.hidden = false; errEl.textContent = e.message; }
           }
         });
+        if (!canShare) el.classList.add("access-chip-disabled");
       });
       curEl.querySelectorAll(".access-chip[data-kind]").forEach((el) => {
         wireAccessChip(el, el.dataset.kind, el.dataset.id, el.textContent.trim());
       });
       curEl.querySelectorAll("[data-drop-user]").forEach((btn) => {
+        btn.disabled = !canAdmin;
         btn.onclick = async (ev) => {
           ev.stopPropagation();
+          if (!canAdmin) return;
           try { await unshareSecret({ userIds: [btn.dataset.dropUser] }); }
           catch (e) {
             if (errEl) { errEl.hidden = false; errEl.textContent = e.message; }
@@ -5048,8 +5120,10 @@ function renderApp(app) {
         };
       });
       curEl.querySelectorAll("[data-drop-group]").forEach((btn) => {
+        btn.disabled = !canAdmin;
         btn.onclick = async (ev) => {
           ev.stopPropagation();
+          if (!canAdmin) return;
           try { await unshareSecret({ groupIds: [btn.dataset.dropGroup] }); }
           catch (e) {
             if (errEl) { errEl.hidden = false; errEl.textContent = e.message; }
@@ -5078,13 +5152,33 @@ function renderApp(app) {
         };
       };
       wireZone(curEl, async (p) => {
-        if (p.kind === "user") await shareSecretWithUser(p.id);
-        else if (p.kind === "group") await shareSecretWithGroup(p.id);
+        if (!canShare) throw new Error("Keine Teilen-Berechtigung");
+        if (p.kind === "user") await shareSecretWithUser(p.id, selectedShareCapability(t.kind));
+        else if (p.kind === "group") await shareSecretWithGroup(p.id, selectedShareCapability(t.kind));
       });
       wireZone(availEl, async (p) => {
+        if (!canAdmin) throw new Error("Keine Verwalten-Berechtigung zum Entfernen");
         if (p.kind === "user") await unshareSecret({ userIds: [p.id] });
         else if (p.kind === "group") await unshareSecret({ groupIds: [p.id] });
       });
+
+      const capPick = t.kind === "modal" ? n.querySelector("#smShareCap") : n.querySelector("#dShareCap");
+      if (capPick) {
+        capPick.disabled = !canShare;
+        Array.from(capPick.options).forEach((opt) => {
+          opt.disabled = !capAtLeast(myCap, opt.value);
+        });
+        if (capPick.selectedOptions[0]?.disabled) {
+          const ok = Array.from(capPick.options).find((o) => !o.disabled);
+          if (ok) capPick.value = ok.value;
+        }
+      }
+      if (t.kind === "detail") {
+        const editBtn = n.querySelector("#dedit");
+        const delBtn = n.querySelector("#sdel");
+        if (editBtn) editBtn.hidden = !capAtLeast(myCap, "write") || !!vault.offlineMode;
+        if (delBtn) delBtn.hidden = !canAdmin || !!vault.offlineMode;
+      }
     }
 
     const sub = n.querySelector("#shareAccessSubtitle");
@@ -5094,7 +5188,8 @@ function renderApp(app) {
       const bits = [];
       if (users.length) bits.push("User: " + users.join(", "));
       if (groups.length) bits.push("Gruppen: " + groups.join(", "));
-      sub.textContent = bits.length ? bits.join(" · ") : "Noch nicht geteilt — Ziele links hinzufügen.";
+      const my = access.my_capability ? "Ihre Rechte: " + capLabel(access.my_capability) : "";
+      sub.textContent = [bits.length ? bits.join(" · ") : "Noch nicht geteilt — Ziele links hinzufügen.", my].filter(Boolean).join(" · ");
     }
   }
 
@@ -5169,7 +5264,7 @@ function renderApp(app) {
     paintSecretList();
   }
 
-  async function shareSecretWithUser(userId) {
+  async function shareSecretWithUser(userId, capability) {
     if (accessDnDBusy || !currentSecret || !userId) return;
     accessDnDBusy = true;
     try {
@@ -5182,7 +5277,10 @@ function renderApp(app) {
       dk.fill(0);
       await api("/api/secrets/" + currentSecret.id + "/share", {
         method: "POST",
-        body: JSON.stringify({ envelopes: [TVCrypto.envelopeToAPI(userId, env)] }),
+        body: JSON.stringify({
+          capability: normalizeShareCap(capability),
+          envelopes: [TVCrypto.envelopeToAPI(userId, env)],
+        }),
       });
       await afterShareMutation();
     } finally {
@@ -5190,7 +5288,7 @@ function renderApp(app) {
     }
   }
 
-  async function shareSecretWithGroup(groupId) {
+  async function shareSecretWithGroup(groupId, capability) {
     if (accessDnDBusy || !currentSecret || !groupId) return;
     accessDnDBusy = true;
     try {
@@ -5211,7 +5309,11 @@ function renderApp(app) {
       dk.fill(0);
       await api("/api/secrets/" + currentSecret.id + "/share-group", {
         method: "POST",
-        body: JSON.stringify({ group_id: groupId, envelopes }),
+        body: JSON.stringify({
+          group_id: groupId,
+          capability: normalizeShareCap(capability),
+          envelopes,
+        }),
       });
       await afterShareMutation();
     } finally {

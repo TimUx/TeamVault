@@ -66,6 +66,19 @@ components:
         ciphertext_b64: { type: string }
         nonce_b64: { type: string }
         key_version: { type: integer }
+        share_user_ids:
+          type: array
+          items: { type: string }
+        share_group_ids:
+          type: array
+          items: { type: string }
+        share_capability:
+          type: string
+          enum: [read, write, share, admin]
+          description: Capability for share_user_ids / share_group_ids; default write
+        visibility:
+          type: string
+          enum: [private, shared]
         envelopes:
           type: array
           items: { $ref: '#/components/schemas/EnvelopeIn' }
@@ -244,6 +257,10 @@ paths:
             schema:
               type: object
               properties:
+                capability:
+                  type: string
+                  enum: [read, write, share, admin]
+                  description: Recipient capability; omitted defaults to write
                 envelopes:
                   type: array
                   items: { $ref: '#/components/schemas/EnvelopeIn' }

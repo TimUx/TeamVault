@@ -54,14 +54,16 @@ func (s *Store) ShareSecret(_ context.Context, envelopes []store.KeyEnvelope, di
 		if share.SecretID == "" || share.UserID == "" {
 			return errors.New("secret_id and user_id required")
 		}
-		exists := false
-		for _, sh := range s.data.DirectShares {
+		share.Capability = store.NormalizeCapability(share.Capability)
+		updated := false
+		for i, sh := range s.data.DirectShares {
 			if sh.TenantID == share.TenantID && sh.SecretID == share.SecretID && sh.UserID == share.UserID {
-				exists = true
+				s.data.DirectShares[i] = share
+				updated = true
 				break
 			}
 		}
-		if !exists {
+		if !updated {
 			s.data.DirectShares = append(s.data.DirectShares, share)
 		}
 	}
@@ -87,8 +89,10 @@ func (s *Store) ShareSecretGroup(_ context.Context, envelopes []store.KeyEnvelop
 		}
 	}
 	exists := false
-	for _, sh := range s.data.GroupShares {
+	group.Capability = store.NormalizeCapability(group.Capability)
+	for i, sh := range s.data.GroupShares {
 		if sh.TenantID == group.TenantID && sh.SecretID == group.SecretID && sh.GroupID == group.GroupID {
+			s.data.GroupShares[i] = group
 			exists = true
 			break
 		}

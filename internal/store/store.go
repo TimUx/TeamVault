@@ -159,16 +159,63 @@ type GroupMember struct {
 
 // SecretDirectShare is an explicit per-user share (not inferred from envelopes).
 type SecretDirectShare struct {
-	TenantID TenantID `json:"tenant_id"`
-	SecretID SecretID `json:"secret_id"`
-	UserID   UserID   `json:"user_id"`
+	TenantID   TenantID `json:"tenant_id"`
+	SecretID   SecretID `json:"secret_id"`
+	UserID     UserID   `json:"user_id"`
+	Capability string   `json:"capability,omitempty"` // read|write|share|admin; empty → write (compat)
 }
 
 // SecretGroupShare is an explicit group share marker (envelopes still per member).
 type SecretGroupShare struct {
-	TenantID TenantID `json:"tenant_id"`
-	SecretID SecretID `json:"secret_id"`
-	GroupID  GroupID  `json:"group_id"`
+	TenantID   TenantID `json:"tenant_id"`
+	SecretID   SecretID `json:"secret_id"`
+	GroupID    GroupID  `json:"group_id"`
+	Capability string   `json:"capability,omitempty"` // read|write|share|admin; empty → write (compat)
+}
+
+// Secret capability levels (architecture.md §5.4). Higher includes lower for ranking.
+const (
+	CapRead  = "read"
+	CapWrite = "write"
+	CapShare = "share"
+	CapAdmin = "admin"
+)
+
+// NormalizeCapability returns a valid capability; empty defaults to write (legacy shared=editable).
+func NormalizeCapability(c string) string {
+	switch strings.ToLower(strings.TrimSpace(c)) {
+	case CapRead:
+		return CapRead
+	case CapShare:
+		return CapShare
+	case CapAdmin:
+		return CapAdmin
+	case CapWrite, "":
+		return CapWrite
+	default:
+		return CapWrite
+	}
+}
+
+// CapRank ranks capabilities for max() comparisons (higher = more privilege).
+func CapRank(c string) int {
+	switch NormalizeCapability(c) {
+	case CapRead:
+		return 1
+	case CapWrite:
+		return 2
+	case CapShare:
+		return 3
+	case CapAdmin:
+		return 4
+	default:
+		return 0
+	}
+}
+
+// CapAtLeast reports whether have grants at least want.
+func CapAtLeast(have, want string) bool {
+	return CapRank(have) >= CapRank(want)
 }
 
 type ImportMode string

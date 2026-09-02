@@ -13,13 +13,14 @@ import (
 )
 
 type Session struct {
-	ID        string
-	UserID    store.UserID
-	TenantID  store.TenantID
-	Username  string
-	Roles     []string
-	Scopes    []string // API-key scopes; empty = unrestricted (cookie sessions)
-	ExpiresAt time.Time
+	ID         string
+	UserID     store.UserID
+	TenantID   store.TenantID
+	Username   string
+	Roles      []string
+	Scopes     []string // API-key scopes; empty = unrestricted (cookie sessions)
+	ExpiresAt  time.Time
+	LastSeenAt time.Time
 }
 
 // Store holds sessions in memory and optionally persists to a JSON file (Phase 9.5).
@@ -29,6 +30,7 @@ type Store struct {
 	mu       sync.Mutex
 	sessions map[string]Session
 	ttl      time.Duration
+	idle     time.Duration // 0 = no idle expiry (absolute TTL only)
 	path     string
 }
 
@@ -52,12 +54,13 @@ func (s *Store) Create(userID store.UserID, tenantID store.TenantID, username st
 	b := make([]byte, 32)
 	_, _ = rand.Read(b)
 	id := hex.EncodeToString(b)
+	now := time.Now().UTC()
 	s.mu.Lock()
 	ttl := s.ttl
 	s.mu.Unlock()
 	sess := Session{
 		ID: id, UserID: userID, TenantID: tenantID, Username: username, Roles: roles,
-		ExpiresAt: time.Now().UTC().Add(ttl),
+		ExpiresAt: now.Add(ttl), LastSeenAt: now,
 	}
 	s.mu.Lock()
 	s.sessions[id] = sess
@@ -66,7 +69,7 @@ func (s *Store) Create(userID store.UserID, tenantID store.TenantID, username st
 	return sess
 }
 
-// SetTTL updates the TTL used for newly created sessions.
+// SetTTL updates the absolute TTL used for newly created sessions.
 func (s *Store) SetTTL(ttl time.Duration) {
 	if ttl <= 0 {
 		ttl = 8 * time.Hour
@@ -76,14 +79,31 @@ func (s *Store) SetTTL(ttl time.Duration) {
 	s.mu.Unlock()
 }
 
+// SetIdle updates the idle timeout. Zero disables idle expiry (absolute TTL only).
+func (s *Store) SetIdle(idle time.Duration) {
+	if idle < 0 {
+		idle = 0
+	}
+	s.mu.Lock()
+	s.idle = idle
+	s.mu.Unlock()
+}
+
 func (s *Store) Get(id string) (Session, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	sess, ok := s.sessions[id]
-	if !ok || time.Now().UTC().After(sess.ExpiresAt) {
+	now := time.Now().UTC()
+	if !ok || now.After(sess.ExpiresAt) {
 		delete(s.sessions, id)
 		return Session{}, false
 	}
+	if s.idle > 0 && !sess.LastSeenAt.IsZero() && now.Sub(sess.LastSeenAt) > s.idle {
+		delete(s.sessions, id)
+		return Session{}, false
+	}
+	sess.LastSeenAt = now
+	s.sessions[id] = sess
 	return sess, true
 }
 
