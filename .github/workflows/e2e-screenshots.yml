@@ -1,13 +1,9 @@
-# Ephemeral test server on GitHub runner: Go tests + Playwright UI walkthrough + doc screenshots.
+# Ephemeral test server on GitHub runner: Go tests + Playwright UI walkthrough + screenshot artifacts.
+# Screenshot commits into docs/help are owned by docs.yml (avoids push races on main).
 name: E2E Test & Screenshots
 
 on:
   workflow_dispatch:
-    inputs:
-      commit_screenshots:
-        description: Screenshot-Updates nach main committen
-        type: boolean
-        default: true
   push:
     branches: [main]
     paths:
@@ -23,7 +19,7 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   e2e:
@@ -35,8 +31,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -60,29 +54,12 @@ jobs:
       - name: Start test server & capture screenshots
         run: bash scripts/ci/docs-screenshots.sh
 
-      - name: Commit generated assets
-        id: commit
-        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.commit_screenshots != 'false')
-        run: |
-          set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add docs/images/*.png web/static/help/img/*.png 2>/dev/null || true
-          if git diff --staged --quiet; then
-            echo "committed=false" >> "$GITHUB_OUTPUT"
-            echo "No screenshot changes to commit."
-            exit 0
-          fi
-          git commit -m "docs: refresh screenshots from E2E runner [skip ci]" -m "Automated capture against ephemeral test server with fictional demo data."
-          echo "committed=true" >> "$GITHUB_OUTPUT"
-
-      - name: Push screenshot updates
-        if: steps.commit.outputs.committed == 'true'
-        run: |
-          set -euo pipefail
-          # Docs workflow may race on the same push; rebase and retry once.
-          git pull --rebase origin main
-          if ! git push origin HEAD:main; then
-            git pull --rebase origin main
-            git push origin HEAD:main
-          fi
+      - name: Upload screenshot artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: docs-screenshots
+          path: |
+            docs/images/*.png
+            web/static/help/img/*.png
+          if-no-files-found: error
+          retention-days: 14
