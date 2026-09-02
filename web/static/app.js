@@ -5045,6 +5045,17 @@ function renderApp(app) {
     it.shared_groups = (access.shared_groups || []).map((g) => g.name).filter(Boolean);
   }
 
+  function capSelectHtml(current, attrs) {
+    const cur = normalizeShareCap(current || "write");
+    const opts = [
+      ["read", "Lesen"],
+      ["write", "Bearbeiten"],
+      ["share", "Teilen"],
+      ["admin", "Verwalten"],
+    ].map(([v, lab]) => `<option value="${v}"${v === cur ? " selected" : ""}>${lab}</option>`).join("");
+    return `<select class="access-cap-inline" ${attrs || ""} aria-label="Rechte">${opts}</select>`;
+  }
+
   async function renderAccessPanel(kind) {
     const targets = [];
     if (!kind || kind === "detail") {
@@ -5081,11 +5092,11 @@ function renderApp(app) {
       curParts.push(`<div class="access-chip owner"><span>${escHtml(owner.username || owner.id || "Eigentümer")} <span class="chip-meta">Eigentümer</span></span></div>`);
       (access.shared_users || []).forEach((u) => {
         const cap = normalizeShareCap(u.capability || "write");
-        curParts.push(`<div class="access-chip" data-kind="user" data-id="${escHtml(u.id)}"><span>${escHtml(u.username)} <span class="chip-meta">User · ${escHtml(capLabel(cap))}</span></span><button type="button" class="btn-ghost btn-sm" data-drop-user="${escHtml(u.id)}">Entfernen</button></div>`);
+        curParts.push(`<div class="access-chip" data-kind="user" data-id="${escHtml(u.id)}"><span>${escHtml(u.username)} <span class="chip-meta">User</span></span>${capSelectHtml(cap, `data-set-user-cap="${escHtml(u.id)}"`)}<button type="button" class="btn-ghost btn-sm" data-drop-user="${escHtml(u.id)}">Entfernen</button></div>`);
       });
       (access.shared_groups || []).forEach((g) => {
         const cap = normalizeShareCap(g.capability || "write");
-        curParts.push(`<div class="access-chip" data-kind="group" data-id="${escHtml(g.id)}"><span>${escHtml(g.name)} <span class="chip-meta">Gruppe · ${escHtml(capLabel(cap))}</span></span><button type="button" class="btn-ghost btn-sm" data-drop-group="${escHtml(g.id)}">Entfernen</button></div>`);
+        curParts.push(`<div class="access-chip" data-kind="group" data-id="${escHtml(g.id)}"><span>${escHtml(g.name)} <span class="chip-meta">Gruppe</span></span>${capSelectHtml(cap, `data-set-group-cap="${escHtml(g.id)}"`)}<button type="button" class="btn-ghost btn-sm" data-drop-group="${escHtml(g.id)}">Entfernen</button></div>`);
       });
       curEl.innerHTML = curParts.join("");
 
@@ -5107,6 +5118,34 @@ function renderApp(app) {
       });
       curEl.querySelectorAll(".access-chip[data-kind]").forEach((el) => {
         wireAccessChip(el, el.dataset.kind, el.dataset.id, el.textContent.trim());
+      });
+      curEl.querySelectorAll("[data-set-user-cap]").forEach((sel) => {
+        sel.disabled = !canShare;
+        Array.from(sel.options).forEach((opt) => { opt.disabled = !capAtLeast(myCap, opt.value); });
+        sel.addEventListener("mousedown", (ev) => ev.stopPropagation());
+        sel.addEventListener("click", (ev) => ev.stopPropagation());
+        sel.onchange = async () => {
+          if (!canShare || accessDnDBusy) return;
+          try { await shareSecretWithUser(sel.dataset.setUserCap, sel.value); }
+          catch (e) {
+            if (errEl) { errEl.hidden = false; errEl.textContent = e.message; }
+            await renderAccessPanel(t.kind);
+          }
+        };
+      });
+      curEl.querySelectorAll("[data-set-group-cap]").forEach((sel) => {
+        sel.disabled = !canShare;
+        Array.from(sel.options).forEach((opt) => { opt.disabled = !capAtLeast(myCap, opt.value); });
+        sel.addEventListener("mousedown", (ev) => ev.stopPropagation());
+        sel.addEventListener("click", (ev) => ev.stopPropagation());
+        sel.onchange = async () => {
+          if (!canShare || accessDnDBusy) return;
+          try { await shareSecretWithGroup(sel.dataset.setGroupCap, sel.value); }
+          catch (e) {
+            if (errEl) { errEl.hidden = false; errEl.textContent = e.message; }
+            await renderAccessPanel(t.kind);
+          }
+        };
       });
       curEl.querySelectorAll("[data-drop-user]").forEach((btn) => {
         btn.disabled = !canAdmin;

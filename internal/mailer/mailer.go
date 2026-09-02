@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"net/smtp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -27,7 +28,7 @@ func Send(cfg instcfg.MailConfig, caPEM, to, subject, body string) error {
 	if from == "" {
 		from = "teamvault@localhost"
 	}
-	addr := fmt.Sprintf("%s:%d", cfg.Host, port)
+	addr := net.JoinHostPort(cfg.Host, strconv.Itoa(port))
 	msg := []byte("From: " + from + "\r\n" +
 		"To: " + to + "\r\n" +
 		"Subject: " + subject + "\r\n" +

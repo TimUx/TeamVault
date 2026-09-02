@@ -1034,6 +1034,11 @@ body.admin-modal-open { overflow: hidden; }
 .access-cap-pick select {
   min-width: 10rem;
 }
+.access-cap-inline {
+  min-width: 8.5rem;
+  font-size: 0.8rem;
+  padding: 0.15rem 0.35rem;
+}
 .access-list.drag-over {
   border-color: var(--color-accent);
   background: var(--color-hover);

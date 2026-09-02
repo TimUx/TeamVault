@@ -75,7 +75,7 @@ curl -fsSL https://raw.githubusercontent.com/TimUx/TeamVault/main/scripts/instal
 irm https://raw.githubusercontent.com/TimUx/TeamVault/main/scripts/install-docker.ps1 | iex
 ```
 
-**Go** ohne Container (Go 1.23+):
+**Go** ohne Container (Go 1.25+):
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/TimUx/TeamVault/main/scripts/install-go.sh | bash
