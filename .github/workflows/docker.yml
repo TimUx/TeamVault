@@ -23,6 +23,7 @@ env:
 jobs:
   test:
     name: Test
+    if: ${{ github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' || !contains(github.event.head_commit.message, '[skip docker]') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -55,6 +56,7 @@ jobs:
 
   image:
     name: Image
+    if: ${{ github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' || !contains(github.event.head_commit.message, '[skip docker]') }}
     needs: test
     runs-on: ubuntu-latest
     steps:
