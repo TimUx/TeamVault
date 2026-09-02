@@ -11,7 +11,19 @@ function Set-CorpProxyEnv {
   $env:HTTP_PROXY = $script:CorpConnectProxyUrl
   $env:HTTPS_PROXY = $script:CorpConnectProxyUrl
   $env:ALL_PROXY = $script:CorpConnectProxyUrl
-  $env:NO_PROXY = "127.0.0.1,localhost"
+  # Internal hosts (e.g. Gitea) must bypass the CONNECT proxy — set via
+  # TV_CORP_NO_PROXY / TV_GITEA_HOST in scripts/corp-proxy.local.ps1 (gitignored).
+  # Tunneling them through the corp proxy often yields 502 / CONNECT aborted.
+  $bypass = [System.Collections.Generic.List[string]]::new()
+  foreach ($h in @("127.0.0.1", "localhost")) { $bypass.Add($h) }
+  if ($env:TV_GITEA_HOST) { $bypass.Add($env:TV_GITEA_HOST.Trim()) }
+  if ($env:TV_CORP_NO_PROXY) {
+    foreach ($h in ($env:TV_CORP_NO_PROXY -split ",")) {
+      $t = $h.Trim()
+      if ($t) { $bypass.Add($t) }
+    }
+  }
+  $env:NO_PROXY = ($bypass | Select-Object -Unique) -join ","
   $env:http_proxy = $env:HTTP_PROXY
   $env:https_proxy = $env:HTTPS_PROXY
   $env:all_proxy = $env:ALL_PROXY
