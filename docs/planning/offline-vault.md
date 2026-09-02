@@ -1,6 +1,6 @@
 # TeamVault – Offline-Vault (Ciphertext-Cache + PWA)
 
-**Status:** Schnitt 1–3 umgesetzt (Branch `feature/offline-vault-cache`)  
+**Status:** Schnitt 1–3 umgesetzt (ab v1.3.0, produktiv)  
 **Bezug:** Sicherheitsprinzipien 1–5, 7–9; OQ-04, OQ-12, OQ-17, OQ-19; [`crypto-design.md`](crypto-design.md)  
 **Nicht Ziel:** Native Mobile-Apps, Bitwarden-Protokoll, Write-Queue v1
 

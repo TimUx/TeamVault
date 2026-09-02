@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>TOTP &amp; Passkeys – TeamVault Hilfe</title>
+  <title>Konto – TOTP, Passkeys &amp; Offline – TeamVault Hilfe</title>
   <link rel="stylesheet" href="/styles.css" />
   <link rel="stylesheet" href="/help/help.css" />
 </head>
@@ -15,18 +15,19 @@
     <div class="help-content">
       <header class="help-top">
         <button type="button" class="btn-ghost help-menu-toggle" id="helpMenuToggle" aria-expanded="false" aria-controls="helpSidebar">Menü</button>
-        <div class="brand">Konto · TOTP &amp; Passkeys</div>
+        <div class="brand">Konto · TOTP, Passkeys &amp; Offline</div>
         <div class="help-top-actions">
           <a class="btn-ghost" href="/app" style="text-decoration:none;padding:.4rem .75rem">Zur App</a>
         </div>
       </header>
       <main id="main" class="help-main">
-        <h1>TOTP und Passkeys</h1>
+        <h1>TOTP, Passkeys und Offline-Vault</h1>
         <p class="lead">Beide schützen nur den <strong>Login</strong>. Der Vault bleibt immer Master-Passwort-pflichtig (Zero-Knowledge).</p>
 
         <nav class="help-toc" aria-label="Auf dieser Seite">
           <a href="#totp">TOTP</a>
           <a href="#passkeys">Passkeys</a>
+          <a href="#offline">Offline-Vault</a>
           <a href="#login">Beim Login</a>
         </nav>
 
@@ -84,6 +85,21 @@
             <li>Unterstützter Browser (Chrome, Edge, Safari, Firefox aktuell)</li>
             <li>Öffentliche URL / Relying-Party muss zur Instanz passen (Admin: Zugriff &amp; Proxy)</li>
           </ul>
+        </div>
+
+        <h2 id="offline">Offline-Vault (optional)</h2>
+        <div class="help-step">
+          <p>Wenn der Administrator den Offline-Cache erlaubt, können Sie eine verschlüsselte lokale Kopie (nur Ciphertext, 30 Tage) vorhalten und ohne Netz lesen.</p>
+          <figure class="help-figure">
+            <img src="/help/img/account-offline.png" alt="Konto – Offline-Vault" width="1100" height="720" loading="lazy" />
+            <figcaption>Tab <strong>Offline-Vault</strong> unter Konto</figcaption>
+          </figure>
+          <ol>
+            <li>Online anmelden, Vault entsperren.</li>
+            <li><strong>Offline-Kopie nach Entsperren aktualisieren</strong> aktivieren — Sync läuft im Hintergrund (Fortschritt in der Sidebar).</li>
+            <li>Ohne Netz: Login-Seite <strong>Offline entsperren</strong> oder <code>/app?offline=1</code> — nur Master-Passwort, kein TOTP.</li>
+          </ol>
+          <p class="help-note">Im Offline-Modus nur <strong>Lesen</strong>; Schreiben und Admin sind ausgeblendet. Logout löscht die Kopie nicht — unter Konto <strong>Offline-Kopie löschen</strong> oder Opt-in deaktivieren.</p>
         </div>
 
         <h2 id="login">Beim Login nutzen</h2>

@@ -312,18 +312,18 @@ async function main() {
   await page.click('[data-nav="account"]');
   await page.waitForSelector('[data-panel-pane="totp"]', { timeout: 15000 });
   await shot(page, "account.png", { fullPage: true });
-  const totpTab = page.locator('[data-panel-tab="totp"]');
-  if ((await totpTab.getAttribute("aria-selected")) !== "true") {
-    await totpTab.click();
+  await page.click('[data-panel-tab="totp"]');
+  await page.waitForSelector('[data-panel-pane="totp"].active', { timeout: 15000 });
+  const totpSetup = page.locator("#totpSetup");
+  if (await totpSetup.isVisible()) {
+    await totpSetup.scrollIntoViewIfNeeded();
+    await totpSetup.click();
+    await page.waitForSelector("#otpQr svg, #otpurl", { timeout: 15000 }).catch(() => {});
+    await page.waitForTimeout(400);
   }
-  await page.waitForSelector('[data-panel-pane="totp"]:not([hidden]) #totpSetup', { state: "visible", timeout: 15000 });
-  await page.locator("#totpSetup").scrollIntoViewIfNeeded();
-  await page.click("#totpSetup");
-  await page.waitForSelector("#otpQr svg, #otpurl", { timeout: 15000 }).catch(() => {});
-  await page.waitForTimeout(400);
   await shot(page, "account-totp.png", { fullPage: true });
   await page.click('[data-panel-tab="offline"]');
-  await page.waitForSelector('[data-panel-pane="offline"]:not([hidden])', { timeout: 10000 }).catch(() => {});
+  await page.waitForSelector('[data-panel-pane="offline"].active', { timeout: 10000 }).catch(() => {});
   const offlineOpt = page.locator("#offline_optin");
   if (await offlineOpt.count()) {
     await offlineOpt.check();

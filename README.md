@@ -36,6 +36,7 @@ Details: [`.cursor/rules/security-principles.mdc`](.cursor/rules/security-princi
 | [**CLI Guide**](docs/cli-guide.md) | tvcli installieren & nutzen (auch in der App: `/help/cli`) |
 | [**Extension Guide**](docs/extension-guide.md) | Browser-Extension (auch: `/help/extension`) |
 | [**Admin Guide**](docs/admin-guide.md) | Betrieb: Setup, LDAP/SMTP, Escrow, Proxy/TLS, Instanz-Backup, CI |
+| [**Dev-Proxy (NTLM)**](docs/dev-proxy.md) | Git, npm, Playwright hinter Firmenproxy |
 | [**Roadmap**](docs/planning/roadmap-phase9plus.md) | Weitere Ausbaupfade (Hardening, UX, Perf, Features) |
 | [**Vergleich Password Manager**](docs/planning/competitive-comparison.md) | TeamVault vs. Bitwarden, Vaultwarden, Passbolt, … |
 | [Clients](clients/README.md) | CLI-Binaries & Extension |
@@ -112,7 +113,7 @@ cp .env.example .env
 mkdir -p secrets
 openssl rand -out secrets/teamvault_unlock 48
 docker compose pull && docker compose up -d
-# Image: ghcr.io/timux/teamvault:latest  (Prod: :1.2.1 in .env pinnen)
+# Image: ghcr.io/timux/teamvault:latest  (Prod: :1.3.26 in .env pinnen)
 # → http://127.0.0.1:8080/setup
 
 # Nur bei Bedarf lokal bauen:
@@ -138,11 +139,11 @@ Workflow [`.github/workflows/docker.yml`](.github/workflows/docker.yml): Unit-Te
 | Trigger | Tags (Auszug) |
 |---------|----------------|
 | `main` | `latest`, `main`, `sha-…` |
-| `v1.2.1` | `1.2.1`, `1.2` |
+| `v1.3.26` | `1.3.26`, `1.3` |
 
 ```bash
 docker pull ghcr.io/timux/teamvault:latest
-docker pull ghcr.io/timux/teamvault:1.2.1
+docker pull ghcr.io/timux/teamvault:1.3.26
 ```
 
 Compose nutzt diese Images standardmäßig (`TEAMVAULT_IMAGE` in `.env`).

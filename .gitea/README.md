@@ -26,7 +26,7 @@ TeamVault nutzt **Gitea nur als internes Git-Remote** und für Container-Registr
 ## Deploy
 
 ```bash
-docker pull git.example.internal/cc-3.3/teamvault:1.3.13
+docker pull git.example.internal/cc-3.3/teamvault:1.3.26
 ```
 
 ## Optional: Base-Images lokal spiegeln

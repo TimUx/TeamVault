@@ -3,7 +3,7 @@
 Schnelle Erstinstallation (Unlock-Keyfile, `.env`, Start).  
 Betrieb und Admin-Themen danach: [Admin Guide](admin-guide.md).
 
-**Entwickler:** Timo Braun · Repo: [github.com/TimUx/TeamVault](https://github.com/TimUx/TeamVault) · aktuelle Release-Tags: `v1.2.1` und neuer
+**Entwickler:** Timo Braun · Repo: [github.com/TimUx/TeamVault](https://github.com/TimUx/TeamVault) · aktuelle Release-Tags: `v1.3.26` und neuer
 
 ## Welche Variante?
 
@@ -134,7 +134,7 @@ docker compose pull && docker compose up -d
 
 ```bash
 # in .env
-TEAMVAULT_IMAGE=ghcr.io/timux/teamvault:1.2.1
+TEAMVAULT_IMAGE=ghcr.io/timux/teamvault:1.3.26
 ```
 
 CI-Tags (Workflow `.github/workflows/docker.yml`):
@@ -142,7 +142,7 @@ CI-Tags (Workflow `.github/workflows/docker.yml`):
 | Event | Beispiel-Tags |
 |-------|----------------|
 | Push `main` | `latest`, `main`, `sha-…` |
-| Tag `v1.2.1` | `1.2.1`, `1.2` |
+| Tag `v1.3.26` | `1.3.26`, `1.3` |
 
 **Prod:** Unlock immer als Keyfile/Secret-Mount. Die Env-Variable `TEAMVAULT_MASTER_UNLOCK_KEY` (Key-Bytes direkt) ist nur Dev/Test-Fallback — die Install-Skripte setzen sie bewusst nicht.
 
@@ -165,7 +165,7 @@ mkdir -p secrets
 openssl rand -out secrets/teamvault_unlock 48
 chmod 644 secrets/teamvault_unlock   # Docker nonroot; secrets/ auf 700 halten
 docker compose pull && docker compose up -d   # GHCR: ghcr.io/timux/teamvault:latest
-# optional SemVer: TEAMVAULT_IMAGE=ghcr.io/timux/teamvault:1.2.1
+# optional SemVer: TEAMVAULT_IMAGE=ghcr.io/timux/teamvault:1.3.26
 # lokaler Build: docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
 ```
 

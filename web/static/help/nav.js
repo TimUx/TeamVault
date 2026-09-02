@@ -34,10 +34,11 @@
         </div>
         <div class="help-sec">
           <div class="help-sec-title">Konto</div>
-          ${link("/help/account", "TOTP &amp; Passkeys", active === "account")}
+          ${link("/help/account", "TOTP, Passkeys &amp; Offline", active === "account")}
           ${active === "account" ? `
             <a class="help-side-link sub" href="#totp">TOTP einrichten</a>
             <a class="help-side-link sub" href="#passkeys">Passkeys</a>
+            <a class="help-side-link sub" href="#offline">Offline-Vault</a>
             <a class="help-side-link sub" href="#login">Beim Login nutzen</a>
           ` : ""}
         </div>

@@ -1,7 +1,7 @@
 # TeamVault – UI Brand Tokens
 
-**Status:** Aktuell (Sidebar-Shell + flache Inline-Icons, 2026-08-27)  
-**Design-Richtung:** Flache App-Shell mit linker Navigation; kühle Slate-Blau-Palette (kein Regenbogen-Hero).
+**Status:** Aktuell (Grid-Shell: Sidebar + Main mit Topbar/Content/Footer, 2026-09-02)  
+**Design-Richtung:** Flache App-Shell mit linker Navigation; kühle Slate-Blau-Palette (kein Regenbogen-Hero). Footer nur in der Main-Spalte.
 
 ---
 
