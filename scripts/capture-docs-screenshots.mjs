@@ -16,8 +16,8 @@ const BASE = process.env.TV_URL || "http://127.0.0.1:8099";
 const VIEWPORT = { width: 1360, height: 900 };
 
 const LOGIN_USER = "admin";
-const LOGIN_PW = "password1234";
-const MASTER_PW = "admin-master-pw!";
+const LOGIN_PW = "Password1234!!!!";
+const MASTER_PW = "Password1234!!!!";
 const TENANT_SLUG = "demo";
 const TENANT_NAME = "Demo GmbH";
 
@@ -49,8 +49,19 @@ async function setupInstance() {
     ?? (process.platform === "win32" ? path.join(os.tmpdir(), "tv-screenshot-data") : "/data");
   fs.mkdirSync(dataDir, { recursive: true });
   const dsn = path.join(dataDir, "vault-screenshots.db");
+  const tokenPath = path.join(dataDir, "setup.token");
+  let token = "";
+  for (let i = 0; i < 60; i++) {
+    if (fs.existsSync(tokenPath)) {
+      token = fs.readFileSync(tokenPath, "utf8").trim();
+      break;
+    }
+    await new Promise((r) => setTimeout(r, 500));
+  }
+  if (!token) throw new Error(`setup.token missing in ${dataDir}`);
   await api("/api/setup/commit", {
     method: "POST",
+    headers: { "X-TeamVault-Setup-Token": token },
     body: JSON.stringify({
       storage: { backend: "sqlite", dsn },
       tenant: { name: TENANT_NAME, slug: TENANT_SLUG, recovery_mode: "user_kit", escrow_allowed: false },
@@ -102,6 +113,95 @@ async function shotElement(page, selector, file, opts = {}) {
   const target = path.join(OUT, file);
   await el.screenshot({ path: target });
   console.log("  →", file, `(element ${selector})`);
+}
+
+async function totpNow(seed) {
+  let secret = String(seed || "").trim();
+  if (secret.startsWith("otpauth://")) {
+    try { secret = new URL(secret).searchParams.get("secret") || ""; } catch { return ""; }
+  }
+  const cleaned = secret.replace(/\s+/g, "").toUpperCase().replace(/=+$/, "");
+  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+  let bits = "";
+  for (const c of cleaned) {
+    const v = alphabet.indexOf(c);
+    if (v < 0) continue;
+    bits += v.toString(2).padStart(5, "0");
+  }
+  const bytes = [];
+  for (let i = 0; i + 8 <= bits.length; i += 8) bytes.push(parseInt(bits.slice(i, i + 8), 2));
+  const key = await crypto.subtle.importKey("raw", new Uint8Array(bytes), { name: "HMAC", hash: "SHA-1" }, false, ["sign"]);
+  const counter = Math.floor(Date.now() / 1000 / 30);
+  const buf = new ArrayBuffer(8);
+  const view = new DataView(buf);
+  view.setUint32(4, counter);
+  const sig = new Uint8Array(await crypto.subtle.sign("HMAC", key, buf));
+  const off = sig[sig.length - 1] & 0xf;
+  const code = ((sig[off] & 0x7f) << 24) | (sig[off + 1] << 16) | (sig[off + 2] << 8) | sig[off + 3];
+  return String(code % 1e6).padStart(6, "0");
+}
+
+async function enableDemoPolicies(page) {
+  await page.evaluate(async (base) => {
+    const res = await fetch(`${base}/api/admin/policy`, {
+      method: "PUT",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        totp_required: false,
+        session_hours: 8,
+        unlock_idle_minutes: 15,
+        escrow_shamir_k: 3,
+        escrow_shamir_n: 5,
+        ldap_sync_hours: 24,
+        offline_cache_allowed: true,
+        cli_integration_enabled: true,
+        browser_integration_enabled: true,
+      }),
+    });
+    if (!res.ok) throw new Error(`policy update failed: ${res.status}`);
+  }, BASE);
+}
+
+async function readTotpSecretFromPage(page) {
+  let secret = "";
+  const urlText = await page.locator("#otpurl").textContent().catch(() => "");
+  if (urlText && urlText.includes("secret=")) {
+    try { secret = new URL(urlText.trim()).searchParams.get("secret") || ""; } catch (_) {}
+  }
+  if (!secret) {
+    const secEl = page.locator("#otpSecret");
+    if (await secEl.isVisible().catch(() => false)) {
+      secret = (await secEl.textContent()).replace(/^Secret:\s*/i, "").trim();
+    }
+  }
+  if (!secret) throw new Error("TOTP secret not visible after setup");
+  return secret;
+}
+
+async function confirmTotpEnable(page, secret) {
+  const code = await totpNow(secret);
+  await page.fill("#code", code);
+  await page.click("#en");
+  await page.waitForTimeout(800);
+}
+
+async function captureLoginTotpStep(page, totpSecret) {
+  await page.click("#out");
+  await page.waitForURL("**/login**", { timeout: 15000 });
+  await page.waitForSelector("#slug", { timeout: 15000 });
+  await page.selectOption("#slug", TENANT_SLUG);
+  await page.fill("#user", LOGIN_USER);
+  await page.fill("#pw", LOGIN_PW);
+  await page.click("#doLogin");
+  await page.waitForSelector("#loginStep2:not([hidden])", { timeout: 15000 });
+  await shot(page, "login-totp.png");
+  const code = await totpNow(totpSecret);
+  for (let i = 0; i < 6; i++) {
+    await page.fill(`#loginTotp${i}`, code[i] || "");
+  }
+  await page.click("#doTotpLogin");
+  await page.waitForURL("**/app**", { timeout: 20000 }).catch(() => {});
 }
 
 async function waitAppReady(page) {
@@ -246,6 +346,7 @@ async function main() {
     serviceWorkers: "block",
   });
   const page = await context.newPage();
+  let totpSecret = "";
 
   if (!st0.initialized) {
     console.log("Setup wizard screenshots…");
@@ -262,6 +363,7 @@ async function main() {
   await shot(page, "login.png");
 
   await loginCookie(context);
+  await enableDemoPolicies(page);
   await onboardIfNeeded(page);
   await unlockVault(page);
 
@@ -272,6 +374,16 @@ async function main() {
   await page.waitForSelector(".secrets-table .tag", { timeout: 30000 }).catch(() => {});
   await page.waitForTimeout(600);
   await shot(page, "vault-secrets-table.png", { fullPage: true });
+  const favBtn = page.locator("[data-fav-toggle]").first();
+  if (await favBtn.count()) {
+    await favBtn.click();
+    await page.waitForTimeout(400);
+  }
+  await page.click('[data-nav="vault:favorites"]');
+  await page.waitForTimeout(600);
+  await shot(page, "vault-favorites.png", { fullPage: true });
+  await page.click('[data-nav="vault:mine"]');
+  await page.waitForTimeout(400);
   await shot(page, "nav-sidebar.png");
 
   await page.click('[data-view="list"]');
@@ -320,8 +432,10 @@ async function main() {
     await totpSetup.click();
     await page.waitForSelector("#otpQr svg, #otpurl", { timeout: 15000 }).catch(() => {});
     await page.waitForTimeout(400);
+    await shot(page, "account-totp.png", { fullPage: true });
+    totpSecret = await readTotpSecretFromPage(page);
+    await confirmTotpEnable(page, totpSecret);
   }
-  await shot(page, "account-totp.png", { fullPage: true });
   await page.click('[data-panel-tab="offline"]');
   await page.waitForSelector('[data-panel-pane="offline"].active', { timeout: 10000 }).catch(() => {});
   const offlineOpt = page.locator("#offline_optin");
@@ -398,7 +512,7 @@ async function main() {
   await page.waitForSelector("#userCreateModal:not([hidden])");
   await page.fill("#nuser", "alice");
   await page.fill("#ndisplay", "Alice");
-  await page.fill("#npw", "password1234!");
+  await page.fill("#npw", "Password1234!!!!");
   await page.click("#ucreate");
   await page.waitForTimeout(800);
   await page.click("#userCreateClose").catch(() => {});
@@ -500,6 +614,12 @@ async function main() {
   await page.click('[data-view="table"]').catch(() => {});
   await page.waitForTimeout(500);
   await shot(page, "vault-shared.png", { fullPage: true });
+
+  if (totpSecret) {
+    console.log("TOTP login step…");
+    await captureLoginTotpStep(page, totpSecret);
+    await unlockVault(page);
+  }
 
   console.log("Help & theme…");
   await page.goto(`${BASE}/help`);
