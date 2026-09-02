@@ -56,13 +56,7 @@ RUN --mount=type=secret,id=tv_extension_pem,required=false \
     go build -trimpath -o /out/pack-extension ./cmd/pack-extension && \
     TV_EXTENSION_UPDATE_BASE=https://teamvault.local /out/pack-extension && \
     cp dist/teamvault-extension.* /out/downloads/ && \
-    cp -r dist/extension /out/downloads/ && \
-    export TV_EXTENSION_REQUIRE_KEY="${REQUIRE_EXTENSION_KEY}" && \
-    go build -trimpath -o /out/pack-extension ./cmd/pack-extension && \
-    TV_EXTENSION_UPDATE_BASE=https://teamvault.local /out/pack-extension && \
-    cp dist/teamvault-extension.* /out/downloads/ && \
-    cp -r dist/extension /out/downloads/
-
+    
 FROM build AS bin
 ARG VERSION=dev
 ARG COMMIT=none
