@@ -50,7 +50,7 @@ RUN --mount=type=secret,id=tv_extension_pem,required=false \
     build_tvcli windows amd64 ".exe" && \
     build_tvcli windows arm64 ".exe" && \
     if [ -f /run/secrets/tv_extension_pem ]; then \
-      export TV_EXTENSION_PEM="$(cat /run/secrets/tv_extension_pem)"; \
+      export TV_EXTENSION_SIGNING_KEY="$(cat /run/secrets/tv_extension_pem)"; \
     fi && \
     export TV_EXTENSION_REQUIRE_KEY="${REQUIRE_EXTENSION_KEY}" && \
     go build -trimpath -o /out/pack-extension ./cmd/pack-extension && \
