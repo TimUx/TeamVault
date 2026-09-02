@@ -29,7 +29,7 @@ Standalone-Binaries (kein Go/Laufzeit nötig): **Windows** und **Linux**, amd64 
 # → dist/tvcli-linux-arm64
 ```
 
-CI (Tag `v*`): `.github/workflows/tvcli.yml` baut die Artefakte; Gitea-Release-Assets werden von GitHub gespiegelt.
+CI (Tag `v*`): `.github/workflows/tvcli.yml` baut die Artefakte und veröffentlicht sie am GitHub-Release.
 
 ```bash
 ./scripts/build-tvcli.sh

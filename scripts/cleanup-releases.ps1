@@ -1,14 +1,11 @@
-# Prune old v1.3.x patch releases/tags (keep latest only) on Gitea and GitHub.
-# Gitea: no HTTP proxy. GitHub: CONNECT proxy 127.0.0.1:18081 (corp network).
+# Prune old v1.3.x patch releases/tags (keep latest only) on GitHub.
 # Usage:
 #   .\scripts\cleanup-releases.ps1              # dry-run
-#   .\scripts\cleanup-releases.ps1 -Apply       # delete releases + remote tags
-#   .\scripts\cleanup-releases.ps1 -Apply -GitHubOnly   # after Gitea already cleaned
+#   .\scripts\cleanup-releases.ps1 -Apply       # delete GitHub releases + remote tags
 
 param(
   [string]$KeepTag = "v1.3.26",
-  [switch]$Apply,
-  [switch]$GitHubOnly
+  [switch]$Apply
 )
 
 $ErrorActionPreference = "Stop"
@@ -26,11 +23,10 @@ function Get-BasicAuthHeader {
 }
 
 $tagsToDrop = @(git tag -l "v1.3.*" | Where-Object { $_ -ne $KeepTag })
-if ($tagsToDrop.Count -eq 0 -and $GitHubOnly) {
-  $keepVer = [version]($KeepTag -replace '^v', '')
+if ($tagsToDrop.Count -eq 0) {
   $tagsToDrop = @(0..25 | ForEach-Object { "v1.3.$_" } | Where-Object { $_ -ne $KeepTag })
 }
-$tagsToDrop = $tagsToDrop | Sort-Object { [version]($_ -replace '^v','') }
+$tagsToDrop = $tagsToDrop | Sort-Object { [version]($_ -replace '^v', '') }
 if ($tagsToDrop.Count -eq 0) {
   Write-Host "No v1.3.x tags to prune (keeping $KeepTag)."
   exit 0
@@ -53,22 +49,6 @@ try {
   Write-Warning "GitHub API not reachable via proxy - release delete may fail; tag batch push will still be attempted."
 }
 
-if (-not $GitHubOnly) {
-  $giteaHost = $env:TV_GITEA_HOST
-  if (-not $giteaHost) {
-    throw "Set TV_GITEA_HOST (or scripts/corp-proxy.local.ps1) before pruning Gitea releases."
-  }
-  $giteaH = Get-BasicAuthHeader $giteaHost
-  $giteaReleases = Invoke-RestMethod -Uri "https://$giteaHost/git/api/v1/repos/CC-3.3/TeamVault/releases?limit=100" -Headers $giteaH
-  foreach ($rel in $giteaReleases) {
-    if ($tagsToDrop -contains $rel.tag_name) {
-      Write-Host "Gitea release delete: $($rel.tag_name) (id=$($rel.id))"
-      Invoke-RestMethod -Method Delete -Uri "https://$giteaHost/git/api/v1/repos/CC-3.3/TeamVault/releases/$($rel.id)" -Headers $giteaH | Out-Null
-    }
-  }
-}
-
-# --- GitHub releases ---
 $ghH = Get-BasicAuthHeader "github.com"
 $ghAuth = $ghH.Authorization
 $page = 1
@@ -85,12 +65,7 @@ do {
   $page++
 } while ($rels.Count -eq 100)
 
-# --- Remote tags ---
 $delRefs = $tagsToDrop | ForEach-Object { ":refs/tags/$_" }
-if (-not $GitHubOnly) {
-  Write-Host "Gitea: batch delete $($delRefs.Count) tags..."
-  git -c http.proxy= push origin @delRefs
-}
 Write-Host "GitHub: batch delete $($delRefs.Count) tags..."
 git -c "http.proxy=$proxy" push github @delRefs
 

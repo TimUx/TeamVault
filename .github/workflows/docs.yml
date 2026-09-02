@@ -1,5 +1,4 @@
 # Regenerate docs screenshots, commit updates, patch-release when online help changes.
-# Gitea sync: run scripts/sync-github-to-gitea.ps1 locally (Gitea not reachable from GitHub).
 name: Docs & Screenshots
 
 on:

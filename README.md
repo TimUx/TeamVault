@@ -36,7 +36,6 @@ Details: [`.cursor/rules/security-principles.mdc`](.cursor/rules/security-princi
 | [**CLI Guide**](docs/cli-guide.md) | tvcli installieren & nutzen (auch in der App: `/help/cli`) |
 | [**Extension Guide**](docs/extension-guide.md) | Browser-Extension (auch: `/help/extension`) |
 | [**Admin Guide**](docs/admin-guide.md) | Betrieb: Setup, LDAP/SMTP, Escrow, Proxy/TLS, Instanz-Backup, CI |
-| [**Dev-Proxy (NTLM)**](docs/dev-proxy.md) | Git, npm, Playwright hinter Firmenproxy (lokal) |
 | [**Roadmap**](docs/planning/roadmap-phase9plus.md) | Weitere Ausbaupfade (Hardening, UX, Perf, Features) |
 | [**Vergleich Password Manager**](docs/planning/competitive-comparison.md) | TeamVault vs. Bitwarden, Vaultwarden, Passbolt, … |
 | [Clients](clients/README.md) | CLI-Binaries & Extension |
