@@ -1,4 +1,5 @@
 # Go tests + optional Playwright screenshots; commits PNG updates for docs/help.
+# Manual: Actions → Docs & Screenshots → Run workflow
 name: Docs & Screenshots
 
 on:

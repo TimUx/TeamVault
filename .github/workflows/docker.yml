@@ -94,18 +94,26 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
 
-      - name: Require extension signing key
+      - name: Extension signing key
+        id: extkey
         if: github.event_name != 'pull_request'
         env:
           KEY: ${{ secrets.TV_EXTENSION_SIGNING_KEY }}
         run: |
-          if [ -z "$KEY" ]; then
-            echo "::error::Set repository secret TV_EXTENSION_SIGNING_KEY to the PKCS#8 PEM from clients/extension/teamvault.pem (never commit the private key)."
+          set -euo pipefail
+          if [ -n "${KEY}" ]; then
+            echo "has_key=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "has_key=false" >> "$GITHUB_OUTPUT"
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            echo "::error::Set repository secret TV_EXTENSION_SIGNING_KEY (PKCS#8 PEM) for release image builds. Never commit the private key."
             exit 1
           fi
+          echo "::warning::TV_EXTENSION_SIGNING_KEY not set — skipping image publish on this branch (tests already passed)."
 
       - name: Log in to GHCR
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' && steps.extkey.outputs.has_key == 'true'
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -113,6 +121,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push
+        if: github.event_name == 'pull_request' || steps.extkey.outputs.has_key == 'true'
         uses: docker/build-push-action@v6
         with:
           context: .
