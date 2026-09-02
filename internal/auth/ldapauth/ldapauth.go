@@ -64,7 +64,7 @@ func Authenticate(cfg Config, username, password string) (dn string, err error) 
 		}
 		userDN = du.DN
 	} else if !strings.Contains(username, "=") && cfg.BaseDN != "" {
-		userDN = fmt.Sprintf("uid=%s,%s", username, cfg.BaseDN)
+		userDN = fmt.Sprintf("uid=%s,%s", ldap.EscapeDN(username), cfg.BaseDN)
 	}
 
 	if err := conn.Bind(userDN, password); err != nil {

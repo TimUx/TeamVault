@@ -1065,11 +1065,36 @@ func (a *API) callerHasEnvelope(r *http.Request, tenant store.TenantID, secret s
 	return false
 }
 
+func (a *API) callerIsSecretOwner(r *http.Request, tenant store.TenantID, secret store.SecretID, user store.UserID) bool {
+	meta, err := a.App.Vault.GetSecretMeta(r.Context(), tenant, secret)
+	if err != nil {
+		return false
+	}
+	return meta.CreatedBy == user
+}
+
+func (a *API) secretSharedWithGroup(r *http.Request, tenant store.TenantID, secret store.SecretID, group store.GroupID) bool {
+	shares, err := a.App.Vault.ListSecretGroupShares(r.Context(), tenant, secret)
+	if err != nil {
+		return false
+	}
+	for _, sh := range shares {
+		if sh.GroupID == group {
+			return true
+		}
+	}
+	return false
+}
+
 func (a *API) handleShareSecret(w http.ResponseWriter, r *http.Request) {
 	sess, _ := a.sessionFrom(r)
 	id := store.SecretID(r.PathValue("id"))
 	if !a.callerHasEnvelope(r, sess.TenantID, id, sess.UserID) {
 		writeErr(w, http.StatusForbidden, "no access envelope")
+		return
+	}
+	if !a.callerIsSecretOwner(r, sess.TenantID, id, sess.UserID) {
+		writeErr(w, http.StatusForbidden, "owner required")
 		return
 	}
 	var body struct {
@@ -1221,6 +1246,10 @@ func (a *API) handleRotateSecret(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusForbidden, "no access envelope")
 		return
 	}
+	if !a.callerIsSecretOwner(r, sess.TenantID, id, sess.UserID) {
+		writeErr(w, http.StatusForbidden, "owner required")
+		return
+	}
 	var req createSecretReq
 	if err := readJSON(r, &req); err != nil {
 		writeErr(w, http.StatusBadRequest, err.Error())
@@ -1268,6 +1297,7 @@ func (a *API) handleRotateSecret(w http.ResponseWriter, r *http.Request) {
 	meta.TitleCiphertext, meta.TitleNonce = titleCT, titleN
 
 	envs := make([]store.KeyEnvelope, 0, len(req.Envelopes))
+	ownerIncluded := false
 	for _, e := range req.Envelopes {
 		packed, err := packEnvelope(e)
 		if err != nil {
@@ -1278,6 +1308,13 @@ func (a *API) handleRotateSecret(w http.ResponseWriter, r *http.Request) {
 			SecretID: id, TenantID: sess.TenantID, UserID: store.UserID(e.UserID),
 			KeyVersion: req.KeyVersion, WrappedDK: packed,
 		})
+		if store.UserID(e.UserID) == meta.CreatedBy {
+			ownerIncluded = true
+		}
+	}
+	if !ownerIncluded {
+		writeErr(w, http.StatusBadRequest, "owner envelope required")
+		return
 	}
 
 	if err := a.App.Vault.RotateSecret(r.Context(), sess.TenantID, id, oldBlob.KeyVersion, *meta, store.CiphertextBlob{
@@ -1319,6 +1356,10 @@ func (a *API) handleDeleteSecret(w http.ResponseWriter, r *http.Request) {
 	id := store.SecretID(r.PathValue("id"))
 	if !a.callerHasEnvelope(r, sess.TenantID, id, sess.UserID) {
 		writeErr(w, http.StatusForbidden, "no access envelope")
+		return
+	}
+	if !a.callerIsSecretOwner(r, sess.TenantID, id, sess.UserID) {
+		writeErr(w, http.StatusForbidden, "owner required")
 		return
 	}
 	if err := a.App.Vault.DeleteSecret(r.Context(), sess.TenantID, id); err != nil {

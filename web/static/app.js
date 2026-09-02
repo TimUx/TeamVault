@@ -2677,7 +2677,7 @@ function renderApp(app) {
       .map((s) => {
         const tenant = s.tenant_name || s.tenant_slug || s.tenant_id;
         const synced = s.synced_at ? new Date(s.synced_at).toLocaleString("de-DE") : "—";
-        return `<option value="${s.key}">${s.username} · ${tenant} · ${synced}</option>`;
+        return `<option value="${escapeHtml(s.key)}">${escapeHtml(s.username)} · ${escapeHtml(tenant)} · ${escapeHtml(synced)}</option>`;
       })
       .join("");
     const pick = () => {
@@ -3027,7 +3027,7 @@ function renderApp(app) {
     const list = n.querySelector("#pklist");
     const creds = await api("/api/webauthn/credentials");
     list.innerHTML = creds.map((c) =>
-      `<div class="list-row"><span>${c.name}</span><button class="btn-ghost" data-pkdel="${c.id}" type="button">Löschen</button></div>`
+      `<div class="list-row"><span>${escapeHtml(c.name)}</span><button class="btn-ghost" data-pkdel="${escapeHtml(c.id)}" type="button">Löschen</button></div>`
     ).join("") || "<p class='hint'>Keine Passkeys</p>";
     list.querySelectorAll("[data-pkdel]").forEach((btn) => {
       btn.onclick = async () => {
@@ -5893,8 +5893,8 @@ function renderApp(app) {
       const keys = await api("/api/admin/api-keys");
       n.querySelector("#klist").innerHTML = keys.map((k) => {
         const scopeLabel = k.legacy_no_scopes ? "legacy (nur read)" : (k.scopes || []).join(", ") || "?";
-        return `<div class="list-row"><span>${k.name} [${scopeLabel}] ${k.revoked ? "(revoked)" : ""}</span>` +
-        (!k.revoked ? `<button class="btn-ghost" data-kr="${k.id}" type="button">Revoke</button>` : "") + `</div>`;
+        return `<div class="list-row"><span>${escapeHtml(k.name)} [${escapeHtml(scopeLabel)}] ${k.revoked ? "(revoked)" : ""}</span>` +
+        (!k.revoked ? `<button class="btn-ghost" data-kr="${escapeHtml(k.id)}" type="button">Revoke</button>` : "") + `</div>`;
       }).join("") || "<p class='hint'>Keine Keys</p>";
       n.querySelector("#klist").querySelectorAll("[data-kr]").forEach((btn) => {
         btn.onclick = async () => {
@@ -5907,8 +5907,8 @@ function renderApp(app) {
       if (platLink) platLink.hidden = false;
       const tenants = await api("/api/admin/tenants");
       n.querySelector("#tlist").innerHTML = tenants.map((t) =>
-        `<div class="list-row"><span>${t.name} (${t.slug}) · ${t.status}</span>` +
-        (t.status !== "disabled" ? `<button class="btn-ghost" data-td="${t.id}" type="button">Disable</button>` : "") + `</div>`
+        `<div class="list-row"><span>${escapeHtml(t.name)} (${escapeHtml(t.slug)}) · ${escapeHtml(t.status)}</span>` +
+        (t.status !== "disabled" ? `<button class="btn-ghost" data-td="${escapeHtml(t.id)}" type="button">Disable</button>` : "") + `</div>`
       ).join("");
       n.querySelector("#tlist").querySelectorAll("[data-td]").forEach((btn) => {
         btn.onclick = async () => {

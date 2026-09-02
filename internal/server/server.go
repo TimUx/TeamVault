@@ -42,7 +42,14 @@ type API struct {
 }
 
 func New(app *bootstrap.Result) *API {
-	ttl := 8 * time.Hour
+	hours := 8
+	if app != nil && app.ConfigStore != nil {
+		b := instcfg.Load(app.ConfigStore)
+		if b.Policy.SessionHours > 0 {
+			hours = b.Policy.SessionHours
+		}
+	}
+	ttl := time.Duration(hours) * time.Hour
 	sessPath := filepath.Join(app.DataDir, "sessions.json")
 	api := &API{
 		App: app, Sessions: session.NewPersistent(sessPath, ttl),

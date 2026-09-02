@@ -1,0 +1,113 @@
+# Security checks suitable for pull requests (no production secrets).
+name: Security
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: security-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CGO_ENABLED: "0"
+
+jobs:
+  go-security-tests:
+    name: Security regression tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: cryptocore.js checksum sync
+        run: |
+          set -euo pipefail
+          h1=$(sha256sum web/static/cryptocore.js | awk '{print $1}')
+          h2=$(sha256sum clients/js/cryptocore.js | awk '{print $1}')
+          h3=$(sha256sum clients/extension/cryptocore.js | awk '{print $1}')
+          if [ "$h1" != "$h2" ] || [ "$h1" != "$h3" ]; then
+            echo "cryptocore.js mismatch"
+            exit 1
+          fi
+
+      - name: Run pentest / finding regression tests
+        run: go test ./internal/server/ -run 'TestPentest|TestFinding|TestAuthz|TestAdmin' -count=1 -timeout 10m
+
+      - name: Package unit tests (auth, crypto, unlock, session)
+        run: go test ./internal/auth/... ./internal/cryptocore/... ./internal/unlock/... ./internal/configstore/... -count=1 -timeout 5m
+
+  govulncheck:
+    name: govulncheck
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@latest
+
+      - name: Run govulncheck
+        run: govulncheck ./...
+
+  secret-patterns:
+    name: Secret pattern scan (tree)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Scan for high-risk secret patterns
+        run: |
+          set -euo pipefail
+          # Fail on private key material or cloud-looking tokens in tracked source.
+          # Test fixtures (Password1234!!!!) and credential-helper parsing are allowlisted via path filters.
+          if git grep -nE 'BEGIN (RSA |OPENSSH |EC )?PRIVATE KEY|AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{22,}' \
+            -- ':!vendor/**' ':!*.sum' ':!go.sum' ':!SECURITY-REPORT.md'; then
+            echo "Potential secret material found"
+            exit 1
+          fi
+          echo "No high-risk secret patterns in tracked tree"
+
+  sbom-hint:
+    name: Module SBOM snapshot
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Write go module list
+        run: |
+          go list -m all > sbom-go-modules.txt
+          head -n 30 sbom-go-modules.txt
+
+      - name: Upload module list
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-go-modules
+          path: sbom-go-modules.txt
+          retention-days: 30

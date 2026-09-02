@@ -130,5 +130,16 @@ func (a *API) sameHost(r *http.Request, raw string) bool {
 	if err != nil || u.Host == "" {
 		return false
 	}
-	return strings.EqualFold(u.Host, a.requestHost(r))
+	return strings.EqualFold(u.Host, a.csrfHost(r))
+}
+
+// csrfHost is the host used for Origin/Referer CSRF checks.
+// Prefer configured PublicURL; never trust client X-Forwarded-Host for CSRF.
+func (a *API) csrfHost(r *http.Request) string {
+	if pub := strings.TrimSpace(a.bundle().PublicAccess.PublicURL); pub != "" {
+		if u, err := url.Parse(pub); err == nil && u.Host != "" {
+			return u.Host
+		}
+	}
+	return r.Host
 }

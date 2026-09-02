@@ -93,7 +93,8 @@ func (a *API) handleGroupMemberKeysForShare(w http.ResponseWriter, r *http.Reque
 }
 
 // handleSecretGroupMemberKeys returns onboarded group member public keys for sharing.
-// Requires an access envelope on the secret (not an admin role).
+// Requires an access envelope and that the group is already shared with the secret
+// (initial share uses GET /api/groups/{id}/member-keys).
 func (a *API) handleSecretGroupMemberKeys(w http.ResponseWriter, r *http.Request) {
 	sess, _ := a.sessionFrom(r)
 	id := store.SecretID(r.PathValue("id"))
@@ -106,7 +107,12 @@ func (a *API) handleSecretGroupMemberKeys(w http.ResponseWriter, r *http.Request
 		writeErr(w, http.StatusBadRequest, "group_id required")
 		return
 	}
-	a.writeGroupMemberPublicKeys(w, r, sess.TenantID, store.GroupID(gid))
+	groupID := store.GroupID(gid)
+	if !a.secretSharedWithGroup(r, sess.TenantID, id, groupID) {
+		writeErr(w, http.StatusForbidden, "group not shared with secret")
+		return
+	}
+	a.writeGroupMemberPublicKeys(w, r, sess.TenantID, groupID)
 }
 
 func (a *API) writeGroupMemberPublicKeys(w http.ResponseWriter, r *http.Request, tenant store.TenantID, gid store.GroupID) {
@@ -275,7 +281,17 @@ func (a *API) handleShareGroup(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	members, err := a.App.Vault.ListGroupMembers(r.Context(), sess.TenantID, store.GroupID(body.GroupID))
+	if body.GroupID == "" {
+		writeErr(w, http.StatusBadRequest, "group_id required")
+		return
+	}
+	gid := store.GroupID(body.GroupID)
+	alreadyShared := a.secretSharedWithGroup(r, sess.TenantID, id, gid)
+	if !alreadyShared && !a.callerIsSecretOwner(r, sess.TenantID, id, sess.UserID) {
+		writeErr(w, http.StatusForbidden, "owner required to share with new group")
+		return
+	}
+	members, err := a.App.Vault.ListGroupMembers(r.Context(), sess.TenantID, gid)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
@@ -317,14 +333,10 @@ func (a *API) handleShareGroup(w http.ResponseWriter, r *http.Request) {
 			KeyVersion: kv, WrappedDK: packed,
 		})
 	}
-	if body.GroupID == "" {
-		writeErr(w, http.StatusBadRequest, "group_id required")
-		return
-	}
 	audit := a.mutationAudit(r, sess, "secret.share_group", "secret", string(id))
 	audit.Metadata, _ = json.Marshal(map[string]string{"group_id": body.GroupID})
 	if err := a.App.Vault.ShareSecretGroup(r.Context(), envs, store.SecretGroupShare{
-		TenantID: sess.TenantID, SecretID: id, GroupID: store.GroupID(body.GroupID),
+		TenantID: sess.TenantID, SecretID: id, GroupID: gid,
 	}, &audit); err != nil {
 		if errors.Is(err, store.ErrRevokedEnvelope) {
 			writeErr(w, http.StatusConflict, "cannot revive revoked envelope")

@@ -52,15 +52,28 @@ func (s *Store) Create(userID store.UserID, tenantID store.TenantID, username st
 	b := make([]byte, 32)
 	_, _ = rand.Read(b)
 	id := hex.EncodeToString(b)
+	s.mu.Lock()
+	ttl := s.ttl
+	s.mu.Unlock()
 	sess := Session{
 		ID: id, UserID: userID, TenantID: tenantID, Username: username, Roles: roles,
-		ExpiresAt: time.Now().UTC().Add(s.ttl),
+		ExpiresAt: time.Now().UTC().Add(ttl),
 	}
 	s.mu.Lock()
 	s.sessions[id] = sess
 	s.mu.Unlock()
 	s.persist()
 	return sess
+}
+
+// SetTTL updates the TTL used for newly created sessions.
+func (s *Store) SetTTL(ttl time.Duration) {
+	if ttl <= 0 {
+		ttl = 8 * time.Hour
+	}
+	s.mu.Lock()
+	s.ttl = ttl
+	s.mu.Unlock()
 }
 
 func (s *Store) Get(id string) (Session, bool) {

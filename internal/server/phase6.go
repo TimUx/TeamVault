@@ -406,6 +406,7 @@ func (a *API) handlePutPolicy(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	a.Sessions.SetTTL(time.Duration(p.SessionHours) * time.Hour)
 	if !a.appendAuditStrict(w, r, store.AuditEvent{
 		TenantID: sess.TenantID, ActorID: string(sess.UserID),
 		Action: "admin.policy.update", ResourceType: "config", ResourceID: "policy",
