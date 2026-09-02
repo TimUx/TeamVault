@@ -1,43 +1,10 @@
 {
-  "manifest_version": 3,
-  "name": "TeamVault",
-  "version": "0.10.0",
-  "description": "Zero-Knowledge vault client — decrypts only in the browser extension.",
   "action": {
     "default_popup": "popup.html",
     "default_title": "TeamVault"
   },
-  "permissions": [
-    "storage",
-    "clipboardWrite",
-    "activeTab",
-    "scripting"
-  ],
-  "host_permissions": [
-    "http://127.0.0.1/*",
-    "http://localhost/*"
-  ],
-  "optional_host_permissions": [
-    "https://*/*",
-    "http://*/*"
-  ],
   "background": {
     "service_worker": "background.js"
-  },
-  "content_scripts": [
-    {
-      "matches": [
-        "http://*/*",
-        "https://*/*"
-      ],
-      "js": [
-        "content.js"
-      ],
-      "run_at": "document_idle"
-    }
-  ],
-  "content_security_policy": {
-    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
   },
   "browser_specific_settings": {
     "gecko": {
@@ -45,5 +12,38 @@
       "strict_min_version": "109.0"
     }
   },
-  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAm6Lq5yCwNVl1yYpib1S61c/YEZ7+v/biwab8nQIHW59dc/i+N0EwkIGMtXW81w8VxTtvZXEna+coE1cieudOLqiMydQ4OtqZwA8sY4a3gofmUb9c9lx2Cch+U5o2ed3bttyn2x+qID472UJq45VHILGH052VzHBSBFc9AvWkBLfuw660QKHZ4P1iX/QyUuPy14q7Wh7qpPZtYglw1IFFTjwSN5rSJN4Z2YFTlz+ByyzdReVR9kFWDzpO1+MBOPJluhKVxJCZ0kNyKaTRcSeYPuaaFRprILzxNN0tdB/YLice+9u7YbZynLSQ6Lhik7gsm2eRCh9dJD6AxF2f/aANawIDAQAB"
+  "content_scripts": [
+    {
+      "js": [
+        "content.js"
+      ],
+      "matches": [
+        "http://*/*",
+        "https://*/*"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
+  },
+  "description": "Zero-Knowledge vault client — decrypts only in the browser extension.",
+  "host_permissions": [
+    "http://127.0.0.1/*",
+    "http://localhost/*"
+  ],
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAsDzvKitzi4J6IG/oD4rGv6BFCLcg5fJZmxIAocevpyjI3URDnEqN8UTtRfXO/C2LDfPDnNdlUM/Jf3xGkhF2F9xffmozDnScDBN05zKaNcrMu++Z4jll/Wuv5rJLI0avvOGQYfwiQXT1ikYiBO3TVVsVmu3gOlEr3wKKg0z7G/orwDoMwWC77iJooL/EtQ4uFBep470hugEnfarE3rKkXlMIPl+ifj2SHhwUotPCjvwl2LafCVL4nD/Zo1/LDgBJJo3OZv1jPnbkurY5rckvMku35RlC8AmupBGyH+vY9UB/CTnix5Za5HhK9syljZ5IQnvJ3ov0fIo9/2/T+F+7AQIDAQAB",
+  "manifest_version": 3,
+  "name": "TeamVault",
+  "optional_host_permissions": [
+    "https://*/*",
+    "http://*/*"
+  ],
+  "permissions": [
+    "storage",
+    "clipboardWrite",
+    "activeTab",
+    "scripting"
+  ],
+  "version": "0.10.0"
 }
