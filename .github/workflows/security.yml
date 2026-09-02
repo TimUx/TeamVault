@@ -29,7 +29,7 @@ jobs:
 
       - name: Set up Go
         # Tag pin; SHA-pin alongside Dependabot when network allows verifying tags.
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
           cache: true
@@ -60,7 +60,7 @@ jobs:
 
       - name: Set up Go
         # Tag pin; SHA-pin alongside Dependabot when network allows verifying tags.
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
           cache: true
@@ -97,7 +97,7 @@ jobs:
 
       - name: Set up Go
         # Tag pin; SHA-pin alongside Dependabot when network allows verifying tags.
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
           cache: true
@@ -108,7 +108,7 @@ jobs:
           head -n 30 sbom-go-modules.txt
 
       - name: Upload module list
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: sbom-go-modules
           path: sbom-go-modules.txt

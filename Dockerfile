@@ -4,7 +4,7 @@
 # Defaults: public golang + distroless (GitHub Actions / local Docker).
 # Air-gapped: override GO_IMAGE and RUNTIME_IMAGE to mirrored registry tags.
 
-ARG GO_IMAGE=golang:1.23.3-bookworm
+ARG GO_IMAGE=golang:1.25.0-bookworm
 ARG RUNTIME_IMAGE=gcr.io/distroless/static-debian12:nonroot
 
 FROM ${GO_IMAGE} AS build
