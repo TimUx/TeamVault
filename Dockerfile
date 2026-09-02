@@ -49,15 +49,14 @@ RUN --mount=type=secret,id=tv_extension_pem,required=false \
     build_tvcli linux arm64 "" && \
     build_tvcli windows amd64 ".exe" && \
     build_tvcli windows arm64 ".exe" && \
-    if [ -n "${TV_EXTENSION_PEM:-}" ]; then
-      # Check if it looks base64-encoded (no newlines, only base64 chars)
-      if echo "${TV_EXTENSION_PEM}" | grep -qE '^[A-Za-z0-9+/]*={0,2}$'; then
-        echo "${TV_EXTENSION_PEM}" | base64 -d > /tmp/key.pem
-      else
-        echo "${TV_EXTENSION_PEM}" > /tmp/key.pem
-      fi
-      export TV_EXTENSION_PEM="$(cat /tmp/key.pem)"
+    if [ -f /run/secrets/tv_extension_pem ]; then \
+      export TV_EXTENSION_PEM="$(cat /run/secrets/tv_extension_pem)"; \
     fi && \
+    export TV_EXTENSION_REQUIRE_KEY="${REQUIRE_EXTENSION_KEY}" && \
+    go build -trimpath -o /out/pack-extension ./cmd/pack-extension && \
+    TV_EXTENSION_UPDATE_BASE=https://teamvault.local /out/pack-extension && \
+    cp dist/teamvault-extension.* /out/downloads/ && \
+    cp -r dist/extension /out/downloads/ && \
     export TV_EXTENSION_REQUIRE_KEY="${REQUIRE_EXTENSION_KEY}" && \
     go build -trimpath -o /out/pack-extension ./cmd/pack-extension && \
     TV_EXTENSION_UPDATE_BASE=https://teamvault.local /out/pack-extension && \
