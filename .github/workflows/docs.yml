@@ -122,6 +122,7 @@ jobs:
         if: steps.commit.outputs.committed == 'true' || steps.release.outputs.needs_release == 'true'
         run: |
           set -euo pipefail
+          git pull --rebase origin main || true
           git push origin HEAD:main
           if [ "${{ steps.release.outputs.needs_release }}" = "true" ] && [ -n "${{ steps.release.outputs.new_tag }}" ]; then
             git push origin "${{ steps.release.outputs.new_tag }}"
