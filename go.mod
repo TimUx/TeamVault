@@ -1,12 +1,12 @@
 module github.com/teamvault/teamvault
 
-go 1.25.0
+go 1.25.13
 
 require (
 	github.com/go-ldap/ldap/v3 v3.4.14
 	github.com/go-webauthn/webauthn v0.11.2
 	github.com/pquerna/otp v1.5.0
-	golang.org/x/crypto v0.54.0
+	golang.org/x/crypto v0.55.0
 	modernc.org/sqlite v1.57.0
 )
 
@@ -20,7 +20,6 @@ require (
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/stretchr/testify v1.10.0 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
-	golang.org/x/net v0.57.0 // indirect
 )
 
 require (

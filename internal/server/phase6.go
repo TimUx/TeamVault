@@ -2,11 +2,11 @@ package server
 
 import (
 	"encoding/base64"
-	"fmt"
 	"net"
 	"net/http"
 	"net/smtp"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -319,7 +319,7 @@ func (a *API) handleTestMail(w http.ResponseWriter, r *http.Request) {
 	if port == 0 {
 		port = 587
 	}
-	addr := fmt.Sprintf("%s:%d", cfg.Host, port)
+	addr := net.JoinHostPort(cfg.Host, strconv.Itoa(port))
 	conn, err := net.DialTimeout("tcp", addr, 5*time.Second)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, "smtp dial: "+err.Error())

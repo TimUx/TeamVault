@@ -285,7 +285,7 @@ Unauthenticated surface is limited (`/api/health`, `/api/version`, setup, login,
 | Check | Result |
 |-------|--------|
 | `govulncheck ./...` | Tracked in CI (`security.yml`); jwt bump addressed GO-2025-3553 |
-| Direct deps | Go 1.25.0; ldap, webauthn, otp, x/crypto, modernc sqlite |
+| Direct deps | Go 1.25.13; ldap, webauthn, otp, x/crypto, modernc sqlite |
 | Frontend npm | Dev-only Playwright under `scripts/` |
 | Container | Distroless nonroot; unlock not baked in |
 | GitHub Actions | `security.yml` checkout SHA-pinned; Trivy FS HIGH/CRITICAL; Dependabot actions/gomod |

@@ -4,6 +4,8 @@ import (
 	"crypto/tls"
 	"encoding/base64"
 	"fmt"
+	"net"
+	"strconv"
 	"strings"
 
 	ldap "github.com/go-ldap/ldap/v3"
@@ -259,7 +261,7 @@ func dial(cfg Config) (*ldap.Conn, error) {
 			port = 389
 		}
 	}
-	addr := fmt.Sprintf("%s:%d", cfg.Host, port)
+	addr := net.JoinHostPort(cfg.Host, strconv.Itoa(port))
 	if !cfg.UseTLS {
 		return ldap.DialURL(fmt.Sprintf("ldap://%s", addr))
 	}
