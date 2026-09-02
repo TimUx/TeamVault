@@ -79,13 +79,13 @@ func PublicKeySPKIB64(privateKeyPEM string) (string, error) {
 func parsePrivateKey(pemBytes string) (*rsa.PrivateKey, []byte, error) {
 	block, _ := pem.Decode([]byte(pemBytes))
 	if block == nil {
-		return nil, nil, fmt.Errorf("invalid pem key")
+		return nil, nil, fmt.Errorf("invalid pem key: no PEM block (need PKCS#8 or PKCS#1 RSA PRIVATE KEY)")
 	}
 	key, err := x509.ParsePKCS8PrivateKey(block.Bytes)
 	if err != nil {
 		keyAny, err2 := x509.ParsePKCS1PrivateKey(block.Bytes)
 		if err2 != nil {
-			return nil, nil, err
+			return nil, nil, fmt.Errorf("invalid pem key: parse PKCS#8: %w; PKCS#1: %v", err, err2)
 		}
 		rsaKey := keyAny
 		pubDER, err := x509.MarshalPKIXPublicKey(&rsaKey.PublicKey)
