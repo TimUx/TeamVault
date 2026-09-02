@@ -53,7 +53,7 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Go test via docker build
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: Dockerfile
@@ -122,7 +122,7 @@ jobs:
 
       - name: Build and push
         if: github.event_name == 'pull_request' || steps.extkey.outputs.has_key == 'true'
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: Dockerfile
