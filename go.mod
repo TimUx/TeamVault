@@ -4,21 +4,20 @@ go 1.25.13
 
 require (
 	github.com/go-ldap/ldap/v3 v3.4.14
-	github.com/go-webauthn/webauthn v0.11.2
+	github.com/go-webauthn/webauthn v0.18.0
 	github.com/pquerna/otp v1.5.0
 	golang.org/x/crypto v0.55.0
 	modernc.org/sqlite v1.57.0
 )
 
 require (
-	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
-	github.com/fxamacker/cbor/v2 v2.7.0 // indirect
-	github.com/go-webauthn/x v0.1.14 // indirect
-	github.com/golang-jwt/jwt/v5 v5.2.2 // indirect
-	github.com/google/go-tpm v0.9.1 // indirect
-	github.com/mitchellh/mapstructure v1.5.0 // indirect
-	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
-	github.com/stretchr/testify v1.10.0 // indirect
+	github.com/fxamacker/cbor/v2 v2.9.3 // indirect
+	github.com/go-viper/mapstructure/v2 v2.5.0 // indirect
+	github.com/go-webauthn/x v0.3.0 // indirect
+	github.com/golang-jwt/jwt/v5 v5.3.1 // indirect
+	github.com/google/go-tpm v0.9.8 // indirect
+	github.com/philhofer/fwd v1.2.0 // indirect
+	github.com/tinylib/msgp v1.6.4 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 )
 
