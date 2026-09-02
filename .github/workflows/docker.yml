@@ -111,8 +111,8 @@ jobs:
             fi
             echo "::warning::TV_EXTENSION_SIGNING_KEY not set — building image with ephemeral extension key (CRX ID will not match committed manifest)."
           else
-            # Normalize CRLF and literal "\n" sequences (common when pasting PEM into secrets UI).
-            printf '%s' "$KEY" | tr -d '\r' | sed 's/\\n/\n/g' > "$pem"
+            # Wenn das Secret base64-encoded ist, decode es zuerst
+            echo "${KEY}" | base64 -d > "$pem" 2>/dev/null || echo "${KEY}" > "$pem"
             if [ -s "$pem" ] && [ "$(tail -c1 "$pem" | wc -l)" -eq 0 ]; then
               printf '\n' >> "$pem"
             fi
