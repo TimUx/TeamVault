@@ -437,9 +437,20 @@ Sessions, Login-Rate-Limits und Passkey-Challenges liegen **im Prozessspeicher**
 - OpenAPI: [openapi.yaml](openapi.yaml)
 - Checkliste: [SECURITY-REVIEW-CHECKLIST.md](../SECURITY-REVIEW-CHECKLIST.md)
 
-### Screenshots aktualisieren (Maintainer)
+### Screenshots & Online-Hilfe (Maintainer)
 
-Dokumentations-Screenshots liegen unter `docs/images/` (Spiegel: `web/static/help/img/`). Neu erzeugen (Playwright + lokaler Dev-Server mit aktuellem `web/static`):
+**Empfohlen:** GitHub Actions Workflow [`.github/workflows/docs.yml`](../.github/workflows/docs.yml) — läuft auf `ubuntu-latest` mit Playwright-Chromium, ohne Firmenproxy.
+
+| Auslöser | Verhalten |
+|----------|-----------|
+| Push auf `main` mit Änderungen unter `web/static/` oder `docs/` | Screenshots neu erzeugen, wenn UI/Online-Hilfe betroffen |
+| Änderungen unter `web/static/help/` (HTML/JS/CSS/**img**) | Automatischer **Patch-Release** (`vX.Y.Z+1`) + Tag-Push |
+| Nur `docs/*.md` (Markdown-Guides) | Kein Release — Hilfe in der App unverändert |
+| `workflow_dispatch` | Manuell: Screenshots ja/nein |
+
+Nach erfolgreichem Lauf: Commit `docs: refresh screenshots… [skip ci]`, optional neuer Tag. Mit Repository-Variable `GITEA_SYNC_ENABLED=true` und Secret `GITEA_PUSH_URL` wird `main` + Tags nach Gitea gespiegelt (siehe [`.gitea/README.md`](../.gitea/README.md)).
+
+Dokumentations-Screenshots liegen unter `docs/images/` (Spiegel: `web/static/help/img/`). Lokal neu erzeugen (Playwright + Dev-Server):
 
 **Hinweis:** CLI- und Extension-Hilfeseiten zeigen keine Vollseiten-Screenshots mehr (vermeidet verschachtelte „Hilfe-in-Hilfe“-Bilder). Stattdessen interaktive Download-Widgets auf `/help/cli` und `/help/extension`; für Markdown-Guides wird `account-clients.png` (Ausschnitt **Konto → Clients**) erzeugt.
 

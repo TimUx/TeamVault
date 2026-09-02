@@ -1,0 +1,147 @@
+# Regenerate docs screenshots, commit updates, patch-release when online help changes, sync Gitea.
+name: Docs & Screenshots
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "web/static/**"
+      - "docs/**"
+      - "scripts/capture-docs-screenshots.mjs"
+      - "scripts/ci/**"
+      - ".github/workflows/docs.yml"
+  workflow_dispatch:
+    inputs:
+      refresh_screenshots:
+        description: PNG-Screenshots neu erzeugen
+        type: boolean
+        default: true
+      force_release:
+        description: Patch-Release erzwingen (nur sinnvoll bei Online-Hilfe-Änderungen)
+        type: boolean
+        default: false
+
+concurrency:
+  group: docs-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    name: Docs, screenshots & release
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.actor != 'github-actions[bot]')
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve base ref
+        id: base
+        run: |
+          BEFORE="${{ github.event.before }}"
+          if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
+            BEFORE="$(git rev-parse HEAD^)"
+          fi
+          echo "before=$BEFORE" >> "$GITHUB_OUTPUT"
+          echo "head=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+
+      - name: Classify incoming changes
+        id: incoming
+        run: bash scripts/ci/docs-changes.sh "${{ steps.base.outputs.before }}" "${{ steps.base.outputs.head }}"
+
+      - name: Should refresh screenshots
+        id: shots
+        run: |
+          REFRESH="false"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ github.event.inputs.refresh_screenshots }}" = "true" ]; then
+            REFRESH="true"
+          elif [ "${{ github.event_name }}" = "push" ] && { [ "${{ steps.incoming.outputs.ui_changed }}" = "true" ] || [ "${{ steps.incoming.outputs.help_changed }}" = "true" ]; }; then
+            REFRESH="true"
+          fi
+          echo "refresh=$REFRESH" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Go
+        if: steps.shots.outputs.refresh == 'true'
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      - name: Set up Node
+        if: steps.shots.outputs.refresh == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: scripts/package-lock.json
+
+      - name: Install Playwright OS deps
+        if: steps.shots.outputs.refresh == 'true'
+        run: npx --prefix scripts playwright install-deps chromium
+
+      - name: Refresh screenshots
+        if: steps.shots.outputs.refresh == 'true'
+        run: bash scripts/ci/docs-screenshots.sh
+
+      - name: Commit generated assets
+        id: commit
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/images/*.png web/static/help/img/*.png 2>/dev/null || true
+          if git diff --staged --quiet; then
+            echo "committed=false" >> "$GITHUB_OUTPUT"
+            echo "No screenshot changes to commit."
+            exit 0
+          fi
+          git commit -m "$(cat <<'EOF'
+docs: refresh screenshots and help images [skip ci]
+
+Automated update from Docs & Screenshots workflow.
+EOF
+)"
+          echo "committed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Patch release when online help changed
+        id: release
+        run: |
+          set -euo pipefail
+          HEAD="$(git rev-parse HEAD)"
+          bash scripts/ci/bump-patch-tag.sh "${{ steps.base.outputs.before }}" "$HEAD"
+          if [ "${{ github.event.inputs.force_release }}" = "true" ]; then
+            if git diff --name-only "${{ steps.base.outputs.before }}" "$HEAD" | grep -qE '^web/static/help/'; then
+              echo "Force release flag set (help paths changed)."
+            else
+              echo "force_release ignored — no online help changes in diff." >&2
+            fi
+          fi
+
+      - name: Push to GitHub
+        if: steps.commit.outputs.committed == 'true' || steps.release.outputs.needs_release == 'true'
+        run: |
+          set -euo pipefail
+          git push origin HEAD:main
+          if [ "${{ steps.release.outputs.needs_release }}" = "true" ] && [ -n "${{ steps.release.outputs.new_tag }}" ]; then
+            git push origin "${{ steps.release.outputs.new_tag }}"
+          fi
+
+      - name: Sync to Gitea
+        if: vars.GITEA_SYNC_ENABLED == 'true' && (steps.commit.outputs.committed == 'true' || steps.release.outputs.needs_release == 'true')
+        env:
+          GITEA_PUSH_URL: ${{ secrets.GITEA_PUSH_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${GITEA_PUSH_URL:-}" ]; then
+            echo "GITEA_PUSH_URL secret missing — skip Gitea sync." >&2
+            exit 1
+          fi
+          git remote add gitea "$GITEA_PUSH_URL"
+          git push gitea HEAD:main
+          if [ "${{ steps.release.outputs.needs_release }}" = "true" ] && [ -n "${{ steps.release.outputs.new_tag }}" ]; then
+            git push gitea "${{ steps.release.outputs.new_tag }}"
+          fi

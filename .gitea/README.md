@@ -12,10 +12,23 @@ TeamVault nutzt **Gitea nur als internes Git-Remote** und für Container-Registr
 
 ## GitHub CI (einzige Build-Pipeline)
 
-- `.github/workflows/ci.yml` — Tests (PR/`main`)
-- `.github/workflows/docker.yml` — Image → `ghcr.io/timux/teamvault`
+- `.github/workflows/docker.yml` — Tests + Image → `ghcr.io/timux/teamvault`
+- `.github/workflows/docs.yml` — Screenshots, Online-Hilfe-Bilder, Patch-Release bei `web/static/help/`
 - `.github/workflows/release.yml` — `teamvault-*` Binaries
 - `.github/workflows/tvcli.yml` — `tvcli-*` Binaries
+
+## Git-Spiegelung GitHub → Gitea (optional, automatisch)
+
+Workflow `docs.yml` kann nach Docs-/Hilfe-Updates `main` und neue Tags nach Gitea pushen.
+
+**GitHub Repository (TimUx/TeamVault):**
+
+| Einstellung | Wert |
+|-------------|------|
+| Variable `GITEA_SYNC_ENABLED` | `true` |
+| Secret `GITEA_PUSH_URL` | `https://<user>:<token>@git.example.internal/git/CC-3.3/TeamVault.git` |
+
+Token: Gitea → Einstellungen → Zugriffstoken (Schreibzugriff auf Repo). Ohne diese Einstellungen bleibt der manuelle Push von Entwickler-Clients nötig.
 
 ## Nach jedem Release-Tag (`v*`)
 
