@@ -43,7 +43,7 @@ jobs:
           cache-dependency-path: go.sum
 
       - name: Run Go tests
-        run: go test ./... -count=1
+        run: go test -mod=mod ./... -count=1
 
       - name: Set up Node
         uses: actions/setup-node@v4
@@ -71,12 +71,7 @@ jobs:
             echo "No screenshot changes to commit."
             exit 0
           fi
-          git commit -m "$(cat <<'EOF'
-docs: refresh screenshots from E2E runner [skip ci]
-
-Automated capture against ephemeral test server with fictional demo data.
-EOF
-)"
+          git commit -m "docs: refresh screenshots from E2E runner [skip ci]" -m "Automated capture against ephemeral test server with fictional demo data."
           echo "committed=true" >> "$GITHUB_OUTPUT"
 
       - name: Push screenshot updates

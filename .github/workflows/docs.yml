@@ -71,7 +71,7 @@ jobs:
           cache-dependency-path: go.sum
 
       - name: Run Go tests
-        run: go test ./... -count=1
+        run: go test -mod=mod ./... -count=1
 
       - name: Set up Node
         if: steps.shots.outputs.refresh == 'true'
@@ -101,12 +101,7 @@ jobs:
             echo "No screenshot changes to commit."
             exit 0
           fi
-          git commit -m "$(cat <<'EOF'
-docs: refresh screenshots and help images [skip ci]
-
-Automated update from Docs & Screenshots workflow.
-EOF
-)"
+          git commit -m "docs: refresh screenshots and help images [skip ci]" -m "Automated update from Docs & Screenshots workflow."
           echo "committed=true" >> "$GITHUB_OUTPUT"
 
       - name: Patch release when online help changed
