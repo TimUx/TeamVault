@@ -1,4 +1,4 @@
-# Build and publish standalone teamvault server binaries on release tags.
+# Build and publish teamvault server + tvcli binaries on release tags.
 name: Release
 
 on:
@@ -13,8 +13,8 @@ env:
   CGO_ENABLED: "0"
 
 jobs:
-  binaries:
-    name: Binaries (${{ matrix.goos }}-${{ matrix.goarch }})
+  server:
+    name: server (${{ matrix.goos }}-${{ matrix.goarch }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -46,6 +46,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+          cache-dependency-path: go.sum
 
       - name: Build
         env:
@@ -53,9 +54,14 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
         run: |
           set -euo pipefail
+          mkdir -p dist
           name="teamvault-${GOOS}-${GOARCH}${{ matrix.suffix }}"
-          go build -trimpath \
-            -ldflags="-s -w -X github.com/teamvault/teamvault/internal/buildinfo.Version=${GITHUB_REF_NAME} -X github.com/teamvault/teamvault/internal/buildinfo.Commit=${GITHUB_SHA}" \
+          ver="${GITHUB_REF_NAME}"
+          if [[ "${GITHUB_REF}" != refs/tags/* ]]; then
+            ver="$(git describe --tags --always --dirty 2>/dev/null || echo dev)"
+          fi
+          go build -trimpath -mod=mod \
+            -ldflags="-s -w -X github.com/teamvault/teamvault/internal/buildinfo.Version=${ver} -X github.com/teamvault/teamvault/internal/buildinfo.Commit=${GITHUB_SHA}" \
             -o "dist/${name}" ./cmd/teamvault
           ls -la "dist/${name}"
 
@@ -65,9 +71,62 @@ jobs:
           name: teamvault-${{ matrix.goos }}-${{ matrix.goarch }}
           path: dist/teamvault-*
 
-  release:
+  tvcli:
+    name: tvcli (${{ matrix.goos }}-${{ matrix.goarch }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            suffix: ""
+          - goos: linux
+            goarch: arm64
+            suffix: ""
+          - goos: windows
+            goarch: amd64
+            suffix: ".exe"
+          - goos: windows
+            goarch: arm64
+            suffix: ".exe"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      - name: Build
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          name="tvcli-${GOOS}-${GOARCH}${{ matrix.suffix }}"
+          ver="${GITHUB_REF_NAME}"
+          if [[ "${GITHUB_REF}" != refs/tags/* ]]; then
+            ver="$(git describe --tags --always --dirty 2>/dev/null || echo dev)"
+          fi
+          go build -trimpath -mod=mod \
+            -ldflags="-s -w -X main.version=${ver} -X main.commit=${GITHUB_SHA}" \
+            -o "dist/${name}" ./cmd/tvcli
+          ls -la "dist/${name}"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tvcli-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/tvcli-*
+
+  publish:
     name: Publish release assets
-    needs: binaries
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    needs: [server, tvcli]
     runs-on: ubuntu-latest
     steps:
       - name: Download artifacts
@@ -82,4 +141,6 @@ jobs:
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/teamvault-*
+          files: |
+            dist/teamvault-*
+            dist/tvcli-*

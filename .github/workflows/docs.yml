@@ -1,4 +1,4 @@
-# Regenerate docs screenshots, commit updates, patch-release when online help changes.
+# Go tests + optional Playwright screenshots; commits PNG updates for docs/help.
 name: Docs & Screenshots
 
 on:
@@ -7,6 +7,11 @@ on:
     paths:
       - "web/static/**"
       - "docs/**"
+      - "internal/**"
+      - "cmd/**"
+      - "clients/**"
+      - "go.mod"
+      - "go.sum"
       - "scripts/capture-docs-screenshots.mjs"
       - "scripts/ci/**"
       - ".github/workflows/docs.yml"
@@ -30,8 +35,10 @@ permissions:
 
 jobs:
   update:
-    name: Docs, screenshots & release
+    name: Tests, screenshots & docs
     runs-on: ubuntu-latest
+    env:
+      GOFLAGS: -mod=mod
     if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.actor != 'github-actions[bot]')
     steps:
       - name: Checkout
@@ -63,6 +70,18 @@ jobs:
             REFRESH="true"
           fi
           echo "refresh=$REFRESH" >> "$GITHUB_OUTPUT"
+
+      - name: cryptocore.js checksum sync
+        run: |
+          set -euo pipefail
+          h1=$(sha256sum web/static/cryptocore.js | awk '{print $1}')
+          h2=$(sha256sum clients/js/cryptocore.js | awk '{print $1}')
+          h3=$(sha256sum clients/extension/cryptocore.js | awk '{print $1}')
+          if [ "$h1" != "$h2" ] || [ "$h1" != "$h3" ]; then
+            echo "cryptocore.js mismatch — keep web/static, clients/js, clients/extension in sync"
+            exit 1
+          fi
+          echo "cryptocore.js ok ($h1)"
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -101,7 +120,7 @@ jobs:
             echo "No screenshot changes to commit."
             exit 0
           fi
-          git commit -m "docs: refresh screenshots and help images [skip ci]" -m "Automated update from Docs & Screenshots workflow."
+          git commit -m "docs: refresh screenshots and help images [skip ci][skip docker]" -m "Automated update from Docs & Screenshots workflow."
           echo "committed=true" >> "$GITHUB_OUTPUT"
 
       - name: Patch release when online help changed
