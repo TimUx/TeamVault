@@ -78,4 +78,11 @@ jobs:
 
       - name: Push screenshot updates
         if: steps.commit.outputs.committed == 'true'
-        run: git push origin HEAD:main
+        run: |
+          set -euo pipefail
+          # Docs workflow may race on the same push; rebase and retry once.
+          git pull --rebase origin main
+          if ! git push origin HEAD:main; then
+            git pull --rebase origin main
+            git push origin HEAD:main
+          fi
