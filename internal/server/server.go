@@ -43,8 +43,8 @@ type API struct {
 
 func New(app *bootstrap.Result) *API {
 	hours := 8
-	if app != nil && app.ConfigStore != nil {
-		b := instcfg.Load(app.ConfigStore)
+	if app != nil && app.Config != nil {
+		b := instcfg.Load(app.Config)
 		if b.Policy.SessionHours > 0 {
 			hours = b.Policy.SessionHours
 		}
