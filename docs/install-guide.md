@@ -10,7 +10,7 @@ Betrieb und Admin-Themen danach: [Admin Guide](admin-guide.md).
 | Variante | Voraussetzung | Wann |
 |----------|---------------|------|
 | **Docker** (empfohlen) | Docker + Compose v2 | Produktion / einfacher Betrieb |
-| **Go** | Go 1.23+ | Entwicklung / ohne Container |
+| **Go** | Go 1.25+ | Entwicklung / ohne Container |
 
 **Docker-One-Liner** fragt nach dem Installationspfad (Enter = `~/teamvault`) und legt dort nur Betriebdateien an (`docker-compose.yml`, `.env`, Unlock-Keyfile) — **kein** vollständiger Git-Clone. Das Image kommt von **GHCR**.  
 **Go-One-Liner** nutzt dieselben Prinzipien: Pfad-Abfrage, freier Port, schlanke Installation (`bin/teamvault`, `.env`, `secrets/`, `data/`) — **kein** Repo-Clone. Binary von GitHub Release (Fallback: einmaliger Build aus Quell-Archiv). Unlock-Key nur in der Keyfile.
@@ -200,7 +200,7 @@ Für **Offline-Lesen** im Browser (verschlüsselte lokale Kopie, 30 Tage) und **
 | Port belegt | One-Liner wählt automatisch den nächsten freien Port ab 8080; Pin: `TEAMVAULT_PORT=…` |
 | `permission denied` auf Unlock-Key | Container = nonroot: `chmod 700 secrets && chmod 644 secrets/teamvault_unlock` |
 | GHCR-Pull fehlgeschlagen | `docker login ghcr.io`; Package öffentlich/sichtbar? Sonst `TEAMVAULT_BUILD=1` / `docker-compose.build.yml` |
-| Go zu alt | Go 1.23+ von [go.dev/dl](https://go.dev/dl/) |
+| Go zu alt | Go 1.25+ von [go.dev/dl](https://go.dev/dl/) |
 | Setup erscheint erneut | Anderes Data-Dir oder anderes Unlock-Keyfile |
 | Altes Image | `docker compose pull` — `TEAMVAULT_PULL_POLICY=always` ist Default |
 

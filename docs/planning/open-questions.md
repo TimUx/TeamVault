@@ -278,6 +278,8 @@ Antwort: Nein, nicht für den ersten Prod-Release nötig – ihr hattet 2FA/Pass
 
 **Antwort (Umsetzung 2026-09):** Akzeptiert und dokumentiert (`crypto-design.md` §8). Geschlossen werden Angriffe, die **ohne** JS-Manipulation funktionieren (Pubkey-TOFU, kein stilles Gruppen-Wrap, Escrow-Replace nur k-aus-n, API-Key-Scopes, Setup-Token). Ein kompromittiertes Release bleibt außerhalb des ZK-Versprechens.
 
+**Teilmitigation (2026-09):** Subresource Integrity (sha384) für kritische Same-Origin-Scripts (`cryptocore.js`, `app.js`, `vault-io.js`, `offline-store.js`) in `web/embed.go`. Schützt gegen CDN-/Cache-Manipulation, **nicht** gegen einen böswilligen App-Server, der HTML und Script gemeinsam austauscht.
+
 ---
 
 ## Review-Checkliste für euch

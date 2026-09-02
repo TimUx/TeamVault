@@ -21,7 +21,7 @@ Ausführlich inkl. One-Liner: [**Installationsanleitung**](install-guide.md).
 
 ### 2.1 Voraussetzungen
 
-- **Docker** + Compose v2 **oder** Go 1.23+
+- **Docker** + Compose v2 **oder** Go 1.25+
 - Persistentes Datenverzeichnis / Volume
 - Unlock-Keyfile ≥ **32 Byte** hohe Entropie (kein Passwort)
 

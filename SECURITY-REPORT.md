@@ -28,7 +28,7 @@ No Critical finding (no remote vault plaintext disclosure, no auth bypass, no cr
 | Hardening | CSP, X-Frame-Options DENY, Origin check on mutating cookie APIs |
 | Deploy | Distroless nonroot; unlock key not in image |
 
-Trust boundaries match `docs/planning/crypto-design.md` §8. The main design/implementation gap is **secret capabilities** documented as `{read, write, share, admin}` but implemented as **envelope ⇒ full control**.
+Trust boundaries match `docs/planning/crypto-design.md` §8. Secret capabilities `{read, write, share, admin}` are stored on shares and enforced on mutate/share/rotate/delete (legacy empty → write).
 
 ---
 
@@ -56,11 +56,11 @@ Trust boundaries match `docs/planning/crypto-design.md` §8. The main design/imp
 | ID | Model | Result summary |
 |----|--------|----------------|
 | A0 | Unauthenticated | Health/version public; admin 401; setup token one-shot; login failures uniform 401 |
-| A1 | Member (`attacker`) | Admin APIs 403; shared-secret BOLA confirmed (delete/rotate/re-share); group key leak |
+| A1 | Member (`attacker`) | Admin APIs 403; share BOLA remediated (capability gates); group key leak fixed |
 | A2/A3 | Tenant/platform admin | Escrow/RBAC already covered by existing `finding_*` tests; not re-broken |
 | A4 | DB theft | No plaintext marker / master password in SQLite dump |
-| A5 | Compromised server/JS | Residual OQ-22; server cannot decrypt without client keys |
-| A6 | Supply chain | Actions tag-pinned; transitive JWT vuln via WebAuthn |
+| A5 | Compromised server/JS | Residual OQ-22; SRI partial mitigation; server cannot decrypt without client keys |
+| A6 | Supply chain | Checkout/Trivy SHA-pinned; Actions majors bumped; jwt GO-2025-3553 fixed |
 
 ---
 

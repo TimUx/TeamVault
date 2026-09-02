@@ -28,7 +28,7 @@ docker run -d --name "$CONTAINER" \
   -e TEAMVAULT_DATA_DIR=/data \
   -e TEAMVAULT_MASTER_UNLOCK_KEY_FILE=/run/secrets/teamvault_unlock \
   -e TEAMVAULT_BUNDLED_DOWNLOADS=/bundled \
-  golang:1.23.3 sh -c 'cd /src && go run ./cmd/teamvault'
+  golang:1.25.13 sh -c 'cd /src && go run ./cmd/teamvault'
 
 cleanup() { docker rm -f "$CONTAINER" 2>/dev/null || true; }
 trap cleanup EXIT
