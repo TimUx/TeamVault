@@ -5,7 +5,7 @@ go 1.23.3
 require (
 	github.com/go-ldap/ldap/v3 v3.4.8
 	github.com/go-webauthn/webauthn v0.11.2
-	github.com/pquerna/otp v1.4.0
+	github.com/pquerna/otp v1.5.0
 	golang.org/x/crypto v0.32.0
 	modernc.org/sqlite v1.34.5
 )
