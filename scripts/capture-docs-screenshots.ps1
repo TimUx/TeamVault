@@ -49,6 +49,9 @@ try {
 
   $nm = Join-Path $Root "scripts\node_modules"
   if (-not (Test-Path (Join-Path $nm "playwright"))) {
+    . (Join-Path $PSScriptRoot "corp-proxy-env.ps1")
+    Start-CorpConnectProxyIfNeeded
+    Set-CorpProxyEnv
     npm install --prefix (Join-Path $Root "scripts") --no-fund --no-audit
     npx --prefix (Join-Path $Root "scripts") playwright install chromium
   }

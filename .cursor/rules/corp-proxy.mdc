@@ -1,0 +1,36 @@
+---
+description: Firmen-NTLM-Proxy für alle externen Downloads (git, npm, Playwright, Go, …)
+alwaysApply: true
+---
+
+# TeamVault – Firmenproxy (NTLM)
+
+In dieser Umgebung ist **direkter Internetzugang blockiert**. Der Firmenproxy (`proxy.example.internal:8080`) verlangt **NTLM/Windows-Credentials**.
+
+## Pflicht für Agenten und Skripte
+
+**Jeder Download** — unabhängig von Tool, Sprache oder Befehl — muss über einen lokalen NTLM-CONNECT-Proxy laufen:
+
+| Zweck | Lokaler Proxy | Skript |
+|--------|----------------|--------|
+| Git, GitHub, npm, npx, Playwright, curl, gh, Docker-Registry, … | `http://127.0.0.1:18081` | `scripts/git-connect-proxy.ps1` |
+| Go-Module (`go mod`, `GOPROXY`) | `http://127.0.0.1:18080` | `scripts/goproxy-corp.ps1` |
+
+Vor Downloads:
+
+1. CONNECT-Proxy starten (falls Port nicht offen): `powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\git-connect-proxy.ps1`
+2. Env setzen: `. .\scripts\corp-proxy-env.ps1` dann `Set-CorpProxyEnv`
+3. Befehl ausführen, z. B.:
+   - `git -c http.proxy=http://127.0.0.1:18081 push github …`
+   - `npx playwright install chromium` (mit `HTTP_PROXY`/`HTTPS_PROXY` gesetzt)
+   - `npm install` (mit Proxy-Env)
+
+**Niemals** `npm install`, `playwright install`, `go mod download`, `git push github`, `curl`/`Invoke-WebRequest` gegen externe URLs ohne Proxy versuchen und nach Timeout aufgeben.
+
+## Playwright
+
+`npx playwright install` lädt Browser-Binaries von Microsoft/CDN — **immer** zuerst CONNECT-Proxy + `Set-CorpProxyEnv`. Siehe `docs/dev-proxy.md`.
+
+## Dokumentation
+
+Details: `docs/dev-proxy.md`

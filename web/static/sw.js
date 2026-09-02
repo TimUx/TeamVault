@@ -6,7 +6,7 @@ const TV_SW_BASE = (() => {
   return i >= 0 ? p.slice(0, i) : "";
 })();
 
-const CACHE = "teamvault-shell-v30";
+const CACHE = "teamvault-shell-v34";
 const NETWORK_FIRST = ["/styles.css", "/app.js"].map((path) => TV_SW_BASE + path);
 const PRECACHE = [
   "/",

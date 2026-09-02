@@ -338,6 +338,8 @@ body.app-wide #aboutFoot {
 }
 body.app-wide main,
 body.app-wide main#app {
+  display: flex;
+  flex-direction: column;
   max-width: none;
   width: 100%;
   height: 100%;
@@ -353,7 +355,7 @@ body.app-wide main#app {
   grid-template-columns: var(--drawer-width) minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr);
   width: 100%;
-  height: 100vh;
+  height: 100%;
   min-height: 0;
   overflow: hidden;
 }
@@ -361,8 +363,8 @@ body.app-wide main#app {
   grid-column: 1;
   grid-row: 1;
   width: var(--drawer-width);
+  height: 100%;
   min-height: 0;
-  max-height: 100vh;
   background: var(--color-surface);
   border-right: 1px solid var(--color-border);
   display: flex;
@@ -373,7 +375,11 @@ body.app-wide main#app {
   display: none !important;
 }
 .app-sidebar-brand {
-  padding: 1rem 1rem 0.75rem;
+  flex-shrink: 0;
+  height: var(--topbar-height);
+  min-height: var(--topbar-height);
+  padding: 0 1rem;
+  box-sizing: border-box;
   border-bottom: 1px solid var(--color-border);
   font-size: 1.15rem;
   font-weight: 700;
@@ -617,9 +623,8 @@ h1 .heading-ico,
   min-width: 0;
   min-height: 0;
   height: 100%;
-  max-height: 100vh;
-  display: grid;
-  grid-template-rows: var(--topbar-height) auto minmax(0, 1fr) auto;
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
   background: var(--color-bg);
 }
@@ -631,7 +636,7 @@ h1 .heading-ico,
   font-size: 0.75rem;
 }
 .offline-banner {
-  grid-row: 2;
+  flex: 0 0 auto;
   margin: 0;
   width: 100%;
   box-sizing: border-box;
@@ -652,7 +657,7 @@ h1 .heading-ico,
   cursor: not-allowed;
 }
 .app-topbar {
-  grid-row: 1;
+  flex: 0 0 var(--topbar-height);
   height: var(--topbar-height);
   width: 100%;
   box-sizing: border-box;
@@ -676,7 +681,7 @@ h1 .heading-ico,
   gap: 0.5rem;
 }
 .app-content {
-  grid-row: 3;
+  flex: 1 1 auto;
   min-height: 0;
   min-width: 0;
   overflow-y: auto;
@@ -689,9 +694,10 @@ h1 .heading-ico,
 .app-content .panel { box-shadow: none; }
 
 .app-footer {
-  grid-row: 4;
+  flex: 0 0 auto;
   width: 100%;
   min-width: 0;
+  min-height: 2.35rem;
   box-sizing: border-box;
   border-top: 1px solid var(--color-border);
   background: var(--color-surface);
@@ -1470,7 +1476,7 @@ body.admin-modal-open { overflow: hidden; }
     top: 0;
     bottom: 0;
     height: auto;
-    max-height: none;
+    flex: none;
     transform: translateX(-105%);
     transition: transform 0.2s ease;
     box-shadow: 4px 0 24px var(--shadow);

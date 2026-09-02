@@ -1480,7 +1480,6 @@ function announceA11y(msg) {
 function renderApp(app) {
   document.body.classList.add("app-wide");
   const n = el(`<div class="app-frame">
-    <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
     <aside class="app-sidebar" id="appSidebar">
       <div class="app-sidebar-brand">${icon("shield", "brand-ico")} <span>TeamVault</span></div>
       <nav class="app-sidebar-nav" id="appSidebarNav">
@@ -2150,7 +2149,6 @@ function renderApp(app) {
               <div class="admin-section" data-admin-section="audit">
                 <div id="alist" class="list hint"></div>
               </div>
-              </div>
               <div class="admin-section" data-admin-section="system">
                 <h2>System &amp; Instanz</h2>
                 ${hintBox("Storage, Vault-Gesundheit und angebundene Dienste.")}
@@ -2171,8 +2169,11 @@ function renderApp(app) {
       </footer>
     </div>
   </div>`);
+  const backdrop = document.createElement("div");
+  backdrop.className = "sidebar-backdrop";
+  backdrop.id = "sidebarBackdrop";
+  app.appendChild(backdrop);
   app.appendChild(n);
-  const backdrop = n.querySelector("#sidebarBackdrop");
   const live = document.createElement("div");
   live.id = "a11yLive";
   live.className = "visually-hidden";
