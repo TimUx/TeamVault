@@ -54,13 +54,16 @@ try {
 }
 
 if (-not $GitHubOnly) {
-  # --- Gitea releases ---
-  $giteaH = Get-BasicAuthHeader "git.example.internal"
-  $giteaReleases = Invoke-RestMethod -Uri 'https://git.example.internal/git/api/v1/repos/CC-3.3/TeamVault/releases?limit=100' -Headers $giteaH
+  $giteaHost = $env:TV_GITEA_HOST
+  if (-not $giteaHost) {
+    throw "Set TV_GITEA_HOST (or scripts/corp-proxy.local.ps1) before pruning Gitea releases."
+  }
+  $giteaH = Get-BasicAuthHeader $giteaHost
+  $giteaReleases = Invoke-RestMethod -Uri "https://$giteaHost/git/api/v1/repos/CC-3.3/TeamVault/releases?limit=100" -Headers $giteaH
   foreach ($rel in $giteaReleases) {
     if ($tagsToDrop -contains $rel.tag_name) {
       Write-Host "Gitea release delete: $($rel.tag_name) (id=$($rel.id))"
-      Invoke-RestMethod -Method Delete -Uri "https://git.example.internal/git/api/v1/repos/CC-3.3/TeamVault/releases/$($rel.id)" -Headers $giteaH | Out-Null
+      Invoke-RestMethod -Method Delete -Uri "https://$giteaHost/git/api/v1/repos/CC-3.3/TeamVault/releases/$($rel.id)" -Headers $giteaH | Out-Null
     }
   }
 }

@@ -26,7 +26,15 @@ func main() {
 	}
 	pem, err := os.ReadFile(keyPath)
 	if err != nil {
-		fatal(fmt.Errorf("read %s: %w", keyPath, err))
+		generated, gerr := crx3.GeneratePrivateKeyPEM()
+		if gerr != nil {
+			fatal(gerr)
+		}
+		if werr := os.WriteFile(keyPath, []byte(generated), 0o600); werr != nil {
+			fatal(werr)
+		}
+		fmt.Fprintf(os.Stderr, "generated %s — keep it local (not git) for a stable extension ID\n", keyPath)
+		pem = []byte(generated)
 	}
 	manifest, err := readManifest(filepath.Join(extDir, "manifest.json"))
 	if err != nil {

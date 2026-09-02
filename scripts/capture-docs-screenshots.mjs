@@ -409,13 +409,9 @@ async function main() {
 
   await page.click('[data-nav="admin:trust"]');
   await page.waitForSelector('[data-admin-section="trust"] #trust_ca_pem');
-  await page.fill(
-    "#trust_ca_pem",
-    "-----BEGIN CERTIFICATE-----\nMIIDXTCCAkWgAwIBAgIJAKExampleDemoCA0MA0GCSqGSIb3DQEBCwUAMEUxCzAJBgNV\nBAYTAkRFOQwwCgYDVQQIDAxIZXNzZW4xDDAKBgNVBAcMA0RybQ0YDVQQKDA1EZW1v\nIENvcnAgQ0ExGDAWBgNVBAMMD2xkYXAuZGVtby5sb2NhbDAeFw0yNDAxMDEwMDAw\nMDBaFw0zNDAxMDEwMDAwMDBaMEUxCzAJBgNVBAYTAkRFOQwwCgYDVQQIDAxIZXNz\nZW4xDDAKBgNVBAcMA0RybQ0YDVQQKDA1EZW1vIENvcnAgQ0ExGDAWBgNVBAMMD2xk\nYXAuZGVtby5sb2NhbDCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBALdemo\n-----END CERTIFICATE-----"
-  );
+  await page.fill("#trust_ca_pem", "");
   await page.waitForTimeout(400);
   await shot(page, "admin-trust.png", { fullPage: true });
-  await page.fill("#trust_ca_pem", "");
 
   await page.click('[data-nav="admin:smtp"]');
   await page.waitForSelector('[data-admin-section="smtp"] #mail_host');

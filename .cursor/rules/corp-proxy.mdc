@@ -5,7 +5,7 @@ alwaysApply: true
 
 # TeamVault – Firmenproxy (NTLM)
 
-In dieser Umgebung ist **direkter Internetzugang blockiert**. Der Firmenproxy (`proxy.example.internal:8080`) verlangt **NTLM/Windows-Credentials**.
+In dieser Umgebung ist **direkter Internetzugang blockiert**. Der Firmen-HTTP-Proxy verlangt **NTLM/Windows-Credentials**. Die Upstream-URL steht in `TV_CORP_HTTP_PROXY` bzw. der gitignored Datei `scripts/corp-proxy.local.ps1` — nie den echten Proxy-Host in Git committen.
 
 ## Pflicht für Agenten und Skripte
 

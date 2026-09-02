@@ -49,12 +49,12 @@ Viele Patch-Tags `v1.3.0`–`v1.3.25` können gelöscht werden; behalten wird nu
 
 1. GitHub Actions abwarten (Release, tvcli, Docker grün)
 2. Release-Assets von GitHub nach Gitea kopieren
-3. Image `ghcr.io/timux/teamvault:<version>` nach `git.example.internal/cc-3.3/teamvault` taggen/pushen
+3. Image `ghcr.io/timux/teamvault:<version>` in die interne Registry taggen/pushen (`TV_GITEA_HOST`, nie den Hostnamen committen)
 
 ## Deploy
 
 ```bash
-docker pull git.example.internal/cc-3.3/teamvault:1.3.26
+docker pull <interne-registry>/teamvault:1.3.26
 ```
 
 ## Optional: Base-Images lokal spiegeln

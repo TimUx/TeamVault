@@ -52,6 +52,20 @@ func PackDir(extensionDir, outPath, privateKeyPEM string) (string, error) {
 	return extID, os.WriteFile(outPath, crx, 0o644)
 }
 
+// GeneratePrivateKeyPEM returns a PKCS#8 RSA key for CRX packing. Callers must
+// keep the file local (never commit); a stable extension ID requires reusing it.
+func GeneratePrivateKeyPEM() (string, error) {
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		return "", err
+	}
+	der, err := x509.MarshalPKCS8PrivateKey(key)
+	if err != nil {
+		return "", err
+	}
+	return string(pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der})), nil
+}
+
 func parsePrivateKey(pemBytes string) (*rsa.PrivateKey, []byte, error) {
 	block, _ := pem.Decode([]byte(pemBytes))
 	if block == nil {

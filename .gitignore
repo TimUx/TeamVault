@@ -25,9 +25,12 @@ unlock-docs-shot.key
 .env
 .env.local
 
-# Not published to GitHub (modules via GOPROXY; internal CA/CI stay off this remote)
+# Not published (modules via GOPROXY; internal CA/CI/hostnames stay off remotes)
 /vendor/
 /certs/
+clients/extension/*.pem
+clients/extension/*.key
+scripts/corp-proxy.local.ps1
 # Gitea: only README is versioned; no Actions workflows (builds on GitHub)
 /.gitea/*
 !/.gitea/README.md
@@ -36,3 +39,4 @@ scripts/go-env.ps1
 scripts/mirror-oci-to-gitea.ps1
 scripts/publish-go-toolchain.ps1
 docs/dev-proxy.md
+.crane-docker-config/

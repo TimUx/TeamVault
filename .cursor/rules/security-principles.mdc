@@ -33,5 +33,6 @@ Vollständige Administration über Web-UI; Branding-Farben siehe `docs/planning/
 ## Verbote
 
 - Keine Klartext-Secrets in Logs, Traces, Error-Messages oder Tests mit Produktionsdaten.
+- Keine internen Zertifikate, privaten Schlüssel, Firmen-Hostnamen oder interne IPs in Git — auch nicht als Doku-Beispiel oder in Screenshots. CA-Dateien und Signing-Keys nur lokal (gitignored).
 - Keine Bitwarden-Protokoll-Kompatibilität; eigene REST-API + Extension/CLI mit geteiltem Crypto-Modul.
 - Bei Konflikt Anforderung vs. Prinzip: in `docs/planning/open-questions.md` sichtbar machen, nicht still auflösen.

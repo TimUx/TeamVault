@@ -12,8 +12,16 @@
 param(
   [string]$ListenHost = "127.0.0.1",
   [int]$ListenPort = 18081,
-  [string]$CorpProxy = "http://proxy.example.internal:8080"
+  [string]$CorpProxy = ""
 )
+if (-not $CorpProxy) {
+  $local = Join-Path $PSScriptRoot "corp-proxy.local.ps1"
+  if (Test-Path $local) { . $local }
+  $CorpProxy = $env:TV_CORP_HTTP_PROXY
+}
+if (-not $CorpProxy) {
+  throw "Set TV_CORP_HTTP_PROXY or create scripts/corp-proxy.local.ps1 (gitignored; never commit the corporate proxy hostname)."
+}
 
 $ErrorActionPreference = "Stop"
 Add-Type -TypeDefinition @'

@@ -1,8 +1,11 @@
 # Corp proxy helpers for npm, Playwright, git, curl, gh, docker pull, etc.
 # Requires git-connect-proxy.ps1 on http://127.0.0.1:18081 (NTLM via DefaultNetworkCredentials).
 
+$localCfg = Join-Path $PSScriptRoot "corp-proxy.local.ps1"
+if (Test-Path $localCfg) { . $localCfg }
+
 $script:CorpConnectProxyUrl = if ($env:TV_CORP_CONNECT_PROXY) { $env:TV_CORP_CONNECT_PROXY } else { "http://127.0.0.1:18081" }
-$script:CorpHttpProxyUrl = if ($env:TV_CORP_HTTP_PROXY) { $env:TV_CORP_HTTP_PROXY } else { "http://proxy.example.internal:8080" }
+$script:CorpHttpProxyUrl = $env:TV_CORP_HTTP_PROXY
 
 function Set-CorpProxyEnv {
   $env:HTTP_PROXY = $script:CorpConnectProxyUrl

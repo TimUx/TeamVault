@@ -378,7 +378,7 @@ Administration → **Zugriff & Proxy**:
 | Feld | Standalone | Hinter Proxy (HTTPS) |
 |------|------------|----------------------|
 | URL-Pfad-Präfix | leer | z. B. `/vault` |
-| Öffentliche URL | optional | z. B. `https://git.example.internal/vault` (für E-Mails/CLI-Hinweise) |
+| Öffentliche URL | optional | z. B. `https://vault.example.com/vault` (für E-Mails/CLI-Hinweise) |
 | Proxy-Header vertrauen | aus | **an** (X-Forwarded-Proto/Host) |
 | X-Forwarded-Prefix | aus | optional, wenn der Proxy den Pfad per Header meldet |
 
@@ -396,7 +396,7 @@ Nützlich, wenn die Einstellung schon vor dem ersten Setup per Compose gesetzt w
 **Caddy (Beispiel Unterpfad):**
 
 ```caddy
-git.example.internal {
+vault.example.com {
     handle /vault/* {
         reverse_proxy teamvault:8080 {
             header_up X-Forwarded-Proto {scheme}
