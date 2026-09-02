@@ -1,6 +1,8 @@
 # Gitea (Mirror-Remote)
 
-TeamVault nutzt **Gitea nur als internes Git-Remote** und für Container-Registry/Releases im Firmennetz. **Keine Gitea Actions** — alle Builds laufen auf GitHub.
+TeamVault nutzt **Gitea nur als internes Git-Remote** und für Container-Registry/Releases im Firmennetz.
+
+**Gitea Actions sind für dieses Repo deaktiviert** (`has_actions: false`). Builds laufen ausschließlich auf **GitHub Actions** (`.github/workflows/`). Die fehlgeschlagenen Gitea-Workflow-Läufe kamen daher, dass Gitea versucht hat, GitHub-Workflows lokal auszuführen.
 
 ## Was auf Gitea liegt
 
@@ -32,6 +34,16 @@ Typischer Ablauf nach Docs-Workflow oder Release:
 1. GitHub Actions auf `main` / neuem Tag abwarten
 2. Lokal: `.\scripts\sync-github-to-gitea.ps1`
 3. Optional: Container-Image und Release-Binaries wie unten
+
+## Releases aufräumen (v1.3.x Patches)
+
+Viele Patch-Tags `v1.3.0`–`v1.3.25` können gelöscht werden; behalten wird nur der aktuelle Stand (z. B. `v1.3.26`):
+
+```powershell
+.\scripts\cleanup-releases.ps1              # Vorschau
+.\scripts\cleanup-releases.ps1 -Apply       # Gitea + GitHub
+.\scripts\cleanup-releases.ps1 -Apply -GitHubOnly   # nur GitHub (wenn Gitea schon bereinigt)
+```
 
 ## Nach jedem Release-Tag (`v*`)
 
