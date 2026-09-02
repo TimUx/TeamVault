@@ -29,6 +29,8 @@ jobs:
   e2e:
     name: Test server, UI smoke & screenshots
     runs-on: ubuntu-latest
+    env:
+      GOFLAGS: -mod=mod
     if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.actor != 'github-actions[bot]')
     steps:
       - name: Checkout

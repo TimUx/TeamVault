@@ -17,6 +17,7 @@ fi
 export TEAMVAULT_ADDR=":${PORT}"
 export TEAMVAULT_DATA_DIR="$DATA"
 export TEAMVAULT_MASTER_UNLOCK_KEY_FILE="$SECRETS/unlock"
+export GOFLAGS="-mod=mod"
 
 echo "Packing client artifacts for screenshots…"
 go run ./cmd/pack-extension

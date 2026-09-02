@@ -23,6 +23,7 @@ if (-not $node) { throw "Node.js nicht gefunden. Bitte Node installieren oder TV
 $env:TEAMVAULT_ADDR = ":$Port"
 $env:TEAMVAULT_DATA_DIR = $Data
 $env:TEAMVAULT_MASTER_UNLOCK_KEY_FILE = Join-Path $Secrets "unlock"
+$env:GOFLAGS = "-mod=mod"
 
 Write-Host "Packing client artifacts for screenshots..."
 go run ./cmd/pack-extension
