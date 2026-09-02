@@ -88,7 +88,7 @@ go run ./cmd/teamvault
 # bzw. ./bin/teamvault nach go build
 ```
 
-Browser: `/setup` — solange `initialized=false`.
+Browser: `/setup` — solange `initialized=false`. Beim ersten Start schreibt die Instanz ein **einmaliges Setup-Token** nach `{data-dir}/setup.token` (Datei 0600) und loggt es auf stderr. Der Wizard und `POST /api/setup/commit` verlangen Header `X-TeamVault-Setup-Token` (oder JSON-Feld `setup_token`). Ohne Token kein Setup-Takeover über den offenen Port (Default `:8080`). Nach erfolgreichem Commit wird die Datei gelöscht.
 
 ### 2.5 Setup-Wizard
 
@@ -96,7 +96,7 @@ Browser: `/setup` — solange `initialized=false`.
 |---------|--------|
 | Willkommen | Kurzinfo Zero-Knowledge |
 | Storage | SQLite (Default) oder JSON-File |
-| Tenant/Admin | Erster Tenant + lokaler Admin (≥12 Zeichen Login-Passwort) |
+| Tenant/Admin | Erster Tenant + lokaler Admin (Login-Passwort: mindestens 16 Zeichen, Groß-/Kleinbuchstaben, Ziffer, Sonderzeichen, keine Umlaute) |
 | Krypto | Argon2id-Parameter (clientseitige Vault-KDF) |
 | Recovery | `user_kit` und/oder Escrow erlaubt |
 | Commit | Atomare Initialisierung |
@@ -142,9 +142,9 @@ Topbar-Theme nutzt flache Inline-SVG-Icons (kein externes Icon-CDN). Jeder Unter
 
 ![User bearbeiten](images/admin-user-edit.png)
 
-- **User anlegen** öffnet ein **Modal** (nicht mehr am Seitenende): Auth-Backend (lokal / LDAP), Username, Anzeigename, E-Mail, ggf. Login-Passwort
+- **User anlegen** öffnet ein **Modal** (nicht mehr am Seitenende): Auth-Backend (lokal / LDAP), Username, Anzeigename, E-Mail; bei **lokal** Login-Passwort (Policy wie Setup-Admin). LDAP-User ohne Passwort in TeamVault.
 - **Ansicht:** Tabelle (Standard), Liste oder Kacheln — Umschalter in der Toolbar
-- **Bearbeiten:** Anzeigename, E-Mail, Rollen (deutsche Bezeichnungen in der UI), für lokale User optional neues Login-Passwort
+- **Bearbeiten:** Anzeigename, E-Mail, Rollen (deutsche Bezeichnungen in der UI); für lokale User optional neues Login-Passwort (gleiche Policy)
 - Status und Auth-Backend mit **deutschen Labels** (z. B. *Aktiv*, *Lokal*, *LDAP/AD*)
 - **LDAP-Verzeichnis** (wenn LDAP aktiv): Verzeichnis durchsuchen und User **vor der ersten Anmeldung importieren** — danach Gruppen zuweisen ohne JIT-Login
 
@@ -175,7 +175,7 @@ Sidebar **Administration → Benutzer & Gruppen → Gruppen**:
 - Gruppe anlegen; **Name** und **Beschreibung** in der Karte bearbeiten (Speichern beim Verlassen des Feldes); **Löschen** mit Bestätigung
 - Rechte/Sharing bleiben über lokale Zuordnung — **keine** LDAP-Gruppen-Autorisierung
 - Secrets können an Gruppen geteilt werden (pro Mitglied eigener Envelope) — siehe User Guide
-- **Neue Gruppenmitglieder:** Bei hinzugefügten Usern (Vault entsperrt) werden bestehende Gruppen-Freigaben clientseitig nachgeteilt; sonst beim nächsten Unlock eines Berechtigten (`GET /api/secrets/group-share-gaps`)
+- **Neue Gruppenmitglieder:** Fehlende Gruppen-Freigaben werden **nicht** still beim Unlock nachgezogen. Ein berechtigter User bestätigt Catch-up inkl. Empfängerliste und TOFU-Fingerprint (`GET /api/secrets/group-share-gaps`). Ohne Bestätigung kein Wrap.
 
 ### 3.4 Zugriff & Proxy
 
@@ -217,6 +217,7 @@ Sidebar **Administration → LDAP**:
 - TLS-Vertrauen über die zentrale Firmen-CA (nicht hier hochladen); Hinweis zeigt, ob eine CA hinterlegt ist
 - **TLS-Zertifikatsfehler ignorieren:** unsichere Notlösung, wenn keine CA hinterlegt werden kann (Hostname und Signatur werden nicht geprüft).
 - Test-Bind (nutzt die aktuellen Formularwerte, auch ungespeicherte), Speichern, LDAP-Sync (fehlende → lokal disabled)
+- **Kein Passwort-Reuse gegen fremde Hosts:** Weicht Host, Port oder Bind-DN vom gespeicherten Tenant-LDAP ab, muss das Bind-Passwort **im Klartext** im Test-Request stehen. Leer oder `***` fällt nicht auf das gespeicherte Passwort zurück. Tenant-LDAP-Save übernimmt nicht das globale Bind-Passwort.
 - **Vorab-Import:** Unter **Benutzer** → Block *LDAP-Verzeichnis* Verzeichnis durchsuchen (`GET /api/admin/ldap/users`) und ausgewählte Accounts importieren (`POST /api/admin/ldap/users/import`) — Gruppenzuweisung ohne vorherigen JIT-Login
 - Just-in-Time bleibt möglich: erster erfolgreicher LDAP-Login legt lokalen User an (`auth_backend=ldap`), falls noch nicht importiert
 
@@ -246,10 +247,11 @@ Sidebar **Administration → Krypto & Policy**:
 
 Wenn Recovery-Modus Escrow erlaubt (Wizard-Schritt Recovery bzw. später umschalten mit Bestätigung `REONBOARD`):
 
-1. In der Admin-UI **Escrow-Keypair + Shares** erzeugen (clientseitig)
+1. In der Admin-UI **Escrow-Keypair + Shares** erzeugen (clientseitig) — nur solange noch kein Pubkey gesetzt ist
 2. Server speichert **nur** den Public Key
 3. Private Shares offline verteilen (`k` von `n`); alternativ `tvcli escrow-split` / `escrow-combine`
 4. Der vollständige Escrow-Private-Key wird **nicht** im DOM belassen — nur Shares (Anzeige + Download)
+5. **Ersetzen** eines bestehenden Escrow-Keys: k Shares eingeben → Server versiegelt eine Zufalls-Challenge an den **aktuellen** Pubkey → Client öffnet die Challenge lokal → neuer Pubkey. Ohne k-aus-n (Tenant-Policy `escrow_shamir_k`, Default 3) kein Austausch.
 
 ![Escrow / Recovery](images/admin-recovery.png)
 
@@ -272,6 +274,7 @@ Der private Escrow-Key darf nie in Logs oder dauerhaft auf dem Server landen.
   | `admin` | `/api/admin/*` — zusätzlich müssen die **User-Rollen** Admin erlauben |
 
 - Cookie-Sessions ohne Scope-Einschränkung. **Legacy-Keys ohne Scopes** (`legacy_no_scopes` in der Key-Liste): nur **read-only** GET-Allowlist — keine Schreib- oder Admin-Aktionen. Key mit expliziten Scopes neu ausstellen und alten Key widerrufen.
+- **Sitzungswiderruf:** Cookie-Sessions des Users werden nach Login-Passwortwechsel/-reset, Rollenänderung und User-Disable gelöscht; Tenant-Disable widerruft alle Sessions des Tenants. Jede Cookie-Session wird zusätzlich gegen aktuellen User-/Tenant-Status geprüft (`disabled` → 401). API-Key-Sessions liegen nicht im Cookie-Store.
 - Nach User-Disable: Secrets mit Envelope dieses Users rotieren (Hinweis + Liste `accessible-secrets` in Admin-UI; kein Auto-Rotate wegen ZK)
 - Tenant-Admins sehen standardmäßig in der Secret-Liste **Metadaten** (IDs, Title-Ciphertext) auch ohne eigenen Envelope — optional einschränkbar über Policy (siehe §3.8)
 
@@ -306,6 +309,8 @@ Unlock-Key nie ins Image legen.
 **Web-App:** Nutzer finden Downloads unter **Konto → Clients**; die Hilfe unter **`/help/cli`** und **`/help/extension`** zeigt dieselben Buttons und Installations-Einzeiler.
 
 **Extension (normal):** Nutzer führen einmal `extension-user.ps1` aus (setzt `ExtensionSettings` + `ExtensionInstallSources` für Chrome/Edge), danach klicken sie auf **Extension installieren**. IT kann stattdessen `extension-policy.ps1` zentral (HKLM/GPO) ausrollen.
+
+Die Chrome-Extension-ID `bmokcifdhcgeeenfpomdpmkccgmgnhhd` ist **verbrannt** (kompromittierter Signierschlüssel). Policy- und Update-XML müssen die **neue** ID aus dem aktuellen `manifest.json` / gepackten CRX verwenden. `.pem`-Signierschlüssel bleiben gitignored und liegen nicht im Extension-Pack-Root.
 
 ![Hilfe Übersicht](images/help.png)
 

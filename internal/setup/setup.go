@@ -39,9 +39,10 @@ type CommitRequest struct {
 		Email       string `json:"email"`
 		Password    string `json:"password"`
 	} `json:"admin"`
-	Argon2 cryptocore.Argon2Params `json:"argon2"`
-	LDAP   json.RawMessage         `json:"ldap,omitempty"`
-	Mail   json.RawMessage         `json:"mail,omitempty"`
+	Argon2     cryptocore.Argon2Params `json:"argon2"`
+	LDAP       json.RawMessage         `json:"ldap,omitempty"`
+	Mail       json.RawMessage         `json:"mail,omitempty"`
+	SetupToken string                  `json:"setup_token,omitempty"`
 }
 
 type CommitResult struct {
@@ -156,8 +157,8 @@ func validate(req CommitRequest) error {
 	if strings.TrimSpace(req.Admin.Username) == "" {
 		return errors.New("admin username required")
 	}
-	if len(req.Admin.Password) < 12 {
-		return errors.New("admin login password must be at least 12 characters")
+	if err := password.ValidateLocal(req.Admin.Password); err != nil {
+		return err
 	}
 	switch req.Tenant.RecoveryMode {
 	case "", "user_kit", "admin_escrow":

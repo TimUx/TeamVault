@@ -44,10 +44,17 @@ type ExtensionInfo struct {
 	InstallSourcesURL string  `json:"install_sources_url,omitempty"`
 }
 
+// IntegrationFeatures controls whether CLI/Extension UI is exposed to end users.
+type IntegrationFeatures struct {
+	CLI              bool `json:"cli"`
+	BrowserExtension bool `json:"browser_extension"`
+}
+
 // Manifest is returned by GET /api/client-downloads.
 type Manifest struct {
-	CLI       []Artifact    `json:"cli"`
-	Extension ExtensionInfo `json:"extension"`
+	Features  IntegrationFeatures `json:"features"`
+	CLI       []Artifact          `json:"cli"`
+	Extension ExtensionInfo       `json:"extension"`
 	Install   struct {
 		CLIWindows        string `json:"cli_windows"`
 		CLIUnix           string `json:"cli_unix"`

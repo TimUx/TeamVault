@@ -28,17 +28,17 @@ func TestTenantAdminCannotAccessPlatformConfig(t *testing.T) {
 	postJSON(t, ts.URL+"/api/setup/commit", map[string]any{
 		"storage": map[string]string{"backend": "sqlite", "dsn": filepath.Join(dir, "v.db")},
 		"tenant":  map[string]any{"name": "T", "slug": "t1", "recovery_mode": "user_kit"},
-		"admin":   map[string]string{"username": "admin", "password": "password1234"},
+		"admin":   map[string]string{"username": "admin", "password": "Password1234!!!!"},
 		"argon2":  argon,
 	}, nil)
 
 	platJar := &cookieJar{m: map[string]string{}}
 	postJSON(t, ts.URL+"/api/auth/login", map[string]string{
-		"tenant_slug": "t1", "username": "admin", "password": "password1234",
+		"tenant_slug": "t1", "username": "admin", "password": "Password1234!!!!",
 	}, platJar)
 
 	postJSONCookie(t, ts.URL+"/api/admin/users", map[string]any{
-		"username": "orgadmin", "password": "password1234!", "auth_backend": "local",
+		"username": "orgadmin", "password": "Password1234!!!!", "auth_backend": "local",
 	}, platJar)
 	users := getJSONListCookie(t, ts.URL+"/api/admin/users", platJar)
 	var orgID string
@@ -56,7 +56,7 @@ func TestTenantAdminCannotAccessPlatformConfig(t *testing.T) {
 
 	orgJar := &cookieJar{m: map[string]string{}}
 	postJSON(t, ts.URL+"/api/auth/login", map[string]string{
-		"tenant_slug": "t1", "username": "orgadmin", "password": "password1234!",
+		"tenant_slug": "t1", "username": "orgadmin", "password": "Password1234!!!!",
 	}, orgJar)
 
 	forbidden := []struct {

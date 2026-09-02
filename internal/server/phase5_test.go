@@ -30,19 +30,19 @@ func TestPhase5UsersGroupsSecretsShareRotate(t *testing.T) {
 	postJSON(t, ts.URL+"/api/setup/commit", map[string]any{
 		"storage": map[string]string{"backend": "sqlite", "dsn": filepath.Join(dir, "v.db")},
 		"tenant":  map[string]any{"name": "T", "slug": "t1", "recovery_mode": "user_kit"},
-		"admin":   map[string]string{"username": "admin", "password": "password1234"},
+		"admin":   map[string]string{"username": "admin", "password": "Password1234!!!!"},
 		"argon2":  argon,
 	}, nil)
 
 	adminJar := &cookieJar{m: map[string]string{}}
 	postJSON(t, ts.URL+"/api/auth/login", map[string]string{
-		"tenant_slug": "t1", "username": "admin", "password": "password1234",
+		"tenant_slug": "t1", "username": "admin", "password": "Password1234!!!!",
 	}, adminJar)
 	adminKP, adminSK := onboardUser(t, ts.URL, adminJar, []byte("admin-master-pw!"), argon)
 
 	// Create second local user
 	created := postJSONCookie(t, ts.URL+"/api/admin/users", map[string]string{
-		"username": "alice", "password": "password1234", "display_name": "Alice",
+		"username": "alice", "password": "Password1234!!!!", "display_name": "Alice",
 	}, adminJar)
 	aliceID, _ := created["id"].(string)
 	if aliceID == "" {
@@ -61,7 +61,7 @@ func TestPhase5UsersGroupsSecretsShareRotate(t *testing.T) {
 
 	aliceJar := &cookieJar{m: map[string]string{}}
 	postJSON(t, ts.URL+"/api/auth/login", map[string]string{
-		"tenant_slug": "t1", "username": "alice", "password": "password1234",
+		"tenant_slug": "t1", "username": "alice", "password": "Password1234!!!!",
 	}, aliceJar)
 	aliceKP, _ := onboardUser(t, ts.URL, aliceJar, []byte("alice-master-pw!"), argon)
 
@@ -186,6 +186,7 @@ func onboardUser(t *testing.T, base string, jar *cookieJar, master []byte, argon
 		"encrypted_private_key_recovery_b64": base64.StdEncoding.EncodeToString(rec.Ciphertext),
 		"recovery_nonce_b64":                 base64.StdEncoding.EncodeToString(rec.Nonce),
 		"recovery_salt_b64":                  base64.StdEncoding.EncodeToString(rec.Salt),
+		"argon2":                             argon,
 	}, jar)
 	return kp, kp.Private[:]
 }
@@ -261,17 +262,17 @@ func TestAdminUserGroupEdit(t *testing.T) {
 	postJSON(t, ts.URL+"/api/setup/commit", map[string]any{
 		"storage": map[string]string{"backend": "sqlite", "dsn": filepath.Join(dir, "v.db")},
 		"tenant":  map[string]any{"name": "T", "slug": "t1", "recovery_mode": "user_kit"},
-		"admin":   map[string]string{"username": "admin", "password": "password1234"},
+		"admin":   map[string]string{"username": "admin", "password": "Password1234!!!!"},
 		"argon2":  argon,
 	}, nil)
 
 	jar := &cookieJar{m: map[string]string{}}
 	postJSON(t, ts.URL+"/api/auth/login", map[string]string{
-		"tenant_slug": "t1", "username": "admin", "password": "password1234",
+		"tenant_slug": "t1", "username": "admin", "password": "Password1234!!!!",
 	}, jar)
 
 	created := postJSONCookie(t, ts.URL+"/api/admin/users", map[string]string{
-		"username": "bob", "password": "password1234", "display_name": "Bob",
+		"username": "bob", "password": "Password1234!!!!", "display_name": "Bob",
 	}, jar)
 	bobID, _ := created["id"].(string)
 

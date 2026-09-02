@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/teamvault/teamvault/internal/auth/passkey"
-	"github.com/teamvault/teamvault/internal/auth/totp"
 	"github.com/teamvault/teamvault/internal/store"
 )
 
@@ -254,9 +253,7 @@ func (a *API) handleWALoginFinish(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if u.TotpEnabled {
-		sec, oerr := a.openTOTP(u.TotpSecretEnc)
-		if oerr != nil || !totp.Validate(body.TOTPCode, sec) {
-			writeErr(w, http.StatusUnauthorized, "invalid totp")
+		if !a.gateTOTPOrIssueToken(w, u, tenant, body.TOTPCode) {
 			return
 		}
 	}
@@ -269,8 +266,11 @@ func (a *API) handleWALoginFinish(w http.ResponseWriter, r *http.Request) {
 		Action: "webauthn.login", ResourceType: "user", ResourceID: string(u.ID), CreatedAt: time.Now().UTC(),
 	})
 	writeJSON(w, http.StatusOK, map[string]any{
-		"username": u.Username, "tenant_id": tenant.ID, "roles": roles,
+		"username": u.Username, "tenant_id": tenant.ID, "tenant_name": tenant.Name, "tenant_slug": tenant.Slug,
+		"roles": roles,
 		"needs_vault_onboard": u.OnboardedAt == nil, "totp_enabled": u.TotpEnabled,
+		"needs_totp_setup": a.bundle().Policy.TOTPRequired && !u.TotpEnabled,
+		"recovery_mode":    tenant.RecoveryMode,
 		"auth": "passkey",
 		"note": "vault unlock still requires master password",
 	})

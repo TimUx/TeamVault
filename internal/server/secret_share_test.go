@@ -28,18 +28,18 @@ func TestSecretSharesPersistedNotInferred(t *testing.T) {
 	postJSON(t, ts.URL+"/api/setup/commit", map[string]any{
 		"storage": map[string]string{"backend": "sqlite", "dsn": filepath.Join(dir, "v.db")},
 		"tenant":  map[string]any{"name": "T", "slug": "t1", "recovery_mode": "user_kit"},
-		"admin":   map[string]string{"username": "admin", "password": "password1234"},
+		"admin":   map[string]string{"username": "admin", "password": "Password1234!!!!"},
 		"argon2":  argon,
 	}, nil)
 
 	adminJar := &cookieJar{m: map[string]string{}}
 	postJSON(t, ts.URL+"/api/auth/login", map[string]string{
-		"tenant_slug": "t1", "username": "admin", "password": "password1234",
+		"tenant_slug": "t1", "username": "admin", "password": "Password1234!!!!",
 	}, adminJar)
 	adminKP, _ := onboardUser(t, ts.URL, adminJar, []byte("admin-master-pw!"), argon)
 
 	created := postJSONCookie(t, ts.URL+"/api/admin/users", map[string]string{
-		"username": "alice", "password": "password1234", "display_name": "Alice",
+		"username": "alice", "password": "Password1234!!!!", "display_name": "Alice",
 	}, adminJar)
 	aliceID, _ := created["id"].(string)
 	grp := postJSONCookie(t, ts.URL+"/api/admin/groups", map[string]string{"name": "Backup"}, adminJar)
@@ -51,7 +51,7 @@ func TestSecretSharesPersistedNotInferred(t *testing.T) {
 
 	aliceJar := &cookieJar{m: map[string]string{}}
 	postJSON(t, ts.URL+"/api/auth/login", map[string]string{
-		"tenant_slug": "t1", "username": "alice", "password": "password1234",
+		"tenant_slug": "t1", "username": "alice", "password": "Password1234!!!!",
 	}, aliceJar)
 	aliceKP, _ := onboardUser(t, ts.URL, aliceJar, []byte("alice-master-pw!"), argon)
 

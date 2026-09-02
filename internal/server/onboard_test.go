@@ -31,13 +31,13 @@ func TestOnboardAndTOTP(t *testing.T) {
 	postJSON(t, ts.URL+"/api/setup/commit", map[string]any{
 		"storage": map[string]string{"backend": "sqlite", "dsn": filepath.Join(dir, "v.db")},
 		"tenant":  map[string]any{"name": "T", "slug": "t1", "recovery_mode": "user_kit"},
-		"admin":   map[string]string{"username": "admin", "password": "password1234"},
+		"admin":   map[string]string{"username": "admin", "password": "Password1234!!!!"},
 		"argon2":  map[string]any{"Time": 1, "Memory": 8192, "Threads": 1, "KeyLen": 32},
 	}, nil)
 
 	jar := &cookieJar{m: map[string]string{}}
 	postJSON(t, ts.URL+"/api/auth/login", map[string]string{
-		"tenant_slug": "t1", "username": "admin", "password": "password1234",
+		"tenant_slug": "t1", "username": "admin", "password": "Password1234!!!!",
 	}, jar)
 
 	// Simulate client onboarding with Go cryptocore
@@ -59,6 +59,7 @@ func TestOnboardAndTOTP(t *testing.T) {
 		"encrypted_private_key_recovery_b64": base64.StdEncoding.EncodeToString(rec.Ciphertext),
 		"recovery_nonce_b64":                 base64.StdEncoding.EncodeToString(rec.Nonce),
 		"recovery_salt_b64":                  base64.StdEncoding.EncodeToString(rec.Salt),
+		"argon2":                             map[string]any{"Time": 1, "Memory": 8192, "Threads": 1, "KeyLen": 32},
 	}, jar)
 
 	me := getJSONCookie(t, ts.URL+"/api/me", jar)
@@ -90,6 +91,13 @@ func TestOnboardAndTOTP(t *testing.T) {
 	keys := getJSONCookie(t, ts.URL+"/api/vault/keys", jar)
 	if keys["public_key_b64"] == "" {
 		t.Fatal(keys)
+	}
+	if keys["kdf_params_stored"] != true {
+		t.Fatalf("expected stored kdf params, got %#v", keys["kdf_params_stored"])
+	}
+	argonOut, _ := keys["argon2"].(map[string]any)
+	if argonOut == nil {
+		t.Fatalf("keys missing argon2: %#v", keys)
 	}
 	ts.Close()
 	_ = app.Vault.Close()

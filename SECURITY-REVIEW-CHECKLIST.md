@@ -4,13 +4,14 @@ Vor dem Betrieb mit echten Zugangsdaten: externes Audit + internes Walkthrough g
 
 ## Zero-Knowledge & Crypto
 
-- [x] Server-/DB-Dumps enthalten keine Vault-Klartexte, Master-Passwörter oder Private Keys
+- [x] Server-/DB-Dumps enthalten keine Vault-Klartexte, Master-Passwörter oder Private Keys (ZK gegen Storage, nicht gegen ausgeliefertes JS — `crypto-design.md` §8 / OQ-22)
 - [x] Client-Crypto nur WebCrypto / libsodium (NaCl); keine eigenen Primitive
-- [x] Argon2id für Vault-Master-Passwort; Login-Hash getrennt (Argon2id)
+- [x] Argon2id für Vault-Master-Passwort; Login-Hash getrennt (Argon2id); KDF-Params am User-Key-Blob
 - [x] Secret-Titel clientseitig verschlüsselt; Suche nur clientseitig
 - [x] Sharing: pro Empfänger eigene Envelope; kein Gruppen-Passwort
-- [x] Rechteentzug erzwingt DK-Rotation; alte Key-Versionen ungültig
-- [x] Escrow-Private-Key nie serverseitig gespeichert; Share-Split offline (Shamir k/n)
+- [x] Rechteentzug erzwingt DK-Rotation; Gruppen-Mitglied-Remove löscht Envelopes und verlangt Client-Rotation
+- [x] Escrow-Private-Key nie serverseitig gespeichert; Share-Split offline; Pubkey-Replace nur nach k-aus-n Challenge
+- [x] Gruppen-Catch-up nicht still beim Unlock; TOFU-Fingerprint vor Wrap
 
 ## Auth & Sessions
 
@@ -19,8 +20,8 @@ Vor dem Betrieb mit echten Zugangsdaten: externes Audit + internes Walkthrough g
 - [x] TOTP-Secrets at-rest nur als undurchsichtige Blobs; Codes nicht geloggt
 - [x] Session-Cookies HttpOnly; Idle-/Session-Timeouts konfiguriert (OQ-17)
 - [x] Onboarding-Gate: ohne Vault-Keys kein Secret-Zugriff
-- [x] API-Key Scope `read` blockiert Admin/Mutationen; Legacy-Keys ohne Scopes nur read-only GET
-- [x] Secret-Create atomar + `secret.create` im Audit; fail-hard bei Audit-Fehler
+- [x] API-Key Scope `read` blockiert Admin/Mutationen; `vault` nur Secret-/Vault-Mutationen; alle API-Keys von TOTP/WebAuthn/Passwort-Wechsel ausgeschlossen; Legacy-Keys ohne Scopes nur read-only GET
+- [x] Secret-Create/Rotate/Share/Share-Group/Member-Remove: Mutation + Audit in derselben Transaktion; fail-hard bei Audit-Fehler
 - [x] Optional: Admin-List nur Secrets mit eigenem Envelope (`admin_secrets_envelope_only`)
 - [x] Delete/Share nur mit gültigem Envelope; Share-Empfänger onboarded im Tenant
 
@@ -53,7 +54,7 @@ Vor dem Betrieb mit echten Zugangsdaten: externes Audit + internes Walkthrough g
 - [x] Keine Secrets in `localStorage` / URL / Analytics
 - [x] CSP und Trusted Types soweit praktikabel
 - [x] Escrow-Gen: kein voller SK im DOM; Shares + Download
-- [x] Extension Fill/Copy nur bei Host-Match
+- [x] Extension Fill/Copy nur bei voller Origin (Scheme+Host+Port); Abbruch nach Navigation
 - [x] Skip-Link, `aria-live` für Status/Fehler, Lock-Dialog mit Escape
 
 ## Dokumentation

@@ -20,5 +20,10 @@ func (a *API) handleClientDownloads(w http.ResponseWriter, r *http.Request) {
 	}
 	dir := filepath.Join(a.App.DataDir, "downloads")
 	m := clients.BuildManifest(dir, a.effectivePublicURL(r))
+	p := a.bundle().Policy
+	m.Features = clients.IntegrationFeatures{
+		CLI:              p.ShowCLIIntegration(),
+		BrowserExtension: p.ShowBrowserIntegration(),
+	}
 	writeJSON(w, http.StatusOK, m)
 }

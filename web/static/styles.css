@@ -609,6 +609,10 @@ h1 .heading-ico,
   fill: currentColor;
   stroke: currentColor;
 }
+.fav-toggle .fav-ico { opacity: 0.35; }
+.fav-toggle.is-fav .fav-ico { opacity: 1; color: var(--color-accent); }
+.fav-toggle:hover .fav-ico { opacity: 0.85; }
+.fav-toggle.is-fav:hover .fav-ico { color: var(--color-accent); }
 
 .about-foot {
   text-align: center;
@@ -1130,6 +1134,8 @@ body.admin-modal-open { overflow: hidden; }
 .toolbar > * { flex: 1 1 140px; min-width: 0; }
 .toolbar label { margin-top: 0; }
 .secrets-view-wrap { flex: 0 0 auto; }
+.secrets-sort-wrap { flex: 0 0 auto; min-width: 9rem; }
+.secrets-sort-select { width: 100%; max-width: 12rem; }
 .secrets-view-toggle {
   display: inline-flex;
   gap: 0.25rem;
@@ -1179,7 +1185,29 @@ body.admin-modal-open { overflow: hidden; }
 .secrets-table .st-share { width: 2.5rem; text-align: center; }
 .secrets-table .st-copy { width: auto; white-space: nowrap; }
 .secrets-table .st-act { text-align: right; white-space: nowrap; }
-.secrets-table .st-fav .fav-ico { width: 0.95rem; height: 0.95rem; color: var(--color-accent); }
+.secrets-table .st-fav { width: 2.25rem; text-align: center; }
+.secrets-table .st-fav .fav-ico { width: 0.95rem; height: 0.95rem; }
+.secrets-table tr.secrets-group-row td {
+  padding: 0.65rem 0.5rem 0.35rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-hint);
+  border-bottom: none;
+  background: transparent;
+}
+.secrets-group-head {
+  margin: 0.85rem 0 0.35rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-hint);
+}
+.secrets-group-head:first-child { margin-top: 0.15rem; }
+.secrets-tiles-wrap .secrets-group-head { padding: 0 0.15rem; }
+.list-row-fav, .secret-tile-fav { display: inline-flex; flex: 0 0 auto; }
 
 .share-badge {
   display: inline-flex;
@@ -1455,6 +1483,36 @@ body.admin-modal-open { overflow: hidden; }
   width: fit-content;
 }
 .totp-qr-wrap svg { display: block; }
+
+.totp-digit-row {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+  margin: 1rem 0 1.25rem;
+}
+.totp-digit {
+  width: 2.75rem;
+  height: 3rem;
+  padding: 0;
+  text-align: center;
+  font-size: 1.35rem;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  letter-spacing: 0.05em;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+}
+.totp-digit:focus {
+  outline: none;
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-accent) 25%, transparent);
+}
+.login-step-title {
+  margin: 0 0 0.75rem;
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
 @media (max-width: 720px) {
   .totp-setup-grid { grid-template-columns: 1fr; }
   .panel-tabs { gap: 0.25rem; }

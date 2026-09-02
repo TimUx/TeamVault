@@ -42,16 +42,32 @@ if (-not $Apply) {
 . (Join-Path $PSScriptRoot "corp-proxy-env.ps1")
 Start-CorpConnectProxyIfNeeded
 $proxy = $script:CorpConnectProxyUrl
-$gitCurl = "C:\Users\tbrau\AppData\Local\Programs\Git\mingw64\bin\curl.exe"
-try {
-  & $gitCurl -fsSL --max-time 20 --proxy $proxy "https://api.github.com/zen" | Out-Null
-} catch {
-  Write-Warning "GitHub API not reachable via proxy - release delete may fail; tag batch push will still be attempted."
+$gitCurl = $null
+$curlCmd = Get-Command curl.exe -ErrorAction SilentlyContinue
+if ($curlCmd) {
+  $gitCurl = $curlCmd.Source
+} else {
+  $gitRoot = (& git --exec-path 2>$null)
+  if ($gitRoot) {
+    $candidate = Join-Path (Split-Path (Split-Path $gitRoot)) "mingw64\bin\curl.exe"
+    if (Test-Path $candidate) { $gitCurl = $candidate }
+  }
+}
+if (-not $gitCurl) {
+  Write-Warning "curl.exe not found on PATH — GitHub API release delete may fail; tag batch push will still be attempted."
+}
+if ($gitCurl) {
+  try {
+    & $gitCurl -fsSL --max-time 20 --proxy $proxy "https://api.github.com/zen" | Out-Null
+  } catch {
+    Write-Warning "GitHub API not reachable via proxy - release delete may fail; tag batch push will still be attempted."
+  }
 }
 
 $ghH = Get-BasicAuthHeader "github.com"
 $ghAuth = $ghH.Authorization
 $page = 1
+if ($gitCurl) {
 do {
   $ghUrl = "https://api.github.com/repos/TimUx/TeamVault/releases?per_page=100" + "&page=$page"
   $json = & $gitCurl -fsSL --max-time 60 --proxy $proxy -H "Authorization: $ghAuth" -H "Accept: application/vnd.github+json" $ghUrl
@@ -64,6 +80,7 @@ do {
   }
   $page++
 } while ($rels.Count -eq 100)
+}
 
 $delRefs = $tagsToDrop | ForEach-Object { ":refs/tags/$_" }
 Write-Host "GitHub: batch delete $($delRefs.Count) tags..."

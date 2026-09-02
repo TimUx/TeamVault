@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"time"
 )
 
@@ -45,6 +46,7 @@ type UserRecord struct {
 	TotpSecretEnc               []byte // server-at-rest sealed TOTP secret (config-key later; Phase4: opaque blob)
 	TotpEnabled                 bool
 	OnboardedAt                 *time.Time
+	KdfParamsJSON               string // Argon2id params used to seal EncryptedPrivateKey
 	CreatedAt                   time.Time
 	UpdatedAt                   time.Time
 }
@@ -87,15 +89,15 @@ func NormalizeVisibility(v SecretVisibility) SecretVisibility {
 
 // SecretMeta holds non-decryptable identifiers. Title is ciphertext (OQ-12).
 type SecretMeta struct {
-	ID               SecretID
-	TenantID         TenantID
-	CollectionID     string
-	TitleCiphertext  []byte
-	TitleNonce       []byte
-	CreatedBy        UserID
-	Visibility       SecretVisibility // private = nur unter „Meine Secrets“; shared = nur unter „Geteilt“
-	CreatedAt        time.Time
-	UpdatedAt        time.Time
+	ID              SecretID
+	TenantID        TenantID
+	CollectionID    string
+	TitleCiphertext []byte
+	TitleNonce      []byte
+	CreatedBy       UserID
+	Visibility      SecretVisibility // private = nur unter „Meine Secrets“; shared = nur unter „Geteilt“
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
 }
 
 type CiphertextBlob struct {
@@ -178,11 +180,11 @@ const (
 
 // StoreSnapshot is a backend-neutral export (JSON + base64 blobs in records).
 type StoreSnapshot struct {
-	FormatVersion int             `json:"format_version"`
-	ExportedAt    time.Time       `json:"exported_at"`
-	TenantFilter  *TenantID       `json:"tenant_filter,omitempty"`
-	Records       json.RawMessage `json:"records"`
-	ChecksumSHA256 string         `json:"checksum_sha256"`
+	FormatVersion  int             `json:"format_version"`
+	ExportedAt     time.Time       `json:"exported_at"`
+	TenantFilter   *TenantID       `json:"tenant_filter,omitempty"`
+	Records        json.RawMessage `json:"records"`
+	ChecksumSHA256 string          `json:"checksum_sha256"`
 }
 
 var (
@@ -190,7 +192,22 @@ var (
 	ErrTenantRequired  = errors.New("tenant_id required")
 	ErrConflict        = errors.New("conflict")
 	ErrRevokedEnvelope = errors.New("cannot revive revoked envelope")
+	ErrAuditInvalid    = errors.New("invalid audit event")
 )
+
+// ValidateAudit returns nil if e is nil (optional) or a complete event.
+func ValidateAudit(e *AuditEvent) error {
+	if e == nil {
+		return nil
+	}
+	if e.TenantID == "" {
+		return ErrTenantRequired
+	}
+	if strings.TrimSpace(e.ID) == "" || strings.TrimSpace(e.Action) == "" {
+		return ErrAuditInvalid
+	}
+	return nil
+}
 
 // VaultStore is implemented by SQLite (Phase 1), later Postgres and JSON.
 type VaultStore interface {
@@ -228,16 +245,25 @@ type VaultStore interface {
 	GetSecretCiphertext(ctx context.Context, tenant TenantID, id SecretID) (*CiphertextBlob, error)
 
 	PutKeyEnvelope(ctx context.Context, env KeyEnvelope) error
+	// DeleteKeyEnvelope revokes all envelope versions for user on a secret.
+	DeleteKeyEnvelope(ctx context.Context, tenant TenantID, secret SecretID, user UserID) error
 	ListKeyEnvelopes(ctx context.Context, tenant TenantID, secret SecretID) ([]KeyEnvelope, error)
 	// ListKeyEnvelopesByTenant returns all non-revoked envelopes for the tenant (list-path batching).
 	ListKeyEnvelopesByTenant(ctx context.Context, tenant TenantID) ([]KeyEnvelope, error)
 	InvalidateKeyVersion(ctx context.Context, tenant TenantID, secret SecretID, version uint32) error
 	// ListSecretKeyVersions returns current ciphertext key_version per secret in the tenant.
 	ListSecretKeyVersions(ctx context.Context, tenant TenantID) (map[SecretID]uint32, error)
-	// RotateSecret atomically invalidates oldKeyVersion, updates meta+ciphertext, and writes envelopes.
-	RotateSecret(ctx context.Context, tenant TenantID, id SecretID, oldKeyVersion uint32, meta SecretMeta, blob CiphertextBlob, envelopes []KeyEnvelope) error
-	// CreateSecret atomically writes meta, ciphertext, and initial envelopes.
-	CreateSecret(ctx context.Context, meta SecretMeta, blob CiphertextBlob, envelopes []KeyEnvelope) error
+	// RotateSecret atomically invalidates oldKeyVersion, updates meta+ciphertext, writes envelopes, and the optional audit event.
+	RotateSecret(ctx context.Context, tenant TenantID, id SecretID, oldKeyVersion uint32, meta SecretMeta, blob CiphertextBlob, envelopes []KeyEnvelope, audit *AuditEvent) error
+	// CreateSecret atomically writes meta, ciphertext, initial envelopes, and the optional audit event.
+	CreateSecret(ctx context.Context, meta SecretMeta, blob CiphertextBlob, envelopes []KeyEnvelope, audit *AuditEvent) error
+	// ShareSecret writes envelopes, optional direct-share rows, and audit in one transaction.
+	ShareSecret(ctx context.Context, envelopes []KeyEnvelope, directs []SecretDirectShare, audit *AuditEvent) error
+	// ShareSecretGroup writes envelopes, the group-share row, and audit in one transaction.
+	ShareSecretGroup(ctx context.Context, envelopes []KeyEnvelope, group SecretGroupShare, audit *AuditEvent) error
+	// RemoveGroupMemberWithRevoke drops membership, revokes envelopes on group-shared secrets
+	// (unless a direct share remains), and writes audit atomically. Returned IDs need client-side DK rotation.
+	RemoveGroupMemberWithRevoke(ctx context.Context, tenant TenantID, group GroupID, user UserID, audit *AuditEvent) (rotateIDs []SecretID, err error)
 
 	PutSecretDirectShare(ctx context.Context, share SecretDirectShare) error
 	DeleteSecretDirectShare(ctx context.Context, tenant TenantID, secret SecretID, user UserID) error

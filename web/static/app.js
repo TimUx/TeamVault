@@ -4,6 +4,7 @@ const state = {
     storage: { backend: "sqlite", dsn: "" },
     tenant: { name: "", slug: "", recovery_mode: "user_kit", escrow_allowed: false },
     admin: { username: "admin", display_name: "", email: "", password: "", password2: "" },
+    setup_token: "",
     argon2: { Time: 3, Memory: 65536, Threads: 1, KeyLen: 32 },
   },
 };
@@ -30,6 +31,30 @@ function formatUserStatus(status) {
 function formatAuthBackend(backend) {
   const labels = { local: "Lokal", ldap: "LDAP" };
   return labels[backend] || backend;
+}
+
+const PASSWORD_POLICY = "mindestens 16 Zeichen, Groß- und Kleinbuchstaben, Ziffer, Sonderzeichen, keine Umlaute";
+
+function passwordPolicyError(pw, kind) {
+  const label = kind || "Passwort";
+  if (typeof pw !== "string" || pw.length < 16) {
+    return label + ": " + PASSWORD_POLICY + ".";
+  }
+  if (/[äöüÄÖÜß]/.test(pw) || /[^\x21-\x7E]/.test(pw)) {
+    return label + ": keine Umlaute und nur ASCII-Zeichen ohne Leerzeichen.";
+  }
+  if (!/[A-Z]/.test(pw) || !/[a-z]/.test(pw) || !/[0-9]/.test(pw) || !/[^A-Za-z0-9]/.test(pw)) {
+    return label + ": " + PASSWORD_POLICY + ".";
+  }
+  return "";
+}
+
+function masterPasswordError(pw) {
+  return passwordPolicyError(pw, "Master-Passwort");
+}
+
+function localLoginPasswordError(pw) {
+  return passwordPolicyError(pw, "Login-Passwort");
 }
 
 function tvBaseFromPath() {
@@ -76,10 +101,11 @@ function tvGo(path) {
 }
 
 async function api(path, opts = {}) {
+  const { headers: extraHeaders, ...rest } = opts;
   const res = await fetch(tvPath(path), {
-    headers: { "Content-Type": "application/json", ...(opts.headers || {}) },
     credentials: "same-origin",
-    ...opts,
+    ...rest,
+    headers: { "Content-Type": "application/json", ...(extraHeaders || {}) },
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || res.statusText);
@@ -185,8 +211,7 @@ function hintBox(bodyHtml, opts = {}) {
 function setHintBox(el, html) {
   if (!el) return;
   const body = el.querySelector(".hint-box-body") || el;
-  if (String(html).includes("<")) body.innerHTML = html;
-  else body.textContent = html;
+  body.textContent = String(html == null ? "" : html).replace(/<[^>]*>/g, "");
 }
 
 function navLink(nav, icoName, label, extraClass, attrs) {
@@ -569,7 +594,7 @@ function stepView(repaint) {
       <label>Admin-Username</label><input id="user" />
       <label>Anzeigename</label><input id="disp" />
       <label>E-Mail</label><input id="email" type="email" />
-      <label>Login-Passwort (≥12)</label><input id="pw" type="password" />
+      <label>Login-Passwort (${PASSWORD_POLICY})</label><input id="pw" type="password" minlength="16" />
       <label>Passwort wiederholen</label><input id="pw2" type="password" />
       <div class="error" id="err" hidden></div>
       <div class="row">
@@ -593,7 +618,8 @@ function stepView(repaint) {
       d.admin.password2 = n.querySelector("#pw2").value;
       const err = n.querySelector("#err");
       if (d.admin.password !== d.admin.password2) { err.hidden = false; err.textContent = "Passwörter stimmen nicht überein"; return; }
-      if (d.admin.password.length < 12) { err.hidden = false; err.textContent = "Passwort zu kurz"; return; }
+      const pwErr = localLoginPasswordError(d.admin.password);
+      if (pwErr) { err.hidden = false; err.textContent = pwErr; return; }
       state.step = 3; repaint();
     };
     return n;
@@ -650,8 +676,10 @@ function stepView(repaint) {
   // commit
   const n = el(`<div>
     <h1>Review & Commit</h1>
-    ${hintBox("Atomarer Commit — danach ist das System initialisiert.")}
+    ${hintBox("Atomarer Commit — danach ist das System initialisiert. Das Setup-Token steht in der Server-Konsole und in der Datei setup.token im Datenverzeichnis.")}
     <pre class="hint" id="sum"></pre>
+    <label>Setup-Token</label>
+    <input id="setup_token" type="password" autocomplete="off" />
     <div class="error" id="err" hidden></div>
     <div class="ok" id="ok" hidden></div>
     <div class="row">
@@ -662,11 +690,14 @@ function stepView(repaint) {
   n.querySelector("#sum").textContent = JSON.stringify({
     storage: d.storage, tenant: { ...d.tenant }, admin: { username: d.admin.username, email: d.admin.email }, argon2: d.argon2,
   }, null, 2);
+  n.querySelector("#setup_token").value = d.setup_token || "";
   n.querySelector("[data-b]").onclick = () => { state.step = 4; repaint(); };
   n.querySelector("[data-n]").onclick = async () => {
     const err = n.querySelector("#err");
     const ok = n.querySelector("#ok");
     err.hidden = true; ok.hidden = true;
+    d.setup_token = (n.querySelector("#setup_token").value || "").trim();
+    if (!d.setup_token) { err.hidden = false; err.textContent = "Setup-Token fehlt (Server-Konsole / setup.token)"; return; }
     try {
       const body = {
         storage: d.storage,
@@ -674,7 +705,11 @@ function stepView(repaint) {
         admin: { username: d.admin.username, display_name: d.admin.display_name, email: d.admin.email, password: d.admin.password },
         argon2: d.argon2,
       };
-      const res = await api("/api/setup/commit", { method: "POST", body: JSON.stringify(body) });
+      const res = await api("/api/setup/commit", {
+        method: "POST",
+        headers: { "X-TeamVault-Setup-Token": d.setup_token },
+        body: JSON.stringify(body),
+      });
       ok.hidden = false;
       ok.textContent = `OK — Tenant ${res.tenant_id}. Weiter zum Login…`;
       setTimeout(() => { tvGo("/login"); }, 800);
@@ -686,31 +721,132 @@ function stepView(repaint) {
   return n;
 }
 
+function totpDigitRowHTML(idPrefix = "totpD") {
+  const inputs = Array.from({ length: 6 }, (_, i) =>
+    `<input class="totp-digit" id="${idPrefix}${i}" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1"${i === 0 ? ' autocomplete="one-time-code"' : ' autocomplete="off"'} aria-label="TOTP Ziffer ${i + 1}" />`
+  ).join("");
+  return `<div class="totp-digit-row" data-totp-row="${idPrefix}">${inputs}</div>`;
+}
+
+function bindTotpDigitInputs(rowEl, opts = {}) {
+  const inputs = [...rowEl.querySelectorAll(".totp-digit")];
+  function readCode() {
+    return inputs.map((inp) => inp.value.replace(/\D/g, "").slice(-1)).join("");
+  }
+  function clear() {
+    inputs.forEach((inp) => { inp.value = ""; });
+    inputs[0]?.focus();
+  }
+  inputs.forEach((inp, idx) => {
+    inp.addEventListener("input", () => {
+      const v = inp.value.replace(/\D/g, "");
+      inp.value = v.slice(-1);
+      if (inp.value && idx < inputs.length - 1) inputs[idx + 1].focus();
+      if (readCode().length === 6 && typeof opts.onComplete === "function") opts.onComplete(readCode());
+    });
+    inp.addEventListener("keydown", (ev) => {
+      if (ev.key === "Backspace" && !inp.value && idx > 0) {
+        inputs[idx - 1].focus();
+        inputs[idx - 1].value = "";
+      }
+      if (ev.key === "ArrowLeft" && idx > 0) inputs[idx - 1].focus();
+      if (ev.key === "ArrowRight" && idx < inputs.length - 1) inputs[idx + 1].focus();
+      if (ev.key === "Enter" && typeof opts.onEnter === "function") opts.onEnter(readCode());
+    });
+    inp.addEventListener("paste", (ev) => {
+      ev.preventDefault();
+      const text = (ev.clipboardData?.getData("text") || "").replace(/\D/g, "").slice(0, 6);
+      text.split("").forEach((ch, i) => { if (inputs[i]) inputs[i].value = ch; });
+      const next = Math.min(text.length, inputs.length - 1);
+      inputs[next]?.focus();
+      if (text.length >= 6 && typeof opts.onComplete === "function") opts.onComplete(readCode());
+    });
+  });
+  return { readCode, clear, focusFirst: () => inputs[0]?.focus() };
+}
+
 function renderLogin(app) {
   const n = el(`<div class="panel">
     <h1>Login</h1>
-    ${hintBox("Login-Passwort oder Passkey. Zum Entschlüsseln des Vaults brauchen Sie weiterhin Ihr Master-Passwort.")}
-    <label>Organisation</label>
-    <select id="slug" autocomplete="organization" disabled>
-      <option value="">Lade Organisationen…</option>
-    </select>
-    ${hintBox("Bestehende Mandanten — Auswahl für diesen Login.")}
-    <label>Username</label><input id="user" autocomplete="username" />
-    <label>Passwort</label><input id="pw" type="password" autocomplete="current-password" />
-    <label>TOTP (falls aktiv)</label><input id="totp" inputmode="numeric" autocomplete="one-time-code" />
-    <div class="error" id="err" hidden></div>
-    <div class="row">
-      <button class="btn-accent" type="button" id="doLogin">Anmelden</button>
-      <button class="btn-ghost" type="button" id="doPasskey">Passkey</button>
+    <div id="loginStep1">
+      ${hintBox("Login-Passwort oder Passkey. Zum Entschlüsseln des Vaults brauchen Sie weiterhin Ihr Master-Passwort.")}
+      <label>Organisation</label>
+      <select id="slug" autocomplete="organization" disabled>
+        <option value="">Lade Organisationen…</option>
+      </select>
+      ${hintBox("Bestehende Mandanten — Auswahl für diesen Login.")}
+      <label>Username</label><input id="user" autocomplete="username" />
+      <label>Passwort</label><input id="pw" type="password" autocomplete="current-password" />
+      <div class="error login-err" hidden></div>
+      <div class="row">
+        <button class="btn-accent" type="button" id="doLogin">Anmelden</button>
+        <button class="btn-ghost" type="button" id="doPasskey">Passkey</button>
+      </div>
+      <div id="offlineLogin" class="offline-login" hidden>
+        <hr />
+        ${hintBox("Ohne Netzwerk: gespeicherte verschlüsselte Kopie mit Master-Passwort entsperren (kein Login, kein TOTP).")}
+        <p class="error" id="offlineExpired" hidden role="alert"></p>
+        <button class="btn-ghost btn-with-ico" type="button" id="doOffline">${btnLabel("unlock", "Offline entsperren")}</button>
+      </div>
     </div>
-    <div id="offlineLogin" class="offline-login" hidden>
-      <hr />
-      ${hintBox("Ohne Netzwerk: gespeicherte verschlüsselte Kopie mit Master-Passwort entsperren (kein Login, kein TOTP).")}
-      <p class="error" id="offlineExpired" hidden role="alert"></p>
-      <button class="btn-ghost btn-with-ico" type="button" id="doOffline">${btnLabel("unlock", "Offline entsperren")}</button>
+    <div id="loginStep2" hidden>
+      <p class="login-step-title">Zwei-Faktor-Authentifizierung</p>
+      ${hintBox("Geben Sie den 6-stelligen Code aus Ihrer Authenticator-App ein.")}
+      ${totpDigitRowHTML("loginTotp")}
+      <div class="error login-err" hidden></div>
+      <div class="row">
+        <button class="btn-accent" type="button" id="doTotpLogin">Bestätigen</button>
+        <button class="btn-ghost" type="button" id="totpBack">Zurück</button>
+      </div>
     </div>
   </div>`);
   const slugSel = n.querySelector("#slug");
+  const step1 = n.querySelector("#loginStep1");
+  const step2 = n.querySelector("#loginStep2");
+  let pendingLoginToken = "";
+  const totpCtrl = bindTotpDigitInputs(n.querySelector("#loginTotp0").closest(".totp-digit-row"), {
+    onComplete: () => n.querySelector("#doTotpLogin")?.click(),
+    onEnter: () => n.querySelector("#doTotpLogin")?.click(),
+  });
+
+  function setLoginErr(msg) {
+    n.querySelectorAll(".login-err").forEach((el) => {
+      if (msg) {
+        el.hidden = false;
+        el.textContent = msg;
+      } else {
+        el.hidden = true;
+        el.textContent = "";
+      }
+    });
+  }
+
+  function showTotpStep(token) {
+    pendingLoginToken = token;
+    step1.hidden = true;
+    step2.hidden = false;
+    setLoginErr("");
+    totpCtrl.clear();
+  }
+
+  function showStep1() {
+    pendingLoginToken = "";
+    step2.hidden = true;
+    step1.hidden = false;
+    setLoginErr("");
+    totpCtrl.clear();
+  }
+
+  async function finishAuth(res, tenantSlug) {
+    if (res.needs_totp && res.login_token) {
+      showTotpStep(res.login_token);
+      return;
+    }
+    if (tenantSlug) {
+      try { localStorage.setItem("tv-tenant-slug", tenantSlug); } catch (_) {}
+    }
+    tvGo(res.needs_vault_onboard ? "/onboard" : "/app");
+  }
   (async () => {
     try {
       const tenants = await api("/api/auth/tenants");
@@ -736,8 +872,7 @@ function renderLogin(app) {
     }
   })();
   n.querySelector("#doLogin").onclick = async () => {
-    const err = n.querySelector("#err");
-    err.hidden = true;
+    setLoginErr("");
     try {
       const tenantSlug = slugSel.value.trim();
       if (!tenantSlug) throw new Error("Bitte Organisation wählen");
@@ -747,23 +882,20 @@ function renderLogin(app) {
           tenant_slug: tenantSlug,
           username: n.querySelector("#user").value.trim(),
           password: n.querySelector("#pw").value,
-          totp_code: n.querySelector("#totp").value.trim(),
         }),
       });
-      try { localStorage.setItem("tv-tenant-slug", tenantSlug); } catch (_) {}
-      tvGo(res.needs_vault_onboard ? "/onboard" : "/app");
+      await finishAuth(res, tenantSlug);
     } catch (e) {
-      err.hidden = false; err.textContent = e.message;
+      setLoginErr(e.message);
     }
   };
-  ["#pw", "#totp", "#user", "#slug"].forEach((sel) => {
+  ["#pw", "#user", "#slug"].forEach((sel) => {
     n.querySelector(sel).addEventListener("keydown", (ev) => {
       if (ev.key === "Enter") n.querySelector("#doLogin").click();
     });
   });
   n.querySelector("#doPasskey").onclick = async () => {
-    const err = n.querySelector("#err");
-    err.hidden = true;
+    setLoginErr("");
     try {
       if (!window.PublicKeyCredential) throw new Error("Passkeys werden von diesem Browser nicht unterstützt");
       const tenant = slugSel.value.trim();
@@ -783,15 +915,30 @@ function renderLogin(app) {
           username,
           challenge_key: begin.challenge_key,
           credential: credentialToJSON(cred),
-          totp_code: n.querySelector("#totp").value.trim(),
         }),
       });
-      try { localStorage.setItem("tv-tenant-slug", tenant); } catch (_) {}
-      tvGo(res.needs_vault_onboard ? "/onboard" : "/app");
+      await finishAuth(res, tenant);
     } catch (e) {
-      err.hidden = false; err.textContent = e.message;
+      setLoginErr(e.message);
     }
   };
+  n.querySelector("#doTotpLogin").onclick = async () => {
+    setLoginErr("");
+    try {
+      const code = totpCtrl.readCode();
+      if (code.length !== 6) throw new Error("Bitte 6-stelligen TOTP-Code eingeben");
+      if (!pendingLoginToken) throw new Error("Anmeldung abgelaufen — bitte erneut anmelden");
+      const res = await api("/api/auth/login", {
+        method: "POST",
+        body: JSON.stringify({ login_token: pendingLoginToken, totp_code: code }),
+      });
+      await finishAuth(res, slugSel.value.trim());
+    } catch (e) {
+      setLoginErr(e.message);
+      totpCtrl.clear();
+    }
+  };
+  n.querySelector("#totpBack").onclick = showStep1;
   (async () => {
     if (!window.TVOfflineStore?.isAvailable()) return;
     try {
@@ -904,11 +1051,11 @@ function renderOnboard(app) {
     setStepper(1, false);
     panel.innerHTML = `
       <h1>Vault-Onboarding</h1>
-      ${hintBox("Legen Sie Ihr persönliches Master-Passwort fest. Es wird nur im Browser verwendet (Zero-Knowledge) — der Server sieht es nie.")}
-      <label>Master-Passwort (≥12 Zeichen)</label>
-      <input id="mpw" type="password" autocomplete="new-password" />
+      ${hintBox("Legen Sie Ihr persönliches Master-Passwort fest. Es wird nur im Browser verwendet (Zero-Knowledge) — der Server sieht es nie. Anforderungen: " + PASSWORD_POLICY + ".")}
+      <label>Master-Passwort (${PASSWORD_POLICY})</label>
+      <input id="mpw" type="password" autocomplete="new-password" minlength="16" />
       <label>Wiederholen</label>
-      <input id="mpw2" type="password" autocomplete="new-password" />
+      <input id="mpw2" type="password" autocomplete="new-password" minlength="16" />
       <div class="error" id="err" hidden></div>
       <div class="row onboard-actions">
         <button class="btn-accent" type="button" id="doOnboard">Schlüssel erzeugen</button>
@@ -924,9 +1071,15 @@ function renderOnboard(app) {
     err.hidden = true;
     const btn = panel.querySelector("#doOnboard");
     const mpw = panel.querySelector("#mpw").value;
-    if (mpw.length < 12 || mpw !== panel.querySelector("#mpw2").value) {
+    if (mpw !== panel.querySelector("#mpw2").value) {
       err.hidden = false;
-      err.textContent = "Master-Passwort ungültig oder stimmt nicht überein (mindestens 12 Zeichen).";
+      err.textContent = "Master-Passwort stimmt nicht überein.";
+      return;
+    }
+    const pwErr = masterPasswordError(mpw);
+    if (pwErr) {
+      err.hidden = false;
+      err.textContent = pwErr;
       return;
     }
     btn.disabled = true;
@@ -1043,7 +1196,16 @@ const vault = {
   pageLimit: 50,
   searchQuery: "",
   tagFilters: [],
-  ownershipFilter: "mine", // mine | shared
+  ownershipFilter: "mine", // mine | shared (legacy; use listScope)
+  listScope: "mine", // mine | shared | favorites
+  sortMode: (function () {
+    try {
+      const v = localStorage.getItem("tv-secrets-sort");
+      if (v === "title-asc" || v === "title-desc" || v === "recent") return v;
+    } catch (_) {}
+    return "title-asc";
+  })(),
+  userFavoriteIds: new Set(),
   viewMode: (function () {
     try {
       const v = localStorage.getItem("tv-secrets-view");
@@ -1065,6 +1227,55 @@ const vault = {
   selectedIds: new Set(),
   offlineSyncRunning: false,
 };
+
+function userFavoritesStorageKey() {
+  const me = vault.me;
+  if (!me?.user_id || !me?.tenant_id) return null;
+  return `tv-fav:${me.tenant_id}:${me.user_id}`;
+}
+
+function loadUserFavoritesFromStorage() {
+  const key = userFavoritesStorageKey();
+  if (!key) {
+    vault.userFavoriteIds = new Set();
+    return;
+  }
+  try {
+    const raw = localStorage.getItem(key);
+    vault.userFavoriteIds = new Set(raw ? JSON.parse(raw) : []);
+  } catch (_) {
+    vault.userFavoriteIds = new Set();
+  }
+}
+
+function persistUserFavorites() {
+  const key = userFavoritesStorageKey();
+  if (!key) return;
+  try {
+    localStorage.setItem(key, JSON.stringify([...vault.userFavoriteIds]));
+  } catch (_) {}
+}
+
+function isUserFavorite(secretId) {
+  return vault.userFavoriteIds.has(secretId);
+}
+
+function setUserFavorite(secretId, on) {
+  if (!secretId) return;
+  if (on) vault.userFavoriteIds.add(secretId);
+  else vault.userFavoriteIds.delete(secretId);
+  persistUserFavorites();
+}
+
+function toggleUserFavorite(secretId) {
+  setUserFavorite(secretId, !isUserFavorite(secretId));
+}
+
+function removeUserFavorite(secretId) {
+  if (!secretId || !vault.userFavoriteIds.has(secretId)) return;
+  vault.userFavoriteIds.delete(secretId);
+  persistUserFavorites();
+}
 
 function isAdmin() {
   const roles = vault.me?.roles || [];
@@ -1184,7 +1395,7 @@ async function unlockVault(masterPassword, opts = {}) {
     return;
   }
   const keys = await api("/api/vault/keys");
-  const params = await api("/api/vault/crypto-params");
+  const params = keys.argon2 || await api("/api/vault/crypto-params");
   const sk = await TVCrypto.unlockPrivateKey(
     masterPassword,
     TVCrypto.b64dec(keys.salt_b64),
@@ -1194,10 +1405,25 @@ async function unlockVault(masterPassword, opts = {}) {
   );
   vault.sk = sk;
   vault.params = params;
+  if (keys.kdf_params_stored === false) {
+    api("/api/vault/kdf-params", { method: "POST", body: JSON.stringify({ argon2: params }) }).catch(() => {});
+  }
 }
 
 function offlinePolicyAllowed() {
   return vault.policy?.offline_cache_allowed !== false;
+}
+
+function cliIntegrationEnabled() {
+  return vault.policy?.cli_integration_enabled === true;
+}
+
+function browserIntegrationEnabled() {
+  return vault.policy?.browser_integration_enabled === true;
+}
+
+function anyClientIntegrationEnabled() {
+  return cliIntegrationEnabled() || browserIntegrationEnabled();
 }
 
 function formatOfflineSessionInfo(snapshot) {
@@ -1219,17 +1445,22 @@ function openDKFromEnvelope(env) {
   );
 }
 
+function escapeHtml(s) {
+  return String(s == null ? "" : s)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
 function fieldRow(label, value, opts = {}) {
   const { copy = true, mask = false, multiline = false, download = false } = opts;
   const display = value == null || value === "" ? "—" : String(value);
-  const safe = display.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const safe = escapeHtml(display);
   const copyAttr = copy && display !== "—" ? `data-copy="${encodeURIComponent(String(value))}"` : "";
   const dlAttr = download && display !== "—" ? `data-download="${encodeURIComponent(String(value))}" data-dlname="${encodeURIComponent(opts.filename || label || "download.txt")}"` : "";
   const actions = [];
   if (copy && display !== "—") actions.push(`<button type="button" class="copy-btn" ${copyAttr} title="Kopieren" aria-label="Kopieren">${btnLabel("copy", "Kopieren")}</button>`);
   if (download && display !== "—") actions.push(`<button type="button" class="copy-btn" ${dlAttr} title="Download" aria-label="Download">${btnLabel("download", "Download")}</button>`);
   return `<div class="secret-field${multiline ? " secret-field-block" : ""}">
-    <div class="sf-label">${label}</div>
+    <div class="sf-label">${escapeHtml(label)}</div>
     <div class="sf-value${mask ? " masked" : ""}${multiline ? " mono prewrap" : ""}">${mask && display !== "—" ? "••••••••" : safe}</div>
     ${actions.length ? `<div class="sf-actions">${actions.join("")}</div>` : "<span></span>"}
   </div>`;
@@ -1486,6 +1717,7 @@ function renderApp(app) {
         ${navSection("vault", "Vault", `
           ${navLink("vault:mine", "key", "Meine Secrets", "active")}
           ${navLink("vault:shared", "share", "Geteilte Secrets")}
+          ${navLink("vault:favorites", "star", "Favoriten")}
           ${navLink("vault:create", "plus", "Neu anlegen")}
           ${navLink("vault:import", "upload", "Import")}
           ${navLink("vault:backup", "download", "Sicherung")}
@@ -1577,6 +1809,14 @@ function renderApp(app) {
                           <button type="button" class="btn-ghost btn-sm" id="stagClear">Filter leeren</button>
                         </div>
                       </div>
+                    </div>
+                    <div class="secrets-sort-wrap">
+                      <label for="ssort">Sortierung</label>
+                      <select id="ssort" class="secrets-sort-select">
+                        <option value="title-asc">Titel A–Z</option>
+                        <option value="title-desc">Titel Z–A</option>
+                        <option value="recent">Zuletzt geändert</option>
+                      </select>
                     </div>
                     <div class="secrets-view-wrap">
                       <label>Ansicht</label>
@@ -1824,10 +2064,10 @@ function renderApp(app) {
               <div class="panel-tabs" role="tablist" aria-label="Konto-Bereiche">
                 <button type="button" class="panel-tab active" role="tab" data-panel-tab="totp" aria-selected="true">TOTP</button>
                 <button type="button" class="panel-tab" role="tab" data-panel-tab="passkeys" aria-selected="false">Passkeys</button>
-                <button type="button" class="panel-tab" role="tab" data-panel-tab="login" aria-selected="false">Login-Passwort</button>
+                <button type="button" class="panel-tab" role="tab" data-panel-tab="login" aria-selected="false" hidden>Login-Passwort</button>
                 <button type="button" class="panel-tab" role="tab" data-panel-tab="master" aria-selected="false">Master-Passwort</button>
                 <button type="button" class="panel-tab" role="tab" data-panel-tab="offline" aria-selected="false">Offline-Vault</button>
-                <button type="button" class="panel-tab" role="tab" data-panel-tab="clients" aria-selected="false">Clients</button>
+                <button type="button" class="panel-tab" role="tab" data-panel-tab="clients" aria-selected="false" hidden>Clients</button>
               </div>
 
               <div class="panel-tab-pane active" role="tabpanel" data-panel-pane="totp">
@@ -1864,16 +2104,16 @@ function renderApp(app) {
               </div>
 
               <div class="panel-tab-pane" role="tabpanel" data-panel-pane="login" hidden>
-                ${hintBox("Nur bei lokalem Auth-Backend. LDAP-User ändern das Passwort in AD.")}
+                ${hintBox("Nur bei lokalem Auth-Backend. LDAP-User ändern das Passwort im Verzeichnis (LDAP/AD-Richtlinie).")}
                 <label>Aktuelles Login-Passwort</label><input id="lpw_cur" type="password" autocomplete="current-password" />
-                <label>Neues Login-Passwort (≥12)</label><input id="lpw_new" type="password" autocomplete="new-password" />
+                <label>Neues Login-Passwort (${PASSWORD_POLICY})</label><input id="lpw_new" type="password" autocomplete="new-password" minlength="16" />
                 <div class="row"><button class="btn-accent" type="button" id="lpw_save">Login-Passwort speichern</button></div>
               </div>
 
               <div class="panel-tab-pane" role="tabpanel" data-panel-pane="master" hidden>
-                ${hintBox("Clientseitig: Private Key wird neu versiegelt; Server speichert nur Ciphertexte. Recovery-Kit / Escrow wird mit erneuert.")}
+                ${hintBox("Clientseitig: Private Key wird neu versiegelt; Server speichert nur Ciphertexte. Recovery-Kit / Escrow wird mit erneuert. Neues Passwort: " + PASSWORD_POLICY + ".")}
                 <label>Aktuelles Master-Passwort</label><input id="mpw_cur" type="password" autocomplete="current-password" />
-                <label>Neues Master-Passwort</label><input id="mpw_new" type="password" autocomplete="new-password" />
+                <label>Neues Master-Passwort (${PASSWORD_POLICY})</label><input id="mpw_new" type="password" autocomplete="new-password" minlength="16" />
                 <label>Recovery-Kit speichern (bei user_kit)</label><input id="mpw_kit" type="text" readonly placeholder="wird erzeugt…" />
                 <div class="row"><button class="btn-accent" type="button" id="mpw_save">Master-Passwort speichern</button></div>
               </div>
@@ -1891,7 +2131,7 @@ function renderApp(app) {
               <div class="panel-tab-pane" role="tabpanel" data-panel-pane="clients" hidden>
                 ${hintBox("CLI und Browser-Extension von dieser Instanz — Zero-Knowledge bleibt erhalten (Entschlüsselung nur lokal).")}
                 <div id="clientDownloadsApp" class="client-dl-grid"></div>
-                ${hintBox(`Ausführliche Anleitung: <a href="${tvPath("/help/cli")}" target="_blank" rel="noopener">CLI</a> · <a href="${tvPath("/help/extension")}" target="_blank" rel="noopener">Extension</a>`)}
+                <div class="hint-box" id="accClientsHelp" hidden></div>
               </div>
 
               <div class="error" id="acc_err" hidden></div>
@@ -1960,7 +2200,7 @@ function renderApp(app) {
                     <label>Anzeigename</label><input id="ndisplay" />
                     <label>E-Mail</label><input id="nemail" type="email" autocomplete="off" />
                     <div id="npw_block">
-                      <label>Passwort (≥12)</label><input id="npw" type="password" autocomplete="new-password" />
+                      <label>Passwort (${PASSWORD_POLICY})</label><input id="npw" type="password" autocomplete="new-password" minlength="16" />
                     </div>
                     <div class="error" id="uc_err" hidden></div>
                     <div class="row">
@@ -1979,7 +2219,7 @@ function renderApp(app) {
                     <label>Anzeigename</label><input id="ue_display" />
                     <label>E-Mail</label><input id="ue_email" type="email" autocomplete="off" />
                     <div id="ue_local_block">
-                      <label>Neues Login-Passwort (optional, ≥12)</label><input id="ue_password" type="password" autocomplete="new-password" />
+                      <label>Neues Login-Passwort (optional, ${PASSWORD_POLICY})</label><input id="ue_password" type="password" autocomplete="new-password" minlength="16" />
                     </div>
                     <fieldset class="role-fieldset">
                       <legend>Rollen</legend>
@@ -2070,6 +2310,9 @@ function renderApp(app) {
                     <label class="inline"><input id="totp_req" type="checkbox" /> TOTP Pflicht (Hinweis nach Login)</label>
                     <label class="inline"><input id="admin_env_only" type="checkbox" /> Admins: Secret-Liste nur mit Envelope</label>
                     <label class="inline"><input id="offline_cache" type="checkbox" checked /> Offline-Vault-Cache erlauben (Ciphertext auf Geräten)</label>
+                    <label class="inline"><input id="cli_integration" type="checkbox" /> CLI-Integration anzeigen (Konto, Hilfe)</label>
+                    <label class="inline"><input id="browser_integration" type="checkbox" /> Browser-Extension-Integration anzeigen (Konto, Hilfe)</label>
+                    ${hintBox("CLI/Extension standardmäßig ausgeblendet — sinnvoll wenn Firmen-GPOs die Browser-Installation blockieren. IT kann Artefakte weiterhin unter /downloads/ bereitstellen.")}
                     <div class="row">
                       <button class="btn-accent" type="button" id="policy_save">Policy speichern</button>
                     </div>
@@ -2092,11 +2335,14 @@ function renderApp(app) {
                     <div class="row"><button class="btn-danger" type="button" id="rec_save">Recovery-Modus ändern</button></div>
                   </div>
                   <div class="panel-tab-pane" role="tabpanel" data-panel-pane="escrow" hidden>
-                    ${hintBox("Privater Escrow-Key wird nur im Browser gesplittet (secrets.js). Server speichert nur den Public Key. Alternativ: <code>tvcli escrow-split</code>.")}
+                    ${hintBox("Erstes Setzen: Keypair im Browser, Server speichert nur den Public Key. Ersetzen nur mit k-aus-n Shares (Zeremonie). SK verlässt den Client nicht. Alternativ: <code>tvcli escrow-split</code>.")}
                     <label>Shamir k</label><input id="shamir_k" type="number" value="3" />
                     <label>Shamir n</label><input id="shamir_n" type="number" value="5" />
                     <div class="ok" id="escrow_out" hidden></div>
-                    <div class="row"><button class="btn-accent" type="button" id="escrow_gen">Escrow-Keypair + Shares</button></div>
+                    <div class="row"><button class="btn-accent" type="button" id="escrow_gen">Escrow-Keypair + Shares (erstes Setzen)</button></div>
+                    <label>Bestehende Shares (eine Zeile je Share, mind. k)</label>
+                    <textarea id="escrow_shares" rows="5" placeholder="share_1=…&#10;share_2=…"></textarea>
+                    <div class="row"><button class="btn-danger" type="button" id="escrow_replace">Escrow ersetzen (k-aus-n)</button></div>
                   </div>
                 </div>
                 <div class="admin-section" data-admin-section="apikeys">
@@ -2188,6 +2434,7 @@ function renderApp(app) {
   const NAV_TITLES = {
     "vault:mine": "Meine Secrets",
     "vault:shared": "Geteilte Secrets",
+    "vault:favorites": "Favoriten",
     "vault:create": "Neu anlegen",
     "vault:import": "Import",
     "vault:backup": "Sicherung",
@@ -2388,8 +2635,9 @@ function renderApp(app) {
     } else if (nav.startsWith("vault:")) {
       pane = "vault";
       vaultSec = nav.slice("vault:".length);
-      if (vaultSec === "mine" || vaultSec === "shared") {
-        vault.ownershipFilter = vaultSec;
+      if (vaultSec === "mine" || vaultSec === "shared" || vaultSec === "favorites") {
+        vault.listScope = vaultSec;
+        vault.ownershipFilter = vaultSec === "shared" ? "shared" : "mine";
         vaultSec = "secrets";
       }
     }
@@ -2479,11 +2727,14 @@ function renderApp(app) {
       const me = await api("/api/me");
       if (me.needs_vault_onboard) { tvGo("/onboard"); return; }
       vault.me = me;
+      loadUserFavoritesFromStorage();
       paintSessionBar(n, { me });
       syncAdminNavVisibility();
       try {
         vault.policy = await api("/api/policy/client");
         vault.idleMin = vault.policy.unlock_idle_minutes || 15;
+        syncAccountClientsUI();
+        syncAccountAuthUI();
       } catch (_) {}
     } catch (_) {
       try {
@@ -2585,6 +2836,30 @@ function renderApp(app) {
     }
   };
 
+  function syncAccountAuthUI() {
+    const tab = n.querySelector('[data-panel-tab="login"]');
+    const pane = n.querySelector('[data-panel-pane="login"]');
+    const isLocal = (vault.me?.auth_backend || "local") === "local";
+    if (tab) tab.hidden = !isLocal;
+    if (pane && !isLocal) pane.hidden = true;
+  }
+
+  function syncAccountClientsUI() {
+    const tab = n.querySelector('[data-panel-tab="clients"]');
+    const pane = n.querySelector('[data-panel-pane="clients"]');
+    const show = anyClientIntegrationEnabled();
+    if (tab) tab.hidden = !show;
+    if (pane && !show) pane.hidden = true;
+    const helpHint = n.querySelector("#accClientsHelp");
+    if (helpHint) {
+      const links = [];
+      if (cliIntegrationEnabled()) links.push(`<a href="${tvPath("/help/cli")}" target="_blank" rel="noopener">CLI</a>`);
+      if (browserIntegrationEnabled()) links.push(`<a href="${tvPath("/help/extension")}" target="_blank" rel="noopener">Extension</a>`);
+      helpHint.hidden = !links.length;
+      if (links.length) helpHint.innerHTML = `Ausführliche Anleitung: ${links.join(" · ")}`;
+    }
+  }
+
   bindPanelTabs(n, "backup");
   bindPanelTabs(n, "crypto");
   bindPanelTabs(n, "recovery");
@@ -2628,10 +2903,16 @@ function renderApp(app) {
   async function refreshClientDownloadsUI() {
     const root = n.querySelector("#clientDownloadsApp");
     if (!root) return;
+    if (!anyClientIntegrationEnabled()) {
+      root.innerHTML = hintBox("CLI und Browser-Extension sind auf dieser Instanz deaktiviert (Plattform-Policy).");
+      return;
+    }
     root.innerHTML = "<p class='hint'>Lade Downloads…</p>";
     const res = await fetch(tvPath("/api/client-downloads"), { credentials: "include" });
     if (!res.ok) throw new Error("Downloads nicht verfügbar");
     const data = await res.json();
+    const showCli = cliIntegrationEnabled();
+    const showExt = browserIntegrationEnabled();
     const plat = detectClientPlatform();
     const arch = detectClientArch();
     const cli = data.cli || [];
@@ -2643,8 +2924,9 @@ function renderApp(app) {
     const crx = ext.crx;
     const cliInstall = plat === "windows" ? data.install.cli_windows : data.install.cli_unix;
     const extInstall = plat === "windows" ? (data.install.extension_user_ps || data.install.extension_windows) : data.install.extension_unix;
-    root.innerHTML = `
-      <div class="client-dl-card">
+    const cards = [];
+    if (showCli) {
+      cards.push(`<div class="client-dl-card">
         <h4>CLI (tvcli)</h4>
         ${rec
           ? `${hintBox(`Empfohlen: ${rec.platform}/${rec.arch}`)}
@@ -2654,8 +2936,10 @@ function renderApp(app) {
              </div>
              <ul class="client-dl-links">${cliLinks}</ul>`
           : hintBox("CLI-Binaries noch nicht bereitgestellt.")}
-      </div>
-      <div class="client-dl-card">
+      </div>`);
+    }
+    if (showExt) {
+      cards.push(`<div class="client-dl-card">
         <h4>Browser-Extension</h4>
         ${crx
           ? `${hintBox("Schritt 1: Browser-Richtlinie per PowerShell (siehe Hilfe). Ohne Richtlinie wird nur die .crx heruntergeladen.")}
@@ -2665,7 +2949,9 @@ function renderApp(app) {
              </div>
              ${hintBox(`Extension-ID: <code>${ext.id || "—"}</code> · <a href="${tvPath("/help/extension")}" target="_blank" rel="noopener">Anleitung</a> · <a href="${tvPath("/help/extension")}#fallback">Entwicklermodus</a>`)}`
           : hintBox("Extension noch nicht bereitgestellt.")}
-      </div>`;
+      </div>`);
+    }
+    root.innerHTML = cards.join("");
     const cliBtn = root.querySelector("#cliInstallCopy");
     if (cliBtn && cliInstall) {
       cliBtn.onclick = () => copyClientText(cliInstall, cliBtn);
@@ -2789,11 +3075,14 @@ function renderApp(app) {
     const err = n.querySelector("#acc_err"); const ok = n.querySelector("#acc_ok");
     err.hidden = true; ok.hidden = true;
     try {
+      const neu = n.querySelector("#lpw_new").value;
+      const pwErr = localLoginPasswordError(neu);
+      if (pwErr) throw new Error(pwErr);
       await api("/api/me/password", {
         method: "POST",
         body: JSON.stringify({
           current_password: n.querySelector("#lpw_cur").value,
-          new_password: n.querySelector("#lpw_new").value,
+          new_password: neu,
         }),
       });
       n.querySelector("#lpw_cur").value = "";
@@ -2808,7 +3097,8 @@ function renderApp(app) {
     try {
       const cur = n.querySelector("#mpw_cur").value;
       const neu = n.querySelector("#mpw_new").value;
-      if (!neu || neu.length < 8) throw new Error("Neues Master-Passwort zu kurz");
+      const pwErr = masterPasswordError(neu);
+      if (pwErr) throw new Error(pwErr);
       const params = vault.params || await api("/api/vault/crypto-params");
       const keys = await api("/api/vault/keys");
       const sk = await TVCrypto.unlockPrivateKey(
@@ -2959,7 +3249,11 @@ function renderApp(app) {
     if (countEl) countEl.textContent = nSel ? `${nSel} ausgewählt` : "Keine Auswahl";
     const sCount = n.querySelector("#sCount");
     if (sCount) {
-      const scopeLabel = vault.ownershipFilter === "shared" ? "geteilt" : "privat";
+      const scopeLabel = vault.listScope === "favorites"
+        ? "Favoriten"
+        : vault.listScope === "shared"
+          ? "geteilt"
+          : "privat";
       const loaded = vault.secretsCache.length;
       const total = vault.secretsTotal;
       const extra = loaded < total ? ` · ${loaded}/${total} geladen` : "";
@@ -3157,6 +3451,7 @@ function renderApp(app) {
       tenant_name: snap.tenant_name,
       roles: [],
     };
+    loadUserFavoritesFromStorage();
     vault.idleMin = 15;
     bindIdleListeners();
     touchIdle();
@@ -3178,12 +3473,15 @@ function renderApp(app) {
   async function afterUnlock() {
     try {
       vault.me = await api("/api/me");
+      loadUserFavoritesFromStorage();
       paintSessionBar(n, { me: vault.me });
     } catch (_) {}
     try {
       const pol = await api("/api/policy/client");
       vault.policy = pol;
       vault.idleMin = pol.unlock_idle_minutes || 15;
+      syncAccountClientsUI();
+      syncAccountAuthUI();
     } catch (_) {}
     bindIdleListeners();
     touchIdle();
@@ -3218,7 +3516,13 @@ function renderApp(app) {
     vault.secretsCache = [];
     vault.secretsOffset = 0;
     await refreshSecrets(true);
-    sealGroupShareGaps().catch((e) => console.warn("group share gaps", e));
+    try {
+      const gaps = await api("/api/secrets/group-share-gaps");
+      const nGaps = (gaps.items || []).length;
+      if (nGaps) {
+        announceA11y(`${nGaps} Gruppen-Freigaben ohne Envelope. Nachpflege nur nach Bestätigung der Empfängerschlüssel.`);
+      }
+    } catch (_) {}
     navigateTo("vault:mine");
     updateOfflineAccountUI(await TVOfflineStore.getSnapshot(vault.me?.tenant_id, vault.me?.user_id));
     maybePromptOfflineOptIn().then(() => {
@@ -3228,7 +3532,49 @@ function renderApp(app) {
     });
   }
 
-  /** Zero-knowledge: seal missing envelopes for group-shared secrets the caller can open. */
+  function keyDirStorageKey() {
+    return "tv_keydir_" + (vault.me?.tenant_id || "");
+  }
+  function loadKeyDir() {
+    try {
+      return JSON.parse(localStorage.getItem(keyDirStorageKey()) || "{}");
+    } catch (_) {
+      return {};
+    }
+  }
+  function saveKeyDir(dir) {
+    localStorage.setItem(keyDirStorageKey(), JSON.stringify(dir));
+  }
+  async function fingerprintOfB64(b64) {
+    const raw = TVCrypto.b64dec(b64);
+    const hash = await crypto.subtle.digest("SHA-256", raw);
+    const hex = [...new Uint8Array(hash)].map((b) => b.toString(16).padStart(2, "0")).join("");
+    return hex.replace(/(.{4})/g, "$1 ").trim().toUpperCase();
+  }
+  async function confirmRecipientKey(userId, username, publicKeyB64) {
+    if (!userId || !publicKeyB64) return false;
+    if (userId === vault.me?.user_id) return true;
+    const fp = await fingerprintOfB64(publicKeyB64);
+    const dir = loadKeyDir();
+    const prev = dir[userId];
+    if (prev && prev.fp === fp) return true;
+    const who = username || userId;
+    const msg = prev
+      ? `Schlüssel von ${who} hat sich geändert.\nBisher: ${prev.fp}\nNeu: ${fp}\nTrotzdem für diesen Empfänger verschlüsseln?`
+      : `Neuer Empfängerschlüssel für ${who}:\n${fp}\nBestätigen?`;
+    if (!confirm(msg)) return false;
+    dir[userId] = { fp, username: who, at: Date.now() };
+    saveKeyDir(dir);
+    return true;
+  }
+  function recipientPubForUser(userId, serverB64) {
+    if (userId === vault.me?.user_id && vault.sk && TVCrypto.publicKeyFromSecret) {
+      return TVCrypto.publicKeyFromSecret(vault.sk);
+    }
+    return TVCrypto.b64dec(serverB64);
+  }
+
+  /** Zero-knowledge: seal missing envelopes after explicit recipient confirmation. */
   async function sealGroupShareGaps(opts = {}) {
     if (!vault.sk || vault.offlineMode) return { sealed: 0, failed: 0, skipped: 0 };
     const q = new URLSearchParams();
@@ -3239,9 +3585,20 @@ function renderApp(app) {
     const items = data.items || [];
     let sealed = 0;
     let failed = 0;
-    // Batch by secret+group so one share-group call can carry multiple users when needed.
+    let skipped = 0;
+    const byUser = new Map();
+    for (const g of items) {
+      if (!byUser.has(g.user_id)) byUser.set(g.user_id, g);
+    }
+    const allowed = new Set();
+    for (const [uid, g] of byUser) {
+      const ok = await confirmRecipientKey(uid, g.username, g.public_key_b64);
+      if (ok) allowed.add(uid);
+      else skipped += items.filter((x) => x.user_id === uid).length;
+    }
     const byKey = new Map();
     for (const g of items) {
+      if (!allowed.has(g.user_id)) continue;
       const key = g.secret_id + "\0" + g.group_id;
       if (!byKey.has(key)) byKey.set(key, []);
       byKey.get(key).push(g);
@@ -3254,7 +3611,7 @@ function renderApp(app) {
         const envelopes = group.map((g) =>
           TVCrypto.envelopeToAPI(
             g.user_id,
-            TVCrypto.sealDataKeyForRecipient(dk, TVCrypto.b64dec(g.public_key_b64), kv)
+            TVCrypto.sealDataKeyForRecipient(dk, recipientPubForUser(g.user_id, g.public_key_b64), kv)
           )
         );
         dk.fill(0);
@@ -3268,7 +3625,7 @@ function renderApp(app) {
         failed += group.length;
       }
     }
-    return { sealed, failed, skipped: 0 };
+    return { sealed, failed, skipped };
   }
 
   async function refreshGroupShareUI() {
@@ -3283,7 +3640,7 @@ function renderApp(app) {
     if (gWrap && gSel) {
       gWrap.hidden = !groups.length;
       if (groups.length) {
-        gSel.innerHTML = groups.map((g) => `<option value="${g.id}">${g.name}</option>`).join("");
+        gSel.innerHTML = groups.map((g) => `<option value="${escapeHtml(g.id)}">${escapeHtml(g.name)}</option>`).join("");
       }
     }
   }
@@ -3295,7 +3652,7 @@ function renderApp(app) {
       if (userSel) {
         userSel.innerHTML = pks
           .filter((p) => p.user_id !== vault.me?.user_id && p.onboarded !== false)
-          .map((p) => `<option value="${p.user_id}" data-pk="${p.public_key_b64}">${p.username}</option>`)
+          .map((p) => `<option value="${escapeHtml(p.user_id)}">${escapeHtml(p.username)}</option>`)
           .join("");
       }
     } catch (_) {}
@@ -3476,6 +3833,18 @@ function renderApp(app) {
     btn.onclick = () => setViewMode(btn.dataset.view);
   });
   syncViewToggle();
+
+  const sortSel = n.querySelector("#ssort");
+  if (sortSel) {
+    sortSel.value = vault.sortMode;
+    sortSel.onchange = () => {
+      const v = sortSel.value;
+      if (v !== "title-asc" && v !== "title-desc" && v !== "recent") return;
+      vault.sortMode = v;
+      try { localStorage.setItem("tv-secrets-sort", v); } catch (_) {}
+      paintSecretList();
+    };
+  }
 
   n.querySelector("#ssearch").oninput = () => {
     vault.searchQuery = n.querySelector("#ssearch").value.trim().toLowerCase();
@@ -3870,8 +4239,60 @@ function renderApp(app) {
 
   function matchesOwnership(it) {
     if (!it.has_access) return false;
+    if (vault.listScope === "favorites") return isUserFavorite(it.id);
     const vis = (it.visibility || "private") === "shared" ? "shared" : "private";
-    return vault.ownershipFilter === "shared" ? vis === "shared" : vis === "private";
+    return vault.listScope === "shared" ? vis === "shared" : vis === "private";
+  }
+
+  function sortSecretItems(items) {
+    const mode = vault.sortMode;
+    const out = [...items];
+    const cmpTitle = (a, b) =>
+      secretTitleLabel(a).localeCompare(secretTitleLabel(b), "de", { sensitivity: "base" });
+    if (mode === "title-desc") out.sort((a, b) => cmpTitle(b, a));
+    else if (mode === "title-asc") out.sort(cmpTitle);
+    return out;
+  }
+
+  function buildOrderedSecretGroups(filtered) {
+    if (vault.listScope === "favorites") {
+      const items = sortSecretItems(filtered);
+      return { groups: [{ label: null, items }], flat: items };
+    }
+    const fav = [];
+    const rest = [];
+    for (const it of filtered) {
+      if (isUserFavorite(it.id)) fav.push(it);
+      else rest.push(it);
+    }
+    const favSorted = sortSecretItems(fav);
+    const restSorted = sortSecretItems(rest);
+    const showLabels = favSorted.length > 0 && restSorted.length > 0;
+    const groups = [];
+    if (favSorted.length) {
+      groups.push({ label: showLabels ? "Favoriten" : null, items: favSorted });
+    }
+    if (restSorted.length) {
+      groups.push({ label: showLabels ? "Weitere Einträge" : null, items: restSorted });
+    }
+    return { groups, flat: [...favSorted, ...restSorted] };
+  }
+
+  function favoriteToggleButton(it) {
+    if (!it.has_access || vault.offlineMode) return "";
+    const on = isUserFavorite(it.id);
+    return `<button type="button" class="btn-icon fav-toggle${on ? " is-fav" : ""}" data-fav-toggle="${escHtml(it.id)}" title="${on ? "Aus Favoriten entfernen" : "Als Favorit markieren"}" aria-pressed="${on ? "true" : "false"}">${icon("star", "fav-ico")}</button>`;
+  }
+
+  function bindFavoriteToggles(root) {
+    if (!root) return;
+    root.querySelectorAll("[data-fav-toggle]").forEach((btn) => {
+      btn.onclick = (ev) => {
+        ev.stopPropagation();
+        toggleUserFavorite(btn.dataset.favToggle);
+        paintSecretList();
+      };
+    });
   }
 
   function filterVisibleSecrets() {
@@ -4112,7 +4533,8 @@ function renderApp(app) {
       }
     }
 
-    const visible = filterVisibleSecrets();
+    const filtered = filterVisibleSecrets();
+    const { groups, flat: visible } = buildOrderedSecretGroups(filtered);
 
     const pendingVisible = visible.filter(needsSecretMeta);
     if (pendingVisible.length) {
@@ -4121,18 +4543,28 @@ function renderApp(app) {
     }
 
     if (!visible.length) {
-      const empty = vault.ownershipFilter === "shared"
-        ? "Keine geteilten Secrets."
-        : "Noch keine privaten Secrets.";
+      let empty;
+      if (vault.listScope === "favorites") {
+        empty = "Keine Favoriten. Markieren Sie Secrets mit dem Stern in der Liste.";
+      } else if (vault.listScope === "shared") {
+        empty = "Keine geteilten Secrets.";
+      } else {
+        empty = "Noch keine privaten Secrets.";
+      }
       list.innerHTML = `<p class="hint">${empty}</p>`;
     } else if (vault.viewMode === "table") {
-      const sharedView = vault.ownershipFilter === "shared";
+      const sharedView = vault.listScope === "shared";
+      const colSpan = sharedView ? 11 : 8;
       const head = sharedView
         ? `<th class="st-check"></th><th>Titel</th><th>Benutzer</th><th>Tags</th><th>Angelegt von</th><th>User</th><th>Gruppen</th><th class="st-share" title="Zugriff"> </th><th class="st-copy" title="Kopieren"> </th><th></th><th></th>`
         : `<th class="st-check"></th><th>Titel</th><th>Benutzer</th><th>Tags</th><th class="st-share" title="Teilen"> </th><th class="st-copy" title="Kopieren"> </th><th></th><th></th>`;
       const table = el(`<table class="secrets-table"><thead><tr>${head}</tr></thead><tbody></tbody></table>`);
       const tbody = table.querySelector("tbody");
-      for (const it of visible) {
+      for (const group of groups) {
+        if (group.label) {
+          tbody.appendChild(el(`<tr class="secrets-group-row"><td colspan="${colSpan}">${escHtml(group.label)}</td></tr>`));
+        }
+        for (const it of group.items) {
         let tr;
         if (sharedView) {
           tr = el(`<tr>
@@ -4145,7 +4577,7 @@ function renderApp(app) {
             <td class="st-groups muted">${escHtml((it.shared_groups || []).join(", ") || "—")}</td>
             <td class="st-share">${shareBadgeButton(it)}</td>
             <td class="st-copy">${copyShortcutButtonsHtml(it)}</td>
-            <td class="st-fav">${it._favorite ? icon("star", "fav-ico") : ""}</td>
+            <td class="st-fav">${favoriteToggleButton(it)}</td>
             <td class="st-act"><button type="button" class="btn-ghost btn-with-ico btn-sm">${btnLabel("open", "Öffnen")}</button></td>
           </tr>`);
         } else {
@@ -4156,7 +4588,7 @@ function renderApp(app) {
             <td class="st-tags"></td>
             <td class="st-share">${shareBadgeButton(it)}</td>
             <td class="st-copy">${copyShortcutButtonsHtml(it)}</td>
-            <td class="st-fav">${it._favorite ? icon("star", "fav-ico") : ""}</td>
+            <td class="st-fav">${favoriteToggleButton(it)}</td>
             <td class="st-act"><button type="button" class="btn-ghost btn-with-ico btn-sm">${btnLabel("open", "Öffnen")}</button></td>
           </tr>`);
         }
@@ -4171,18 +4603,25 @@ function renderApp(app) {
         }
         tr.querySelector(".st-act button").onclick = () => openSecret(it.id);
         tbody.appendChild(tr);
+        }
       }
       bindShareBadge(table);
       bindSecretCopyButtons(table);
+      bindFavoriteToggles(table);
       list.appendChild(table);
     } else if (vault.viewMode === "tiles") {
-      const grid = el(`<div class="secrets-tiles"></div>`);
-      for (const it of visible) {
+      const wrap = el(`<div class="secrets-tiles-wrap"></div>`);
+      for (const group of groups) {
+        if (group.label) {
+          wrap.appendChild(el(`<h3 class="secrets-group-head">${escHtml(group.label)}</h3>`));
+        }
+        const grid = el(`<div class="secrets-tiles"></div>`);
+        for (const it of group.items) {
         const tile = el(`<article class="secret-tile">
           <div class="secret-tile-head">
             <input type="checkbox" class="sec-check" ${it.has_access ? "" : "disabled"} />
             <span class="list-row-ico" aria-hidden="true">${icon("key")}</span>
-            ${it._favorite ? `<span class="fav-mark" title="Favorit">${icon("star", "fav-ico")}</span>` : ""}
+            <span class="secret-tile-fav">${favoriteToggleButton(it)}</span>
             <span class="secret-tile-share">${shareBadgeButton(it)}</span>
           </div>
           <h3 class="secret-tile-title"></h3>
@@ -4204,14 +4643,22 @@ function renderApp(app) {
         }
         tile.querySelector("button.btn-ghost").onclick = () => openSecret(it.id);
         grid.appendChild(tile);
+        }
+        wrap.appendChild(grid);
       }
-      bindShareBadge(grid);
-      bindSecretCopyButtons(grid);
-      list.appendChild(grid);
+      bindShareBadge(wrap);
+      bindSecretCopyButtons(wrap);
+      bindFavoriteToggles(wrap);
+      list.appendChild(wrap);
     } else {
-      for (const it of visible) {
+      for (const group of groups) {
+        if (group.label) {
+          list.appendChild(el(`<h3 class="secrets-group-head">${escHtml(group.label)}</h3>`));
+        }
+        for (const it of group.items) {
         const row = el(`<div class="list-row">
           <input type="checkbox" class="sec-check" ${it.has_access ? "" : "disabled"} />
+          <span class="list-row-fav">${favoriteToggleButton(it)}</span>
           <span class="list-row-main"></span>
           ${shareBadgeButton(it)}
           ${copyShortcutButtonsHtml(it)}
@@ -4232,9 +4679,11 @@ function renderApp(app) {
           btn.onclick = () => openSecret(it.id);
         });
         list.appendChild(row);
+        }
       }
       bindShareBadge(list);
       bindSecretCopyButtons(list);
+      bindFavoriteToggles(list);
     }
 
     updateTagOptions();
@@ -4358,7 +4807,7 @@ function renderApp(app) {
       if (payload.notes) html += fieldRow("Notizen", payload.notes, { multiline: true });
       if (tags.length) {
         html += `<div class="secret-field"><div class="sf-label">Tags</div><div class="sf-value"><div class="tags">${
-          tags.map((t) => `<span class="tag">${String(t).replace(/</g, "")}</span>`).join("")
+          tags.map((t) => `<span class="tag">${escapeHtml(t)}</span>`).join("")
         }</div></div><span></span></div>`;
       }
       if (payload.favorite) html += fieldRow("Favorit", "ja", { copy: false });
@@ -4670,9 +5119,9 @@ function renderApp(app) {
     }
     if (shareEditorOpen) await renderAccessPanel("modal");
     await refreshSecrets(true);
-    if (currentSecret.visibility === "shared" && vault.ownershipFilter === "mine") {
+    if (currentSecret.visibility === "shared" && vault.listScope === "mine") {
       navigateTo("vault:shared");
-    } else if (currentSecret.visibility !== "shared" && vault.ownershipFilter === "shared") {
+    } else if (currentSecret.visibility !== "shared" && vault.listScope === "shared") {
       navigateTo("vault:mine");
     }
   }
@@ -4727,8 +5176,9 @@ function renderApp(app) {
       const pks = await api("/api/users/public-keys");
       const pk = pks.find((p) => p.user_id === userId);
       if (!pk) throw new Error("Pubkey fehlt");
+      if (!(await confirmRecipientKey(userId, pk.username, pk.public_key_b64))) return;
       const dk = openDKFromEnvelope(currentSecret.envelope);
-      const env = TVCrypto.sealDataKeyForRecipient(dk, TVCrypto.b64dec(pk.public_key_b64), currentSecret.key_version);
+      const env = TVCrypto.sealDataKeyForRecipient(dk, recipientPubForUser(userId, pk.public_key_b64), currentSecret.key_version);
       dk.fill(0);
       await api("/api/secrets/" + currentSecret.id + "/share", {
         method: "POST",
@@ -4746,11 +5196,16 @@ function renderApp(app) {
     try {
       const pks = await api("/api/secrets/" + currentSecret.id + "/group-member-keys?group_id=" + encodeURIComponent(groupId));
       if (!pks.length) throw new Error("Keine onboardeten Gruppenmitglieder");
+      const allowed = [];
+      for (const p of pks) {
+        if (await confirmRecipientKey(p.user_id, p.username, p.public_key_b64)) allowed.push(p);
+      }
+      if (!allowed.length) return;
       const dk = openDKFromEnvelope(currentSecret.envelope);
-      const envelopes = pks.map((p) =>
+      const envelopes = allowed.map((p) =>
         TVCrypto.envelopeToAPI(
           p.user_id,
-          TVCrypto.sealDataKeyForRecipient(dk, TVCrypto.b64dec(p.public_key_b64), currentSecret.key_version)
+          TVCrypto.sealDataKeyForRecipient(dk, recipientPubForUser(p.user_id, p.public_key_b64), currentSecret.key_version)
         )
       );
       dk.fill(0);
@@ -4764,7 +5219,7 @@ function renderApp(app) {
     }
   }
 
-  async function unshareSecret({ userIds = [], groupIds = [] }) {
+  async function unshareSecret({ userIds = [], groupIds = [], dropDirect = true }) {
     if (accessDnDBusy || !currentSecret) return;
     if (!userIds.length && !groupIds.length) return;
     accessDnDBusy = true;
@@ -4775,7 +5230,8 @@ function renderApp(app) {
       keepUsers.add(ownerId);
       keepUsers.add(vault.me.user_id);
       (access.shared_users || []).forEach((u) => {
-        if (!userIds.includes(u.id)) keepUsers.add(u.id);
+        if (dropDirect && userIds.includes(u.id)) return;
+        keepUsers.add(u.id);
       });
       const remainingGroups = (access.shared_groups || []).filter((g) => !groupIds.includes(g.id));
       for (const g of remainingGroups) {
@@ -4800,11 +5256,16 @@ function renderApp(app) {
       const titleEnc = await TVCrypto.encryptTitle(title, newDk, newKv);
       const bodyEnc = await TVCrypto.encryptPayload(pt, newDk, newKv);
       const pks = await api("/api/users/public-keys");
-      const byId = Object.fromEntries(pks.map((p) => [p.user_id, p.public_key_b64]));
-      const envelopes = [...keepUsers].map((uid) => {
-        if (!byId[uid]) throw new Error("Pubkey fehlt: " + uid);
-        return TVCrypto.envelopeToAPI(uid, TVCrypto.sealDataKeyForRecipient(newDk, TVCrypto.b64dec(byId[uid]), newKv));
-      });
+      const byId = Object.fromEntries(pks.map((p) => [p.user_id, p]));
+      const envelopes = [];
+      for (const uid of keepUsers) {
+        const pk = byId[uid];
+        if (!pk?.public_key_b64) throw new Error("Pubkey fehlt: " + uid);
+        if (!(await confirmRecipientKey(uid, pk.username, pk.public_key_b64))) {
+          throw new Error("Empfängerschlüssel nicht bestätigt: " + (pk.username || uid));
+        }
+        envelopes.push(TVCrypto.envelopeToAPI(uid, TVCrypto.sealDataKeyForRecipient(newDk, recipientPubForUser(uid, pk.public_key_b64), newKv)));
+      }
       newDk.fill(0);
       await api("/api/secrets/" + currentSecret.id + "/rotate", {
         method: "POST",
@@ -4815,7 +5276,7 @@ function renderApp(app) {
           nonce_b64: TVCrypto.b64enc(bodyEnc.nonce),
           key_version: newKv,
           envelopes,
-          drop_user_ids: userIds,
+          drop_user_ids: dropDirect ? userIds : [],
           drop_group_ids: groupIds,
         }),
       });
@@ -4868,7 +5329,9 @@ function renderApp(app) {
 
   n.querySelector("#sdel").onclick = async () => {
     if (!confirm("Secret löschen?")) return;
-    await api("/api/secrets/" + currentSecret.id, { method: "DELETE" });
+    const id = currentSecret.id;
+    await api("/api/secrets/" + id, { method: "DELETE" });
+    removeUserFavorite(id);
     closeSecretModal();
     document.body.classList.remove("secret-modal-open");
     await refreshSecrets(true);
@@ -4968,9 +5431,32 @@ function renderApp(app) {
   }
 
   async function groupsMemberRemove(gid, uid) {
-    await api("/api/admin/groups/" + encodeURIComponent(gid) + "/members/" + encodeURIComponent(uid), {
+    const res = await api("/api/admin/groups/" + encodeURIComponent(gid) + "/members/" + encodeURIComponent(uid), {
       method: "DELETE",
     });
+    const ids = res.rotate_secret_ids || [];
+    if (vault.sk && !vault.offlineMode && ids.length) {
+      for (const sid of ids) {
+        try {
+          await rotateSecretExcludingUser(sid, uid);
+        } catch (e) {
+          console.warn("rotate after member remove", sid, e);
+        }
+      }
+    }
+  }
+
+  async function rotateSecretExcludingUser(secretId, dropUserId) {
+    const prev = currentSecret;
+    const prevBusy = accessDnDBusy;
+    try {
+      currentSecret = await api("/api/secrets/" + secretId);
+      accessDnDBusy = false;
+      await unshareSecret({ userIds: [dropUserId], groupIds: [], dropDirect: false });
+    } finally {
+      currentSecret = prev;
+      accessDnDBusy = prevBusy;
+    }
   }
 
   async function handleGroupDrop(gid, payload) {
@@ -5275,7 +5761,8 @@ function renderApp(app) {
         const pw = n.querySelector("#ue_password").value;
         if (pw) {
           if (editingUser.auth_backend !== "local") throw new Error("Login-Passwort nur für lokale User");
-          if (pw.length < 12) throw new Error("Passwort mindestens 12 Zeichen");
+          const pwErr = localLoginPasswordError(pw);
+          if (pwErr) throw new Error(pwErr);
           body.password = pw;
         }
         await api("/api/admin/users/" + encodeURIComponent(editingUser.id), {
@@ -5331,7 +5818,7 @@ function renderApp(app) {
         const auditRaw = await api("/api/admin/audit");
         const audit = Array.isArray(auditRaw) ? auditRaw : (auditRaw.items || []);
         n.querySelector("#alist").innerHTML = audit.slice(0, 50).map((e) =>
-          `<div>${e.created_at} · ${e.action} · ${e.actor_id} · ${e.resource_type}/${e.resource_id}</div>`
+          `<div>${escapeHtml(e.created_at)} · ${escapeHtml(e.action)} · ${escapeHtml(e.actor_id)} · ${escapeHtml(e.resource_type)}/${escapeHtml(e.resource_id)}</div>`
         ).join("") || "<p>Keine Events</p>";
       } catch (e) {
         n.querySelector("#alist").innerHTML = `<p class="hint">${escHtml(e.message)}</p>`;
@@ -5399,6 +5886,10 @@ function renderApp(app) {
       n.querySelector("#admin_env_only").checked = !!pol.admin_secrets_envelope_only;
       const offlineCache = n.querySelector("#offline_cache");
       if (offlineCache) offlineCache.checked = pol.offline_cache_allowed !== false;
+      const cliInt = n.querySelector("#cli_integration");
+      if (cliInt) cliInt.checked = !!pol.cli_integration_enabled;
+      const browserInt = n.querySelector("#browser_integration");
+      if (browserInt) browserInt.checked = !!pol.browser_integration_enabled;
       const keys = await api("/api/admin/api-keys");
       n.querySelector("#klist").innerHTML = keys.map((k) => {
         const scopeLabel = k.legacy_no_scopes ? "legacy (nur read)" : (k.scopes || []).join(", ") || "?";
@@ -5459,7 +5950,7 @@ function renderApp(app) {
     const auditRaw = await api("/api/admin/audit");
     const audit = Array.isArray(auditRaw) ? auditRaw : (auditRaw.items || []);
     n.querySelector("#alist").innerHTML = audit.slice(0, 30).map((e) =>
-      `<div>${e.created_at} · ${e.action} · ${e.actor_id} · ${e.resource_type}/${e.resource_id}</div>`
+      `<div>${escapeHtml(e.created_at)} · ${escapeHtml(e.action)} · ${escapeHtml(e.actor_id)} · ${escapeHtml(e.resource_type)}/${escapeHtml(e.resource_id)}</div>`
     ).join("") || "<p>Keine Events</p>";
     syncAdminNavVisibility();
   }
@@ -5556,7 +6047,12 @@ function renderApp(app) {
         email: n.querySelector("#nemail").value.trim(),
         auth_backend: authBackend,
       };
-      if (authBackend === "local") body.password = n.querySelector("#npw").value;
+      if (authBackend === "local") {
+        const pw = n.querySelector("#npw").value;
+        const pwErr = localLoginPasswordError(pw);
+        if (pwErr) throw new Error(pwErr);
+        body.password = pw;
+      }
       await api("/api/admin/users", { method: "POST", body: JSON.stringify(body) });
       closeUserCreateModal();
       await refreshAdmin();
@@ -5713,6 +6209,8 @@ function renderApp(app) {
           totp_required: n.querySelector("#totp_req").checked,
           admin_secrets_envelope_only: n.querySelector("#admin_env_only").checked,
           offline_cache_allowed: n.querySelector("#offline_cache").checked,
+          cli_integration_enabled: n.querySelector("#cli_integration").checked,
+          browser_integration_enabled: n.querySelector("#browser_integration").checked,
           session_hours: 8,
           unlock_idle_minutes: vault.idleMin || 15,
           escrow_shamir_k: Number(n.querySelector("#shamir_k").value) || 3,
@@ -5747,6 +6245,10 @@ function renderApp(app) {
     const err = n.querySelector("#aerr"); err.hidden = true;
     const out = n.querySelector("#escrow_out");
     try {
+      const st = await api("/api/vault/status");
+      if (st.has_escrow_pubkey) {
+        throw new Error("Escrow-Key ist bereits gesetzt. Ersetzen nur über die k-aus-n-Zeremonie.");
+      }
       const k = Number(n.querySelector("#shamir_k").value) || 3;
       const nn = Number(n.querySelector("#shamir_n").value) || 5;
       const kp = TVCrypto.generateBoxKeyPair();
@@ -5754,35 +6256,85 @@ function renderApp(app) {
         method: "POST",
         body: JSON.stringify({ public_key_b64: TVCrypto.b64enc(kp.publicKey) }),
       });
-      const hex = Array.from(kp.secretKey).map((b) => b.toString(16).padStart(2, "0")).join("");
-      let shares = null;
-      let sharesHtml = "";
-      if (typeof secrets !== "undefined" && secrets.share) {
-        shares = secrets.share(hex, nn, k);
-        sharesHtml = "<br/><strong>Shamir-Shares (einzeln verwahren):</strong><ol>" +
-          shares.map((s, i) => `<li><code class="mono">share_${i + 1}=${s}</code></li>`).join("") +
-          "</ol>";
-      } else {
-        sharesHtml = "<br/>secrets.js fehlt — nutze <code>tvcli escrow-split</code>.";
-      }
-      kp.secretKey.fill(0);
-      out.hidden = false;
-      out.innerHTML = "<strong>Escrow Public Key gespeichert.</strong> Privater Key wird nicht im DOM gehalten." +
-        sharesHtml +
-        (shares ? "<div class='row'><button class='btn-ghost' type='button' id='escrow_dl'>Shares als Datei speichern</button></div>" : "");
-      const dl = out.querySelector("#escrow_dl");
-      if (dl && shares) {
-        dl.onclick = () => {
-          const blob = new Blob([shares.map((s, i) => `share_${i + 1}=${s}`).join("\n") + "\n"], { type: "text/plain" });
-          const a = document.createElement("a");
-          a.href = URL.createObjectURL(blob);
-          a.download = "teamvault-escrow-shares.txt";
-          a.click();
-          URL.revokeObjectURL(a.href);
-        };
-      }
+      showEscrowShares(out, kp, k, nn, "Escrow Public Key gespeichert.");
     } catch (e) { err.hidden = false; err.textContent = e.message; }
   };
+  n.querySelector("#escrow_replace").onclick = async () => {
+    const err = n.querySelector("#aerr"); err.hidden = true;
+    const out = n.querySelector("#escrow_out");
+    try {
+      if (typeof secrets === "undefined" || !secrets.combine) {
+        throw new Error("secrets.js fehlt — nutze tvcli escrow-combine und die Zeremonie-API.");
+      }
+      const rawShares = (n.querySelector("#escrow_shares").value || "")
+        .split(/\r?\n/)
+        .map((line) => line.replace(/^share_\d+=\s*/i, "").trim())
+        .filter(Boolean);
+      const begin = await api("/api/admin/tenant/escrow/replace/begin", { method: "POST", body: "{}" });
+      const need = Number(begin.shamir_k) || 3;
+      if (rawShares.length < need) {
+        throw new Error("Mindestens " + need + " Shares erforderlich");
+      }
+      const hex = secrets.combine(rawShares);
+      const sk = hexToU8(hex);
+      const challenge = TVCrypto.openDataKeyEnvelope(
+        TVCrypto.b64dec(begin.ephemeral_pub_b64),
+        TVCrypto.b64dec(begin.nonce_b64),
+        TVCrypto.b64dec(begin.wrapped_dk_b64),
+        sk,
+      );
+      sk.fill(0);
+      if (!challenge) throw new Error("Challenge konnte nicht geöffnet werden — Shares prüfen");
+      const k = Number(n.querySelector("#shamir_k").value) || need;
+      const nn = Number(n.querySelector("#shamir_n").value) || 5;
+      const kp = TVCrypto.generateBoxKeyPair();
+      await api("/api/admin/tenant/escrow/replace/finish", {
+        method: "POST",
+        body: JSON.stringify({
+          challenge_b64: TVCrypto.b64enc(challenge),
+          public_key_b64: TVCrypto.b64enc(kp.publicKey),
+        }),
+      });
+      showEscrowShares(out, kp, k, nn, "Escrow Public Key ersetzt (k-aus-n bestätigt).");
+      n.querySelector("#escrow_shares").value = "";
+    } catch (e) { err.hidden = false; err.textContent = e.message; }
+  };
+  function hexToU8(hex) {
+    const h = String(hex || "").replace(/^0x/i, "").trim();
+    if (!h || h.length % 2) throw new Error("ungültiges Shamir-Secret");
+    const out = new Uint8Array(h.length / 2);
+    for (let i = 0; i < out.length; i++) out[i] = parseInt(h.slice(i * 2, i * 2 + 2), 16);
+    return out;
+  }
+  function showEscrowShares(out, kp, k, nn, title) {
+    const hex = Array.from(kp.secretKey).map((b) => b.toString(16).padStart(2, "0")).join("");
+    let shares = null;
+    let sharesHtml = "";
+    if (typeof secrets !== "undefined" && secrets.share) {
+      shares = secrets.share(hex, nn, k);
+      sharesHtml = "<br/><strong>Shamir-Shares (einzeln verwahren):</strong><ol>" +
+        shares.map((s, i) => `<li><code class="mono">share_${i + 1}=${s}</code></li>`).join("") +
+        "</ol>";
+    } else {
+      sharesHtml = "<br/>secrets.js fehlt — nutze <code>tvcli escrow-split</code>.";
+    }
+    kp.secretKey.fill(0);
+    out.hidden = false;
+    out.innerHTML = "<strong>" + escapeHtml(title) + "</strong> Privater Key wird nicht im DOM gehalten." +
+      sharesHtml +
+      (shares ? "<div class='row'><button class='btn-ghost' type='button' id='escrow_dl'>Shares als Datei speichern</button></div>" : "");
+    const dl = out.querySelector("#escrow_dl");
+    if (dl && shares) {
+      dl.onclick = () => {
+        const blob = new Blob([shares.map((s, i) => `share_${i + 1}=${s}`).join("\n") + "\n"], { type: "text/plain" });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = "teamvault-escrow-shares.txt";
+        a.click();
+        URL.revokeObjectURL(a.href);
+      };
+    }
+  }
   n.querySelector("#ldap_sync").onclick = async () => {
     const err = n.querySelector("#aerr"); err.hidden = true;
     try {

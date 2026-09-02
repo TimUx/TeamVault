@@ -260,13 +260,19 @@ func (c *client) unlockSK() ([]byte, cryptocore.Argon2Params, error) {
 	if err != nil {
 		return nil, cryptocore.Argon2Params{}, err
 	}
-	paramsRaw, err := c.getJSON("/api/vault/crypto-params")
-	if err != nil {
-		return nil, cryptocore.Argon2Params{}, err
-	}
-	b, _ := json.Marshal(paramsRaw)
 	var params cryptocore.Argon2Params
-	_ = json.Unmarshal(b, &params)
+	if raw, ok := keys["argon2"]; ok {
+		b, _ := json.Marshal(raw)
+		_ = json.Unmarshal(b, &params)
+	}
+	if params.Time == 0 {
+		paramsRaw, err := c.getJSON("/api/vault/crypto-params")
+		if err != nil {
+			return nil, cryptocore.Argon2Params{}, err
+		}
+		b, _ := json.Marshal(paramsRaw)
+		_ = json.Unmarshal(b, &params)
+	}
 	if params.KeyLen == 0 {
 		params = cryptocore.DefaultArgon2
 	}
@@ -284,7 +290,14 @@ func (c *client) unlockSK() ([]byte, cryptocore.Argon2Params, error) {
 	if mk != nil {
 		zero(mk)
 	}
-	return sk, params, err
+	if err != nil {
+		return nil, params, err
+	}
+	stored, _ := keys["kdf_params_stored"].(bool)
+	if !stored {
+		_, _ = c.postJSON("/api/vault/kdf-params", map[string]any{"argon2": params})
+	}
+	return sk, params, nil
 }
 
 func (c *client) secretsList() error {
@@ -403,19 +416,19 @@ type secretCreateOpts struct {
 }
 
 type secretFlagInput struct {
-	title, username, password string
-	urlsFlag                  string
-	urlFlags                  stringSlice
-	notes, totp, tags         string
-	favorite                  bool
-	folder, visibility        string
-	shareUsers, shareGroups   stringSlice
-	sshPriv, sshPrivFile      string
-	sshPub, sshPubFile        string
-	s3Access, s3Secret        string
-	cert, certFile            string
+	title, username, password  string
+	urlsFlag                   string
+	urlFlags                   stringSlice
+	notes, totp, tags          string
+	favorite                   bool
+	folder, visibility         string
+	shareUsers, shareGroups    stringSlice
+	sshPriv, sshPrivFile       string
+	sshPub, sshPubFile         string
+	s3Access, s3Secret         string
+	cert, certFile             string
 	extraFlags, extraFileFlags stringSlice
-	provided                  map[string]bool
+	provided                   map[string]bool
 }
 
 func secretOptsFromFlags(in secretFlagInput, promptPassword bool) (secretCreateOpts, error) {
@@ -430,7 +443,7 @@ func secretOptsFromFlags(in secretFlagInput, promptPassword bool) (secretCreateO
 	}
 	opts := secretCreateOpts{
 		Title: in.title, Username: in.username, Password: pw,
-		URLs: append(splitSemi(in.urlsFlag), []string(in.urlFlags)...),
+		URLs:  append(splitSemi(in.urlsFlag), []string(in.urlFlags)...),
 		Notes: in.notes, TOTP: in.totp, Tags: splitComma(in.tags),
 		Favorite: in.favorite, Folder: in.folder,
 		Visibility: strings.TrimSpace(in.visibility),
@@ -819,23 +832,29 @@ func openDKFromDetail(det map[string]any, sk []byte) ([]byte, uint32, error) {
 	return dk, kv, nil
 }
 
+func appendShareEnvelope(envelopes []map[string]any, seen map[string]bool, uid, pub string, dk []byte, kv uint32) ([]map[string]any, error) {
+	if uid == "" || seen[uid] || pub == "" {
+		return envelopes, nil
+	}
+	env, err := cryptocore.SealDataKeyForRecipient(dk, mustB64(pub), kv)
+	if err != nil {
+		return envelopes, err
+	}
+	envelopes = append(envelopes, map[string]any{
+		"user_id": uid, "key_version": kv,
+		"wrapped_dk_b64": b64(env.Ciphertext), "ephemeral_pub_b64": b64(env.EphemeralPub), "nonce_b64": b64(env.Nonce),
+	})
+	seen[uid] = true
+	return envelopes, nil
+}
+
 func (c *client) buildShareEnvelopes(dk []byte, kv uint32, meID, mePub string, opts secretCreateOpts) ([]map[string]any, []string, []string, error) {
-	seen := map[string]bool{meID: true}
+	seen := map[string]bool{}
 	var envelopes []map[string]any
 	add := func(uid, pub string) error {
-		if uid == "" || seen[uid] || pub == "" {
-			return nil
-		}
-		env, err := cryptocore.SealDataKeyForRecipient(dk, mustB64(pub), kv)
-		if err != nil {
-			return err
-		}
-		envelopes = append(envelopes, map[string]any{
-			"user_id": uid, "key_version": kv,
-			"wrapped_dk_b64": b64(env.Ciphertext), "ephemeral_pub_b64": b64(env.EphemeralPub), "nonce_b64": b64(env.Nonce),
-		})
-		seen[uid] = true
-		return nil
+		var err error
+		envelopes, err = appendShareEnvelope(envelopes, seen, uid, pub, dk, kv)
+		return err
 	}
 	if err := add(meID, mePub); err != nil {
 		return nil, nil, nil, err

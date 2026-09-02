@@ -627,6 +627,25 @@ func (s *Store) PutKeyEnvelope(_ context.Context, env store.KeyEnvelope) error {
 	return s.flush()
 }
 
+func (s *Store) DeleteKeyEnvelope(_ context.Context, tenant store.TenantID, secret store.SecretID, user store.UserID) error {
+	if err := requireTenant(tenant); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	changed := false
+	for i, e := range s.data.Envelopes {
+		if e.TenantID == tenant && e.SecretID == secret && e.UserID == user && !e.Revoked {
+			s.data.Envelopes[i].Revoked = true
+			changed = true
+		}
+	}
+	if !changed {
+		return nil
+	}
+	return s.flush()
+}
+
 func (s *Store) ListKeyEnvelopes(_ context.Context, tenant store.TenantID, secret store.SecretID) ([]store.KeyEnvelope, error) {
 	if err := requireTenant(tenant); err != nil {
 		return nil, err
@@ -688,8 +707,11 @@ func (s *Store) InvalidateKeyVersion(_ context.Context, tenant store.TenantID, s
 	return s.flush()
 }
 
-func (s *Store) RotateSecret(_ context.Context, tenant store.TenantID, id store.SecretID, oldKeyVersion uint32, meta store.SecretMeta, blob store.CiphertextBlob, envelopes []store.KeyEnvelope) error {
+func (s *Store) RotateSecret(_ context.Context, tenant store.TenantID, id store.SecretID, oldKeyVersion uint32, meta store.SecretMeta, blob store.CiphertextBlob, envelopes []store.KeyEnvelope, audit *store.AuditEvent) error {
 	if err := requireTenant(tenant); err != nil {
+		return err
+	}
+	if err := store.ValidateAudit(audit); err != nil {
 		return err
 	}
 	if meta.TenantID != tenant || meta.ID != id {
@@ -697,6 +719,11 @@ func (s *Store) RotateSecret(_ context.Context, tenant store.TenantID, id store.
 	}
 	if len(envelopes) == 0 {
 		return errors.New("envelopes required")
+	}
+	for _, env := range envelopes {
+		if env.TenantID != tenant || env.SecretID != id {
+			return store.ErrConflict
+		}
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -720,33 +747,28 @@ func (s *Store) RotateSecret(_ context.Context, tenant store.TenantID, id store.
 	s.data.Blobs[secretKey(tenant, id)] = blob
 
 	for _, env := range envelopes {
-		if env.TenantID != tenant || env.SecretID != id {
-			return store.ErrConflict
-		}
-		replaced := false
-		for i, e := range s.data.Envelopes {
-			if e.TenantID == env.TenantID && e.SecretID == env.SecretID && e.UserID == env.UserID && e.KeyVersion == env.KeyVersion {
-				if e.Revoked {
-					return store.ErrRevokedEnvelope
-				}
-				s.data.Envelopes[i] = envelopeRec{KeyEnvelope: env, Revoked: false}
-				replaced = true
-				break
-			}
-		}
-		if !replaced {
-			s.data.Envelopes = append(s.data.Envelopes, envelopeRec{KeyEnvelope: env})
+		if err := s.putEnvelopeLocked(env); err != nil {
+			return err
 		}
 	}
+	s.appendAuditLocked(audit)
 	return s.flush()
 }
 
-func (s *Store) CreateSecret(_ context.Context, meta store.SecretMeta, blob store.CiphertextBlob, envelopes []store.KeyEnvelope) error {
+func (s *Store) CreateSecret(_ context.Context, meta store.SecretMeta, blob store.CiphertextBlob, envelopes []store.KeyEnvelope, audit *store.AuditEvent) error {
 	if err := requireTenant(meta.TenantID); err != nil {
+		return err
+	}
+	if err := store.ValidateAudit(audit); err != nil {
 		return err
 	}
 	if len(envelopes) == 0 {
 		return errors.New("envelopes required")
+	}
+	for _, env := range envelopes {
+		if env.TenantID != meta.TenantID || env.SecretID != meta.ID {
+			return store.ErrConflict
+		}
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -761,11 +783,11 @@ func (s *Store) CreateSecret(_ context.Context, meta store.SecretMeta, blob stor
 	s.data.Blobs[secretKey(meta.TenantID, meta.ID)] = blob
 
 	for _, env := range envelopes {
-		if env.TenantID != meta.TenantID || env.SecretID != meta.ID {
-			return store.ErrConflict
+		if err := s.putEnvelopeLocked(env); err != nil {
+			return err
 		}
-		s.data.Envelopes = append(s.data.Envelopes, envelopeRec{KeyEnvelope: env})
 	}
+	s.appendAuditLocked(audit)
 	return s.flush()
 }
 

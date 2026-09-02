@@ -151,8 +151,6 @@ func (a *API) putTenantLDAP(w http.ResponseWriter, r *http.Request, sess session
 	if cfg.BindPassword == "***" || cfg.BindPassword == "" {
 		if existingPwd != "" {
 			cfg.BindPassword = existingPwd
-		} else {
-			cfg.BindPassword = b.LDAP.BindPassword
 		}
 	}
 	cfg.CACertPEM = ""
@@ -239,11 +237,20 @@ func (a *API) handlePutTrust(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) handleTestLDAP(w http.ResponseWriter, r *http.Request) {
-	cfg := a.bundle().LDAP
+	sess, _ := a.sessionFrom(r)
+	stored := a.ldapConfigFor(sess.TenantID)
+	cfg := stored
 	var override ldapauth.Config
-	if err := readJSON(r, &override); err == nil && override.Host != "" {
+	if err := readJSON(r, &override); err == nil && strings.TrimSpace(override.Host) != "" {
+		if ldapTargetChanged(override, stored) && (override.BindPassword == "" || override.BindPassword == "***") {
+			writeErr(w, http.StatusBadRequest, "bind password required when testing a different LDAP host")
+			return
+		}
 		if override.BindPassword == "***" || override.BindPassword == "" {
-			override.BindPassword = cfg.BindPassword
+			override.BindPassword = stored.BindPassword
+		}
+		if strings.TrimSpace(override.BindDN) == "" {
+			override.BindDN = stored.BindDN
 		}
 		cfg = override
 	}
@@ -257,6 +264,20 @@ func (a *API) handleTestLDAP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func ldapTargetChanged(override, stored ldapauth.Config) bool {
+	if !strings.EqualFold(strings.TrimSpace(override.Host), strings.TrimSpace(stored.Host)) {
+		return true
+	}
+	if override.Port != 0 && stored.Port != 0 && override.Port != stored.Port {
+		return true
+	}
+	if strings.TrimSpace(override.BindDN) != "" &&
+		!strings.EqualFold(strings.TrimSpace(override.BindDN), strings.TrimSpace(stored.BindDN)) {
+		return true
+	}
+	return false
 }
 
 func (a *API) handleGetMail(w http.ResponseWriter, r *http.Request) {
@@ -458,6 +479,7 @@ func (a *API) handleDisableTenant(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	a.Sessions.DeleteByTenant(id)
 	if !a.appendAuditStrict(w, r, store.AuditEvent{
 		TenantID: sess.TenantID, ActorID: string(sess.UserID),
 		Action: "admin.tenant.disable", ResourceType: "tenant", ResourceID: string(id),

@@ -31,13 +31,13 @@ func TestPhase7PasskeyRegisterBeginAndStore(t *testing.T) {
 	postJSON(t, ts.URL+"/api/setup/commit", map[string]any{
 		"storage": map[string]string{"backend": "sqlite", "dsn": filepath.Join(dir, "v.db")},
 		"tenant":  map[string]any{"name": "T", "slug": "t1", "recovery_mode": "user_kit"},
-		"admin":   map[string]string{"username": "admin", "password": "password1234"},
+		"admin":   map[string]string{"username": "admin", "password": "Password1234!!!!"},
 		"argon2":  argon,
 	}, nil)
 
 	jar := &cookieJar{m: map[string]string{}}
 	postJSON(t, ts.URL+"/api/auth/login", map[string]string{
-		"tenant_slug": "t1", "username": "admin", "password": "password1234",
+		"tenant_slug": "t1", "username": "admin", "password": "Password1234!!!!",
 	}, jar)
 	onboardUser(t, ts.URL, jar, []byte("admin-master-pw!"), argon)
 

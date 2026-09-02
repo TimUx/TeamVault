@@ -80,6 +80,15 @@ func Run(opts Options) (*Result, error) {
 		return nil, err
 	}
 
+	if !cfg.Initialized {
+		if _, err := EnsureSetupToken(dataDir); err != nil {
+			_ = vault.Close()
+			return nil, fmt.Errorf("setup token: %w", err)
+		}
+	} else {
+		ClearSetupToken(dataDir)
+	}
+
 	return &Result{
 		DataDir:     dataDir,
 		Config:      cfg,

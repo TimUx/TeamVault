@@ -9,10 +9,29 @@
     return `<a class="help-side-link${a}${c}" href="${pathOf(href)}">${label}</a>`;
   }
 
-  /**
-   * @param {string} active page key: overview|vault|account|cli|extension
-   */
-  function tvHelpNav(active) {
+  function clientsNavSection(active, features) {
+    const show = features.cli || features.browser_extension;
+    if (!show) return "";
+    const cliLink = features.cli ? link("/help/cli", "CLI (tvcli)", active === "cli") : "";
+    const extLink = features.browser_extension ? link("/help/extension", "Browser-Extension", active === "extension") : "";
+    return `
+        <div class="help-sec">
+          <div class="help-sec-title">Clients</div>
+          ${cliLink}
+          ${extLink}
+          ${active === "extension" && features.browser_extension ? `
+            <a class="help-side-link sub" href="#install">Installation</a>
+            <a class="help-side-link sub" href="#fallback">Fallback</a>
+            <a class="help-side-link sub" href="#nutzen">Fill &amp; Copy</a>
+          ` : ""}
+          ${active === "cli" && features.cli ? `
+            <a class="help-side-link sub" href="#install">Installation</a>
+            <a class="help-side-link sub" href="#nutzen">Befehle</a>
+          ` : ""}
+        </div>`;
+  }
+
+  function renderHelpNav(active, features) {
     const sidebar = document.getElementById("helpSidebar");
     if (!sidebar) return;
 
@@ -42,20 +61,7 @@
             <a class="help-side-link sub" href="#login">Beim Login nutzen</a>
           ` : ""}
         </div>
-        <div class="help-sec">
-          <div class="help-sec-title">Clients</div>
-          ${link("/help/cli", "CLI (tvcli)", active === "cli")}
-          ${link("/help/extension", "Browser-Extension", active === "extension")}
-          ${active === "extension" ? `
-            <a class="help-side-link sub" href="#install">Installation</a>
-            <a class="help-side-link sub" href="#fallback">Fallback</a>
-            <a class="help-side-link sub" href="#nutzen">Fill &amp; Copy</a>
-          ` : ""}
-          ${active === "cli" ? `
-            <a class="help-side-link sub" href="#install">Installation</a>
-            <a class="help-side-link sub" href="#nutzen">Befehle</a>
-          ` : ""}
-        </div>
+        ${clientsNavSection(active, features)}
         <div class="help-sec">
           <div class="help-sec-title">App</div>
           ${link("/login", "Login", false)}
@@ -109,6 +115,18 @@
         if (foot) foot.textContent = text;
         if (about) about.textContent = text;
       });
+  }
+
+  /**
+   * @param {string} active page key: overview|vault|account|cli|extension
+   */
+  async function tvHelpNav(active) {
+    let features = { cli: false, browser_extension: false };
+    if (typeof tvFetchClientFeatures === "function") {
+      features = await tvFetchClientFeatures();
+    }
+    renderHelpNav(active, features);
+    return features;
   }
 
   window.tvHelpNav = tvHelpNav;

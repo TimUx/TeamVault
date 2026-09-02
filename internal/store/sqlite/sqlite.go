@@ -16,7 +16,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const schemaVersion = 6
+const schemaVersion = 7
 
 type Store struct {
 	db *sql.DB
@@ -79,6 +79,7 @@ CREATE TABLE IF NOT EXISTS users (
   escrow_envelope BLOB,
   totp_secret_enc BLOB,
   totp_enabled INTEGER NOT NULL DEFAULT 0,
+  kdf_params_json TEXT NOT NULL DEFAULT '',
   onboarded_at TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
@@ -198,6 +199,7 @@ CREATE TABLE IF NOT EXISTS secret_group_shares (
   PRIMARY KEY (tenant_id, secret_id, group_id)
 )`,
 		`ALTER TABLE secrets ADD COLUMN visibility TEXT NOT NULL DEFAULT 'private'`,
+		`ALTER TABLE users ADD COLUMN kdf_params_json TEXT NOT NULL DEFAULT ''`,
 	} {
 		_, _ = s.db.Exec(q)
 	}
@@ -334,8 +336,8 @@ func (s *Store) UpsertUser(ctx context.Context, u store.UserRecord) error {
 	_, err := s.db.ExecContext(ctx, `
 INSERT INTO users(id, tenant_id, username, display_name, email, auth_backend, local_password_hash,
   status, roles_json, public_key, encrypted_private_key, encrypted_private_key_recovery,
-  escrow_envelope, totp_secret_enc, totp_enabled, onboarded_at, created_at, updated_at)
-VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+  escrow_envelope, totp_secret_enc, totp_enabled, kdf_params_json, onboarded_at, created_at, updated_at)
+VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
 ON CONFLICT(tenant_id, id) DO UPDATE SET
   username=excluded.username, display_name=excluded.display_name, email=excluded.email,
   auth_backend=excluded.auth_backend, local_password_hash=excluded.local_password_hash,
@@ -343,10 +345,11 @@ ON CONFLICT(tenant_id, id) DO UPDATE SET
   encrypted_private_key=excluded.encrypted_private_key,
   encrypted_private_key_recovery=excluded.encrypted_private_key_recovery,
   escrow_envelope=excluded.escrow_envelope, totp_secret_enc=excluded.totp_secret_enc,
-  totp_enabled=excluded.totp_enabled, onboarded_at=excluded.onboarded_at, updated_at=excluded.updated_at
+  totp_enabled=excluded.totp_enabled, kdf_params_json=excluded.kdf_params_json,
+  onboarded_at=excluded.onboarded_at, updated_at=excluded.updated_at
 `, u.ID, u.TenantID, u.Username, u.DisplayName, u.Email, u.AuthBackend, u.LocalPasswordHash,
 		u.Status, u.RolesJSON, u.PublicKey, u.EncryptedPrivateKey, u.EncryptedPrivateKeyRecovery,
-		u.EscrowEnvelope, u.TotpSecretEnc, boolToInt(u.TotpEnabled),
+		u.EscrowEnvelope, u.TotpSecretEnc, boolToInt(u.TotpEnabled), u.KdfParamsJSON,
 		onboarded, u.CreatedAt.Format(time.RFC3339Nano), u.UpdatedAt.Format(time.RFC3339Nano))
 	return err
 }
@@ -357,9 +360,10 @@ func scanUser(row scanner) (*store.UserRecord, error) {
 	var u store.UserRecord
 	var onboarded, cAt, uAt sql.NullString
 	var totpEnabled int
+	var kdf sql.NullString
 	if err := row.Scan(&u.ID, &u.TenantID, &u.Username, &u.DisplayName, &u.Email, &u.AuthBackend,
 		&u.LocalPasswordHash, &u.Status, &u.RolesJSON, &u.PublicKey, &u.EncryptedPrivateKey,
-		&u.EncryptedPrivateKeyRecovery, &u.EscrowEnvelope, &u.TotpSecretEnc, &totpEnabled,
+		&u.EncryptedPrivateKeyRecovery, &u.EscrowEnvelope, &u.TotpSecretEnc, &totpEnabled, &kdf,
 		&onboarded, &cAt, &uAt); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, store.ErrNotFound
@@ -367,6 +371,9 @@ func scanUser(row scanner) (*store.UserRecord, error) {
 		return nil, err
 	}
 	u.TotpEnabled = totpEnabled == 1
+	if kdf.Valid {
+		u.KdfParamsJSON = kdf.String
+	}
 	if onboarded.Valid {
 		t, _ := time.Parse(time.RFC3339Nano, onboarded.String)
 		u.OnboardedAt = &t
@@ -383,7 +390,7 @@ func (s *Store) GetUser(ctx context.Context, tenant store.TenantID, id store.Use
 	row := s.db.QueryRowContext(ctx, `
 SELECT id, tenant_id, username, display_name, email, auth_backend, local_password_hash, status, roles_json,
   public_key, encrypted_private_key, encrypted_private_key_recovery, escrow_envelope, totp_secret_enc, totp_enabled,
-  onboarded_at, created_at, updated_at
+  kdf_params_json, onboarded_at, created_at, updated_at
 FROM users WHERE tenant_id = ? AND id = ?`, tenant, id)
 	return scanUser(row)
 }
@@ -395,7 +402,7 @@ func (s *Store) GetUserByUsername(ctx context.Context, tenant store.TenantID, us
 	row := s.db.QueryRowContext(ctx, `
 SELECT id, tenant_id, username, display_name, email, auth_backend, local_password_hash, status, roles_json,
   public_key, encrypted_private_key, encrypted_private_key_recovery, escrow_envelope, totp_secret_enc, totp_enabled,
-  onboarded_at, created_at, updated_at
+  kdf_params_json, onboarded_at, created_at, updated_at
 FROM users WHERE tenant_id = ? AND lower(username) = lower(?)`, tenant, username)
 	return scanUser(row)
 }
@@ -411,7 +418,7 @@ func (s *Store) ListUsers(ctx context.Context, tenant store.TenantID, q store.Us
 	rows, err := s.db.QueryContext(ctx, `
 SELECT id, tenant_id, username, display_name, email, auth_backend, local_password_hash, status, roles_json,
   public_key, encrypted_private_key, encrypted_private_key_recovery, escrow_envelope, totp_secret_enc, totp_enabled,
-  onboarded_at, created_at, updated_at
+  kdf_params_json, onboarded_at, created_at, updated_at
 FROM users WHERE tenant_id = ?
 ORDER BY username LIMIT ?`, tenant, limit)
 	if err != nil {
@@ -780,6 +787,16 @@ WHERE key_envelopes.revoked = 0
 	return err
 }
 
+func (s *Store) DeleteKeyEnvelope(ctx context.Context, tenant store.TenantID, secret store.SecretID, user store.UserID) error {
+	if err := requireTenant(tenant); err != nil {
+		return err
+	}
+	_, err := s.db.ExecContext(ctx, `
+UPDATE key_envelopes SET revoked = 1
+WHERE tenant_id = ? AND secret_id = ? AND user_id = ? AND revoked = 0`, tenant, secret, user)
+	return err
+}
+
 func (s *Store) ListKeyEnvelopes(ctx context.Context, tenant store.TenantID, secret store.SecretID) ([]store.KeyEnvelope, error) {
 	if err := requireTenant(tenant); err != nil {
 		return nil, err
@@ -856,8 +873,11 @@ WHERE tenant_id = ? AND secret_id = ? AND key_version = ?`, tenant, secret, vers
 	return err
 }
 
-func (s *Store) RotateSecret(ctx context.Context, tenant store.TenantID, id store.SecretID, oldKeyVersion uint32, meta store.SecretMeta, blob store.CiphertextBlob, envelopes []store.KeyEnvelope) error {
+func (s *Store) RotateSecret(ctx context.Context, tenant store.TenantID, id store.SecretID, oldKeyVersion uint32, meta store.SecretMeta, blob store.CiphertextBlob, envelopes []store.KeyEnvelope, audit *store.AuditEvent) error {
 	if err := requireTenant(tenant); err != nil {
+		return err
+	}
+	if err := store.ValidateAudit(audit); err != nil {
 		return err
 	}
 	if meta.TenantID != tenant || meta.ID != id {
@@ -930,11 +950,17 @@ WHERE key_envelopes.revoked = 0
 			return err
 		}
 	}
+	if err := insertAuditTx(ctx, tx, audit); err != nil {
+		return err
+	}
 	return tx.Commit()
 }
 
-func (s *Store) CreateSecret(ctx context.Context, meta store.SecretMeta, blob store.CiphertextBlob, envelopes []store.KeyEnvelope) error {
+func (s *Store) CreateSecret(ctx context.Context, meta store.SecretMeta, blob store.CiphertextBlob, envelopes []store.KeyEnvelope, audit *store.AuditEvent) error {
 	if err := requireTenant(meta.TenantID); err != nil {
+		return err
+	}
+	if err := store.ValidateAudit(audit); err != nil {
 		return err
 	}
 	if len(envelopes) == 0 {
@@ -977,6 +1003,9 @@ VALUES(?,?,?,?,?,0)
 `, env.SecretID, env.TenantID, env.UserID, env.KeyVersion, env.WrappedDK); err != nil {
 			return err
 		}
+	}
+	if err := insertAuditTx(ctx, tx, audit); err != nil {
+		return err
 	}
 	return tx.Commit()
 }

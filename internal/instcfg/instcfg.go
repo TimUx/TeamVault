@@ -39,6 +39,8 @@ type Policy struct {
 	LDAPSyncHours            int   `json:"ldap_sync_hours"`             // default 24; 0 = manual only
 	AdminSecretsEnvelopeOnly bool  `json:"admin_secrets_envelope_only"` // false = admins see all secret metadata in list (default)
 	OfflineCacheAllowed      *bool `json:"offline_cache_allowed,omitempty"` // nil = enabled (default)
+	CLIIntegrationEnabled    *bool `json:"cli_integration_enabled,omitempty"`       // nil/false = hide CLI in Konto/Hilfe
+	BrowserIntegrationEnabled *bool `json:"browser_integration_enabled,omitempty"` // nil/false = hide Extension in Konto/Hilfe
 }
 
 // PublicAccess configures how clients reach this instance (reverse proxy, subpath, canonical URL).
@@ -56,6 +58,16 @@ func (p Policy) OfflineCacheEnabled() bool {
 		return true
 	}
 	return *p.OfflineCacheAllowed
+}
+
+// ShowCLIIntegration reports whether CLI downloads/guides are shown in Konto and Hilfe.
+func (p Policy) ShowCLIIntegration() bool {
+	return p.CLIIntegrationEnabled != nil && *p.CLIIntegrationEnabled
+}
+
+// ShowBrowserIntegration reports whether browser extension integration is shown in Konto and Hilfe.
+func (p Policy) ShowBrowserIntegration() bool {
+	return p.BrowserIntegrationEnabled != nil && *p.BrowserIntegrationEnabled
 }
 
 // LDAPConnection is a per-tenant LDAP bind config (OQ-09).

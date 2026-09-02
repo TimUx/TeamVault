@@ -81,6 +81,30 @@ func (s *Store) Delete(id string) {
 	s.persist()
 }
 
+// DeleteByUser drops all cookie sessions for userID (API-key sessions are not stored here).
+func (s *Store) DeleteByUser(userID store.UserID) {
+	s.mu.Lock()
+	for id, sess := range s.sessions {
+		if sess.UserID == userID {
+			delete(s.sessions, id)
+		}
+	}
+	s.mu.Unlock()
+	s.persist()
+}
+
+// DeleteByTenant drops all cookie sessions for tenantID.
+func (s *Store) DeleteByTenant(tenantID store.TenantID) {
+	s.mu.Lock()
+	for id, sess := range s.sessions {
+		if sess.TenantID == tenantID {
+			delete(s.sessions, id)
+		}
+	}
+	s.mu.Unlock()
+	s.persist()
+}
+
 func (s *Store) persist() {
 	if s.path == "" {
 		return

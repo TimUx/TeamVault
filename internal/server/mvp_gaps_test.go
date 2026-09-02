@@ -30,13 +30,13 @@ func TestMVPGapsLDAPConnPolicyRateLimitShamir(t *testing.T) {
 	postJSON(t, ts.URL+"/api/setup/commit", map[string]any{
 		"storage": map[string]string{"backend": "sqlite", "dsn": filepath.Join(dir, "v.db")},
 		"tenant":  map[string]any{"name": "T", "slug": "t1", "recovery_mode": "user_kit"},
-		"admin":   map[string]string{"username": "admin", "password": "password1234"},
+		"admin":   map[string]string{"username": "admin", "password": "Password1234!!!!"},
 		"argon2":  argon,
 	}, nil)
 
 	jar := &cookieJar{m: map[string]string{}}
 	postJSON(t, ts.URL+"/api/auth/login", map[string]string{
-		"tenant_slug": "t1", "username": "admin", "password": "password1234",
+		"tenant_slug": "t1", "username": "admin", "password": "Password1234!!!!",
 	}, jar)
 	onboardUser(t, ts.URL, jar, []byte("admin-master-pw!"), argon)
 
@@ -75,6 +75,23 @@ func TestMVPGapsLDAPConnPolicyRateLimitShamir(t *testing.T) {
 	if pol["offline_cache_allowed"] != false {
 		t.Fatalf("offline disable, got %v", pol["offline_cache_allowed"])
 	}
+	if pol["cli_integration_enabled"] != false {
+		t.Fatalf("cli integration default off, got %v", pol["cli_integration_enabled"])
+	}
+	putJSONCookie(t, ts.URL+"/api/admin/policy", map[string]any{
+		"totp_required": false, "session_hours": 8, "unlock_idle_minutes": 15,
+		"escrow_shamir_k": 3, "escrow_shamir_n": 5, "ldap_sync_hours": 24,
+		"cli_integration_enabled": true, "browser_integration_enabled": true,
+	}, jar)
+	pol = getJSONCookie(t, ts.URL+"/api/policy/client", jar)
+	if pol["cli_integration_enabled"] != true || pol["browser_integration_enabled"] != true {
+		t.Fatalf("integration enable, got %v", pol)
+	}
+	dl := getJSON(t, ts.URL+"/api/client-downloads")
+	feat, _ := dl["features"].(map[string]any)
+	if feat["cli"] != true || feat["browser_extension"] != true {
+		t.Fatalf("downloads features: %v", feat)
+	}
 
 	putJSONCookie(t, ts.URL+"/api/admin/mail/templates", map[string]any{
 		"invite_subject": "Hi", "invite_body": "u={{username}} t={{tenant}}",
@@ -82,14 +99,14 @@ func TestMVPGapsLDAPConnPolicyRateLimitShamir(t *testing.T) {
 	}, jar)
 
 	created := postJSONCookie(t, ts.URL+"/api/admin/users", map[string]string{
-		"username": "bob", "password": "password1234", "email": "bob@example.com",
+		"username": "bob", "password": "Password1234!!!!", "email": "bob@example.com",
 	}, jar)
 	bobID := created["id"].(string)
 	postJSONCookie(t, ts.URL+"/api/admin/users/"+bobID+"/roles", map[string]any{
 		"roles": []string{"member", "tenant_admin"},
 	}, jar)
 	postJSONCookie(t, ts.URL+"/api/admin/users/"+bobID+"/password", map[string]string{
-		"password": "password9999ab",
+		"password": "Password5678!!!!",
 	}, jar)
 
 	// Shamir roundtrip (vendored HashiCorp)

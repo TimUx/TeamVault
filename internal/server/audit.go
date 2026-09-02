@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/teamvault/teamvault/internal/auth/session"
 	"github.com/teamvault/teamvault/internal/store"
 )
 
@@ -20,4 +21,12 @@ func (a *API) appendAuditStrict(w http.ResponseWriter, r *http.Request, e store.
 		return false
 	}
 	return true
+}
+
+func (a *API) mutationAudit(r *http.Request, sess session.Session, action, resourceType, resourceID string) store.AuditEvent {
+	return store.AuditEvent{
+		ID: newID("aud"), TenantID: sess.TenantID, ActorID: string(sess.UserID),
+		Action: action, ResourceType: resourceType, ResourceID: resourceID,
+		CreatedAt: time.Now().UTC(),
+	}
 }

@@ -8,6 +8,7 @@
  */
 import crypto from "crypto";
 import fs from "fs";
+import os from "os";
 import path from "path";
 import { fileURLToPath } from "url";
 import { execFileSync } from "child_process";
@@ -16,7 +17,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, "..");
 const EXT = path.join(ROOT, "clients", "extension");
 const OUT = path.join(ROOT, "dist");
-const KEY = path.join(EXT, "teamvault.pem");
+const KEY = path.join(ROOT, "clients", "teamvault.pem");
+const LEGACY_KEY = path.join(EXT, "teamvault.pem");
 const MANIFEST = path.join(EXT, "manifest.json");
 
 function chromeExtensionId(pubKeyDer) {
@@ -35,13 +37,20 @@ function requireSigningKey() {
   return v === "1" || v === "true" || v === "yes";
 }
 
+function keyPath() {
+  if (process.env.TV_EXTENSION_PEM) return KEY;
+  if (fs.existsSync(KEY) && fs.statSync(KEY).size > 0) return KEY;
+  if (fs.existsSync(LEGACY_KEY) && fs.statSync(LEGACY_KEY).size > 0) return LEGACY_KEY;
+  return KEY;
+}
+
 function ensureKey() {
   const fromEnv = (process.env.TV_EXTENSION_PEM || "").trim();
   if (fromEnv) {
-    fs.writeFileSync(KEY, fromEnv, { mode: 0o600 });
-    return;
+    return fromEnv;
   }
-  if (fs.existsSync(KEY) && fs.statSync(KEY).size > 0) return;
+  const dest = keyPath();
+  if (fs.existsSync(dest) && fs.statSync(dest).size > 0) return fs.readFileSync(dest, "utf8");
   if (requireSigningKey()) {
     console.error(
       "extension signing key required: set TV_EXTENSION_PEM or provide",
@@ -51,19 +60,21 @@ function ensureKey() {
     process.exit(1);
   }
   const { privateKey } = crypto.generateKeyPairSync("rsa", { modulusLength: 2048 });
-  fs.writeFileSync(KEY, privateKey.export({ type: "pkcs8", format: "pem" }), { mode: 0o600 });
-  console.log("Generated new extension key:", KEY, "— keep it local (not git)");
+  const pem = privateKey.export({ type: "pkcs8", format: "pem" });
+  fs.mkdirSync(path.dirname(dest), { recursive: true });
+  fs.writeFileSync(dest, pem, { mode: 0o600 });
+  console.log("Generated new extension key:", dest, "— keep it local (not git)");
+  return pem;
 }
 
-function publicKeyBase64() {
-  const pem = fs.readFileSync(KEY, "utf8");
+function publicKeyBase64(pem) {
   const key = crypto.createPrivateKey(pem);
   const pubDer = crypto.createPublicKey(key).export({ type: "spki", format: "der" });
   return { b64: pubDer.toString("base64"), der: pubDer };
 }
 
-function syncManifestKey() {
-  const { b64 } = publicKeyBase64();
+function syncManifestKey(pem) {
+  const { b64 } = publicKeyBase64(pem);
   const manifest = JSON.parse(fs.readFileSync(MANIFEST, "utf8"));
   if (manifest.key === b64) return manifest;
   if (requireSigningKey()) {
@@ -76,17 +87,35 @@ function syncManifestKey() {
   return manifest;
 }
 
-function zipDir(src, destZip) {
-  if (process.platform === "win32") {
-    if (fs.existsSync(destZip)) fs.unlinkSync(destZip);
-    const ps = `Compress-Archive -Path '${src.replace(/'/g, "''")}\\*' -DestinationPath '${destZip.replace(/'/g, "''")}' -Force`;
-    execFileSync("powershell", ["-NoProfile", "-Command", ps], { stdio: "inherit" });
-    return;
+function copyExtensionWithoutSecrets(src, dest) {
+  fs.mkdirSync(dest, { recursive: true });
+  for (const name of fs.readdirSync(src)) {
+    if (name.endsWith(".pem") || name.endsWith(".key")) continue;
+    const from = path.join(src, name);
+    const to = path.join(dest, name);
+    const st = fs.statSync(from);
+    if (st.isDirectory()) copyExtensionWithoutSecrets(from, to);
+    else fs.copyFileSync(from, to);
   }
-  execFileSync("zip", ["-qr", destZip, "."], { cwd: src, stdio: "inherit" });
 }
 
-async function packCrx(crxPath) {
+function zipDir(src, destZip) {
+  const staging = fs.mkdtempSync(path.join(os.tmpdir(), "tv-ext-"));
+  try {
+    copyExtensionWithoutSecrets(src, staging);
+    if (process.platform === "win32") {
+      if (fs.existsSync(destZip)) fs.unlinkSync(destZip);
+      const ps = `Compress-Archive -Path '${staging.replace(/'/g, "''")}\\*' -DestinationPath '${destZip.replace(/'/g, "''")}' -Force`;
+      execFileSync("powershell", ["-NoProfile", "-Command", ps], { stdio: "inherit" });
+      return;
+    }
+    execFileSync("zip", ["-qr", destZip, ".", "-x", "*.pem", "-x", "*.key"], { cwd: staging, stdio: "inherit" });
+  } finally {
+    fs.rmSync(staging, { recursive: true, force: true });
+  }
+}
+
+async function packCrx(crxPath, pem) {
   let crx3;
   try {
     crx3 = (await import("crx3")).default;
@@ -94,7 +123,13 @@ async function packCrx(crxPath) {
     console.error("Install crx3: npm install --prefix scripts crx3");
     process.exit(1);
   }
-  await crx3([EXT], { keyPath: KEY, crxPath });
+  const keyFile = path.join(os.tmpdir(), "tv-ext-" + process.pid + ".pem");
+  fs.writeFileSync(keyFile, pem, { mode: 0o600 });
+  try {
+    await crx3([EXT], { keyPath: keyFile, crxPath });
+  } finally {
+    try { fs.unlinkSync(keyFile); } catch {}
+  }
 }
 
 function writeUpdatesXml(dir, manifest, extId, publicBase) {
@@ -135,9 +170,9 @@ function writePolicyTemplate(dir, extId, publicBase) {
 }
 
 async function main() {
-  ensureKey();
-  const manifest = syncManifestKey();
-  const { der, b64 } = publicKeyBase64();
+  const pem = ensureKey();
+  const manifest = syncManifestKey(pem);
+  const { der, b64 } = publicKeyBase64(pem);
   const extId = chromeExtensionId(der);
   fs.mkdirSync(OUT, { recursive: true });
 
@@ -148,7 +183,7 @@ async function main() {
   console.log("Packing zip…");
   zipDir(EXT, zipPath);
   console.log("Packing crx…");
-  await packCrx(crxPath);
+  await packCrx(crxPath, pem);
   console.log("Packing xpi…");
   fs.copyFileSync(zipPath, xpiPath);
 

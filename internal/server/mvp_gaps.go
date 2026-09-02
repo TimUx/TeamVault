@@ -29,12 +29,14 @@ func (a *API) registerMVPGaps(mux *http.ServeMux) {
 func (a *API) handleClientPolicy(w http.ResponseWriter, r *http.Request) {
 	p := a.bundle().Policy
 	writeJSON(w, http.StatusOK, map[string]any{
-		"session_hours":          p.SessionHours,
-		"unlock_idle_minutes":    p.UnlockIdleMinutes,
-		"totp_required":          p.TOTPRequired,
-		"escrow_shamir_k":        p.EscrowShamirK,
-		"escrow_shamir_n":        p.EscrowShamirN,
-		"offline_cache_allowed":  p.OfflineCacheEnabled(),
+		"session_hours":               p.SessionHours,
+		"unlock_idle_minutes":         p.UnlockIdleMinutes,
+		"totp_required":               p.TOTPRequired,
+		"escrow_shamir_k":             p.EscrowShamirK,
+		"escrow_shamir_n":             p.EscrowShamirN,
+		"offline_cache_allowed":       p.OfflineCacheEnabled(),
+		"cli_integration_enabled":     p.ShowCLIIntegration(),
+		"browser_integration_enabled": p.ShowBrowserIntegration(),
 	})
 }
 
@@ -210,8 +212,8 @@ func (a *API) handleResetPassword(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Password string `json:"password"`
 	}
-	if err := readJSON(r, &body); err != nil || len(body.Password) < 12 {
-		writeErr(w, http.StatusBadRequest, "password min 12 chars")
+	if err := readJSON(r, &body); err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	u, err := a.App.Vault.GetUser(r.Context(), sess.TenantID, store.UserID(r.PathValue("id")))
@@ -223,6 +225,14 @@ func (a *API) handleResetPassword(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "only local users")
 		return
 	}
+	if !actorMayModifyUser(sess.Roles, *u) {
+		writeErr(w, http.StatusForbidden, "cannot modify platform_admin")
+		return
+	}
+	if err := password.ValidateLocal(body.Password); err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	hash, err := password.Hash(body.Password, password.Default)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
@@ -232,6 +242,11 @@ func (a *API) handleResetPassword(w http.ResponseWriter, r *http.Request) {
 	if err := a.App.Vault.UpsertUser(r.Context(), *u); err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
+	}
+	a.Sessions.DeleteByUser(u.ID)
+	if sess.UserID == u.ID {
+		fresh := a.Sessions.Create(sess.UserID, sess.TenantID, sess.Username, sess.Roles)
+		a.setSessionCookie(w, r, fresh)
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
@@ -262,7 +277,7 @@ func (a *API) handleSetRoles(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusNotFound, "user not found")
 		return
 	}
-	if !actorMayChangeUserRoles(sess.Roles, *u) {
+	if !actorMayModifyUser(sess.Roles, *u) {
 		writeErr(w, http.StatusForbidden, "cannot modify platform_admin")
 		return
 	}
@@ -271,6 +286,11 @@ func (a *API) handleSetRoles(w http.ResponseWriter, r *http.Request) {
 	if err := a.App.Vault.UpsertUser(r.Context(), *u); err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
+	}
+	a.Sessions.DeleteByUser(u.ID)
+	if sess.UserID == u.ID {
+		fresh := a.Sessions.Create(sess.UserID, sess.TenantID, sess.Username, body.Roles)
+		a.setSessionCookie(w, r, fresh)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"roles": body.Roles})
 }

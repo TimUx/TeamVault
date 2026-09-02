@@ -34,7 +34,7 @@ Nach dem Login (oder nach Onboarding) erscheint **Vault entsperren**:
 
 Beim ersten Vault-Zugriff führt ein **zweistufiger Assistent** durch die Einrichtung:
 
-1. **Schritt 1 — Master-Passwort:** ≥12 Zeichen wählen und wiederholen → **Schlüssel erzeugen** (läuft lokal im Browser)
+1. **Schritt 1 — Master-Passwort:** mindestens 16 Zeichen, mit Groß- und Kleinbuchstaben, Ziffer und Sonderzeichen, **keine Umlaute** → **Schlüssel erzeugen** (läuft lokal im Browser)
 2. **Schritt 2 — Recovery-Kit** (bei Modus *User Recovery-Kit*): Kit **kopieren** oder **herunterladen**, Checkliste abarbeiten, Häkchen **Ich habe das Recovery-Kit gesichert** setzen → **Weiter zur App**
 3. Bei **Admin-Escrow** entfällt das Kit — nach der Schlüsselerzeugung direkt **Weiter zur App**
 
@@ -125,7 +125,7 @@ Ein privates Secret wird durch Teilen zum **geteilten** Secret und wandert in di
 
 Die Tabelle **Geteilte Secrets** zeigt Anleger, User- und Gruppen-Freigaben. **Meine Secrets** bleibt ohne Freigabe-Spalten (nur Teilen-Aktion).
 
-Wird ein User **neu in eine Gruppe** aufgenommen, teilt TeamVault die Gruppen-Secrets automatisch nach — sofern jemand mit Zugriff (z.&nbsp;B. Admin) den Vault **entsperrt** hat bzw. beim Hinzufügen entsperrt ist. Der Server erzeugt keine Umschläge (Zero-Knowledge); fehlende Freigaben werden beim nächsten Unlock nachgeholt.
+Wird ein User **neu in eine Gruppe** aufgenommen, erscheinen fehlende Umschläge als Catch-up-Hinweis. Nachpflege passiert **nicht** still beim Unlock: jemand mit Zugriff bestätigt die Empfängerliste (TOFU-Fingerprint bei neuem oder geändertem Public Key). Der Server erzeugt keine Umschläge (Zero-Knowledge).
 
 **Import** legt Secrets immer als **privat** an.
 
@@ -211,11 +211,11 @@ Passkeys ersetzen nur das Login — das Master-Passwort bleibt für den Vault n�
 
 ### Login-Passwort ändern
 
-Nur bei **lokalem** Auth-Backend: aktuelles + neues Login-Passwort (≥12) → **Login-Passwort speichern**. LDAP-User ändern das Passwort in AD.
+Nur bei **lokalem** Auth-Backend: aktuelles + neues Login-Passwort (mindestens 16 Zeichen, Groß-/Kleinbuchstaben, Ziffer, Sonderzeichen, keine Umlaute) → **Login-Passwort speichern**. LDAP-User ändern das Passwort in AD — für sie entfällt der Tab **Login-Passwort** im Konto.
 
 ### Master-Passwort ändern
 
-Aktuelles und neues Master-Passwort eingeben → **Master-Passwort speichern**. Der Private Key wird **nur im Browser** neu versiegelt; der Server speichert neue Ciphertexte. Bei Recovery-Modus `user_kit` erscheint ein neues Recovery-Kit (einmalig sichern).
+Aktuelles und neues Master-Passwort eingeben → **Master-Passwort speichern**. Das neue Passwort unterliegt derselben Regel wie beim Onboarding (mindestens 16 Zeichen, Groß-/Kleinbuchstaben, Ziffer, Sonderzeichen, keine Umlaute). Der Private Key wird **nur im Browser** neu versiegelt; der Server speichert neue Ciphertexte. Bei Recovery-Modus `user_kit` erscheint ein neues Recovery-Kit (einmalig sichern).
 
 ### Offline-Vault (optional)
 
@@ -263,7 +263,7 @@ Nur `read` → keine Admin- oder Schreibaktionen. Cookie-Login ohne API-Key ist 
 
 ## 9. Gute Praxis
 
-- Master-Passwort lang und einzigartig; Recovery-Kit offline sichern  
+- Master-Passwort einzigartig (mindestens 16 Zeichen, Groß-/Klein, Ziffer, Sonderzeichen, keine Umlaute); Recovery-Kit offline sichern  
 - Login-Passwort ≠ Master-Passwort  
 - Nach Teilen nur notwendige Personen; bei Austritt Admin um Entzug/Rotation bitten  
 - Öffentliche/geteilte Rechner: nach Nutzung **Logout** und Browser schließen  

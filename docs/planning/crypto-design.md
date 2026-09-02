@@ -98,7 +98,7 @@ sequenceDiagram
 1. Owner entschlüsselt `DK` mit eigener SK.
 2. Für **jeden** Ziel-User: neues Envelope `box(DK, PK_target)`.
 3. Kein gemeinsames Gruppengeheimnis – Gruppenmitgliedschaft steuert nur, *für wen* Envelopes erzeugt werden.
-4. Bei späteren Gruppenänderungen: fehlende Envelopes nachziehen bzw. bei Entzug rotieren (3.5).
+4. Bei späteren Gruppenänderungen: fehlende Envelopes nur nach expliziter Bestätigung (TOFU) nachziehen bzw. bei Entzug rotieren (3.5).
 
 ### 3.5 Berechtigung entziehen (Pflicht-Rotation)
 
@@ -194,15 +194,23 @@ Server-seitiger Hash-Update; **kein** Einfluss auf Vault-Keys (außer User wähl
 
 ---
 
-## 8. Bedrohungsannahmen (kurz)
+## 8. Bedrohungsannahmen
+
+Zero-Knowledge gilt gegenüber **Speicher und DB-Dump** und gegenüber einem ehrlichen Server, der Ciphertexts nur ablegt. Es gilt **nicht** gegenüber einem App-Server, der das Web-UI-JavaScript ausliefert (XSS, kompromittiertes Release, böswilliger Operator am Auslieferungskanal). In dem Modell kann der Client beliebige Schlüssel wrappen oder exfiltrieren; das ist physikalisch nicht zu schließen, solange Crypto im Browser läuft.
+
+Geschlossene Pfade ohne JS-Manipulation:
 
 | Bedrohung | Gegenmaßnahme |
 |-----------|---------------|
-| Kompromittierte DB | Nur Ciphertext; ohne User-SK nutzlos |
-| Böswilliger Server-Admin | Zero-Knowledge; Escrow-Modus bewusst schwächer – Tenant-Wahl |
-| Rechteentzug ohne Rotation | Verboten durch Design; erzwungen in API-Workflow |
-| XSS im WebUI | CSP, hartes Session-/Memory-Handling; SK nur im Speicher |
-| Offline-Brute-Force auf encrypted_private_key | Argon2id-Kosten hoch ansetzen (Tenant-Params) |
+| Kompromittierte DB / Storage-Dump | Nur Ciphertext; ohne User-SK nutzlos |
+| Server vertauscht Empfänger-Pubkeys | TOFU-Fingerprint im Client (localStorage); Wrap nur nach Bestätigung bei neuem/geändertem Key |
+| Stilles Gruppen-Catch-up (`afterUnlock` wrappt DKs) | Entfernt; Nachpflege nur mit sichtbarer Empfängerliste und Bestätigung |
+| Böswilliger Tenant-Admin ohne Escrow-SK | Escrow-Pubkey ersetzen nur nach k-aus-n Challenge gegen den **aktuellen** Escrow-Key |
+| Rechteentzug ohne Rotation | API + Client erzwingen DK-Rotation; alte Key-Version ungültig |
+| XSS im WebUI | CSP; SK nur im Speicher; residual: kompromittiertes JS bricht ZK |
+| Offline-Brute-Force auf `encrypted_private_key` | Argon2id-Kosten (user-eigene Params am Key-Blob) |
+
+**Residualrisiko (OQ-22):** Ein Angreifer, der die ausgelieferte Web-App kontrolliert, umgeht alle clientseitigen Checks. Schutz: Release-Signatur, Subresource Integrity wo möglich, eingeschränkte Admin-Zugänge zum Host, Code-Review der Auslieferung.
 
 ---
 

@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/teamvault/teamvault/internal/auth/ldapauth"
@@ -31,10 +32,13 @@ import (
 )
 
 type API struct {
-	App      *bootstrap.Result
-	Sessions *session.Store
-	Passkeys *passkey.Manager
-	loginRL  *rateLimiter
+	App           *bootstrap.Result
+	Sessions      *session.Store
+	Passkeys      *passkey.Manager
+	loginRL       *rateLimiter
+	pendingLogins *pendingLoginStore
+	escrowMu      sync.Mutex
+	escrowReplace map[store.TenantID]escrowReplacePending
 }
 
 func New(app *bootstrap.Result) *API {
@@ -43,6 +47,8 @@ func New(app *bootstrap.Result) *API {
 	api := &API{
 		App: app, Sessions: session.NewPersistent(sessPath, ttl),
 		Passkeys: passkey.NewManager(), loginRL: newRateLimiter(),
+		pendingLogins: newPendingLoginStore(),
+		escrowReplace: map[store.TenantID]escrowReplacePending{},
 	}
 	go api.ldapSyncLoop()
 	return api
@@ -108,12 +114,15 @@ func (a *API) Handler() http.Handler {
 	mux.HandleFunc("GET /api/vault/crypto-params", a.requireAuth(a.handleCryptoParams))
 	mux.HandleFunc("POST /api/vault/onboard", a.requireAuth(a.handleVaultOnboard))
 	mux.HandleFunc("GET /api/vault/keys", a.requireAuth(a.handleVaultKeys))
+	mux.HandleFunc("POST /api/vault/kdf-params", a.requireAuth(a.requireOnboarded(a.handlePersistKDFParams)))
 	mux.HandleFunc("POST /api/vault/change-master", a.requireAuth(a.requireOnboarded(a.handleChangeMaster)))
 	mux.HandleFunc("POST /api/me/password", a.requireAuth(a.handleChangeLoginPassword))
 	mux.HandleFunc("POST /api/totp/setup", a.requireAuth(a.handleTOTPSetup))
 	mux.HandleFunc("POST /api/totp/enable", a.requireAuth(a.handleTOTPEnable))
 	mux.HandleFunc("POST /api/admin/tenant/recovery", a.requireAuth(a.handleAdminRecovery))
-	mux.HandleFunc("POST /api/admin/tenant/escrow-pubkey", a.requireAuth(a.handleEscrowPubKey))
+	mux.HandleFunc("POST /api/admin/tenant/escrow-pubkey", a.requireAuth(a.requireAdmin(a.handleEscrowPubKey)))
+	mux.HandleFunc("POST /api/admin/tenant/escrow/replace/begin", a.requireAuth(a.requireAdmin(a.handleEscrowReplaceBegin)))
+	mux.HandleFunc("POST /api/admin/tenant/escrow/replace/finish", a.requireAuth(a.requireAdmin(a.handleEscrowReplaceFinish)))
 	a.registerPhase5(mux)
 	a.registerPhase6(mux)
 	a.registerMVPGaps(mux)
@@ -227,19 +236,43 @@ func apiKeyScopesOK(sess session.Session, r *http.Request) bool {
 		// Legacy keys without scopes: read-only GET allowlist (re-issue key with explicit scopes).
 		return apiKeyReadAllowed(r)
 	}
+	p := r.URL.Path
+	if isAccountAuthAPIPath(p) {
+		return false
+	}
 	if isReadOnlyAPIKey(scopes) {
 		return apiKeyReadAllowed(r)
 	}
-	p := r.URL.Path
 	if strings.HasPrefix(p, "/api/admin/") {
 		return hasAPIKeyScope(scopes, "admin")
 	}
 	mutating := r.Method != http.MethodGet && r.Method != http.MethodHead && r.Method != http.MethodOptions
 	if mutating {
+		if !apiKeyVaultMutationAllowed(p) {
+			return false
+		}
 		return hasAPIKeyScope(scopes, "vault") || hasAPIKeyScope(scopes, "admin")
 	}
 	// Non-admin GETs: read, vault, or admin
 	return hasAPIKeyScope(scopes, "read") || hasAPIKeyScope(scopes, "vault") || hasAPIKeyScope(scopes, "admin")
+}
+
+func isAccountAuthAPIPath(p string) bool {
+	return p == "/api/me/password" ||
+		strings.HasPrefix(p, "/api/totp/") ||
+		strings.HasPrefix(p, "/api/webauthn/")
+}
+
+func apiKeyVaultMutationAllowed(p string) bool {
+	if strings.HasPrefix(p, "/api/secrets") {
+		return true
+	}
+	switch p {
+	case "/api/vault/onboard", "/api/vault/change-master", "/api/vault/kdf-params":
+		return true
+	default:
+		return false
+	}
 }
 
 func normalizeAPIKeyScopes(in []string) ([]string, error) {
@@ -281,7 +314,11 @@ func (a *API) handleVersion(w http.ResponseWriter, r *http.Request) {
 
 func (a *API) handleSetupStatus(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
-		"initialized": a.App.Config.Initialized, "storage": a.App.Config.Storage, "data_dir": a.App.DataDir,
+		"initialized":          a.App.Config.Initialized,
+		"storage":              a.App.Config.Storage,
+		"data_dir":             a.App.DataDir,
+		"setup_token_required": !a.App.Config.Initialized,
+		"setup_token_header":   bootstrap.SetupTokenHeader,
 	})
 }
 
@@ -295,11 +332,20 @@ func (a *API) handleSetupCommit(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	token := strings.TrimSpace(r.Header.Get(bootstrap.SetupTokenHeader))
+	if token == "" {
+		token = strings.TrimSpace(req.SetupToken)
+	}
+	if !bootstrap.SetupTokenValid(a.App.DataDir, token) {
+		writeErr(w, http.StatusUnauthorized, "invalid setup token")
+		return
+	}
 	res, err := setup.Commit(r.Context(), a.App, req)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	bootstrap.ClearSetupToken(a.App.DataDir)
 	writeJSON(w, http.StatusOK, res)
 }
 
@@ -308,6 +354,7 @@ type loginReq struct {
 	Username   string `json:"username"`
 	Password   string `json:"password"`
 	TOTPCode   string `json:"totp_code"`
+	LoginToken string `json:"login_token"`
 }
 
 func (a *API) handleAuthTenants(w http.ResponseWriter, r *http.Request) {
@@ -356,6 +403,10 @@ func (a *API) handleLogin(w http.ResponseWriter, r *http.Request) {
 	var req loginReq
 	if err := readJSON(r, &req); err != nil {
 		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if req.LoginToken != "" {
+		a.handleLoginTOTPStep(w, r, req.LoginToken, req.TOTPCode, ip)
 		return
 	}
 	tenant, err := a.App.Vault.GetTenantBySlug(r.Context(), req.TenantSlug)
@@ -417,13 +468,77 @@ func (a *API) handleLogin(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusForbidden, "account disabled")
 		return
 	}
-	if user.TotpEnabled {
-		sec, oerr := a.openTOTP(user.TotpSecretEnc)
-		if oerr != nil || !totp.Validate(req.TOTPCode, sec) {
-			writeErr(w, http.StatusUnauthorized, "invalid totp")
-			return
+	if !a.gateTOTPOrIssueToken(w, user, tenant, req.TOTPCode) {
+		return
+	}
+	a.writeLoginSuccess(w, r, user, tenant)
+}
+
+func normalizeTOTPCode(s string) string {
+	var b strings.Builder
+	for _, r := range strings.TrimSpace(s) {
+		if r >= '0' && r <= '9' {
+			b.WriteRune(r)
 		}
 	}
+	return b.String()
+}
+
+func (a *API) gateTOTPOrIssueToken(w http.ResponseWriter, user *store.UserRecord, tenant *store.Tenant, totpCode string) bool {
+	if !user.TotpEnabled {
+		return true
+	}
+	code := normalizeTOTPCode(totpCode)
+	if code == "" {
+		token := a.pendingLogins.issue(user.ID, tenant.ID)
+		writeJSON(w, http.StatusOK, map[string]any{
+			"needs_totp":  true,
+			"login_token": token,
+		})
+		return false
+	}
+	sec, oerr := a.openTOTP(user.TotpSecretEnc)
+	if oerr != nil || !totp.Validate(code, sec) {
+		writeErr(w, http.StatusUnauthorized, "invalid totp")
+		return false
+	}
+	return true
+}
+
+func (a *API) handleLoginTOTPStep(w http.ResponseWriter, r *http.Request, loginToken, totpCode, ip string) {
+	if !a.loginRL.allow("totp:"+ip, 30, time.Minute) {
+		writeErr(w, http.StatusTooManyRequests, "too many login attempts")
+		return
+	}
+	pending, ok := a.pendingLogins.consume(loginToken)
+	if !ok {
+		writeErr(w, http.StatusUnauthorized, "login expired")
+		return
+	}
+	user, err := a.App.Vault.GetUser(r.Context(), pending.TenantID, pending.UserID)
+	if err != nil || user.Status == "disabled" || !user.TotpEnabled {
+		writeErr(w, http.StatusUnauthorized, "invalid login")
+		return
+	}
+	code := normalizeTOTPCode(totpCode)
+	if code == "" {
+		writeErr(w, http.StatusBadRequest, "totp required")
+		return
+	}
+	sec, oerr := a.openTOTP(user.TotpSecretEnc)
+	if oerr != nil || !totp.Validate(code, sec) {
+		writeErr(w, http.StatusUnauthorized, "invalid totp")
+		return
+	}
+	tenant, err := a.App.Vault.GetTenant(r.Context(), pending.TenantID)
+	if err != nil {
+		writeErr(w, http.StatusUnauthorized, "invalid login")
+		return
+	}
+	a.writeLoginSuccess(w, r, user, tenant)
+}
+
+func (a *API) writeLoginSuccess(w http.ResponseWriter, r *http.Request, user *store.UserRecord, tenant *store.Tenant) {
 	var roles []string
 	_ = json.Unmarshal([]byte(user.RolesJSON), &roles)
 	sess := a.Sessions.Create(user.ID, tenant.ID, user.Username, roles)
@@ -579,6 +694,11 @@ func (a *API) handleVaultOnboard(w http.ResponseWriter, r *http.Request) {
 	now := time.Now().UTC()
 	u.OnboardedAt = &now
 	u.Status = "active"
+	if js := argonParamsJSON(req.Argon2); js != "" {
+		u.KdfParamsJSON = js
+	} else if js := argonParamsJSON(a.bundle().Argon2); js != "" {
+		u.KdfParamsJSON = js
+	}
 	if err := a.App.Vault.UpsertUser(r.Context(), *u); err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
@@ -602,12 +722,46 @@ func (a *API) handleVaultKeys(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	salt, nonce, ct := u.EncryptedPrivateKey[:16], u.EncryptedPrivateKey[16:40], u.EncryptedPrivateKey[40:]
+	params, stored := userArgonParams(*u, a.bundle().Argon2)
 	writeJSON(w, http.StatusOK, map[string]any{
 		"public_key_b64":                  base64.StdEncoding.EncodeToString(u.PublicKey),
 		"salt_b64":                        base64.StdEncoding.EncodeToString(salt),
 		"encrypted_private_key_nonce_b64": base64.StdEncoding.EncodeToString(nonce),
 		"encrypted_private_key_b64":       base64.StdEncoding.EncodeToString(ct),
+		"argon2":                          params,
+		"kdf_params_stored":               stored,
 	})
+}
+
+func (a *API) handlePersistKDFParams(w http.ResponseWriter, r *http.Request) {
+	sess, _ := a.sessionFrom(r)
+	u, err := a.App.Vault.GetUser(r.Context(), sess.TenantID, sess.UserID)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if u.KdfParamsJSON != "" {
+		writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "stored": true})
+		return
+	}
+	var body struct {
+		Argon2 cryptocore.Argon2Params `json:"argon2"`
+	}
+	if err := readJSON(r, &body); err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	js := argonParamsJSON(body.Argon2)
+	if js == "" {
+		writeErr(w, http.StatusBadRequest, "argon2 params required")
+		return
+	}
+	u.KdfParamsJSON = js
+	if err := a.App.Vault.UpsertUser(r.Context(), *u); err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "stored": true})
 }
 
 // handleChangeMaster stores newly sealed private-key material after a client-side master-password change.
@@ -660,6 +814,9 @@ func (a *API) handleChangeMaster(w http.ResponseWriter, r *http.Request) {
 		}
 		u.EscrowEnvelope = env
 	}
+	if js := argonParamsJSON(req.Argon2); js != "" {
+		u.KdfParamsJSON = js
+	}
 	if err := a.App.Vault.UpsertUser(r.Context(), *u); err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
@@ -682,10 +839,6 @@ func (a *API) handleChangeLoginPassword(w http.ResponseWriter, r *http.Request) 
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if len(body.NewPassword) < 12 {
-		writeErr(w, http.StatusBadRequest, "password min 12 chars")
-		return
-	}
 	u, err := a.App.Vault.GetUser(r.Context(), sess.TenantID, sess.UserID)
 	if err != nil {
 		writeErr(w, http.StatusNotFound, "user not found")
@@ -693,6 +846,10 @@ func (a *API) handleChangeLoginPassword(w http.ResponseWriter, r *http.Request) 
 	}
 	if u.AuthBackend != "local" && u.AuthBackend != "" {
 		writeErr(w, http.StatusBadRequest, "only local login password can be changed here")
+		return
+	}
+	if err := password.ValidateLocal(body.NewPassword); err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	ok, verr := password.Verify(body.CurrentPassword, u.LocalPasswordHash)
@@ -710,6 +867,9 @@ func (a *API) handleChangeLoginPassword(w http.ResponseWriter, r *http.Request) 
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	a.Sessions.DeleteByUser(sess.UserID)
+	fresh := a.Sessions.Create(sess.UserID, sess.TenantID, sess.Username, sess.Roles)
+	a.setSessionCookie(w, r, fresh)
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
@@ -888,6 +1048,10 @@ func (a *API) handleEscrowPubKey(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	if len(ten.EscrowPublicKey) > 0 {
+		writeErr(w, http.StatusConflict, "escrow public key already set; use replace ceremony")
+		return
+	}
 	ten.EscrowPublicKey = pub
 	if err := a.App.Vault.PutTenant(r.Context(), *ten); err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
@@ -904,7 +1068,10 @@ func (a *API) ldapConfig() ldapauth.Config {
 func (a *API) sessionFrom(r *http.Request) (session.Session, bool) {
 	if c, err := r.Cookie("tv_session"); err == nil {
 		if sess, ok := a.Sessions.Get(c.Value); ok {
-			return sess, true
+			if a.cookieSessionValid(r, sess) {
+				return sess, true
+			}
+			a.Sessions.Delete(sess.ID)
 		}
 	}
 	// CLI / Extension machine auth: Bearer tvk_… (hashed in sealed config).
@@ -916,6 +1083,18 @@ func (a *API) sessionFrom(r *http.Request) (session.Session, bool) {
 		}
 	}
 	return session.Session{}, false
+}
+
+func (a *API) cookieSessionValid(r *http.Request, sess session.Session) bool {
+	ten, err := a.App.Vault.GetTenant(r.Context(), sess.TenantID)
+	if err != nil || ten.Status == "disabled" {
+		return false
+	}
+	u, err := a.App.Vault.GetUser(r.Context(), sess.TenantID, sess.UserID)
+	if err != nil || u.Status == "disabled" {
+		return false
+	}
+	return true
 }
 
 func (a *API) sessionFromAPIKey(r *http.Request, token string) (session.Session, bool) {
@@ -941,6 +1120,10 @@ func (a *API) sessionFromAPIKey(r *http.Request, token string) (session.Session,
 	}
 	u, err := a.App.Vault.GetUser(r.Context(), store.TenantID(rec.TenantID), store.UserID(rec.UserID))
 	if err != nil || u.Status == "disabled" {
+		return session.Session{}, false
+	}
+	ten, terr := a.App.Vault.GetTenant(r.Context(), u.TenantID)
+	if terr != nil || ten.Status == "disabled" {
 		return session.Session{}, false
 	}
 	var roles []string

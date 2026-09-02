@@ -3,6 +3,7 @@ package server_test
 import (
 	"bytes"
 	"encoding/base64"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -29,24 +30,24 @@ func TestGroupShareGapsAfterNewMember(t *testing.T) {
 	postJSON(t, ts.URL+"/api/setup/commit", map[string]any{
 		"storage": map[string]string{"backend": "sqlite", "dsn": filepath.Join(dir, "v.db")},
 		"tenant":  map[string]any{"name": "T", "slug": "t1", "recovery_mode": "user_kit"},
-		"admin":   map[string]string{"username": "admin", "password": "password1234"},
+		"admin":   map[string]string{"username": "admin", "password": "Password1234!!!!"},
 		"argon2":  argon,
 	}, nil)
 
 	adminJar := &cookieJar{m: map[string]string{}}
 	postJSON(t, ts.URL+"/api/auth/login", map[string]string{
-		"tenant_slug": "t1", "username": "admin", "password": "password1234",
+		"tenant_slug": "t1", "username": "admin", "password": "Password1234!!!!",
 	}, adminJar)
 	adminKP, _ := onboardUser(t, ts.URL, adminJar, []byte("admin-master-pw!"), argon)
 	me := getJSONCookie(t, ts.URL+"/api/me", adminJar)
 	adminUID, _ := me["user_id"].(string)
 
 	alice := postJSONCookie(t, ts.URL+"/api/admin/users", map[string]string{
-		"username": "alice", "password": "password1234", "display_name": "Alice",
+		"username": "alice", "password": "Password1234!!!!", "display_name": "Alice",
 	}, adminJar)
 	aliceID, _ := alice["id"].(string)
 	bob := postJSONCookie(t, ts.URL+"/api/admin/users", map[string]string{
-		"username": "bob", "password": "password1234", "display_name": "Bob",
+		"username": "bob", "password": "Password1234!!!!", "display_name": "Bob",
 	}, adminJar)
 	bobID, _ := bob["id"].(string)
 
@@ -57,13 +58,13 @@ func TestGroupShareGapsAfterNewMember(t *testing.T) {
 
 	aliceJar := &cookieJar{m: map[string]string{}}
 	postJSON(t, ts.URL+"/api/auth/login", map[string]string{
-		"tenant_slug": "t1", "username": "alice", "password": "password1234",
+		"tenant_slug": "t1", "username": "alice", "password": "Password1234!!!!",
 	}, aliceJar)
 	aliceKP, _ := onboardUser(t, ts.URL, aliceJar, []byte("alice-master-pw!"), argon)
 
 	bobJar := &cookieJar{m: map[string]string{}}
 	postJSON(t, ts.URL+"/api/auth/login", map[string]string{
-		"tenant_slug": "t1", "username": "bob", "password": "password1234",
+		"tenant_slug": "t1", "username": "bob", "password": "Password1234!!!!",
 	}, bobJar)
 	bobKP, _ := onboardUser(t, ts.URL, bobJar, []byte("bob-master-pw!!"), argon)
 
@@ -135,6 +136,28 @@ func TestGroupShareGapsAfterNewMember(t *testing.T) {
 	got := getJSONCookie(t, ts.URL+"/api/secrets/"+sid, bobJar)
 	if got["envelope"] == nil {
 		t.Fatal("bob should have envelope after reseal")
+	}
+
+	delReq, _ := http.NewRequest(http.MethodDelete, ts.URL+"/api/admin/groups/"+gid+"/members/"+bobID, nil)
+	setTestOrigin(delReq)
+	delReq.AddCookie(&http.Cookie{Name: "tv_session", Value: adminJar.m["tv_session"]})
+	delRes, err := http.DefaultClient.Do(delReq)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer delRes.Body.Close()
+	if delRes.StatusCode != http.StatusOK {
+		t.Fatalf("remove member status %d", delRes.StatusCode)
+	}
+	var delBody map[string]any
+	_ = json.NewDecoder(delRes.Body).Decode(&delBody)
+	ids, _ := delBody["rotate_secret_ids"].([]any)
+	if len(ids) != 1 || ids[0] != sid {
+		t.Fatalf("rotate_secret_ids: %#v", delBody)
+	}
+	code, _ := getJSONCookieStatus(t, ts.URL+"/api/secrets/"+sid, bobJar)
+	if code == http.StatusOK {
+		t.Fatal("bob should lose envelope after group remove")
 	}
 
 	// No access without envelope before reseal is already covered; ensure alice still ok

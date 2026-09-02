@@ -176,34 +176,69 @@
     });
   }
 
-  async function tvInitClientDownloads(mode) {
+  async function fetchClientManifest() {
     const base = tvHelpOrigin();
+    const res = await fetch(base + "/api/client-downloads");
+    if (!res.ok) throw new Error("manifest");
+    return res.json();
+  }
+
+  function integrationFeatures(data) {
+    const f = data?.features || {};
+    return {
+      cli: f.cli === true,
+      browser_extension: f.browser_extension === true,
+    };
+  }
+
+  function disabledIntegrationMsg(kind) {
+    const label = kind === "cli" ? "CLI" : "Browser-Extension";
+    return `<p class="help-note warn">${label}-Integration ist auf dieser Instanz deaktiviert (Plattform-Administrator). IT kann Artefakte weiterhin unter <code>/downloads/</code> bereitstellen.</p>`;
+  }
+
+  async function tvInitClientDownloads(mode) {
+    const cliRoot = document.getElementById("clientDlCli");
+    const extRoot = document.getElementById("clientDlExt");
     let data;
     try {
-      const res = await fetch(base + "/api/client-downloads");
-      if (!res.ok) throw new Error("manifest");
-      data = await res.json();
+      data = await fetchClientManifest();
     } catch {
       const msg = `<p class="help-note warn">Download-Liste konnte nicht geladen werden.</p>`;
-      const cliRoot = document.getElementById("clientDlCli");
-      const extRoot = document.getElementById("clientDlExt");
       if (mode === "cli" && cliRoot) cliRoot.innerHTML = msg;
       if (mode === "extension" && extRoot) extRoot.innerHTML = msg;
       if (mode === "both") {
         if (cliRoot) cliRoot.innerHTML = msg;
         if (extRoot) extRoot.innerHTML = msg;
       }
-      return;
+      return integrationFeatures(null);
     }
+    const features = integrationFeatures(data);
     if (mode === "cli" || mode === "both") {
-      renderCLI(document.getElementById("clientDlCli"), data);
-      bindCopy(document.getElementById("clientDlCli"));
+      if (!features.cli) {
+        if (cliRoot) cliRoot.innerHTML = disabledIntegrationMsg("cli");
+      } else {
+        renderCLI(cliRoot, data);
+        bindCopy(cliRoot);
+      }
     }
     if (mode === "extension" || mode === "both") {
-      renderExtension(document.getElementById("clientDlExt"), data);
-      bindCopy(document.getElementById("clientDlExt"));
+      if (!features.browser_extension) {
+        if (extRoot) extRoot.innerHTML = disabledIntegrationMsg("extension");
+      } else {
+        renderExtension(extRoot, data);
+        bindCopy(extRoot);
+      }
     }
+    return features;
   }
+
+  globalThis.tvFetchClientFeatures = async function tvFetchClientFeatures() {
+    try {
+      return integrationFeatures(await fetchClientManifest());
+    } catch {
+      return { cli: false, browser_extension: false };
+    }
+  };
 
   globalThis.tvInitClientDownloads = tvInitClientDownloads;
 })();

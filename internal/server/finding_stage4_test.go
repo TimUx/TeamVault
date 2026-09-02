@@ -29,13 +29,13 @@ func TestFindingStage4ResidualHardening(t *testing.T) {
 	postJSON(t, ts.URL+"/api/setup/commit", map[string]any{
 		"storage": map[string]string{"backend": "sqlite", "dsn": filepath.Join(dir, "v.db")},
 		"tenant":  map[string]any{"name": "T", "slug": "t1", "recovery_mode": "user_kit"},
-		"admin":   map[string]string{"username": "admin", "password": "password1234"},
+		"admin":   map[string]string{"username": "admin", "password": "Password1234!!!!"},
 		"argon2":  argon,
 	}, nil)
 
 	adminJar := &cookieJar{m: map[string]string{}}
 	postJSON(t, ts.URL+"/api/auth/login", map[string]string{
-		"tenant_slug": "t1", "username": "admin", "password": "password1234",
+		"tenant_slug": "t1", "username": "admin", "password": "Password1234!!!!",
 	}, adminJar)
 	adminKP, _ := onboardUser(t, ts.URL, adminJar, []byte("admin-master-pw!"), argon)
 
@@ -88,12 +88,12 @@ func TestFindingStage4ResidualHardening(t *testing.T) {
 
 	// R8: admin_secrets_envelope_only hides secrets without envelope
 	bob := postJSONCookie(t, ts.URL+"/api/admin/users", map[string]string{
-		"username": "bob", "password": "password1234",
+		"username": "bob", "password": "Password1234!!!!",
 	}, adminJar)
 	bobID, _ := bob["id"].(string)
 	bobJar := &cookieJar{m: map[string]string{}}
 	postJSON(t, ts.URL+"/api/auth/login", map[string]string{
-		"tenant_slug": "t1", "username": "bob", "password": "password1234",
+		"tenant_slug": "t1", "username": "bob", "password": "Password1234!!!!",
 	}, bobJar)
 	bobKP, _ := onboardUser(t, ts.URL, bobJar, []byte("bob-master-pw!"), argon)
 	dk2, _ := cryptocore.GenerateDataKey()

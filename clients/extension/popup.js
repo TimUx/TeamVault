@@ -1,6 +1,6 @@
 /* TeamVault extension popup — mature autofill + domain match (ZK: keys only here). */
 const api = typeof browser !== "undefined" ? browser : chrome;
-const state = { base: "", sk: null, me: null, cache: [], tabHost: "" };
+const state = { base: "", sk: null, me: null, cache: [], tabHost: "", tabOrigin: "" };
 
 function showErr(msg) {
   const el = document.getElementById("err");
@@ -33,12 +33,25 @@ function openDK(env) {
   );
 }
 
+function originFromUrl(u) {
+  try {
+    const x = new URL(u);
+    return x.protocol + "//" + x.host;
+  } catch {
+    return "";
+  }
+}
+
 function hostFromUrl(u) {
   try {
     return new URL(u).hostname.replace(/^www\./, "").toLowerCase();
   } catch {
     return "";
   }
+}
+
+function originsMatch(a, b) {
+  return !!(a && b && a.toLowerCase() === b.toLowerCase());
 }
 
 function hostsMatch(a, b) {
@@ -90,8 +103,9 @@ async function boot() {
     const [tab] = await api.tabs.query({ active: true, currentWindow: true });
     if (tab?.url) {
       state.tabHost = hostFromUrl(tab.url);
-      document.getElementById("tabHost").textContent = state.tabHost
-        ? "Seite: " + state.tabHost
+      state.tabOrigin = originFromUrl(tab.url);
+      document.getElementById("tabHost").textContent = state.tabOrigin
+        ? "Seite: " + state.tabOrigin
         : "";
     }
   } catch (_) {}
@@ -197,39 +211,42 @@ async function decryptPayloadFor(id) {
   }
 }
 
-async function fillTab(payload) {
+async function fillTab(payload, expectedOrigin) {
   const [tab] = await api.tabs.query({ active: true, currentWindow: true });
   if (!tab?.id) throw new Error("Kein aktives Tab");
+  const liveOrigin = tab.url ? originFromUrl(tab.url) : "";
+  if (expectedOrigin && liveOrigin !== expectedOrigin) {
+    throw new Error("Tab-Origin hat sich geändert (" + (liveOrigin || "?") + "). Fill abgebrochen.");
+  }
   let totp = "";
   if (payload.totp_seed) {
     try {
       totp = await totpNow(payload.totp_seed);
     } catch (_) {}
   }
+  const msg = {
+    type: "tv-fill",
+    username: payload.username || "",
+    password: payload.password || "",
+    totp,
+    expectedOrigin: expectedOrigin || liveOrigin,
+  };
   try {
-    return await api.tabs.sendMessage(tab.id, {
-      type: "tv-fill",
-      username: payload.username || "",
-      password: payload.password || "",
-      totp,
-    });
+    return await api.tabs.sendMessage(tab.id, msg);
   } catch {
     await api.scripting.executeScript({ target: { tabId: tab.id }, files: ["content.js"] });
-    return await api.tabs.sendMessage(tab.id, {
-      type: "tv-fill",
-      username: payload.username || "",
-      password: payload.password || "",
-      totp,
-    });
+    return await api.tabs.sendMessage(tab.id, msg);
   }
 }
 
+function urlOriginsAllowed(it, tabOrigin) {
+  const origins = it.urlOrigins || [];
+  if (!origins.length) return true;
+  return !!(tabOrigin && origins.some((o) => originsMatch(o, tabOrigin)));
+}
+
 function urlHostsAllowed(it) {
-  const hosts = it.urlHosts || [];
-  const legacy = it.urlHost ? [it.urlHost] : [];
-  const all = hosts.length ? hosts : legacy;
-  if (!all.length) return true;
-  return !!(state.tabHost && all.some((h) => hostsMatch(h, state.tabHost)));
+  return urlOriginsAllowed(it, state.tabOrigin);
 }
 
 function paintList() {
@@ -281,12 +298,19 @@ function paintList() {
     fill.textContent = "Fill";
     fill.onclick = async () => {
       try {
-        if (!urlHostsAllowed(it)) {
-          showErr("Fill blockiert: Secret-URL passt nicht zum Tab-Host (" + (state.tabHost || "?") + ").");
+        const [tab] = await api.tabs.query({ active: true, currentWindow: true });
+        const liveOrigin = tab?.url ? originFromUrl(tab.url) : "";
+        state.tabOrigin = liveOrigin;
+        state.tabHost = tab?.url ? hostFromUrl(tab.url) : "";
+        if (!urlOriginsAllowed(it, liveOrigin)) {
+          showErr("Fill blockiert: Secret-URL passt nicht zur Tab-Origin (" + (liveOrigin || "?") + ").");
           return;
         }
         const payload = await decryptPayloadFor(it.id);
-        await fillTab(payload);
+        const result = await fillTab(payload, liveOrigin);
+        if (result?.blocked) {
+          showErr("Fill blockiert: Seite hat navigiert (" + (result.origin || "?") + ").");
+        }
       } catch (e) {
         showErr(e.message);
       }
@@ -297,8 +321,8 @@ function paintList() {
     copy.textContent = "Copy";
     copy.onclick = async () => {
       try {
-        if (!urlHostsAllowed(it)) {
-          showErr("Copy blockiert: Secret-URL passt nicht zum Tab-Host (" + (state.tabHost || "?") + ").");
+        if (!urlOriginsAllowed(it, state.tabOrigin)) {
+          showErr("Copy blockiert: Secret-URL passt nicht zur Tab-Origin (" + (state.tabOrigin || "?") + ").");
           return;
         }
         const payload = await decryptPayloadFor(it.id);
@@ -360,6 +384,7 @@ async function refresh() {
           ? [payload.url]
           : [];
       entry.urlHosts = urls.map((u) => hostFromUrl(u)).filter(Boolean);
+      entry.urlOrigins = urls.map((u) => originFromUrl(u)).filter(Boolean);
       entry.urlHost = entry.urlHosts[0] || "";
       if (!entry.urlHost && entry.title) {
         const m = entry.title.match(/([a-z0-9-]+\.[a-z]{2,})/i);

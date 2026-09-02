@@ -88,7 +88,7 @@ func (a *API) withSecurity(next http.Handler) http.Handler {
 			w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
 		}
 
-		if isMutating(r.Method) && strings.HasPrefix(r.URL.Path, "/api/") && r.URL.Path != "/api/setup/commit" {
+		if isMutating(r.Method) && strings.HasPrefix(r.URL.Path, "/api/") {
 			if !a.originOK(r) {
 				writeErr(w, http.StatusForbidden, "origin check failed")
 				return

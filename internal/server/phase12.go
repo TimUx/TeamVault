@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/teamvault/teamvault/internal/store"
 )
@@ -117,9 +116,10 @@ func (a *API) writeGroupMemberPublicKeys(w http.ResponseWriter, r *http.Request,
 		return
 	}
 	type pk struct {
-		UserID    string `json:"user_id"`
-		Username  string `json:"username"`
-		PublicKey string `json:"public_key_b64"`
+		UserID      string `json:"user_id"`
+		Username    string `json:"username"`
+		PublicKey   string `json:"public_key_b64"`
+		Fingerprint string `json:"fingerprint"`
 	}
 	var out []pk
 	for _, uid := range members {
@@ -129,7 +129,8 @@ func (a *API) writeGroupMemberPublicKeys(w http.ResponseWriter, r *http.Request,
 		}
 		out = append(out, pk{
 			UserID: string(u.ID), Username: u.Username,
-			PublicKey: base64.StdEncoding.EncodeToString(u.PublicKey),
+			PublicKey:   base64.StdEncoding.EncodeToString(u.PublicKey),
+			Fingerprint: publicKeyFingerprint(u.PublicKey),
 		})
 	}
 	writeJSON(w, http.StatusOK, out)
@@ -182,13 +183,14 @@ func (a *API) handleGroupShareGaps(w http.ResponseWriter, r *http.Request) {
 		KeyVersion      uint32 `json:"key_version"`
 	}
 	type gap struct {
-		SecretID       string  `json:"secret_id"`
-		GroupID        string  `json:"group_id"`
-		UserID         string  `json:"user_id"`
-		Username       string  `json:"username"`
-		PublicKeyB64   string  `json:"public_key_b64"`
-		KeyVersion     uint32  `json:"key_version"`
-		Envelope       *envOut `json:"envelope"`
+		SecretID     string  `json:"secret_id"`
+		GroupID      string  `json:"group_id"`
+		UserID       string  `json:"user_id"`
+		Username     string  `json:"username"`
+		PublicKeyB64 string  `json:"public_key_b64"`
+		Fingerprint  string  `json:"fingerprint"`
+		KeyVersion   uint32  `json:"key_version"`
+		Envelope     *envOut `json:"envelope"`
 	}
 
 	membersCache := map[store.GroupID][]store.UserID{}
@@ -250,7 +252,8 @@ func (a *API) handleGroupShareGaps(w http.ResponseWriter, r *http.Request) {
 				SecretID: string(sh.SecretID), GroupID: string(sh.GroupID),
 				UserID: string(mid), Username: u.Username,
 				PublicKeyB64: base64.StdEncoding.EncodeToString(u.PublicKey),
-				KeyVersion: kv, Envelope: callerEnv,
+				Fingerprint:  publicKeyFingerprint(u.PublicKey),
+				KeyVersion:   kv, Envelope: callerEnv,
 			})
 		}
 	}
@@ -286,6 +289,7 @@ func (a *API) handleShareGroup(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusNotFound, "secret not found")
 		return
 	}
+	var envs []store.KeyEnvelope
 	for _, e := range body.Envelopes {
 		if !allowed[e.UserID] {
 			writeErr(w, http.StatusBadRequest, "envelope user not in group")
@@ -308,37 +312,29 @@ func (a *API) handleShareGroup(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, http.StatusBadRequest, "key_version must match current secret version")
 			return
 		}
-		if err := a.App.Vault.PutKeyEnvelope(r.Context(), store.KeyEnvelope{
+		envs = append(envs, store.KeyEnvelope{
 			SecretID: id, TenantID: sess.TenantID, UserID: store.UserID(e.UserID),
 			KeyVersion: kv, WrappedDK: packed,
-		}); err != nil {
-			if errors.Is(err, store.ErrRevokedEnvelope) {
-				writeErr(w, http.StatusConflict, "cannot revive revoked envelope")
-				return
-			}
-			writeErr(w, http.StatusInternalServerError, err.Error())
+		})
+	}
+	if body.GroupID == "" {
+		writeErr(w, http.StatusBadRequest, "group_id required")
+		return
+	}
+	audit := a.mutationAudit(r, sess, "secret.share_group", "secret", string(id))
+	audit.Metadata, _ = json.Marshal(map[string]string{"group_id": body.GroupID})
+	if err := a.App.Vault.ShareSecretGroup(r.Context(), envs, store.SecretGroupShare{
+		TenantID: sess.TenantID, SecretID: id, GroupID: store.GroupID(body.GroupID),
+	}, &audit); err != nil {
+		if errors.Is(err, store.ErrRevokedEnvelope) {
+			writeErr(w, http.StatusConflict, "cannot revive revoked envelope")
 			return
 		}
-	}
-	if body.GroupID != "" {
-		if err := a.App.Vault.PutSecretGroupShare(r.Context(), store.SecretGroupShare{
-			TenantID: sess.TenantID, SecretID: id, GroupID: store.GroupID(body.GroupID),
-		}); err != nil {
-			writeErr(w, http.StatusInternalServerError, err.Error())
-			return
-		}
-	}
-	if err := a.syncSecretVisibility(r.Context(), sess.TenantID, id, true); err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	meta, _ := json.Marshal(map[string]string{"group_id": body.GroupID})
-	if err := a.App.Vault.AppendAudit(r.Context(), store.AuditEvent{
-		ID: newID("aud"), TenantID: sess.TenantID, ActorID: string(sess.UserID),
-		Action: "secret.share_group", ResourceType: "secret", ResourceID: string(id),
-		Metadata: meta, CreatedAt: time.Now().UTC(),
-	}); err != nil {
-		writeErr(w, http.StatusInternalServerError, "audit: "+err.Error())
+	if err := a.syncSecretVisibility(r.Context(), sess.TenantID, id, true); err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "shared": len(body.Envelopes)})

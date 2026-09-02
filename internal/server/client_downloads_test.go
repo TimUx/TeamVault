@@ -41,11 +41,18 @@ func TestClientDownloadsAPI(t *testing.T) {
 			Name string `json:"name"`
 			URL  string `json:"url"`
 		} `json:"cli"`
+		Features struct {
+			CLI              bool `json:"cli"`
+			BrowserExtension bool `json:"browser_extension"`
+		} `json:"features"`
 	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
 		t.Fatal(err)
 	}
 	if len(body.CLI) != 1 || body.CLI[0].Name != "tvcli-linux-amd64" {
 		t.Fatalf("cli: %+v", body.CLI)
+	}
+	if body.Features.CLI || body.Features.BrowserExtension {
+		t.Fatalf("features default off: %+v", body.Features)
 	}
 }

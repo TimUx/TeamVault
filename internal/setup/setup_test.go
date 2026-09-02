@@ -28,7 +28,7 @@ func TestCommitAndLoginHash(t *testing.T) {
 	req.Tenant.Slug = "acme"
 	req.Tenant.RecoveryMode = "user_kit"
 	req.Admin.Username = "admin"
-	req.Admin.Password = "super-secret-1"
+	req.Admin.Password = password.TestLocalPassword
 	req.Admin.DisplayName = "Admin"
 
 	ctx := context.Background()
@@ -43,7 +43,7 @@ func TestCommitAndLoginHash(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ok, err := password.Verify("super-secret-1", u.LocalPasswordHash)
+	ok, err := password.Verify(password.TestLocalPassword, u.LocalPasswordHash)
 	if err != nil || !ok {
 		t.Fatal("hash verify failed")
 	}

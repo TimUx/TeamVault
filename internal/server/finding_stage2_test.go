@@ -30,22 +30,22 @@ func TestFindingStage2ScopesOriginShareGroup(t *testing.T) {
 	postJSON(t, ts.URL+"/api/setup/commit", map[string]any{
 		"storage": map[string]string{"backend": "sqlite", "dsn": filepath.Join(dir, "v.db")},
 		"tenant":  map[string]any{"name": "T", "slug": "t1", "recovery_mode": "user_kit"},
-		"admin":   map[string]string{"username": "admin", "password": "password1234"},
+		"admin":   map[string]string{"username": "admin", "password": "Password1234!!!!"},
 		"argon2":  argon,
 	}, nil)
 
 	adminJar := &cookieJar{m: map[string]string{}}
 	postJSON(t, ts.URL+"/api/auth/login", map[string]string{
-		"tenant_slug": "t1", "username": "admin", "password": "password1234",
+		"tenant_slug": "t1", "username": "admin", "password": "Password1234!!!!",
 	}, adminJar)
 	adminKP, _ := onboardUser(t, ts.URL, adminJar, []byte("admin-master-pw!"), argon)
 
 	created := postJSONCookie(t, ts.URL+"/api/admin/users", map[string]string{
-		"username": "alice", "password": "password1234", "display_name": "Alice",
+		"username": "alice", "password": "Password1234!!!!", "display_name": "Alice",
 	}, adminJar)
 	aliceID, _ := created["id"].(string)
 	bob := postJSONCookie(t, ts.URL+"/api/admin/users", map[string]string{
-		"username": "bob", "password": "password1234", "display_name": "Bob",
+		"username": "bob", "password": "Password1234!!!!", "display_name": "Bob",
 	}, adminJar)
 	bobID, _ := bob["id"].(string)
 
@@ -55,7 +55,7 @@ func TestFindingStage2ScopesOriginShareGroup(t *testing.T) {
 
 	aliceJar := &cookieJar{m: map[string]string{}}
 	postJSON(t, ts.URL+"/api/auth/login", map[string]string{
-		"tenant_slug": "t1", "username": "alice", "password": "password1234",
+		"tenant_slug": "t1", "username": "alice", "password": "Password1234!!!!",
 	}, aliceJar)
 	aliceKP, _ := onboardUser(t, ts.URL, aliceJar, []byte("alice-master-pw!"), argon)
 	_ = aliceKP
@@ -110,7 +110,7 @@ func TestFindingStage2ScopesOriginShareGroup(t *testing.T) {
 	if resAdmin.StatusCode != http.StatusForbidden {
 		t.Fatalf("read key admin GET: want 403 got %d", resAdmin.StatusCode)
 	}
-	b, _ := json.Marshal(map[string]string{"username": "x", "password": "password1234"})
+	b, _ := json.Marshal(map[string]string{"username": "x", "password": "Password1234!!!!"})
 	reqPost, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/admin/users", bytes.NewReader(b))
 	reqPost.Header.Set("Content-Type", "application/json")
 	reqPost.Header.Set("Authorization", "Bearer "+token)

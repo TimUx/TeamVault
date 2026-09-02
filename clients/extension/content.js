@@ -65,6 +65,16 @@ function findLoginFields(root = document) {
 }
 
 function fillLogin(msg) {
+  if (msg.expectedOrigin && location.origin !== msg.expectedOrigin) {
+    return {
+      filledUser: false,
+      filledPass: false,
+      filledTotp: false,
+      host: location.hostname,
+      origin: location.origin,
+      blocked: true,
+    };
+  }
   const { username, password, totp } = findLoginFields();
   if (msg.username != null && username) setNativeValue(username, msg.username);
   if (msg.password != null && password) setNativeValue(password, msg.password);

@@ -63,6 +63,10 @@
     };
   }
 
+  function publicKeyFromSecret(sk) {
+    return nacl.box.keyPair.fromSecretKey(sk).publicKey;
+  }
+
   async function unlockPrivateKey(masterPassword, salt, nonce, sealed, params) {
     const mk = await argon2id(masterPassword, salt, params);
     const sk = nacl.secretbox.open(sealed, nonce, mk);
@@ -191,6 +195,7 @@
     b64enc,
     b64dec,
     createIdentity,
+    publicKeyFromSecret,
     unlockPrivateKey,
     sealPrivateKey,
     sealWithRecoveryKit,

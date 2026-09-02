@@ -1,7 +1,7 @@
 # TeamVault – Offene Fragen (Product Owner)
 
-**Status:** BEANTWORTET / freigegeben (2026-08-26)  
-Alle OQ-01–OQ-20 sind entschieden. Entscheidungen sind in die übrigen Planungsdocs übernommen. Nächster Schritt: Teil C Phase 1.
+**Status:** BEANTWORTET / freigegeben (2026-08-26); OQ-21 vorläufig, OQ-22 dokumentiertes Residualrisiko (2026-09)  
+Alle OQ-01–OQ-22 sind erfasst. Entscheidungen sind in die übrigen Planungsdocs übernommen.
 
 ### Entscheidungsübersicht
 
@@ -27,6 +27,8 @@ Alle OQ-01–OQ-20 sind entschieden. Entscheidungen sind in die übrigen Planung
 | OQ-18 | MVP nur Light Theme; Dark später |
 | OQ-19 | Keine Telemetrie/CDN; Air-Gap-Hardening bestätigt |
 | OQ-20 | Passkeys nicht für ersten Prod-Release; TOTP Phase 4 Pflicht |
+| OQ-21 | Multi-Tenant-Membership: Status quo getrennte Konten; Switcher später |
+| OQ-22 | Residual: böswilliger App-Server / ausgeliefertes JS kann ZK nicht halten; dokumentiert |
 
 ---
 
@@ -265,6 +267,16 @@ Antwort: Nein, nicht für den ersten Prod-Release nötig – ihr hattet 2FA/Pass
 - (c) Status quo: Tenant-Slug pro Login, gleicher Username in mehreren Tenants = getrennte Konten
 
 **Vorläufig:** (c) mit UX-Verbesserungen (Organisation-Dropdown am Login, Tenant-Name in UI/Footer, zuletzt gewählte Organisation im Browser). (a) für Phase 10+ planen.
+
+---
+
+## OQ-22 – Residualrisiko böswilliger App-Server
+
+**Annahme:** Zero-Knowledge schützt Ciphertexts in DB/Backup und ehrliche Persistenz. Der Server, der `app.js` / `cryptocore.js` ausliefert, kann theoretisch beliebigen Client-Code unterschieben.
+
+**Frage:** Ist das Residualrisiko akzeptiert, oder soll ein zusätzliches Vertrauensmodell (signierte Clients, Extension-only, CLI-only) der Default werden?
+
+**Antwort (Umsetzung 2026-09):** Akzeptiert und dokumentiert (`crypto-design.md` §8). Geschlossen werden Angriffe, die **ohne** JS-Manipulation funktionieren (Pubkey-TOFU, kein stilles Gruppen-Wrap, Escrow-Replace nur k-aus-n, API-Key-Scopes, Setup-Token). Ein kompromittiertes Release bleibt außerhalb des ZK-Versprechens.
 
 ---
 

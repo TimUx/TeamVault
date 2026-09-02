@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/teamvault/teamvault/internal/bootstrap"
@@ -33,7 +34,7 @@ func TestSetupCommitAndLoginHTTP(t *testing.T) {
 	body := map[string]any{
 		"storage": map[string]string{"backend": "sqlite", "dsn": filepath.Join(dir, "v.db")},
 		"tenant":  map[string]any{"name": "T", "slug": "t1", "recovery_mode": "user_kit", "escrow_allowed": false},
-		"admin":   map[string]string{"username": "admin", "password": "password1234", "display_name": "A"},
+		"admin":   map[string]string{"username": "admin", "password": "Password1234!!!!", "display_name": "A"},
 		"argon2":  map[string]any{"Time": 1, "Memory": 8192, "Threads": 1, "KeyLen": 32},
 	}
 	postJSON(t, ts.URL+"/api/setup/commit", body, nil)
@@ -50,7 +51,7 @@ func TestSetupCommitAndLoginHTTP(t *testing.T) {
 
 	jar := &cookieJar{m: map[string]string{}}
 	login := postJSON(t, ts.URL+"/api/auth/login", map[string]string{
-		"tenant_slug": "t1", "username": "admin", "password": "password1234",
+		"tenant_slug": "t1", "username": "admin", "password": "Password1234!!!!",
 	}, jar)
 	if login["username"] != "admin" {
 		t.Fatal(login)
@@ -121,6 +122,7 @@ func postJSON(t *testing.T, rawURL string, body any, jar *cookieJar) map[string]
 	}
 	req.Header.Set("Content-Type", "application/json")
 	setTestOrigin(req)
+	attachSetupTokenIfNeeded(t, req, body)
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
@@ -149,6 +151,42 @@ func setTestOrigin(req *http.Request) {
 		scheme = "http"
 	}
 	req.Header.Set("Origin", scheme+"://"+u.Host)
+}
+
+func attachSetupTokenIfNeeded(t *testing.T, req *http.Request, body any) {
+	t.Helper()
+	if !strings.Contains(req.URL.Path, "/api/setup/commit") {
+		return
+	}
+	if req.Header.Get(bootstrap.SetupTokenHeader) != "" {
+		return
+	}
+	dsn := extractStorageDSN(body)
+	if dsn == "" {
+		t.Fatal("setup commit test missing storage.dsn (needed to load setup token)")
+	}
+	tok, err := bootstrap.LoadSetupToken(filepath.Dir(dsn))
+	if err != nil || tok == "" {
+		t.Fatalf("load setup token from %s: %v", filepath.Dir(dsn), err)
+	}
+	req.Header.Set(bootstrap.SetupTokenHeader, tok)
+}
+
+func extractStorageDSN(body any) string {
+	raw, err := json.Marshal(body)
+	if err != nil {
+		return ""
+	}
+	var m map[string]any
+	if json.Unmarshal(raw, &m) != nil {
+		return ""
+	}
+	st, _ := m["storage"].(map[string]any)
+	if st == nil {
+		return ""
+	}
+	dsn, _ := st["dsn"].(string)
+	return dsn
 }
 
 type cookieJar struct{ m map[string]string }

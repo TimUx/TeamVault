@@ -31,6 +31,7 @@ unlock-docs-shot.key
 # CRX signing private key — local file / GitHub secret TV_EXTENSION_SIGNING_KEY, never commit
 clients/extension/*.pem
 clients/extension/*.key
+clients/*.pem
 scripts/corp-proxy.local.ps1
 /.gitea/
 scripts/sync-github-to-gitea.ps1

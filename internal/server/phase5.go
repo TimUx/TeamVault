@@ -18,7 +18,7 @@ import (
 )
 
 type secretShareContext struct {
-	usernameByID map[store.UserID]string
+	usernameByID  map[store.UserID]string
 	groupNameByID map[store.GroupID]string
 }
 
@@ -216,8 +216,8 @@ func (a *API) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 	}
 	var hash string
 	if backend == "local" {
-		if len(body.Password) < 12 {
-			writeErr(w, http.StatusBadRequest, "password min 12 chars")
+		if err := password.ValidateLocal(body.Password); err != nil {
+			writeErr(w, http.StatusBadRequest, err.Error())
 			return
 		}
 		var err error
@@ -272,11 +272,16 @@ func (a *API) handleDisableUser(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusNotFound, "user not found")
 		return
 	}
+	if !actorMayModifyUser(sess.Roles, *u) {
+		writeErr(w, http.StatusForbidden, "cannot modify platform_admin")
+		return
+	}
 	u.Status = "disabled"
 	if err := a.App.Vault.UpsertUser(r.Context(), *u); err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	a.Sessions.DeleteByUser(u.ID)
 	a.maybeMailDisabled(*u, sess.TenantID)
 	writeJSON(w, http.StatusOK, map[string]string{"status": "disabled"})
 }
@@ -299,6 +304,10 @@ func (a *API) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	if !actorMayModifyUser(sess.Roles, *u) {
+		writeErr(w, http.StatusForbidden, "cannot modify platform_admin")
+		return
+	}
 	u.DisplayName = strings.TrimSpace(body.DisplayName)
 	u.Email = strings.TrimSpace(body.Email)
 	if body.Password != "" {
@@ -306,8 +315,8 @@ func (a *API) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, http.StatusBadRequest, "only local users can reset password here")
 			return
 		}
-		if len(body.Password) < 12 {
-			writeErr(w, http.StatusBadRequest, "password min 12 chars")
+		if err := password.ValidateLocal(body.Password); err != nil {
+			writeErr(w, http.StatusBadRequest, err.Error())
 			return
 		}
 		hash, err := password.Hash(body.Password, password.Default)
@@ -320,10 +329,6 @@ func (a *API) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 	if body.Roles != nil {
 		if len(body.Roles) == 0 {
 			writeErr(w, http.StatusBadRequest, "roles required")
-			return
-		}
-		if !actorMayChangeUserRoles(sess.Roles, *u) {
-			writeErr(w, http.StatusForbidden, "cannot modify platform_admin")
 			return
 		}
 		for _, role := range body.Roles {
@@ -344,6 +349,15 @@ func (a *API) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 	if err := a.App.Vault.UpsertUser(r.Context(), *u); err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
+	}
+	if body.Password != "" || body.Roles != nil {
+		a.Sessions.DeleteByUser(u.ID)
+		if sess.UserID == u.ID {
+			var roles []string
+			_ = json.Unmarshal([]byte(u.RolesJSON), &roles)
+			fresh := a.Sessions.Create(sess.UserID, sess.TenantID, sess.Username, roles)
+			a.setSessionCookie(w, r, fresh)
+		}
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
@@ -557,12 +571,19 @@ func (a *API) handleAddMember(w http.ResponseWriter, r *http.Request) {
 
 func (a *API) handleRemoveMember(w http.ResponseWriter, r *http.Request) {
 	sess, _ := a.sessionFrom(r)
-	err := a.App.Vault.RemoveGroupMember(r.Context(), sess.TenantID, store.GroupID(r.PathValue("id")), store.UserID(r.PathValue("userId")))
+	gid := store.GroupID(r.PathValue("id"))
+	uid := store.UserID(r.PathValue("userId"))
+	audit := a.mutationAudit(r, sess, "group.member_remove", "group", string(gid))
+	rotateIDs, err := a.App.Vault.RemoveGroupMemberWithRevoke(r.Context(), sess.TenantID, gid, uid, &audit)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+	out := make([]string, 0, len(rotateIDs))
+	for _, id := range rotateIDs {
+		out = append(out, string(id))
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "rotate_secret_ids": out})
 }
 
 func (a *API) handleListPublicKeys(w http.ResponseWriter, r *http.Request) {
@@ -573,30 +594,37 @@ func (a *API) handleListPublicKeys(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	type pk struct {
-		UserID     string `json:"user_id"`
-		Username   string `json:"username"`
-		PublicKey  string `json:"public_key_b64"`
-		Onboarded  bool   `json:"onboarded"`
+		UserID       string `json:"user_id"`
+		Username     string `json:"username"`
+		PublicKey    string `json:"public_key_b64"`
+		Fingerprint  string `json:"fingerprint"`
+		KeyChangedAt string `json:"key_changed_at,omitempty"`
+		Onboarded    bool   `json:"onboarded"`
 	}
 	var out []pk
 	for _, u := range users {
 		if u.OnboardedAt == nil || len(u.PublicKey) == 0 || u.Status == "disabled" {
 			continue
 		}
+		changed := ""
+		if u.OnboardedAt != nil {
+			changed = u.OnboardedAt.UTC().Format(time.RFC3339)
+		}
 		out = append(out, pk{
 			UserID: string(u.ID), Username: u.Username,
-			PublicKey: base64.StdEncoding.EncodeToString(u.PublicKey), Onboarded: true,
+			PublicKey:   base64.StdEncoding.EncodeToString(u.PublicKey),
+			Fingerprint: publicKeyFingerprint(u.PublicKey), KeyChangedAt: changed, Onboarded: true,
 		})
 	}
 	writeJSON(w, http.StatusOK, out)
 }
 
 type envelopeIn struct {
-	UserID            string `json:"user_id"`
-	KeyVersion        uint32 `json:"key_version"`
-	WrappedDKB64      string `json:"wrapped_dk_b64"`
-	EphemeralPubB64   string `json:"ephemeral_pub_b64"`
-	NonceB64          string `json:"nonce_b64"`
+	UserID          string `json:"user_id"`
+	KeyVersion      uint32 `json:"key_version"`
+	WrappedDKB64    string `json:"wrapped_dk_b64"`
+	EphemeralPubB64 string `json:"ephemeral_pub_b64"`
+	NonceB64        string `json:"nonce_b64"`
 }
 
 type createSecretReq struct {
@@ -704,7 +732,10 @@ func (a *API) handleCreateSecret(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := a.App.Vault.CreateSecret(r.Context(), meta, store.CiphertextBlob{
 		Ciphertext: ct, Nonce: nonce, KeyVersion: req.KeyVersion, ContentType: "application/octet-stream",
-	}, envs); err != nil {
+	}, envs, func() *store.AuditEvent {
+		e := a.mutationAudit(r, sess, "secret.create", "secret", string(id))
+		return &e
+	}()); err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -735,12 +766,6 @@ func (a *API) handleCreateSecret(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-	}
-	if !a.appendAuditStrict(w, r, store.AuditEvent{
-		TenantID: sess.TenantID, ActorID: string(sess.UserID),
-		Action: "secret.create", ResourceType: "secret", ResourceID: string(id),
-	}) {
-		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"id": id, "key_version": req.KeyVersion, "visibility": string(vis)})
 }
@@ -835,7 +860,7 @@ func (a *API) handleListSecrets(w http.ResponseWriter, r *http.Request) {
 			ID: string(m.ID), TitleCiphertextB64: base64.StdEncoding.EncodeToString(m.TitleCiphertext),
 			TitleNonceB64: base64.StdEncoding.EncodeToString(m.TitleNonce), CreatedBy: string(m.CreatedBy),
 			Visibility: string(store.NormalizeVisibility(m.Visibility)),
-			HasAccess: access, KeyVersion: kv,
+			HasAccess:  access, KeyVersion: kv,
 		}
 		if shareCtx != nil {
 			it.CreatedByUsername = shareCtx.usernameByID[m.CreatedBy]
@@ -899,7 +924,7 @@ func (a *API) handleGetSecret(w http.ResponseWriter, r *http.Request) {
 	}
 	eph, nonce, ct := mine.WrappedDK[:32], mine.WrappedDK[32:56], mine.WrappedDK[56:]
 	out := map[string]any{
-		"id": meta.ID,
+		"id":                   meta.ID,
 		"title_ciphertext_b64": base64.StdEncoding.EncodeToString(meta.TitleCiphertext),
 		"title_nonce_b64":      base64.StdEncoding.EncodeToString(meta.TitleNonce),
 		"ciphertext_b64":       base64.StdEncoding.EncodeToString(blob.Ciphertext),
@@ -1018,11 +1043,11 @@ func (a *API) handleSecretAccess(w http.ResponseWriter, r *http.Request) {
 		availGroups = append(availGroups, namedID{ID: string(g.ID), Name: g.Name})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"owner":           namedID{ID: string(meta.CreatedBy), Username: ownerName},
-		"visibility":      string(store.NormalizeVisibility(meta.Visibility)),
-		"shared_users":    sharedUsers,
-		"shared_groups":   sharedGroups,
-		"available_users": availUsers,
+		"owner":            namedID{ID: string(meta.CreatedBy), Username: ownerName},
+		"visibility":       string(store.NormalizeVisibility(meta.Visibility)),
+		"shared_users":     sharedUsers,
+		"shared_groups":    sharedGroups,
+		"available_users":  availUsers,
 		"available_groups": availGroups,
 	})
 }
@@ -1059,6 +1084,8 @@ func (a *API) handleShareSecret(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusNotFound, "secret not found")
 		return
 	}
+	var envs []store.KeyEnvelope
+	var directs []store.SecretDirectShare
 	for _, e := range body.Envelopes {
 		if !a.recipientShareable(r, sess.TenantID, store.UserID(e.UserID)) {
 			writeErr(w, http.StatusBadRequest, "recipient must be onboarded user in tenant")
@@ -1077,35 +1104,27 @@ func (a *API) handleShareSecret(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, http.StatusBadRequest, "key_version must match current secret version")
 			return
 		}
-		if err := a.App.Vault.PutKeyEnvelope(r.Context(), store.KeyEnvelope{
+		envs = append(envs, store.KeyEnvelope{
 			SecretID: id, TenantID: sess.TenantID, UserID: store.UserID(e.UserID),
 			KeyVersion: kv, WrappedDK: packed,
-		}); err != nil {
-			if errors.Is(err, store.ErrRevokedEnvelope) {
-				writeErr(w, http.StatusConflict, "cannot revive revoked envelope")
-				return
-			}
-			writeErr(w, http.StatusInternalServerError, err.Error())
-			return
-		}
+		})
 		if e.UserID != string(sess.UserID) {
-			if err := a.App.Vault.PutSecretDirectShare(r.Context(), store.SecretDirectShare{
+			directs = append(directs, store.SecretDirectShare{
 				TenantID: sess.TenantID, SecretID: id, UserID: store.UserID(e.UserID),
-			}); err != nil {
-				writeErr(w, http.StatusInternalServerError, err.Error())
-				return
-			}
+			})
 		}
 	}
-	if err := a.syncSecretVisibility(r.Context(), sess.TenantID, id, true); err != nil {
+	audit := a.mutationAudit(r, sess, "secret.share", "secret", string(id))
+	if err := a.App.Vault.ShareSecret(r.Context(), envs, directs, &audit); err != nil {
+		if errors.Is(err, store.ErrRevokedEnvelope) {
+			writeErr(w, http.StatusConflict, "cannot revive revoked envelope")
+			return
+		}
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	if err := a.App.Vault.AppendAudit(r.Context(), store.AuditEvent{
-		ID: newID("aud"), TenantID: sess.TenantID, ActorID: string(sess.UserID),
-		Action: "secret.share", ResourceType: "secret", ResourceID: string(id), CreatedAt: time.Now().UTC(),
-	}); err != nil {
-		writeErr(w, http.StatusInternalServerError, "audit: "+err.Error())
+	if err := a.syncSecretVisibility(r.Context(), sess.TenantID, id, true); err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
@@ -1263,7 +1282,10 @@ func (a *API) handleRotateSecret(w http.ResponseWriter, r *http.Request) {
 
 	if err := a.App.Vault.RotateSecret(r.Context(), sess.TenantID, id, oldBlob.KeyVersion, *meta, store.CiphertextBlob{
 		Ciphertext: ct, Nonce: nonce, KeyVersion: req.KeyVersion,
-	}, envs); err != nil {
+	}, envs, func() *store.AuditEvent {
+		e := a.mutationAudit(r, sess, "secret.key_rotated", "secret", string(id))
+		return &e
+	}()); err != nil {
 		if errors.Is(err, store.ErrRevokedEnvelope) {
 			writeErr(w, http.StatusConflict, "cannot revive revoked envelope")
 			return
@@ -1287,13 +1309,6 @@ func (a *API) handleRotateSecret(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := a.syncSecretVisibility(r.Context(), sess.TenantID, id, false); err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	if err := a.App.Vault.AppendAudit(r.Context(), store.AuditEvent{
-		ID: newID("aud"), TenantID: sess.TenantID, ActorID: string(sess.UserID),
-		Action: "secret.key_rotated", ResourceType: "secret", ResourceID: string(id), CreatedAt: time.Now().UTC(),
-	}); err != nil {
-		writeErr(w, http.StatusInternalServerError, "audit: "+err.Error())
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"id": id, "key_version": req.KeyVersion})

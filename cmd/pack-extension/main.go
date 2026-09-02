@@ -21,7 +21,13 @@ func main() {
 	}
 	extDir := filepath.Join(root, "clients", "extension")
 	outDir := filepath.Join(root, "dist")
-	keyPath := filepath.Join(extDir, "teamvault.pem")
+	keyPath := filepath.Join(root, "clients", "teamvault.pem")
+	legacyKey := filepath.Join(extDir, "teamvault.pem")
+	if _, err := os.Stat(keyPath); err != nil {
+		if _, err2 := os.Stat(legacyKey); err2 == nil {
+			keyPath = legacyKey
+		}
+	}
 	if err := os.MkdirAll(outDir, 0o755); err != nil {
 		fatal(err)
 	}
@@ -197,6 +203,10 @@ func loadSigningKey(keyPath string) ([]byte, error) {
 	generated, err := crx3.GeneratePrivateKeyPEM()
 	if err != nil {
 		return nil, err
+	}
+	if _, err := os.Stat("/.dockerenv"); err == nil {
+		fmt.Fprintln(os.Stderr, "generated ephemeral extension key (not written — Docker/CI unofficial pack)")
+		return []byte(generated), nil
 	}
 	if werr := os.WriteFile(keyPath, []byte(generated), 0o600); werr != nil {
 		return nil, werr
