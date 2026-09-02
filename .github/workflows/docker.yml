@@ -110,32 +110,32 @@ jobs:
               exit 1
             fi
             echo "::warning::TV_EXTENSION_SIGNING_KEY not set — building image with ephemeral extension key (CRX ID will not match committed manifest)."
-           else
-             # Try base64 decode first, then fall back to raw PEM
-             if echo "${KEY}" | base64 -d 2>/dev/null | openssl pkey -noout 2>/dev/null; then
-               echo "${KEY}" | base64 -d > "$pem"
-             else
-               # Raw PEM: normalize CRLF and literal "\n" sequences
-               printf '%s' "${KEY}" | tr -d '\r' | sed 's/\\n/\n/g' > "$pem"
-             fi
-             
-             # Ensure final newline
-             if [ -s "$pem" ] && [ "$(tail -c1 "$pem" | wc -l)" -eq 0 ]; then
-               printf '\n' >> "$pem"
-             fi
-             
-             # Validate PEM
-             if grep -q 'BEGIN .*PRIVATE KEY' "$pem" && openssl pkey -in "$pem" -noout 2>/dev/null; then
-               has_key=true
-             else
-               : > "$pem"
-               if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
-                 echo "::error::TV_EXTENSION_SIGNING_KEY is not a valid PKCS#8/PEM private key (openssl pkey failed). Fix the secret and re-run."
-                 exit 1
-               fi
-               echo "::warning::TV_EXTENSION_SIGNING_KEY is set but not a valid PEM — building with ephemeral extension key. Update the secret to a PKCS#8 private key matching clients/extension/[...]"
-             fi
-           fi
+          else
+            # Try base64 decode first, then fall back to raw PEM
+            if echo "${KEY}" | base64 -d 2>/dev/null | openssl pkey -noout 2>/dev/null; then
+              echo "${KEY}" | base64 -d > "$pem"
+            else
+              # Raw PEM: normalize CRLF and literal "\n" sequences
+              printf '%s' "${KEY}" | tr -d '\r' | sed 's/\\n/\n/g' > "$pem"
+            fi
+
+            # Ensure final newline
+            if [ -s "$pem" ] && [ "$(tail -c1 "$pem" | wc -l)" -eq 0 ]; then
+              printf '\n' >> "$pem"
+            fi
+
+            # Validate PEM
+            if grep -q 'BEGIN .*PRIVATE KEY' "$pem" && openssl pkey -in "$pem" -noout 2>/dev/null; then
+              has_key=true
+            else
+              : > "$pem"
+              if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+                echo "::error::TV_EXTENSION_SIGNING_KEY is not a valid PKCS#8/PEM private key (openssl pkey failed). Fix the secret and re-run."
+                exit 1
+              fi
+              echo "::warning::TV_EXTENSION_SIGNING_KEY is set but not a valid PEM — building with ephemeral extension key. Update the secret to a PKCS#8 private key matching clients/extension/[...]"
+            fi
+          fi
 
           echo "has_key=${has_key}" >> "$GITHUB_OUTPUT"
           echo "pem_path=${pem}" >> "$GITHUB_OUTPUT"
