@@ -32,7 +32,11 @@ RUN export GOFLAGS="$(cat /tmp/goflags)"; go test ./... && go vet ./...
 FROM build AS clients
 ARG VERSION=dev
 ARG COMMIT=none
-RUN export GOFLAGS="$(cat /tmp/goflags)" CGO_ENABLED=0 && \
+# Official images (CI push) set REQUIRE_EXTENSION_KEY=1 and inject TV_EXTENSION_SIGNING_KEY.
+# The PEM is read from a BuildKit secret into process env — never copied into a layer.
+ARG REQUIRE_EXTENSION_KEY=0
+RUN --mount=type=secret,id=tv_extension_pem,required=false \
+    export GOFLAGS="$(cat /tmp/goflags)" CGO_ENABLED=0 && \
     mkdir -p /out/downloads && \
     build_tvcli() { \
       goos="$1"; goarch="$2"; suffix="$3"; \
@@ -45,9 +49,12 @@ RUN export GOFLAGS="$(cat /tmp/goflags)" CGO_ENABLED=0 && \
     build_tvcli linux arm64 "" && \
     build_tvcli windows amd64 ".exe" && \
     build_tvcli windows arm64 ".exe" && \
+    if [ -s /run/secrets/tv_extension_pem ]; then \
+      export TV_EXTENSION_PEM="$(cat /run/secrets/tv_extension_pem)"; \
+    fi && \
+    export TV_EXTENSION_REQUIRE_KEY="${REQUIRE_EXTENSION_KEY}" && \
     go build -trimpath -o /out/pack-extension ./cmd/pack-extension && \
     TV_EXTENSION_UPDATE_BASE=https://teamvault.local /out/pack-extension && \
-    mkdir -p /out/downloads && \
     cp dist/teamvault-extension.* /out/downloads/ && \
     cp -r dist/extension /out/downloads/
 

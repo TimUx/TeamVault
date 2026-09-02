@@ -9,6 +9,7 @@ import (
 	"crypto/rsa"
 	"crypto/sha256"
 	"crypto/x509"
+	"encoding/base64"
 	"encoding/binary"
 	"encoding/pem"
 	"fmt"
@@ -64,6 +65,15 @@ func GeneratePrivateKeyPEM() (string, error) {
 		return "", err
 	}
 	return string(pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der})), nil
+}
+
+// PublicKeySPKIB64 returns the SPKI (PKIX) public key as Base64, for manifest.json "key".
+func PublicKeySPKIB64(privateKeyPEM string) (string, error) {
+	_, pubDER, err := parsePrivateKey(privateKeyPEM)
+	if err != nil {
+		return "", err
+	}
+	return base64.StdEncoding.EncodeToString(pubDER), nil
 }
 
 func parsePrivateKey(pemBytes string) (*rsa.PrivateKey, []byte, error) {

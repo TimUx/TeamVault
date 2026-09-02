@@ -78,6 +78,21 @@ Firefox nutzt `browser_specific_settings.gecko` und die `browser`-API (Polyfill 
 
 Session-Cookies gelten für die Server-Origin (host_permissions / optional hosts).
 
+### CRX-Signatur (Maintainer)
+
+Der Chrome/Edge-Signing-Key liegt **nicht** im Repo. Er bestimmt die stabile Extension-ID.
+
+| Umgebung | Quelle |
+|----------|--------|
+| Lokal | gitignored `clients/extension/teamvault.pem` (legt `go run ./cmd/pack-extension` bei Bedarf an) |
+| CI / Image-Push | GitHub Actions Secret **`TV_EXTENSION_SIGNING_KEY`** (vollständiges PKCS#8-PEM) |
+
+`manifest.json` `"key"` ist der **öffentliche** Schlüssel und darf versioniert werden; er muss zum privaten Key passen.
+
+Release-Images (`main`, Tags) **scheitern ohne Secret** — es wird kein offizielles CRX mit Wegwerf-ID gebaut. PRs und Docs-Screenshots dürfen einen ephemeren Key erzeugen.
+
+Secret setzen (PEM nie in Tickets/Chat): GitHub → Settings → Secrets and variables → Actions → `TV_EXTENSION_SIGNING_KEY`. Lokal dieselbe Datei behalten und im Firmen-Secret-Store sichern. Rotation: neuen Key erzeugen, Secret ersetzen, öffentlichen `key` im Manifest committen (neue Extension-ID → Policy-Rollout anpassen).
+
 ## Shamir Escrow
 
 ```powershell

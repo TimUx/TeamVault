@@ -25,6 +25,9 @@ docs/
 clients/
 !clients/extension/
 !clients/extension/**
+# CRX signing private key and corp CAs — never send to the daemon
+**/*.pem
+certs/
 scripts/
 *.md
 SECURITY-REVIEW-CHECKLIST.md

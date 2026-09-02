@@ -28,6 +28,7 @@ unlock-docs-shot.key
 # Local-only internals (never publish)
 /vendor/
 /certs/
+# CRX signing private key — local file / GitHub secret TV_EXTENSION_SIGNING_KEY, never commit
 clients/extension/*.pem
 clients/extension/*.key
 scripts/corp-proxy.local.ps1

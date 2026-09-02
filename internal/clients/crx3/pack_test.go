@@ -8,10 +8,13 @@ import (
 
 func TestPackDirProducesCRX(t *testing.T) {
 	ext := filepath.Join("..", "..", "..", "clients", "extension")
-	keyPath := filepath.Join(ext, "teamvault.pem")
-	pem, err := os.ReadFile(keyPath)
+	pem, err := GeneratePrivateKeyPEM()
 	if err != nil {
-		t.Skip("extension key missing")
+		t.Fatal(err)
+	}
+	b64, err := PublicKeySPKIB64(pem)
+	if err != nil || b64 == "" {
+		t.Fatalf("public key: %q err %v", b64, err)
 	}
 	out := filepath.Join(t.TempDir(), "test.crx")
 	id, err := PackDir(ext, out, string(pem))

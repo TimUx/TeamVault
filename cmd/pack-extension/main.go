@@ -3,6 +3,7 @@ package main
 
 import (
 	"archive/zip"
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -24,20 +25,16 @@ func main() {
 	if err := os.MkdirAll(outDir, 0o755); err != nil {
 		fatal(err)
 	}
-	pem, err := os.ReadFile(keyPath)
+	pem, err := loadSigningKey(keyPath)
 	if err != nil {
-		generated, gerr := crx3.GeneratePrivateKeyPEM()
-		if gerr != nil {
-			fatal(gerr)
-		}
-		if werr := os.WriteFile(keyPath, []byte(generated), 0o600); werr != nil {
-			fatal(werr)
-		}
-		fmt.Fprintf(os.Stderr, "generated %s — keep it local (not git) for a stable extension ID\n", keyPath)
-		pem = []byte(generated)
+		fatal(err)
 	}
-	manifest, err := readManifest(filepath.Join(extDir, "manifest.json"))
+	manifestPath := filepath.Join(extDir, "manifest.json")
+	manifest, err := readManifest(manifestPath)
 	if err != nil {
+		fatal(err)
+	}
+	if err := applyManifestPublicKey(manifestPath, &manifest, string(pem)); err != nil {
 		fatal(err)
 	}
 	zipPath := filepath.Join(outDir, "teamvault-extension.zip")
@@ -65,6 +62,7 @@ func main() {
 
 type manifestJSON struct {
 	Version string `json:"version"`
+	Key     string `json:"key"`
 }
 
 func readManifest(path string) (manifestJSON, error) {
@@ -176,6 +174,70 @@ func envOr(k, d string) string {
 		return v
 	}
 	return d
+}
+
+func requireSigningKey() bool {
+	v := strings.ToLower(strings.TrimSpace(os.Getenv("TV_EXTENSION_REQUIRE_KEY")))
+	return v == "1" || v == "true" || v == "yes"
+}
+
+// loadSigningKey prefers TV_EXTENSION_PEM (CI secret), then the local pem file.
+// Release builds set TV_EXTENSION_REQUIRE_KEY=1 and must not generate a key.
+func loadSigningKey(keyPath string) ([]byte, error) {
+	if v := strings.TrimSpace(os.Getenv("TV_EXTENSION_PEM")); v != "" {
+		return []byte(v), nil
+	}
+	b, err := os.ReadFile(keyPath)
+	if err == nil && len(bytes.TrimSpace(b)) > 0 {
+		return b, nil
+	}
+	if requireSigningKey() {
+		return nil, fmt.Errorf("extension signing key required: set TV_EXTENSION_PEM or provide %s (do not generate for release)", keyPath)
+	}
+	generated, err := crx3.GeneratePrivateKeyPEM()
+	if err != nil {
+		return nil, err
+	}
+	if werr := os.WriteFile(keyPath, []byte(generated), 0o600); werr != nil {
+		return nil, werr
+	}
+	fmt.Fprintf(os.Stderr, "generated %s — keep it local (not git); set GitHub secret TV_EXTENSION_SIGNING_KEY for stable CRX IDs\n", keyPath)
+	return []byte(generated), nil
+}
+
+func applyManifestPublicKey(path string, manifest *manifestJSON, pem string) error {
+	b64, err := crx3.PublicKeySPKIB64(pem)
+	if err != nil {
+		return err
+	}
+	if requireSigningKey() {
+		if manifest.Key != b64 {
+			return fmt.Errorf("signing key does not match manifest.json key — refusing official CRX pack")
+		}
+		return nil
+	}
+	if manifest.Key == b64 {
+		return nil
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	var full map[string]any
+	if err := json.Unmarshal(raw, &full); err != nil {
+		return err
+	}
+	full["key"] = b64
+	out, err := json.MarshalIndent(full, "", "  ")
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(path, append(out, '\n'), 0o644); err != nil {
+		return err
+	}
+	manifest.Key = b64
+	fmt.Fprintf(os.Stderr, "updated %s key field (public only; commit that, never the .pem)\n", path)
+	return nil
 }
 
 func copyFile(src, dst string) error {

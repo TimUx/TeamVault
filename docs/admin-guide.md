@@ -462,6 +462,7 @@ Windows (ohne Docker) — **wenn `.ps1` lokal durch Antimalware blockiert wird**
 
 ```bash
 # Client-Artefakte (ohne PowerShell)
+# Signing-Key: lokale gitignored teamvault.pem oder TV_EXTENSION_PEM — nie committen
 go run ./cmd/pack-extension
 ./scripts/build-tvcli.sh   # oder nur Linux-Binaries im CI
 

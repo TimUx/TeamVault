@@ -30,11 +30,29 @@ function chromeExtensionId(pubKeyDer) {
   return id;
 }
 
+function requireSigningKey() {
+  const v = (process.env.TV_EXTENSION_REQUIRE_KEY || "").trim().toLowerCase();
+  return v === "1" || v === "true" || v === "yes";
+}
+
 function ensureKey() {
-  if (fs.existsSync(KEY)) return;
+  const fromEnv = (process.env.TV_EXTENSION_PEM || "").trim();
+  if (fromEnv) {
+    fs.writeFileSync(KEY, fromEnv, { mode: 0o600 });
+    return;
+  }
+  if (fs.existsSync(KEY) && fs.statSync(KEY).size > 0) return;
+  if (requireSigningKey()) {
+    console.error(
+      "extension signing key required: set TV_EXTENSION_PEM or provide",
+      KEY,
+      "(do not generate for release)"
+    );
+    process.exit(1);
+  }
   const { privateKey } = crypto.generateKeyPairSync("rsa", { modulusLength: 2048 });
-  fs.writeFileSync(KEY, privateKey.export({ type: "pkcs8", format: "pem" }));
-  console.log("Generated new extension key:", KEY);
+  fs.writeFileSync(KEY, privateKey.export({ type: "pkcs8", format: "pem" }), { mode: 0o600 });
+  console.log("Generated new extension key:", KEY, "— keep it local (not git)");
 }
 
 function publicKeyBase64() {
@@ -47,11 +65,14 @@ function publicKeyBase64() {
 function syncManifestKey() {
   const { b64 } = publicKeyBase64();
   const manifest = JSON.parse(fs.readFileSync(MANIFEST, "utf8"));
-  if (manifest.key !== b64) {
-    manifest.key = b64;
-    fs.writeFileSync(MANIFEST, JSON.stringify(manifest, null, 2) + "\n");
-    console.log("Updated manifest.json key field");
+  if (manifest.key === b64) return manifest;
+  if (requireSigningKey()) {
+    console.error("signing key does not match manifest.json key — refusing official CRX pack");
+    process.exit(1);
   }
+  manifest.key = b64;
+  fs.writeFileSync(MANIFEST, JSON.stringify(manifest, null, 2) + "\n");
+  console.log("Updated manifest.json key field (public only; commit that, never the .pem)");
   return manifest;
 }
 

@@ -28,6 +28,7 @@ Vor dem Betrieb mit echten Zugangsdaten: externes Audit + internes Walkthrough g
 
 - [x] Genau ein externes Secret: `MASTER_UNLOCK_KEY` (Keyfile/Secret-Mount in Prod; `.env` nur Pfad)
 - [x] Unlock-Key nie in Logs/Traces; Mindestentropie ≥32 Byte
+- [x] Extension-CRX-Signing-Key nicht im Git; CI-Secret `TV_EXTENSION_SIGNING_KEY`; Release-Image ohne Secret schlägt fehl
 - [x] LDAP/SMTP/API-Key-Material nur in sealed Config-DB
 - [x] API-Key-Klartext nur einmal angezeigt; Speicherung gehasht
 - [x] Storage-Migration: Bestätigungspflicht; Rollback-Plan dokumentiert
