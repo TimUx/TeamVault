@@ -5,7 +5,7 @@ $Root = Split-Path -Parent $PSScriptRoot
 $Port = if ($env:TV_CAPTURE_PORT) { $env:TV_CAPTURE_PORT } else { "8099" }
 $Data = if ($env:TV_CAPTURE_DATA) { $env:TV_CAPTURE_DATA } else { Join-Path $env:TEMP "tv-screenshot-data" }
 $Secrets = Join-Path $Data "secrets"
-if (-not $env:TV_CAPTURE_DATA -and (Test-Path $Data)) {
+if (-not $env:TV_CAPTURE_KEEP_DATA -and (Test-Path $Data)) {
   Remove-Item -Recurse -Force $Data
 }
 New-Item -ItemType Directory -Force -Path $Data, $Secrets | Out-Null
@@ -35,6 +35,10 @@ if (Test-Path $serverBin) { Remove-Item -Force $serverBin }
 Write-Host "Building server binary for fresh go:embed…"
 go build -a -trimpath -o $serverBin ./cmd/teamvault
 if ($LASTEXITCODE -ne 0) { throw "go build failed" }
+
+# Stop leftover screenshot server on the same port (reuse would hit stale DB/password).
+Get-NetTCPConnection -LocalPort $Port -ErrorAction SilentlyContinue |
+  ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }
 
 $server = Start-Process -FilePath $serverBin `
   -WorkingDirectory $Root -PassThru -WindowStyle Hidden
@@ -68,6 +72,7 @@ try {
     }
   }
   & $node (Join-Path $Root "scripts\capture-docs-screenshots.mjs")
+  if ($LASTEXITCODE -ne 0) { throw "capture-docs-screenshots.mjs failed with exit $LASTEXITCODE" }
   Write-Host "Screenshots written to docs/images/"
 } finally {
   if ($server -and -not $server.HasExited) { Stop-Process -Id $server.Id -Force -ErrorAction SilentlyContinue }

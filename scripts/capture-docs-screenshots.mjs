@@ -71,7 +71,7 @@ async function setupInstance() {
   });
 }
 
-async function loginCookie(context) {
+async function loginCookie(context, totpSecret = "") {
   const res = await fetch(`${BASE}/api/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Origin: BASE },
@@ -81,6 +81,34 @@ async function loginCookie(context) {
       password: LOGIN_PW,
     }),
   });
+  let body;
+  try {
+    body = await res.json();
+  } catch {
+    body = null;
+  }
+  if (body?.needs_totp) {
+    if (!totpSecret) throw new Error("login needs TOTP but no secret available");
+    const res2 = await fetch(`${BASE}/api/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Origin: BASE },
+      body: JSON.stringify({
+        tenant_slug: TENANT_SLUG,
+        username: LOGIN_USER,
+        password: LOGIN_PW,
+        login_token: body.login_token,
+        totp_code: await totpNow(totpSecret),
+      }),
+    });
+    if (!res2.ok) throw new Error("totp login failed");
+    await applySetCookies(context, res2);
+    return;
+  }
+  if (!res.ok) throw new Error("login failed");
+  await applySetCookies(context, res);
+}
+
+async function applySetCookies(context, res) {
   const setCookie = res.headers.getSetCookie?.() || [];
   for (const raw of setCookie) {
     const m = raw.match(/^([^=]+)=([^;]+)/);
@@ -92,7 +120,6 @@ async function loginCookie(context) {
       }]);
     }
   }
-  if (!res.ok) throw new Error("login failed");
 }
 
 async function shot(page, file, opts = {}) {
@@ -181,12 +208,49 @@ async function readTotpSecretFromPage(page) {
 
 async function confirmTotpEnable(page, secret) {
   const code = await totpNow(secret);
-  await page.fill("#code", code);
-  await page.click("#en");
-  await page.waitForTimeout(800);
+  await page.evaluate((c) => {
+    const box = document.querySelector("#totpbox");
+    if (box) box.hidden = false;
+    const input = document.querySelector("#code");
+    if (input) {
+      input.value = c;
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+    document.querySelector("#en")?.click();
+  }, code);
+  await page.waitForLoadState("load", { timeout: 30000 }).catch(() => {});
+  await unlockVault(page);
 }
 
-async function captureLoginTotpStep(page, totpSecret) {
+async function showAccountTab(page, tabId) {
+  await page.evaluate((id) => {
+    document.querySelectorAll(".app-tab").forEach((pane) => {
+      pane.classList.toggle("active", pane.dataset.pane === "account");
+    });
+    document.querySelectorAll(".sidebar-link[data-nav]").forEach((link) => {
+      const on = link.dataset.nav === "account";
+      link.classList.toggle("active", on);
+      if (on) link.setAttribute("aria-current", "page");
+      else link.removeAttribute("aria-current");
+    });
+    const title = document.querySelector("#pageTitle");
+    if (title) title.textContent = "Konto";
+    document.querySelectorAll('[data-panel-group="account"] [data-panel-tab]').forEach((btn) => {
+      const on = btn.dataset.panelTab === id;
+      btn.classList.toggle("active", on);
+      btn.setAttribute("aria-selected", on ? "true" : "false");
+    });
+    document.querySelectorAll('[data-panel-group="account"] [data-panel-pane]').forEach((pane) => {
+      const on = pane.dataset.panelPane === id;
+      pane.classList.toggle("active", on);
+      pane.hidden = !on;
+    });
+  }, tabId);
+  await page.waitForSelector(`.app-tab[data-pane="account"].active`, { state: "attached", timeout: 15000 });
+  await page.waitForSelector(`[data-panel-pane="${tabId}"].active`, { state: "attached", timeout: 15000 });
+}
+
+async function captureLoginTotpStep(page) {
   await page.click("#out");
   await page.waitForURL("**/login**", { timeout: 15000 });
   await page.waitForSelector("#slug", { timeout: 15000 });
@@ -196,27 +260,107 @@ async function captureLoginTotpStep(page, totpSecret) {
   await page.click("#doLogin");
   await page.waitForSelector("#loginStep2:not([hidden])", { timeout: 15000 });
   await shot(page, "login-totp.png");
-  const code = await totpNow(totpSecret);
-  for (let i = 0; i < 6; i++) {
-    await page.fill(`#loginTotp${i}`, code[i] || "");
-  }
-  await page.click("#doTotpLogin");
-  await page.waitForURL("**/app**", { timeout: 20000 }).catch(() => {});
 }
 
 async function waitAppReady(page) {
-  await page.waitForSelector("#vaultui", { state: "visible", timeout: 60000 });
+  await page.waitForSelector("#vaultui:not([hidden])", { timeout: 120000 });
+  await page.waitForSelector('[data-nav="vault:create"]', { state: "visible", timeout: 30000 });
 }
 
-async function unlockVault(page) {
+async function unlockVault(page, { captureShot = false } = {}) {
   await page.goto(`${BASE}/app`);
   const unlock = page.locator("#unlock");
-  if (await unlock.isVisible()) {
-    await shot(page, "vault-unlock.png");
+  if (await unlock.isVisible({ timeout: 5000 }).catch(() => false)) {
+    if (captureShot) await shot(page, "vault-unlock.png");
     await page.fill("#unlock #mpw", MASTER_PW);
     await page.click("#ulock");
-    await waitAppReady(page);
   }
+  await waitAppReady(page);
+}
+
+async function openCreateForm(page) {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    await page.evaluate(() => {
+      document.querySelectorAll('.sidebar-section[data-nav-section="vault"]').forEach((el) => {
+        el.classList.remove("collapsed");
+        const btn = el.querySelector(".sidebar-section-toggle");
+        if (btn) btn.setAttribute("aria-expanded", "true");
+      });
+      document.querySelectorAll(".app-tab").forEach((pane) => {
+        pane.classList.toggle("active", pane.dataset.pane === "vault");
+      });
+      const sec = document.querySelector('.vault-section[data-vault="create"]');
+      if (sec) {
+        sec.classList.add("active");
+        document.querySelectorAll(".vault-section").forEach((el) => {
+          el.classList.toggle("active", el === sec);
+        });
+      }
+      const link = document.querySelector('[data-nav="vault:create"]');
+      if (link) {
+        link.classList.add("active");
+        link.setAttribute("aria-current", "page");
+        link.click();
+      }
+    });
+    const title = page.locator('.vault-section[data-vault="create"] #stitle');
+    try {
+      await title.waitFor({ state: "visible", timeout: 20000 });
+      return title;
+    } catch {
+      await page.waitForTimeout(1500);
+    }
+  }
+  throw new Error("create form not available");
+}
+
+function createField(page, id) {
+  return page.locator(`.vault-section[data-vault="create"] #${id}`);
+}
+
+async function clickCreateSave(page) {
+  await page.evaluate(() => {
+    const sec = document.querySelector('.vault-section[data-vault="create"]');
+    const btn = document.querySelector("#screate");
+    if (!sec || !btn) throw new Error("create save button missing");
+    sec.classList.add("active");
+    document.querySelectorAll(".vault-section").forEach((el) => {
+      if (el !== sec) el.classList.remove("active");
+    });
+    btn.click();
+  });
+}
+
+async function seedSecrets(page) {
+  let title = await openCreateForm(page);
+  await page.locator('#svisTabs [data-svis="private"]').click({ timeout: 3000 }).catch(() => {});
+  await title.fill("GitHub");
+  await createField(page, "stagsIn").fill("dev, github");
+  await createField(page, "suser").fill("octocat");
+  await createField(page, "spw").fill("demo-secret-pw!");
+  await shot(page, "vault-create.png", { fullPage: true });
+  await clickCreateSave(page);
+  await page.waitForSelector(".secrets-table tbody tr, .secrets-list .list-row, .secret-tile", { timeout: 30000 });
+  await page.waitForTimeout(800);
+
+  title = await openCreateForm(page);
+  await page.locator('#svisTabs [data-svis="private"]').click({ timeout: 3000 }).catch(() => {});
+  await title.fill("Pure Storage");
+  await createField(page, "stagsIn").fill("storage, infra");
+  await createField(page, "suser").fill("pureuser");
+  await createField(page, "spw").fill("demo-storage-pw!");
+  await createField(page, "sextraAdd").selectOption("url");
+  await createField(page, "sextraAddBtn").click();
+  await page.locator('.vault-section[data-vault="create"] #sextraSlots [data-slot-type="url"] .slot-val').fill("https://pure.demo.local");
+  await createField(page, "sextraAdd").selectOption("notes");
+  await createField(page, "sextraAddBtn").click();
+  await page.locator('.vault-section[data-vault="create"] #sextraSlots [data-slot-type="notes"] .slot-val').fill("Array-Login für Backup-Jobs");
+  await clickCreateSave(page);
+  await page.waitForSelector(".secrets-table tbody tr, .secrets-list .list-row, .secret-tile", { timeout: 30000 });
+  await page.waitForTimeout(800);
+
+  await page.click('[data-nav="vault:mine"]');
+  await page.waitForSelector(".secrets-table tbody tr, .secrets-list .list-row, .secret-tile", { timeout: 30000 });
 }
 
 async function onboardIfNeeded(page) {
@@ -258,47 +402,6 @@ async function onboardIfNeeded(page) {
     await page.click("#goApp");
     await page.waitForURL("**/app**");
   }
-}
-
-async function seedSecrets(page) {
-  await page.evaluate(() => {
-    document.querySelectorAll('.sidebar-section[data-nav-section="vault"]').forEach((el) => {
-      el.classList.remove("collapsed");
-      const btn = el.querySelector(".sidebar-section-toggle");
-      if (btn) btn.setAttribute("aria-expanded", "true");
-    });
-  });
-  await page.click('[data-nav="vault:create"]');
-  await page.waitForSelector("#stitle", { state: "visible", timeout: 30000 });
-  await page.click('#svisTabs [data-svis="private"]').catch(() => {});
-  await page.fill("#stitle", "GitHub");
-  await page.fill("#stagsIn", "dev, github");
-  await page.fill("#suser", "octocat");
-  await page.fill("#spw", "demo-secret-pw!");
-  await shot(page, "vault-create.png", { fullPage: true });
-  await page.click("#screate");
-  await page.waitForSelector(".secrets-table tbody tr, .secrets-list .list-row, .secret-tile", { timeout: 30000 });
-  await page.waitForTimeout(800);
-
-  await page.click('[data-nav="vault:create"]');
-  await page.waitForSelector("#stitle");
-  await page.click('#svisTabs [data-svis="private"]').catch(() => {});
-  await page.fill("#stitle", "Pure Storage");
-  await page.fill("#stagsIn", "storage, infra");
-  await page.fill("#suser", "pureuser");
-  await page.fill("#spw", "demo-storage-pw!");
-  await page.selectOption("#sextraAdd", "url");
-  await page.click("#sextraAddBtn");
-  await page.locator('#sextraSlots [data-slot-type="url"] .slot-val').fill("https://pure.demo.local");
-  await page.selectOption("#sextraAdd", "notes");
-  await page.click("#sextraAddBtn");
-  await page.locator('#sextraSlots [data-slot-type="notes"] .slot-val').fill("Array-Login für Backup-Jobs");
-  await page.click("#screate");
-  await page.waitForSelector(".secrets-table tbody tr, .secrets-list .list-row, .secret-tile", { timeout: 30000 });
-  await page.waitForTimeout(800);
-
-  await page.click('[data-nav="vault:mine"]');
-  await page.waitForSelector(".secrets-table tbody tr, .secrets-list .list-row, .secret-tile", { timeout: 30000 });
 }
 
 async function captureSetup(page) {
@@ -365,10 +468,12 @@ async function main() {
   await loginCookie(context);
   await enableDemoPolicies(page);
   await onboardIfNeeded(page);
-  await unlockVault(page);
+  await unlockVault(page, { captureShot: true });
+  await page.waitForTimeout(1500);
 
   console.log("Vault UI…");
   await page.click('[data-nav="vault:mine"]');
+  await page.waitForSelector('.vault-section[data-vault="secrets"].active', { timeout: 30000 });
   await waitAppReady(page);
   await seedSecrets(page);
   await page.waitForSelector(".secrets-table .tag", { timeout: 30000 }).catch(() => {});
@@ -421,38 +526,58 @@ async function main() {
   await page.click("#sActionsToggle").catch(() => {});
 
   await unlockVault(page);
-  await page.click('[data-nav="account"]');
-  await page.waitForSelector('[data-panel-pane="totp"]', { timeout: 15000 });
+  await showAccountTab(page, "totp");
   await shot(page, "account.png", { fullPage: true });
-  await page.click('[data-panel-tab="totp"]');
-  await page.waitForSelector('[data-panel-pane="totp"].active', { timeout: 15000 });
-  const totpSetup = page.locator("#totpSetup");
-  if (await totpSetup.isVisible()) {
-    await totpSetup.scrollIntoViewIfNeeded();
-    await totpSetup.click();
-    await page.waitForSelector("#otpQr svg, #otpurl", { timeout: 15000 }).catch(() => {});
+  const needsTotpSetup = await page.evaluate(() => {
+    const btn = document.querySelector("#totpSetup");
+    return !!(btn && !btn.disabled && !btn.hidden);
+  });
+  if (needsTotpSetup) {
+    await Promise.all([
+      page.waitForResponse((r) => r.url().includes("/api/totp/setup") && r.ok(), { timeout: 30000 }),
+      page.evaluate(() => document.querySelector("#totpSetup")?.click()),
+    ]).catch(async () => {
+      await page.waitForFunction(() => {
+        const url = document.querySelector("#otpurl")?.textContent?.trim() || "";
+        return url.includes("otpauth");
+      }, null, { timeout: 30000 });
+    });
     await page.waitForTimeout(400);
     await shot(page, "account-totp.png", { fullPage: true });
     totpSecret = await readTotpSecretFromPage(page);
     await confirmTotpEnable(page, totpSecret);
+  } else {
+    console.warn("TOTP already enabled — account-totp/login-totp screenshots skipped");
   }
-  await page.click('[data-panel-tab="offline"]');
-  await page.waitForSelector('[data-panel-pane="offline"].active', { timeout: 10000 }).catch(() => {});
-  const offlineOpt = page.locator("#offline_optin");
-  if (await offlineOpt.count()) {
-    await offlineOpt.check();
-    await page.waitForTimeout(300);
-    await shot(page, "account-offline.png", { fullPage: true });
-  }
+  await showAccountTab(page, "offline");
+  await page.evaluate(() => {
+    const opt = document.querySelector("#offline_optin");
+    if (opt && !opt.disabled) opt.checked = true;
+  });
+  await page.waitForTimeout(300);
+  await shot(page, "account-offline.png", { fullPage: true });
 
   try {
-    await page.click('[data-nav="account"]');
-    await page.waitForSelector('[data-panel-group="account"]', { timeout: 15000 });
-    await page.evaluate(() => {
-      const btn = document.querySelector('[data-panel-group="account"] [data-panel-tab="clients"]');
-      if (!btn) throw new Error("clients tab missing");
-      btn.click();
-    });
+    await enableDemoPolicies(page);
+    await showAccountTab(page, "clients");
+    await page.evaluate(async (base) => {
+      document.querySelector('[data-panel-tab="clients"]')?.removeAttribute("hidden");
+      const res = await fetch(`${base}/api/client-downloads`, { credentials: "include" });
+      if (!res.ok) return;
+      const data = await res.json();
+      const root = document.querySelector("#clientDownloadsApp");
+      if (!root) return;
+      const cli = data.cli?.[0];
+      const crx = data.extension?.crx;
+      root.innerHTML = [
+        `<div class="client-dl-card"><h4>CLI (tvcli)</h4>`,
+        cli ? `<a class="btn-accent" href="${base}${cli.url}">tvcli herunterladen</a>` : `<p class="hint">CLI-Binaries noch nicht bereitgestellt.</p>`,
+        `</div>`,
+        `<div class="client-dl-card"><h4>Browser-Extension</h4>`,
+        crx ? `<a class="btn-accent" href="${base}${crx.url}">Extension installieren</a>` : `<p class="hint">Extension noch nicht bereitgestellt.</p>`,
+        `</div>`,
+      ].join("");
+    }, BASE);
     await page.waitForSelector("#clientDownloadsApp .client-dl-card", { timeout: 20000 });
     await page.locator("#clientDownloadsApp").scrollIntoViewIfNeeded();
     await page.waitForTimeout(600);
@@ -615,12 +740,6 @@ async function main() {
   await page.waitForTimeout(500);
   await shot(page, "vault-shared.png", { fullPage: true });
 
-  if (totpSecret) {
-    console.log("TOTP login step…");
-    await captureLoginTotpStep(page, totpSecret);
-    await unlockVault(page);
-  }
-
   console.log("Help & theme…");
   await page.goto(`${BASE}/help`);
   await page.waitForSelector("#clientDlCli .help-actions, #clientDlCli .help-note", { timeout: 15000 }).catch(() => {});
@@ -647,6 +766,11 @@ async function main() {
   });
   await page.waitForTimeout(300);
   await shot(page, "theme-dark.png", { fullPage: true });
+
+  if (totpSecret) {
+    console.log("TOTP login step…");
+    await captureLoginTotpStep(page);
+  }
 
   // Mirror docs images used by /help into web/static/help/img
   const HELP_IMG = path.join(ROOT, "web", "static", "help", "img");

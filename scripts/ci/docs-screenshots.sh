@@ -28,6 +28,12 @@ SERVER_BIN="$(mktemp)"
 echo "Building server binary for go:embed…"
 go build -trimpath -o "$SERVER_BIN" ./cmd/teamvault
 
+# Free the port if a prior run left a listener (would serve stale DB/password).
+if command -v fuser >/dev/null 2>&1; then
+  fuser -k "${PORT}/tcp" 2>/dev/null || true
+  sleep 1
+fi
+
 echo "Starting TeamVault on :${PORT}…"
 "$SERVER_BIN" &
 SERVER_PID=$!
