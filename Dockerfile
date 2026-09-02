@@ -50,8 +50,12 @@ RUN --mount=type=secret,id=tv_extension_pem,required=false \
     build_tvcli windows amd64 ".exe" && \
     build_tvcli windows arm64 ".exe" && \
     if [ -n "${TV_EXTENSION_PEM:-}" ]; then
-      # Decode base64 secret
-      echo "${TV_EXTENSION_PEM}" | base64 -d > /tmp/key.pem
+      # Check if it looks base64-encoded (no newlines, only base64 chars)
+      if echo "${TV_EXTENSION_PEM}" | grep -qE '^[A-Za-z0-9+/]*={0,2}$'; then
+        echo "${TV_EXTENSION_PEM}" | base64 -d > /tmp/key.pem
+      else
+        echo "${TV_EXTENSION_PEM}" > /tmp/key.pem
+      fi
       export TV_EXTENSION_PEM="$(cat /tmp/key.pem)"
     fi && \
     export TV_EXTENSION_REQUIRE_KEY="${REQUIRE_EXTENSION_KEY}" && \
