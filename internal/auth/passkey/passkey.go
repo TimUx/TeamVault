@@ -20,8 +20,8 @@ type User struct {
 	Credentials []webauthn.Credential
 }
 
-func (u *User) WebAuthnID() []byte          { return []byte(u.Record.ID) }
-func (u *User) WebAuthnName() string        { return u.Record.Username }
+func (u *User) WebAuthnID() []byte   { return []byte(u.Record.ID) }
+func (u *User) WebAuthnName() string { return u.Record.Username }
 func (u *User) WebAuthnDisplayName() string {
 	if u.Record.DisplayName != "" {
 		return u.Record.DisplayName
@@ -36,10 +36,10 @@ func ToWebAuthnCreds(list []store.WebAuthnCredential) []webauthn.Credential {
 		var transports []protocol.AuthenticatorTransport
 		_ = json.Unmarshal([]byte(c.Transport), &transports)
 		out = append(out, webauthn.Credential{
-			ID:        c.CredentialID,
-			PublicKey: c.PublicKey,
+			ID:              c.CredentialID,
+			PublicKey:       c.PublicKey,
 			AttestationType: c.Attestation,
-			Transport: transports,
+			Transport:       transports,
 			Flags: webauthn.CredentialFlags{
 				UserPresent: true, UserVerified: true, BackupEligible: true, BackupState: true,
 			},
@@ -65,16 +65,27 @@ func FromWebAuthnCred(tenant store.TenantID, user store.UserID, id, name string,
 
 type challengeStore struct {
 	mu   sync.Mutex
-	data map[string]webauthn.SessionData
+	data map[string]challenge
+}
+
+type challenge struct {
+	session webauthn.SessionData
+	expires time.Time
 }
 
 func newChallengeStore() *challengeStore {
-	return &challengeStore{data: map[string]webauthn.SessionData{}}
+	return &challengeStore{data: map[string]challenge{}}
 }
 
 func (s *challengeStore) put(key string, sess webauthn.SessionData) {
 	s.mu.Lock()
-	s.data[key] = sess
+	now := time.Now()
+	for k, v := range s.data {
+		if !now.Before(v.expires) {
+			delete(s.data, k)
+		}
+	}
+	s.data[key] = challenge{session: sess, expires: now.Add(5 * time.Minute)}
 	s.mu.Unlock()
 }
 
@@ -82,10 +93,14 @@ func (s *challengeStore) take(key string) (webauthn.SessionData, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	v, ok := s.data[key]
+	if ok && !time.Now().Before(v.expires) {
+		delete(s.data, key)
+		return webauthn.SessionData{}, false
+	}
 	if ok {
 		delete(s.data, key)
 	}
-	return v, ok
+	return v.session, ok
 }
 
 // Manager wraps go-webauthn with in-memory ceremony sessions.

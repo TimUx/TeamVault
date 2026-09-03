@@ -39,6 +39,8 @@ type API struct {
 	pendingLogins *pendingLoginStore
 	escrowMu      sync.Mutex
 	escrowReplace map[store.TenantID]escrowReplacePending
+	totpMu        sync.Mutex
+	totpCounters  map[store.UserID]int64
 }
 
 func New(app *bootstrap.Result) *API {
@@ -60,6 +62,7 @@ func New(app *bootstrap.Result) *API {
 		Passkeys: passkey.NewManager(), loginRL: newRateLimiter(),
 		pendingLogins: newPendingLoginStore(),
 		escrowReplace: map[store.TenantID]escrowReplacePending{},
+		totpCounters:  map[store.UserID]int64{},
 	}
 	api.Sessions.SetIdle(time.Duration(idleMin) * time.Minute)
 	go api.ldapSyncLoop()
@@ -327,8 +330,7 @@ func (a *API) handleVersion(w http.ResponseWriter, r *http.Request) {
 func (a *API) handleSetupStatus(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"initialized":          a.App.Config.Initialized,
-		"storage":              a.App.Config.Storage,
-		"data_dir":             a.App.DataDir,
+		"storage":              map[string]string{"backend": a.App.Config.Storage.Backend},
 		"setup_token_required": !a.App.Config.Initialized,
 		"setup_token_header":   bootstrap.SetupTokenHeader,
 	})
@@ -505,6 +507,7 @@ func (a *API) gateTOTPOrIssueToken(w http.ResponseWriter, user *store.UserRecord
 	if !user.TotpEnabled {
 		return true
 	}
+
 	code := normalizeTOTPCode(totpCode)
 	if code == "" {
 		token := a.pendingLogins.issue(user.ID, tenant.ID)
@@ -515,10 +518,24 @@ func (a *API) gateTOTPOrIssueToken(w http.ResponseWriter, user *store.UserRecord
 		return false
 	}
 	sec, oerr := a.openTOTP(user.TotpSecretEnc)
-	if oerr != nil || !totp.Validate(code, sec) {
+	if oerr != nil || !a.validateTOTP(user.ID, code, sec) {
 		writeErr(w, http.StatusUnauthorized, "invalid totp")
 		return false
 	}
+	return true
+}
+
+func (a *API) validateTOTP(userID store.UserID, code, secret string) bool {
+	counter, ok := totp.ValidateCounter(code, secret, time.Now().UTC())
+	if !ok {
+		return false
+	}
+	a.totpMu.Lock()
+	defer a.totpMu.Unlock()
+	if last, exists := a.totpCounters[userID]; exists && counter <= last {
+		return false
+	}
+	a.totpCounters[userID] = counter
 	return true
 }
 
@@ -543,7 +560,7 @@ func (a *API) handleLoginTOTPStep(w http.ResponseWriter, r *http.Request, loginT
 		return
 	}
 	sec, oerr := a.openTOTP(user.TotpSecretEnc)
-	if oerr != nil || !totp.Validate(code, sec) {
+	if oerr != nil || !a.validateTOTP(user.ID, code, sec) {
 		writeErr(w, http.StatusUnauthorized, "invalid totp")
 		return
 	}
@@ -946,7 +963,7 @@ func (a *API) handleTOTPEnable(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "totp setup unavailable — bitte erneut einrichten")
 		return
 	}
-	if len(u.TotpSecretEnc) == 0 || !totp.Validate(body.Code, sec) {
+	if len(u.TotpSecretEnc) == 0 || !a.validateTOTP(u.ID, body.Code, sec) {
 		writeErr(w, http.StatusBadRequest, "invalid totp code")
 		return
 	}
@@ -1181,6 +1198,7 @@ func readJSON(r *http.Request, dst any) error {
 
 func writeJSON(w http.ResponseWriter, code int, v any) {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(code)
 	_ = json.NewEncoder(w).Encode(v)
 }
