@@ -174,10 +174,4 @@ jobs:
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@5113cdc90fd4d541c801c55356214017bf5ae34b # v3
         with:
-          files: |
-            dist/teamvault-*
-            dist/tvcli-*
-            dist/SHA256SUMS
-            dist/*.sig
-            dist/*.pem
-            dist/*.spdx.json
+          files: dist/*
