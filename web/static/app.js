@@ -2913,7 +2913,10 @@ function renderApp(app) {
     const pane = n.querySelector('[data-panel-pane="login"]');
     const isLocal = (vault.me?.auth_backend || "local") === "local";
     if (tab) tab.hidden = !isLocal;
-    if (pane && !isLocal) pane.hidden = true;
+    if (pane && !isLocal) {
+      pane.hidden = true;
+      n.querySelector('[data-panel-group="account"] .panel-tab:not([hidden])')?.click();
+    }
   }
 
   function syncAccountClientsUI() {
