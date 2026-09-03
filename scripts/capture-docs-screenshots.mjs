@@ -596,7 +596,14 @@ async function main() {
   await page.waitForTimeout(500);
   await shot(page, "admin-users.png", { fullPage: true });
 
-  const editBtn = page.locator("[data-edit-user]").first();
+  await page.click('[data-nav="admin:clients"]');
+  await page.waitForSelector('[data-admin-section="clients"] #admin_cli_integration');
+  await page.check("#admin_cli_integration");
+  await page.check("#admin_browser_integration");
+  await page.waitForTimeout(300);
+  await shot(page, "admin-clients.png", { fullPage: true });
+
+  const editBtn = page.locator("[data-edit-user]:visible").first();
   if (await editBtn.count()) {
     await editBtn.click();
     await page.waitForSelector("#userEditModal:not([hidden])");
