@@ -203,13 +203,15 @@ Instanz-weites Ciphertext-Backup (Tenants, User, Secrets): siehe [Admin Guide](a
 
 **Löschen** entfernt den Eintrag (nicht rückgängig über den Server). Nur wer einen gültigen Envelope hat, darf löschen.
 
-## 6. Konto & Sicherheit: TOTP, Passkeys, Passwörter
+## 6. Konto & Sicherheit: Tabs für Sicherheit und Konto
 
 Sidebar **Konto & Sicherheit**:
 
 ![Konto](images/account.png)
 
-Die persönlichen Angaben ändern Sie unter **Einstellungen**. Dort können Name und E-Mail-Adresse angepasst werden; der Username bleibt unveränderlich.
+**Passwörter & 2FA** öffnet eine eigene Tab-Leiste mit **2FA**, **Passkeys**, **Login-Passwort** (nur lokale Benutzer) und **Master-Passwort**. Die übrigen Themen **Offline-Vault**, **Clients** und **Einstellungen** sind separate Menüpunkte.
+
+Die persönlichen Angaben ändern Sie unter **Einstellungen**. Dort können Name und E-Mail-Adresse angepasst werden; der Username bleibt unveränderlich — insbesondere auch bei LDAP-Benutzern.
 
 ### Einstellungen
 
@@ -221,7 +223,7 @@ Unter **Einstellungen** bearbeiten Sie ausschließlich Ihre persönlichen Kontod
 
 ![Einstellungen](images/account-settings.png)
 
-Passwörter, TOTP und Passkeys befinden sich separat unter **Passwörter & 2FA**. Offline-Vault und Client-Downloads haben ebenfalls eigene Menüpunkte.
+Der Menüpunkt **Clients** erscheint nur, wenn mindestens eine Client-Integration durch den Plattform-Administrator aktiviert wurde. Ist keine aktiviert, werden auch die zugehörigen Hinweise nicht angezeigt.
 
 ### Login-2FA (TOTP)
 

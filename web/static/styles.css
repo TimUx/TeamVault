@@ -20,6 +20,7 @@
   --radius: 6px;
   --drawer-width: 240px;
   --topbar-height: 56px;
+  --app-footer-height: 4.5rem;
   --font: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
 }
 
@@ -417,6 +418,9 @@ body.app-wide main#app {
 }
 .app-sidebar-foot {
   flex-shrink: 0;
+  height: var(--app-footer-height);
+  min-height: var(--app-footer-height);
+  box-sizing: border-box;
   border-top: 1px solid var(--color-border);
   padding: 0.65rem 0.75rem;
   display: flex;
@@ -714,10 +718,11 @@ h1 .heading-ico,
 .app-content .panel { box-shadow: none; }
 
 .app-footer {
-  flex: 0 0 auto;
+  flex: 0 0 var(--app-footer-height);
   width: 100%;
   min-width: 0;
-  min-height: 2.35rem;
+  height: var(--app-footer-height);
+  min-height: var(--app-footer-height);
   box-sizing: border-box;
   border-top: 1px solid var(--color-border);
   background: var(--color-surface);

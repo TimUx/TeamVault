@@ -8,7 +8,7 @@ Step-by-step für Endanwender. Interaktive Fassung: **`/help/extension`** auf Ih
 
 Ohne Entwicklermodus — aber **nur mit Browser-Richtlinie**. Chrome/Edge installieren `.crx` nicht aus dem Download-Ordner; der Installationsdialog erscheint nur, wenn `ExtensionSettings` und `ExtensionInstallSources` gesetzt sind.
 
-1. **`/help/extension`** oder **Konto & Sicherheit → Clients** öffnen (sichtbar nur bei aktivierter Extension-Integration; `/downloads/` unabhängig davon).
+1. **`/help/extension`** oder **Konto & Sicherheit → Clients** öffnen (sichtbar nur bei aktivierter Extension-Integration; der Plattform-Administrator verwaltet diese Option unter **Administration → Client-Integrationen**; `/downloads/` bleibt unabhängig davon erreichbar).
 2. **Schritt 1 — Einrichtung:** PowerShell-Einzeiler (setzt Richtlinie unter HKCU):
 
 ```powershell
