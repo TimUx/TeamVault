@@ -115,7 +115,7 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add docs/images/*.png web/static/help/img/*.png 2>/dev/null || true
+          git add -A docs/images web/static/help/img
           if git diff --staged --quiet; then
             echo "committed=false" >> "$GITHUB_OUTPUT"
             echo "No screenshot changes to commit."
@@ -142,8 +142,15 @@ jobs:
         if: steps.commit.outputs.committed == 'true' || steps.release.outputs.needs_release == 'true'
         run: |
           set -euo pipefail
-          git pull --rebase origin main || true
+          if ! git diff --quiet || ! git diff --cached --quiet || [[ -n "$(git ls-files --others --exclude-standard)" ]]; then
+            git stash push --include-untracked -m "docs workflow generated files"
+          fi
+          git pull --rebase origin main
           git push origin HEAD:main
           if [ "${{ steps.release.outputs.needs_release }}" = "true" ] && [ -n "${{ steps.release.outputs.new_tag }}" ]; then
-            git push origin "${{ steps.release.outputs.new_tag }}"
+            if git ls-remote --exit-code --refs origin "refs/tags/${{ steps.release.outputs.new_tag }}" >/dev/null 2>&1; then
+              echo "Tag ${{ steps.release.outputs.new_tag }} already exists on origin."
+            else
+              git push origin "${{ steps.release.outputs.new_tag }}"
+            fi
           fi

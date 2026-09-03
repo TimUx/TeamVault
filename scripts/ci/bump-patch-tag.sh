@@ -37,6 +37,14 @@ if git rev-parse "$new_tag" >/dev/null 2>&1; then
   exit 0
 fi
 
+if git ls-remote --exit-code --refs origin "refs/tags/$new_tag" >/dev/null 2>&1; then
+  echo "Tag $new_tag already exists on origin — skip."
+  if [[ -n "$OUT" ]]; then
+    echo "needs_release=false" >> "$OUT"
+  fi
+  exit 0
+fi
+
 git tag -a "$new_tag" "$TO" -m "TeamVault ${new_tag}
 
 Patch release: online help or embedded help images updated."
