@@ -138,9 +138,14 @@ jobs:
       - name: List assets
         run: ls -la dist/
 
+      - name: Generate checksums
+        working-directory: dist
+        run: sha256sum teamvault-* tvcli-* > SHA256SUMS
+
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v3
         with:
           files: |
             dist/teamvault-*
             dist/tvcli-*
+            dist/SHA256SUMS

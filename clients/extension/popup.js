@@ -259,8 +259,8 @@ function paintList() {
   if (visFilter !== "all") {
     rows = rows.filter((r) => (r.visibility || "private") === visFilter);
   }
-  if (onlyHost && state.tabHost) {
-    rows = rows.filter((r) => (r.urlHosts || []).some((h) => hostsMatch(h, state.tabHost)) || (r.urlHost && hostsMatch(r.urlHost, state.tabHost)));
+  if (onlyHost && state.tabOrigin) {
+    rows = rows.filter((r) => urlOriginsAllowed(r, state.tabOrigin));
   }
   if (q) {
     rows = rows.filter(

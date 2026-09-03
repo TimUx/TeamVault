@@ -64,9 +64,53 @@ func New(app *bootstrap.Result) *API {
 		escrowReplace: map[store.TenantID]escrowReplacePending{},
 		totpCounters:  map[store.UserID]int64{},
 	}
+	api.loadTOTPCounters(filepath.Join(app.DataDir, "totp-counters.json"))
 	api.Sessions.SetIdle(time.Duration(idleMin) * time.Minute)
 	go api.ldapSyncLoop()
 	return api
+}
+
+func (a *API) loadTOTPCounters(path string) {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return
+	}
+	var counters map[store.UserID]int64
+	if json.Unmarshal(raw, &counters) == nil {
+		a.totpCounters = counters
+	}
+}
+
+func (a *API) saveTOTPCounters() error {
+	raw, err := json.Marshal(a.totpCounters)
+	if err != nil {
+		return err
+	}
+	path := filepath.Join(a.App.DataDir, "totp-counters.json")
+	tmp := path + ".tmp"
+	f, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
+	if err != nil {
+		return err
+	}
+	if _, err := f.Write(raw); err != nil {
+		_ = f.Close()
+		_ = os.Remove(tmp)
+		return err
+	}
+	if err := f.Sync(); err != nil {
+		_ = f.Close()
+		_ = os.Remove(tmp)
+		return err
+	}
+	if err := f.Close(); err != nil {
+		_ = os.Remove(tmp)
+		return err
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		_ = os.Remove(tmp)
+		return err
+	}
+	return nil
 }
 
 func (a *API) ldapSyncLoop() {
@@ -536,6 +580,7 @@ func (a *API) validateTOTP(userID store.UserID, code, secret string) bool {
 		return false
 	}
 	a.totpCounters[userID] = counter
+	_ = a.saveTOTPCounters()
 	return true
 }
 
