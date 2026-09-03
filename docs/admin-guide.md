@@ -250,12 +250,21 @@ Sidebar **Administration → Krypto & Policy**:
 
 - Argon2-Defaults / Presets für neue Onboardings
 - TOTP-Pflicht (Hinweis/Policy nach Login)
-- **CLI-Integration anzeigen** / **Browser-Extension-Integration anzeigen** (Plattform-Administrator): steuert, ob **Konto & Sicherheit → Clients** und die Hilfe-Einträge CLI/Extension sichtbar sind. Default: aus (GPO-/Rollout-Gründe). Downloads unter `/downloads/` bleiben unabhängig davon erreichbar. Persönliche Name- und E-Mail-Änderungen erfolgen unter **Konto & Sicherheit → Einstellungen**.
 - **Offline-Vault-Cache erlauben:** Mandantenweit Opt-in für clientseitige Ciphertext-Kopie (IndexedDB, 30 Tage TTL). Aus = Nutzer können keine Offline-Kopie anlegen; bestehende Kopien auf Geräten werden beim nächsten Online-Besuch nicht mehr aktualisiert.
 - Idle-Lock der Vault-Session (Default 15 min) — nur Client-Unlock
 - **Admins: Secret-Liste nur mit Envelope** (`admin_secrets_envelope_only`): Wenn aktiv, sehen Tenant-Admins in der Secret-Liste nur Einträge, für die sie selbst ein Envelope haben (Inventar-Metadaten anderer Secrets ausgeblendet). Default: aus — Admins sehen alle Secret-Metadaten (IDs, Title-Ciphertext), Klartext bleibt Zero-Knowledge-geschützt.
 
-### 3.9 Escrow & Shamir
+### 3.9 Client-Integrationen
+
+Sidebar **Administration → Client-Integrationen** (nur Plattform-Administratoren):
+
+![Client-Integrationen](images/admin-clients.png)
+
+- **CLI-Integration aktivieren** und **Browser-Extension aktivieren** steuern, welche Client-Downloads in **Konto & Sicherheit → Clients** und in der Hilfe angezeigt werden.
+- Sind beide Optionen deaktiviert, wird der Menüpunkt **Konto → Clients** vollständig ausgeblendet; die direkten Artefakte unter `/downloads/` bleiben für IT unabhängig davon erreichbar.
+- Änderungen mit **Client-Einstellungen speichern** übernehmen. Bereits installierte Clients werden dadurch nicht entfernt oder deaktiviert.
+
+### 3.10 Escrow & Shamir
 
 Wenn Recovery-Modus Escrow erlaubt (Wizard-Schritt Recovery bzw. später umschalten mit Bestätigung `REONBOARD`):
 
@@ -271,7 +280,7 @@ Wenn Recovery-Modus Escrow erlaubt (Wizard-Schritt Recovery bzw. später umschal
 
 Der private Escrow-Key darf nie in Logs oder dauerhaft auf dem Server landen.
 
-### 3.10 Audit & API-Keys
+### 3.11 Audit & API-Keys
 
 ![API-Keys](images/admin-apikeys.png)
 
