@@ -5,6 +5,19 @@ Installation: [Installationsanleitung](install-guide.md) · Betrieb: [Admin Guid
 
 Version und Entwickler (Timo Braun) sehen Sie unten in der App bzw. unter Login.
 
+## Inhaltsverzeichnis
+
+- [Zwei Passwörter — warum?](#1-zwei-passwörter--warum)
+- [Erste Anmeldung](#2-erste-anmeldung)
+- [Vault-Onboarding](#3-vault-onboarding-einmalig)
+- [Vault entsperren](#4-vault-entsperren)
+- [Secrets](#5-secrets)
+- [Konto & Sicherheit](#6-konto--sicherheit-totp-passkeys-passwörter)
+- [Browser-Extension](#7-browser-extension)
+- [CLI](#8-cli-tvcli)
+- [Gute Praxis](#9-gute-praxis)
+- [Hilfe](#10-hilfe)
+
 ![Login](images/login.png)
 
 ## 1. Zwei Passwörter — warum?

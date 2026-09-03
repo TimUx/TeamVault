@@ -2093,16 +2093,7 @@ function renderApp(app) {
 
           <div class="app-tab" data-pane="account">
             <div class="panel account-panel" data-panel-group="account">
-              <div class="panel-tabs" role="tablist" aria-label="Konto-Bereiche" hidden>
-               <button type="button" class="panel-tab active" role="tab" data-panel-tab="totp" aria-selected="true">Passwörter &amp; 2FA</button>
-               <button type="button" class="panel-tab" role="tab" data-panel-tab="passkeys" aria-selected="false">Passkeys</button>
-               <button type="button" class="panel-tab" role="tab" data-panel-tab="login" aria-selected="false">Login-Passwort</button>
-               <button type="button" class="panel-tab" role="tab" data-panel-tab="master" aria-selected="false">Master-Passwort</button>
-               <button type="button" class="panel-tab" role="tab" data-panel-tab="offline" aria-selected="false">Offline-Vault</button>
-               <button type="button" class="panel-tab" role="tab" data-panel-tab="clients" aria-selected="false">Clients</button>
-               <button type="button" class="panel-tab" role="tab" data-panel-tab="profile" aria-selected="false">Einstellungen</button>
-             </div>
-              <div class="panel-tab-pane active" role="tabpanel" data-panel-pane="totp">
+              <div class="panel-tab-pane account-page active" role="tabpanel" data-panel-pane="totp">
                <h2>Passwörter &amp; 2FA</h2>
                 ${hintBox("Zwei-Faktor per Authenticator-App (nur Login). QR-Code kommt vom Server (scannbar).")}
                 <div class="row">
@@ -2128,8 +2119,8 @@ function renderApp(app) {
                 </div>
               </div>
 
-              <div class="panel-tab-pane" role="tabpanel" data-panel-pane="passkeys" hidden>
-                <h2>Passwörter &amp; 2FA</h2>
+              <div class="panel-tab-pane account-page" role="tabpanel" data-panel-pane="passkeys">
+                <h2>Passkeys</h2>
                 ${hintBox("Passkeys werden vom Browser bzw. Betriebssystem eingerichtet (Windows Hello, Face ID, Sicherheitsschlüssel). TeamVault erzeugt dafür keinen eigenen QR.")}
                 <label>Name</label><input id="pkname" value="Mein Passkey" />
                 <div id="pklist" class="list"></div>
@@ -2137,16 +2128,16 @@ function renderApp(app) {
                 <div class="error" id="pkerr" hidden></div>
               </div>
 
-              <div class="panel-tab-pane" role="tabpanel" data-panel-pane="login" hidden>
-                <h2>Passwörter &amp; 2FA</h2>
+              <div class="panel-tab-pane account-page" role="tabpanel" data-panel-pane="login">
+                <h2>Login-Passwort</h2>
                 ${hintBox("Nur bei lokalem Auth-Backend. LDAP-User ändern das Passwort im Verzeichnis (LDAP/AD-Richtlinie).")}
                 <label>Aktuelles Login-Passwort</label><input id="lpw_cur" type="password" autocomplete="current-password" />
                 <label>Neues Login-Passwort (${PASSWORD_POLICY})</label><input id="lpw_new" type="password" autocomplete="new-password" minlength="16" />
                 <div class="row"><button class="btn-accent" type="button" id="lpw_save">Login-Passwort speichern</button></div>
               </div>
 
-              <div class="panel-tab-pane" role="tabpanel" data-panel-pane="master" hidden>
-                <h2>Passwörter &amp; 2FA</h2>
+              <div class="panel-tab-pane account-page" role="tabpanel" data-panel-pane="master">
+                <h2>Master-Passwort</h2>
                 ${hintBox("Clientseitig: Private Key wird neu versiegelt; Server speichert nur Ciphertexte. Recovery-Kit / Escrow wird mit erneuert. Neues Passwort: " + PASSWORD_POLICY + ".")}
                 <label>Aktuelles Master-Passwort</label><input id="mpw_cur" type="password" autocomplete="current-password" />
                 <label>Neues Master-Passwort (${PASSWORD_POLICY})</label><input id="mpw_new" type="password" autocomplete="new-password" minlength="16" />
@@ -2154,7 +2145,7 @@ function renderApp(app) {
                 <div class="row"><button class="btn-accent" type="button" id="mpw_save">Master-Passwort speichern</button></div>
               </div>
 
-              <div class="panel-tab-pane" role="tabpanel" data-panel-pane="offline" hidden>
+              <div class="panel-tab-pane account-page" role="tabpanel" data-panel-pane="offline" hidden>
                 <h2>Offline-Vault</h2>
                 ${hintBox("Verschlüsselte Kopie für Offline-Lesen (30 Tage, nur Ciphertext). Schreiben bleibt online.", { id: "offlineAccHint" })}
                 <p class="hint" id="offlineAccStatus">—</p>
@@ -2165,13 +2156,13 @@ function renderApp(app) {
                 </div>
               </div>
 
-              <div class="panel-tab-pane" role="tabpanel" data-panel-pane="clients" hidden>
+              <div class="panel-tab-pane account-page" role="tabpanel" data-panel-pane="clients" hidden>
                 <h2>Clients</h2>
                 ${hintBox("CLI und Browser-Extension von dieser Instanz — Zero-Knowledge bleibt erhalten (Entschlüsselung nur lokal).")}
                 <div id="clientDownloadsApp" class="client-dl-grid"></div>
                 <div class="hint-box" id="accClientsHelp" hidden></div>
               </div>
-              <div class="panel-tab-pane" role="tabpanel" data-panel-pane="profile" hidden>
+              <div class="panel-tab-pane account-page" role="tabpanel" data-panel-pane="profile" hidden>
                 <h2>Einstellungen</h2>
                 ${hintBox("Persönliche Angaben für Ihr Konto. Änderungen betreffen nur Ihren TeamVault-Benutzer.")}
                 <label for="profile_username">Username</label>
@@ -2712,13 +2703,21 @@ function renderApp(app) {
     }
     closeMobileNav();
     if (nav === "account" || nav.startsWith("account:")) {
-      const accountTab = nav === "account:offline" ? "offline"
+      const accountPage = nav === "account:offline" ? "offline"
         : nav === "account:clients" ? "clients"
-          : nav === "account:profile" ? "profile" : "totp";
-      const tab = n.querySelector(`[data-panel-tab="${accountTab}"]`);
-      if (tab) tab.click();
-      if (accountTab === "offline") updateOfflineAccountUI(vault.offlineSnapshot);
-      if (accountTab === "profile") {
+          : nav === "account:profile" ? "profile" : "security";
+      n.querySelectorAll(".account-page").forEach((page) => {
+        const isSecurity = accountPage === "security" &&
+          ["totp", "passkeys", "login", "master"].includes(page.dataset.panelPane);
+        page.hidden = page.dataset.panelPane !== accountPage && !isSecurity;
+      });
+      if (accountPage === "security") {
+        refreshPasskeys().catch(() => {});
+        syncAccountAuthUI();
+      }
+      if (accountPage === "offline") updateOfflineAccountUI(vault.offlineSnapshot);
+      if (accountPage === "clients") refreshClientDownloadsUI().catch(() => {});
+      if (accountPage === "profile") {
         n.querySelector("#profile_username").value = vault.me?.username || "";
         n.querySelector("#profile_display").value = vault.me?.display_name || "";
         n.querySelector("#profile_email").value = vault.me?.email || "";
@@ -2930,14 +2929,6 @@ function renderApp(app) {
   bindPanelTabs(n, "crypto");
   bindPanelTabs(n, "recovery");
   bindPanelTabs(n, "platform");
-  bindPanelTabs(n, "account", {
-    onShow(tab) {
-      if (tab === "passkeys") refreshPasskeys().catch(() => {});
-      if (tab === "offline") updateOfflineAccountUI(vault.offlineSnapshot);
-      if (tab === "clients") refreshClientDownloadsUI().catch(() => {});
-    },
-  });
-
   function fmtClientBytes(n) {
     if (!n) return "";
     if (n < 1024) return n + " B";

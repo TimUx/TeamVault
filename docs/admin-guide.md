@@ -4,6 +4,17 @@ Betrieb und Verwaltung der Instanz. Für den Alltag der Endanwender: [User Guide
 
 **Entwickler:** Timo Braun · Version der laufenden Instanz: `GET /api/version` oder `teamvault -version` (auch in der Web-UI Sidebar/Footer).
 
+## Inhaltsverzeichnis
+
+- [Rollen](#1-rollen)
+- [Erstinstallation](#2-erstinstallation)
+- [Admin-UI](#3-admin-ui-nach-vault-entsperren)
+- [Docker & Package](#4-docker--package)
+- [Backup](#5-backup)
+- [Netzwerk & TLS](#6-netzwerk--tls)
+- [Troubleshooting](#7-troubleshooting)
+- [Weiterführend](#8-weiterführend)
+
 ## 1. Rollen
 
 | Rolle (technisch) | Anzeige in der UI | Rechte (Auszug) |
