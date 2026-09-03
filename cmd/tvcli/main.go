@@ -236,9 +236,9 @@ func newClient(base, apiKey string) (*client, error) {
 		return nil, err
 	}
 	c := &client{
-		base: strings.TrimRight(base, "/"),
+		base:   strings.TrimRight(base, "/"),
 		apiKey: apiKey,
-		http: &http.Client{Jar: jar, Timeout: 30 * time.Second},
+		http:   &http.Client{Jar: jar, Timeout: 30 * time.Second},
 	}
 	dir, err := os.UserConfigDir()
 	if err != nil {
