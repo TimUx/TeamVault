@@ -231,31 +231,14 @@ async function confirmTotpEnable(page, secret, context) {
 }
 
 async function showAccountTab(page, tabId) {
-  await page.evaluate((id) => {
-    document.querySelectorAll(".app-tab").forEach((pane) => {
-      pane.classList.toggle("active", pane.dataset.pane === "account");
-    });
-    document.querySelectorAll(".sidebar-link[data-nav]").forEach((link) => {
-      const on = link.dataset.nav === "account";
-      link.classList.toggle("active", on);
-      if (on) link.setAttribute("aria-current", "page");
-      else link.removeAttribute("aria-current");
-    });
-    const title = document.querySelector("#pageTitle");
-    if (title) title.textContent = "Konto";
-    document.querySelectorAll('[data-panel-group="account"] [data-panel-tab]').forEach((btn) => {
-      const on = btn.dataset.panelTab === id;
-      btn.classList.toggle("active", on);
-      btn.setAttribute("aria-selected", on ? "true" : "false");
-    });
-    document.querySelectorAll('[data-panel-group="account"] [data-panel-pane]').forEach((pane) => {
-      const on = pane.dataset.panelPane === id;
-      pane.classList.toggle("active", on);
-      pane.hidden = !on;
-    });
-  }, tabId);
+  const route = tabId === "offline" ? "account:offline"
+    : tabId === "clients" ? "account:clients"
+      : tabId === "profile" ? "account:profile" : "account:security";
+  await page.click(`[data-nav="${route}"]`);
+  await page.waitForTimeout(300);
   await page.waitForSelector(`.app-tab[data-pane="account"].active`, { state: "attached", timeout: 15000 });
-  await page.waitForSelector(`[data-panel-pane="${tabId}"].active`, { state: "attached", timeout: 15000 });
+  const pane = tabId === "security" ? "totp" : tabId;
+  await page.waitForSelector(`[data-panel-pane="${pane}"]:not([hidden])`, { state: "attached", timeout: 15000 });
 }
 
 async function captureLoginTotpStep(page) {
@@ -575,7 +558,6 @@ async function main() {
     await enableDemoPolicies(page);
     await showAccountTab(page, "clients");
     await page.evaluate(async (base) => {
-      document.querySelector('[data-panel-tab="clients"]')?.removeAttribute("hidden");
       const res = await fetch(`${base}/api/client-downloads`, { credentials: "include" });
       if (!res.ok) return;
       const data = await res.json();
