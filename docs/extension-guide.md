@@ -2,13 +2,13 @@
 
 Step-by-step für Endanwender. Interaktive Fassung: **`/help/extension`** auf Ihrer Instanz.
 
-![Konto → Clients](images/account-clients.png)
+![Konto & Sicherheit → Clients](images/account-clients.png)
 
 ## Installation (normal, empfohlen)
 
 Ohne Entwicklermodus — aber **nur mit Browser-Richtlinie**. Chrome/Edge installieren `.crx` nicht aus dem Download-Ordner; der Installationsdialog erscheint nur, wenn `ExtensionSettings` und `ExtensionInstallSources` gesetzt sind.
 
-1. **`/help/extension`** oder **Konto → Clients** öffnen (sichtbar nur bei aktivierter Extension-Integration; `/downloads/` unabhängig davon).
+1. **`/help/extension`** oder **Konto & Sicherheit → Clients** öffnen (sichtbar nur bei aktivierter Extension-Integration; `/downloads/` unabhängig davon).
 2. **Schritt 1 — Einrichtung:** PowerShell-Einzeiler (setzt Richtlinie unter HKCU):
 
 ```powershell
@@ -31,7 +31,7 @@ Richtlinien-Vorlagen: `/downloads/extension/chrome-policy.json`, `chrome-install
 
 `irm … | iex` wird in vielen Umgebungen von Antimalware oder App-Control blockiert — das ist normal.
 
-**Endanwender (Schritt 2):** In `/help/extension` oder **Konto → Clients** auf **Extension installieren** klicken — dafür ist kein PowerShell nötig, sobald die Browser-Richtlinie gesetzt ist.
+**Endanwender (Schritt 2):** In `/help/extension` oder **Konto & Sicherheit → Clients** auf **Extension installieren** klicken — dafür ist kein PowerShell nötig, sobald die Browser-Richtlinie gesetzt ist.
 
 **Schritt 1 ohne Pipe:**
 

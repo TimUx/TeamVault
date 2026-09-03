@@ -64,7 +64,7 @@ Unterkante der Topbar: dezenter Accent-Streifen (2px), kein Multi-Color-Gradient
 
 ## 5. Layout
 
-- Linke Sidebar (~240px), Sektionen Vault (Meine Secrets / Geteilte Secrets / Neu / Import / Sicherung) / Konto / Administration  
+- Linke Sidebar (~240px), Sektionen Vault (Meine Secrets / Geteilte Secrets / Neu / Import / Sicherung) / Konto & Sicherheit / Administration mit Tenant- und Plattform-Administration
 - Sticky Topbar mit Seitentitel, Theme-Toggle als Icon (Sonne/Mond)  
 - Flache Inline-SVG-Icons in Sidebar und Primäraktionen (kein Icon-CDN, Air-Gap)  
 - Secrets-Ansicht: Liste / Tabelle / Kacheln (`tv-secrets-view` in localStorage); Mehrfachauswahl für Export  

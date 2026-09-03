@@ -89,20 +89,25 @@ async function loginCookie(context, totpSecret = "") {
   }
   if (body?.needs_totp) {
     if (!totpSecret) throw new Error("login needs TOTP but no secret available");
-    const res2 = await fetch(`${BASE}/api/auth/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Origin: BASE },
-      body: JSON.stringify({
-        tenant_slug: TENANT_SLUG,
-        username: LOGIN_USER,
-        password: LOGIN_PW,
-        login_token: body.login_token,
-        totp_code: await totpNow(totpSecret),
-      }),
-    });
-    if (!res2.ok) throw new Error("totp login failed");
-    await applySetCookies(context, res2);
-    return;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const res2 = await fetch(`${BASE}/api/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Origin: BASE },
+        body: JSON.stringify({
+          tenant_slug: TENANT_SLUG,
+          username: LOGIN_USER,
+          password: LOGIN_PW,
+          login_token: body.login_token,
+          totp_code: await totpNow(totpSecret),
+        }),
+      });
+      if (res2.ok) {
+        await applySetCookies(context, res2);
+        return;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
+    throw new Error("totp login failed");
   }
   if (!res.ok) throw new Error("login failed");
   await applySetCookies(context, res);
@@ -206,7 +211,7 @@ async function readTotpSecretFromPage(page) {
   return secret;
 }
 
-async function confirmTotpEnable(page, secret) {
+async function confirmTotpEnable(page, secret, context) {
   const code = await totpNow(secret);
   await page.evaluate((c) => {
     const box = document.querySelector("#totpbox");
@@ -219,35 +224,21 @@ async function confirmTotpEnable(page, secret) {
     document.querySelector("#en")?.click();
   }, code);
   await page.waitForLoadState("load", { timeout: 30000 }).catch(() => {});
+  const waitForNextTotpWindow = 30000 - (Date.now() % 30000) + 1000;
+  await new Promise((resolve) => setTimeout(resolve, waitForNextTotpWindow));
+  await loginCookie(context, secret);
   await unlockVault(page);
 }
 
 async function showAccountTab(page, tabId) {
-  await page.evaluate((id) => {
-    document.querySelectorAll(".app-tab").forEach((pane) => {
-      pane.classList.toggle("active", pane.dataset.pane === "account");
-    });
-    document.querySelectorAll(".sidebar-link[data-nav]").forEach((link) => {
-      const on = link.dataset.nav === "account";
-      link.classList.toggle("active", on);
-      if (on) link.setAttribute("aria-current", "page");
-      else link.removeAttribute("aria-current");
-    });
-    const title = document.querySelector("#pageTitle");
-    if (title) title.textContent = "Konto";
-    document.querySelectorAll('[data-panel-group="account"] [data-panel-tab]').forEach((btn) => {
-      const on = btn.dataset.panelTab === id;
-      btn.classList.toggle("active", on);
-      btn.setAttribute("aria-selected", on ? "true" : "false");
-    });
-    document.querySelectorAll('[data-panel-group="account"] [data-panel-pane]').forEach((pane) => {
-      const on = pane.dataset.panelPane === id;
-      pane.classList.toggle("active", on);
-      pane.hidden = !on;
-    });
-  }, tabId);
+  const route = tabId === "offline" ? "account:offline"
+    : tabId === "clients" ? "account:clients"
+      : tabId === "profile" ? "account:profile" : "account:security";
+  await page.click(`[data-nav="${route}"]`);
+  await page.waitForTimeout(300);
   await page.waitForSelector(`.app-tab[data-pane="account"].active`, { state: "attached", timeout: 15000 });
-  await page.waitForSelector(`[data-panel-pane="${tabId}"].active`, { state: "attached", timeout: 15000 });
+  const pane = tabId === "security" ? "totp" : tabId;
+  await page.waitForSelector(`[data-panel-pane="${pane}"]:not([hidden])`, { state: "attached", timeout: 15000 });
 }
 
 async function captureLoginTotpStep(page) {
@@ -268,7 +259,9 @@ async function waitAppReady(page) {
 }
 
 async function unlockVault(page, { captureShot = false } = {}) {
-  await page.goto(`${BASE}/app`);
+  await page.goto(`${BASE}/app`).catch((error) => {
+    if (!/ERR_ABORTED/.test(String(error))) throw error;
+  });
   const unlock = page.locator("#unlock");
   if (await unlock.isVisible({ timeout: 5000 }).catch(() => false)) {
     if (captureShot) await shot(page, "vault-unlock.png");
@@ -528,6 +521,10 @@ async function main() {
   await unlockVault(page);
   await showAccountTab(page, "totp");
   await shot(page, "account.png", { fullPage: true });
+  await page.click('[data-nav="account:profile"]');
+  await page.waitForSelector('[data-panel-pane="profile"]:not([hidden])', { timeout: 10000 });
+  await page.waitForTimeout(400);
+  await shot(page, "account-settings.png", { fullPage: true });
   const needsTotpSetup = await page.evaluate(() => {
     const btn = document.querySelector("#totpSetup");
     return !!(btn && !btn.disabled && !btn.hidden);
@@ -545,7 +542,7 @@ async function main() {
     await page.waitForTimeout(400);
     await shot(page, "account-totp.png", { fullPage: true });
     totpSecret = await readTotpSecretFromPage(page);
-    await confirmTotpEnable(page, totpSecret);
+    await confirmTotpEnable(page, totpSecret, context);
   } else {
     console.warn("TOTP already enabled — account-totp/login-totp screenshots skipped");
   }
@@ -561,7 +558,6 @@ async function main() {
     await enableDemoPolicies(page);
     await showAccountTab(page, "clients");
     await page.evaluate(async (base) => {
-      document.querySelector('[data-panel-tab="clients"]')?.removeAttribute("hidden");
       const res = await fetch(`${base}/api/client-downloads`, { credentials: "include" });
       if (!res.ok) return;
       const data = await res.json();

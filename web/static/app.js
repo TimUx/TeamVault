@@ -293,7 +293,7 @@ function saveNavSubsectionState(subId, collapsed) {
 }
 
 function navSectionIdForRoute(nav) {
-  if (nav === "account") return "account";
+  if (nav === "account" || (nav && nav.startsWith("account:"))) return "account";
   if (nav && nav.startsWith("admin:")) return "admin";
   return "vault";
 }
@@ -1340,6 +1340,8 @@ function touchIdle() {
     const overlay = document.getElementById("lockOverlay");
     if (overlay) {
       overlay.hidden = false;
+      const status = document.getElementById("securityStatus");
+      if (status) status.textContent = "Vault gesperrt";
       const mpw = overlay.querySelector("#lockMpw");
       if (mpw) mpw.value = "";
       const err = overlay.querySelector("#lockErr");
@@ -1722,11 +1724,15 @@ function renderApp(app) {
           ${navLink("vault:import", "upload", "Import")}
           ${navLink("vault:backup", "download", "Sicherung")}
         `)}
-        ${navSection("account", "Konto", `
-          ${navLink("account", "user", "Konto")}
+        ${navSection("account", "Konto &amp; Sicherheit", `
+          ${navLink("account:security", "shield", "Passwörter &amp; 2FA")}
+          ${navLink("account:offline", "lock", "Offline-Vault")}
+          ${navLink("account:clients", "download", "Clients")}
+          ${navLink("account:profile", "user", "Einstellungen")}
           <a class="sidebar-link" href="${tvPath("/help")}" target="_blank" rel="noopener"><span class="nav-ico">${icon("book")}</span><span>Hilfe</span></a>
         `)}
         ${navSection("admin", "Administration", `
+          <div class="sidebar-nav-group-label">Tenant-Administration</div>
           ${navSubSection("admin-org", "Benutzer &amp; Gruppen", `
             ${navLink("admin:users", "users", "Benutzer", "admin-link", 'data-admin-only')}
             ${navLink("admin:groups", "group", "Gruppen", "admin-link", 'data-admin-only')}
@@ -1742,6 +1748,7 @@ function renderApp(app) {
             ${navLink("admin:recovery", "lock", "Recovery &amp; Escrow", "admin-link", 'data-admin-only')}
             ${navLink("admin:apikeys", "key", "API-Keys", "admin-link", 'data-admin-only data-platform-only')}
           `)}
+          <div class="sidebar-nav-group-label">Plattform-Administration</div>
           ${navSubSection("admin-platform", "Plattform", `
             ${navLink("admin:platform", "building", "Tenants &amp; Migration", "admin-link platform-link", 'data-admin-only data-platform-only hidden')}
             ${navLink("admin:system", "info", "System", "admin-link", 'data-admin-only data-platform-only')}
@@ -1760,6 +1767,8 @@ function renderApp(app) {
         <button type="button" class="menu-toggle btn-icon" id="menuToggle" aria-label="Menü">${icon("menu")}</button>
         <h1 id="pageTitle">Vault</h1>
         <div class="app-topbar-actions">
+          <span class="app-security-status" id="securityStatus" role="status">Vault entsperrt</span>
+          <button type="button" class="btn-ghost btn-sm btn-with-ico" id="lockNow">${btnLabel("lock", "Sperren")}</button>
           <button type="button" class="btn-icon" data-theme-toggle aria-label="Dunkelmodus" title="Dunkelmodus">${icon("moon")}</button>
         </div>
       </header>
@@ -1784,7 +1793,7 @@ function renderApp(app) {
           <label id="offlineSnapLabel" hidden for="offlineSnap">Gespeicherte Offline-Kopie</label>
           <select id="offlineSnap" hidden></select>
           <label>Master-Passwort</label><input id="mpw" type="password" autocomplete="current-password" />
-          <div class="error" id="uerr" hidden></div>
+          <div class="error" id="uerr" hidden role="alert" aria-live="assertive"></div>
           <div class="row"><button class="btn-accent btn-with-ico" type="button" id="ulock">${btnLabel("unlock", "Entsperren")}</button></div>
         </div>
 
@@ -2084,17 +2093,8 @@ function renderApp(app) {
 
           <div class="app-tab" data-pane="account">
             <div class="panel account-panel" data-panel-group="account">
-              ${hintBox("Login-Absicherung und Geräte-Kopie — der Vault bleibt Master-Passwort-pflichtig.")}
-              <div class="panel-tabs" role="tablist" aria-label="Konto-Bereiche">
-                <button type="button" class="panel-tab active" role="tab" data-panel-tab="totp" aria-selected="true">TOTP</button>
-                <button type="button" class="panel-tab" role="tab" data-panel-tab="passkeys" aria-selected="false">Passkeys</button>
-                <button type="button" class="panel-tab" role="tab" data-panel-tab="login" aria-selected="false" hidden>Login-Passwort</button>
-                <button type="button" class="panel-tab" role="tab" data-panel-tab="master" aria-selected="false">Master-Passwort</button>
-                <button type="button" class="panel-tab" role="tab" data-panel-tab="offline" aria-selected="false">Offline-Vault</button>
-                <button type="button" class="panel-tab" role="tab" data-panel-tab="clients" aria-selected="false" hidden>Clients</button>
-              </div>
-
-              <div class="panel-tab-pane active" role="tabpanel" data-panel-pane="totp">
+              <div class="panel-tab-pane account-page active" role="tabpanel" data-panel-pane="totp">
+               <h2>Passwörter &amp; 2FA</h2>
                 ${hintBox("Zwei-Faktor per Authenticator-App (nur Login). QR-Code kommt vom Server (scannbar).")}
                 <div class="row">
                   <button class="btn-accent" type="button" id="totpSetup">TOTP einrichten</button>
@@ -2119,7 +2119,8 @@ function renderApp(app) {
                 </div>
               </div>
 
-              <div class="panel-tab-pane" role="tabpanel" data-panel-pane="passkeys" hidden>
+              <div class="panel-tab-pane account-page" role="tabpanel" data-panel-pane="passkeys">
+                <h2>Passkeys</h2>
                 ${hintBox("Passkeys werden vom Browser bzw. Betriebssystem eingerichtet (Windows Hello, Face ID, Sicherheitsschlüssel). TeamVault erzeugt dafür keinen eigenen QR.")}
                 <label>Name</label><input id="pkname" value="Mein Passkey" />
                 <div id="pklist" class="list"></div>
@@ -2127,14 +2128,16 @@ function renderApp(app) {
                 <div class="error" id="pkerr" hidden></div>
               </div>
 
-              <div class="panel-tab-pane" role="tabpanel" data-panel-pane="login" hidden>
+              <div class="panel-tab-pane account-page" role="tabpanel" data-panel-pane="login">
+                <h2>Login-Passwort</h2>
                 ${hintBox("Nur bei lokalem Auth-Backend. LDAP-User ändern das Passwort im Verzeichnis (LDAP/AD-Richtlinie).")}
                 <label>Aktuelles Login-Passwort</label><input id="lpw_cur" type="password" autocomplete="current-password" />
                 <label>Neues Login-Passwort (${PASSWORD_POLICY})</label><input id="lpw_new" type="password" autocomplete="new-password" minlength="16" />
                 <div class="row"><button class="btn-accent" type="button" id="lpw_save">Login-Passwort speichern</button></div>
               </div>
 
-              <div class="panel-tab-pane" role="tabpanel" data-panel-pane="master" hidden>
+              <div class="panel-tab-pane account-page" role="tabpanel" data-panel-pane="master">
+                <h2>Master-Passwort</h2>
                 ${hintBox("Clientseitig: Private Key wird neu versiegelt; Server speichert nur Ciphertexte. Recovery-Kit / Escrow wird mit erneuert. Neues Passwort: " + PASSWORD_POLICY + ".")}
                 <label>Aktuelles Master-Passwort</label><input id="mpw_cur" type="password" autocomplete="current-password" />
                 <label>Neues Master-Passwort (${PASSWORD_POLICY})</label><input id="mpw_new" type="password" autocomplete="new-password" minlength="16" />
@@ -2142,7 +2145,8 @@ function renderApp(app) {
                 <div class="row"><button class="btn-accent" type="button" id="mpw_save">Master-Passwort speichern</button></div>
               </div>
 
-              <div class="panel-tab-pane" role="tabpanel" data-panel-pane="offline" hidden>
+              <div class="panel-tab-pane account-page" role="tabpanel" data-panel-pane="offline" hidden>
+                <h2>Offline-Vault</h2>
                 ${hintBox("Verschlüsselte Kopie für Offline-Lesen (30 Tage, nur Ciphertext). Schreiben bleibt online.", { id: "offlineAccHint" })}
                 <p class="hint" id="offlineAccStatus">—</p>
                 <label class="inline"><input id="offline_optin" type="checkbox" /> Offline-Kopie nach Entsperren aktualisieren</label>
@@ -2152,10 +2156,24 @@ function renderApp(app) {
                 </div>
               </div>
 
-              <div class="panel-tab-pane" role="tabpanel" data-panel-pane="clients" hidden>
+              <div class="panel-tab-pane account-page" role="tabpanel" data-panel-pane="clients" hidden>
+                <h2>Clients</h2>
                 ${hintBox("CLI und Browser-Extension von dieser Instanz — Zero-Knowledge bleibt erhalten (Entschlüsselung nur lokal).")}
                 <div id="clientDownloadsApp" class="client-dl-grid"></div>
                 <div class="hint-box" id="accClientsHelp" hidden></div>
+              </div>
+              <div class="panel-tab-pane account-page" role="tabpanel" data-panel-pane="profile" hidden>
+                <h2>Einstellungen</h2>
+                ${hintBox("Persönliche Angaben für Ihr Konto. Änderungen betreffen nur Ihren TeamVault-Benutzer.")}
+                <label for="profile_username">Username</label>
+                <input id="profile_username" readonly />
+                <label for="profile_display">Name</label>
+                <input id="profile_display" autocomplete="name" />
+                <label for="profile_email">E-Mail-Adresse</label>
+                <input id="profile_email" type="email" autocomplete="email" />
+                <div class="row"><button class="btn-accent" type="button" id="profile_save">Einstellungen speichern</button></div>
+                <div class="error" id="profile_err" hidden></div>
+                <div class="ok" id="profile_ok" hidden></div>
               </div>
 
               <div class="error" id="acc_err" hidden></div>
@@ -2462,7 +2480,10 @@ function renderApp(app) {
     "vault:create": "Neu anlegen",
     "vault:import": "Import",
     "vault:backup": "Sicherung",
-    account: "Konto",
+    "account:security": "Passwörter & 2FA",
+    "account:offline": "Offline-Vault",
+    "account:clients": "Clients",
+    "account:profile": "Einstellungen",
     "admin:users": "Benutzer",
     "admin:groups": "Gruppen",
     "admin:trust": "Firmen-CA",
@@ -2651,7 +2672,7 @@ function renderApp(app) {
     let pane = "vault";
     let vaultSec = null;
     let adminSec = null;
-    if (nav === "account") {
+    if (nav.startsWith("account:") || nav === "account") {
       pane = "account";
     } else if (nav.startsWith("admin:")) {
       pane = "admin";
@@ -2681,7 +2702,27 @@ function renderApp(app) {
       });
     }
     closeMobileNav();
-    if (nav === "account") updateOfflineAccountUI(vault.offlineSnapshot);
+    if (nav === "account" || nav.startsWith("account:")) {
+      const accountPage = nav === "account:offline" ? "offline"
+        : nav === "account:clients" ? "clients"
+          : nav === "account:profile" ? "profile" : "security";
+      n.querySelectorAll(".account-page").forEach((page) => {
+        const isSecurity = accountPage === "security" &&
+          ["totp", "passkeys", "login", "master"].includes(page.dataset.panelPane);
+        page.hidden = page.dataset.panelPane !== accountPage && !isSecurity;
+      });
+      if (accountPage === "security") {
+        refreshPasskeys().catch(() => {});
+        syncAccountAuthUI();
+      }
+      if (accountPage === "offline") updateOfflineAccountUI(vault.offlineSnapshot);
+      if (accountPage === "clients") refreshClientDownloadsUI().catch(() => {});
+      if (accountPage === "profile") {
+        n.querySelector("#profile_username").value = vault.me?.username || "";
+        n.querySelector("#profile_display").value = vault.me?.display_name || "";
+        n.querySelector("#profile_email").value = vault.me?.email || "";
+      }
+    }
   }
 
   const offlineUrlParam = new URLSearchParams(location.search).get("offline") === "1";
@@ -2888,14 +2929,6 @@ function renderApp(app) {
   bindPanelTabs(n, "crypto");
   bindPanelTabs(n, "recovery");
   bindPanelTabs(n, "platform");
-  bindPanelTabs(n, "account", {
-    onShow(tab) {
-      if (tab === "passkeys") refreshPasskeys().catch(() => {});
-      if (tab === "offline") updateOfflineAccountUI(vault.offlineSnapshot);
-      if (tab === "clients") refreshClientDownloadsUI().catch(() => {});
-    },
-  });
-
   function fmtClientBytes(n) {
     if (!n) return "";
     if (n < 1024) return n + " B";
@@ -3113,6 +3146,28 @@ function renderApp(app) {
       n.querySelector("#lpw_new").value = "";
       ok.hidden = false; ok.textContent = "Login-Passwort geändert.";
     } catch (e) { err.hidden = false; err.textContent = e.message; }
+  };
+  n.querySelector("#profile_save").onclick = async () => {
+    const err = n.querySelector("#profile_err");
+    const ok = n.querySelector("#profile_ok");
+    err.hidden = true; ok.hidden = true;
+    try {
+      await api("/api/me/profile", {
+        method: "PUT",
+        body: JSON.stringify({
+          display_name: n.querySelector("#profile_display").value.trim(),
+          email: n.querySelector("#profile_email").value.trim(),
+        }),
+      });
+      vault.me = await api("/api/me");
+      n.querySelector("#profile_display").value = vault.me.display_name || "";
+      n.querySelector("#profile_email").value = vault.me.email || "";
+      ok.hidden = false;
+      ok.textContent = "Einstellungen gespeichert.";
+    } catch (e) {
+      err.hidden = false;
+      err.textContent = e.message;
+    }
   };
 
   n.querySelector("#mpw_save").onclick = async () => {
@@ -3813,6 +3868,18 @@ function renderApp(app) {
       err.hidden = false; err.textContent = e.message;
     }
   };
+  n.querySelector("#lockNow").onclick = () => {
+    if (!vault.sk) return;
+    clearVaultKey();
+    const overlay = n.querySelector("#lockOverlay");
+    if (overlay) {
+      overlay.hidden = false;
+      overlay.querySelector("#lockMpw")?.focus();
+    }
+    const status = n.querySelector("#securityStatus");
+    if (status) status.textContent = "Vault gesperrt";
+    announceA11y("Vault gesperrt");
+  };
   n.querySelector("#mpw").addEventListener("keydown", (ev) => {
     if (ev.key === "Enter") n.querySelector("#ulock").click();
   });
@@ -3829,6 +3896,8 @@ function renderApp(app) {
       n.querySelector("#lockOverlay").hidden = true;
       touchIdle();
       n.querySelector("#lockMpw").value = "";
+      const status = n.querySelector("#securityStatus");
+      if (status) status.textContent = "Vault entsperrt";
     } catch (e) {
       err.hidden = false; err.textContent = e.message;
     }

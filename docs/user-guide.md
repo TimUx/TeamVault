@@ -5,6 +5,19 @@ Installation: [Installationsanleitung](install-guide.md) · Betrieb: [Admin Guid
 
 Version und Entwickler (Timo Braun) sehen Sie unten in der App bzw. unter Login.
 
+## Inhaltsverzeichnis
+
+- [Zwei Passwörter — warum?](#1-zwei-passwörter--warum)
+- [Erste Anmeldung](#2-erste-anmeldung)
+- [Vault-Onboarding](#3-vault-onboarding-einmalig)
+- [Vault entsperren](#4-vault-entsperren)
+- [Secrets](#5-secrets)
+- [Konto & Sicherheit](#6-konto--sicherheit-totp-passkeys-passwörter)
+- [Browser-Extension](#7-browser-extension)
+- [CLI](#8-cli-tvcli)
+- [Gute Praxis](#9-gute-praxis)
+- [Hilfe](#10-hilfe)
+
 ![Login](images/login.png)
 
 ## 1. Zwei Passwörter — warum?
@@ -52,7 +65,7 @@ Nach dem Login erscheint **Vault entsperren**. Master-Passwort eingeben → **En
 - Bei Inaktivität (Default ca. 15 Minuten) sperrt die App den Vault erneut (opakes Overlay).
 - Logout beendet die Server-Session; der Schlüssel im Speicher wird gelöscht.
 
-Oben rechts: Theme-Umschalter als **Sonne/Mond-Icon** (wird lokal gespeichert). Die Sidebar nutzt flache Inline-Icons; die Hauptbereiche **Vault**, **Konto** und **Administration** sind einklappbar (Zustand wird im Browser gemerkt). Auf schmalen Viewports: Menü-Taste öffnet die Sidebar (Schließen mit Backdrop oder **Escape**).
+Oben rechts: Theme-Umschalter als **Sonne/Mond-Icon** (wird lokal gespeichert), Sicherheitsstatus und **Sperren**. Die Sidebar nutzt flache Inline-Icons; die Hauptbereiche **Vault**, **Konto & Sicherheit** und **Administration** sind einklappbar (Zustand wird im Browser gemerkt). Unter **Konto & Sicherheit** sind **Passwörter & 2FA**, **Offline-Vault**, **Clients** und **Einstellungen** getrennte Menüpunkte. Administration ist zusätzlich in **Tenant-Administration** und **Plattform-Administration** getrennt. Auf schmalen Viewports: Menü-Taste öffnet die Sidebar (Schließen mit Backdrop oder **Escape**).
 
 ![Dark Theme](images/theme-dark.png)
 
@@ -190,11 +203,25 @@ Instanz-weites Ciphertext-Backup (Tenants, User, Secrets): siehe [Admin Guide](a
 
 **Löschen** entfernt den Eintrag (nicht rückgängig über den Server). Nur wer einen gültigen Envelope hat, darf löschen.
 
-## 6. Konto: TOTP, Passkeys, Passwörter
+## 6. Konto & Sicherheit: TOTP, Passkeys, Passwörter
 
-Sidebar **Konto**:
+Sidebar **Konto & Sicherheit**:
 
 ![Konto](images/account.png)
+
+Die persönlichen Angaben ändern Sie unter **Einstellungen**. Dort können Name und E-Mail-Adresse angepasst werden; der Username bleibt unveränderlich.
+
+### Einstellungen
+
+Unter **Einstellungen** bearbeiten Sie ausschließlich Ihre persönlichen Kontodaten:
+
+- Anzeigename
+- E-Mail-Adresse
+- unveränderlicher Username (nur Anzeige)
+
+![Einstellungen](images/account-settings.png)
+
+Passwörter, TOTP und Passkeys befinden sich separat unter **Passwörter & 2FA**. Offline-Vault und Client-Downloads haben ebenfalls eigene Menüpunkte.
 
 ### Login-2FA (TOTP)
 

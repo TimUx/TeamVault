@@ -137,11 +137,35 @@ func (s *Store) flush() error {
 		return err
 	}
 	tmp := s.path + ".tmp"
-	if err := os.WriteFile(tmp, raw, 0o600); err != nil {
+	f, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
+	if err != nil {
 		return err
 	}
-	_ = os.Remove(s.path) // Windows: rename fails if dest exists
-	return os.Rename(tmp, s.path)
+	if _, err := f.Write(raw); err != nil {
+		_ = f.Close()
+		_ = os.Remove(tmp)
+		return err
+	}
+	if err := f.Sync(); err != nil {
+		_ = f.Close()
+		_ = os.Remove(tmp)
+		return err
+	}
+	if err := f.Close(); err != nil {
+		_ = os.Remove(tmp)
+		return err
+	}
+	if err := os.Rename(tmp, s.path); err != nil {
+		_ = os.Remove(tmp)
+		return err
+	}
+	if dir := filepath.Dir(s.path); dir != "." && dir != "" {
+		if d, err := os.Open(dir); err == nil {
+			_ = d.Sync()
+			_ = d.Close()
+		}
+	}
+	return nil
 }
 
 func (s *Store) Close() error { return nil }
@@ -368,6 +392,9 @@ func (s *Store) UpdateWebAuthnSignCount(_ context.Context, tenant store.TenantID
 	defer s.mu.Unlock()
 	for i := range s.data.WebAuthn {
 		if s.data.WebAuthn[i].TenantID == tenant && s.data.WebAuthn[i].ID == id {
+			if signCount < s.data.WebAuthn[i].SignCount {
+				return nil
+			}
 			s.data.WebAuthn[i].SignCount = signCount
 			return s.flush()
 		}
