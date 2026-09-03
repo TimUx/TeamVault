@@ -224,6 +224,8 @@ async function confirmTotpEnable(page, secret, context) {
     document.querySelector("#en")?.click();
   }, code);
   await page.waitForLoadState("load", { timeout: 30000 }).catch(() => {});
+  const waitForNextTotpWindow = 30000 - (Date.now() % 30000) + 1000;
+  await new Promise((resolve) => setTimeout(resolve, waitForNextTotpWindow));
   await loginCookie(context, secret);
   await unlockVault(page);
 }
