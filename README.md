@@ -148,6 +148,10 @@ docker pull ghcr.io/timux/teamvault:1.3.26
 
 Compose nutzt diese Images standardmäßig (`TEAMVAULT_IMAGE` in `.env`).
 
+### Gitea Actions (lokal, Firmenproxy)
+
+Workflow [`.gitea/workflows/build.yml`](.gitea/workflows/build.yml): baut die Binaries (`teamvault`, `tvcli`) und das Docker-Image in einer **lokalen Gitea-Instanz** inkl. Push in deren Registry. Hosts für Registry, Gruppe, Firmenproxy usw. werden über **Repository-Variablen/Secrets** konfiguriert — siehe [docs/gitea-ci.md](docs/gitea-ci.md).
+
 ## Bootstrap-Unlock
 
 | Umgebung | Variable |
