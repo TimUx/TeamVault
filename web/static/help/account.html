@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Konto – TOTP, Passkeys &amp; Offline – TeamVault Hilfe</title>
+  <title>Konto &amp; Sicherheit – TOTP, Passkeys &amp; Offline – TeamVault Hilfe</title>
   <link rel="stylesheet" href="/styles.css" />
   <link rel="stylesheet" href="/help/help.css" />
 </head>
@@ -15,7 +15,7 @@
     <div class="help-content">
       <header class="help-top">
         <button type="button" class="btn-ghost help-menu-toggle" id="helpMenuToggle" aria-expanded="false" aria-controls="helpSidebar">Menü</button>
-        <div class="brand">Konto · TOTP, Passkeys &amp; Offline</div>
+        <div class="brand">Konto &amp; Sicherheit · TOTP, Passkeys &amp; Offline</div>
         <div class="help-top-actions">
           <a class="btn-ghost" href="/app" style="text-decoration:none;padding:.4rem .75rem">Zur App</a>
         </div>
@@ -33,14 +33,14 @@
 
         <figure class="help-figure">
           <img src="/help/img/account.png" alt="Konto-Seite" width="1100" height="720" loading="lazy" />
-          <figcaption>Sidebar <strong>Konto</strong> — Tabs: TOTP, Passkeys, Login-/Master-Passwort, Offline-Vault</figcaption>
+          <figcaption>Sidebar <strong>Konto &amp; Sicherheit</strong> — Tabs: TOTP, Passkeys, Login-/Master-Passwort, Offline-Vault</figcaption>
         </figure>
 
         <h2 id="totp">TOTP einrichten (Authenticator-App)</h2>
         <div class="help-step">
           <h3>Ablauf</h3>
           <ol>
-            <li>Anmelden, Vault entsperren → Sidebar <strong>Konto</strong> → Tab <strong>TOTP</strong>.</li>
+            <li>Anmelden, Vault entsperren → Sidebar <strong>Konto &amp; Sicherheit</strong> → Tab <strong>TOTP</strong>.</li>
             <li><strong>TOTP einrichten</strong> klicken — der Server erzeugt ein Secret; der Browser zeigt einen <strong>QR-Code lokal</strong> (kein externes CDN) und die otpauth-URL.</li>
             <li>Authenticator-App (Microsoft Authenticator, Google Authenticator, Aegis, …) öffnen → Konto hinzufügen → QR scannen <em>oder</em> Secret/otpauth manuell einfügen.</li>
             <li>Den aktuellen 6-stelligen Code unter <strong>Code bestätigen</strong> eintragen → <strong>Aktivieren</strong>.</li>
@@ -70,7 +70,7 @@
         <div class="help-step">
           <h3>Ablauf</h3>
           <ol>
-            <li>Konto → Tab <strong>Passkeys</strong>.</li>
+            <li>Konto &amp; Sicherheit → Tab <strong>Passkeys</strong>.</li>
             <li>Namen vergeben (z.&nbsp;B. <code>Notebook Windows Hello</code>).</li>
             <li><strong>Registrieren</strong> — Browser/OS-Dialog (PIN, Fingerabdruck, Sicherheitsschlüssel).</li>
             <li>Der Passkey erscheint in der Liste; löschen ist jederzeit möglich.</li>
@@ -92,14 +92,14 @@
           <p>Wenn der Administrator den Offline-Cache erlaubt, können Sie eine verschlüsselte lokale Kopie (nur Ciphertext, 30 Tage) vorhalten und ohne Netz lesen.</p>
           <figure class="help-figure">
             <img src="/help/img/account-offline.png" alt="Konto – Offline-Vault" width="1100" height="720" loading="lazy" />
-            <figcaption>Tab <strong>Offline-Vault</strong> unter Konto</figcaption>
+            <figcaption>Tab <strong>Offline-Vault</strong> unter Konto &amp; Sicherheit</figcaption>
           </figure>
           <ol>
             <li>Online anmelden, Vault entsperren.</li>
             <li><strong>Offline-Kopie nach Entsperren aktualisieren</strong> aktivieren — Sync läuft im Hintergrund (Fortschritt in der Sidebar).</li>
             <li>Ohne Netz: Login-Seite <strong>Offline entsperren</strong> oder <code>/app?offline=1</code> — nur Master-Passwort, kein TOTP.</li>
           </ol>
-          <p class="help-note">Im Offline-Modus nur <strong>Lesen</strong>; Schreiben und Admin sind ausgeblendet. Logout löscht die Kopie nicht — unter Konto <strong>Offline-Kopie löschen</strong> oder Opt-in deaktivieren.</p>
+          <p class="help-note">Im Offline-Modus nur <strong>Lesen</strong>; Schreiben und Admin sind ausgeblendet. Logout löscht die Kopie nicht — unter Konto &amp; Sicherheit <strong>Offline-Kopie löschen</strong> oder Opt-in deaktivieren.</p>
         </div>
 
         <h2 id="login">Beim Login nutzen</h2>

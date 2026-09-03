@@ -125,7 +125,7 @@ Nach dem Commit: Login → **Vault-Onboarding** (Master-Passwort) → App.
 
 ## 3. Admin-UI (nach Vault-Entsperren)
 
-In der **Sidebar** unter **Administration** (sichtbar für `tenant_admin` / `platform_admin`; Auditoren nur **Audit**). Die Bereiche **Vault**, **Konto** und **Administration** sind einklappbar; unter Administration gibt es vier Untergruppen:
+In der **Sidebar** unter **Administration** (sichtbar für `tenant_admin` / `platform_admin`; Auditoren nur **Audit**). Die Bereiche **Vault**, **Konto & Sicherheit** und **Administration** sind einklappbar. Administration ist in **Tenant-Administration** und **Plattform-Administration** getrennt; darunter gibt es vier Untergruppen:
 
 | Untergruppe | Menüpunkte |
 |-------------|------------|

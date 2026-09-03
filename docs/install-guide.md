@@ -188,7 +188,7 @@ go build -o bin/teamvault ./cmd/teamvault
 Für **Offline-Lesen** im Browser (verschlüsselte lokale Kopie, 30 Tage) und **App-Shell ohne Netz** nach einmaligem Besuch:
 
 - **HTTPS** oder `localhost` (Secure Context) — reines HTTP ohne TLS lädt keinen Service Worker
-- Nach Online-Login: Vault entsperren → Opt-in „Offline vorhalten“ → Sync unter **Konto** oder automatisch im Hintergrund
+- Nach Online-Login: Vault entsperren → Opt-in „Offline vorhalten“ → Sync unter **Konto & Sicherheit** oder automatisch im Hintergrund
 - Ohne Netz: Login-Seite **Offline entsperren** oder `/app` mit gespeicherter Kopie
 - Details: [`docs/planning/offline-vault.md`](planning/offline-vault.md)
 
