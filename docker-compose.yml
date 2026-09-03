@@ -1,7 +1,7 @@
 # TeamVault — self-hosted Zero-Knowledge password manager
 #
 # Uses images published by CI to GHCR (push to main / tags v*):
-#   ghcr.io/timux/teamvault:latest
+#   ghcr.io/timux/teamvault:1.3.26
 #   ghcr.io/timux/teamvault:1.1.0   (semver from release tags)
 #
 # Quick start (downloads only this file + .env.example — no full repo clone):
@@ -23,7 +23,7 @@
 
 services:
   teamvault:
-    image: ${TEAMVAULT_IMAGE:-ghcr.io/timux/teamvault:latest}
+    image: ${TEAMVAULT_IMAGE:-ghcr.io/timux/teamvault:1.3.26}
     pull_policy: ${TEAMVAULT_PULL_POLICY:-always}
     container_name: teamvault
     ports:

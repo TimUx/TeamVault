@@ -10,7 +10,7 @@
 
 $ErrorActionPreference = "Stop"
 
-$RepoRef = if ($env:TEAMVAULT_REF) { $env:TEAMVAULT_REF } else { "main" }
+$RepoRef = if ($env:TEAMVAULT_REF) { $env:TEAMVAULT_REF } else { "v1.3.26" }
 $ForceBuild = $env:TEAMVAULT_BUILD -eq "1"
 $RawBase = if ($env:TEAMVAULT_RAW_BASE) { $env:TEAMVAULT_RAW_BASE } else { "https://raw.githubusercontent.com/TimUx/TeamVault/$RepoRef" }
 $RepoUrl = if ($env:TEAMVAULT_REPO) { $env:TEAMVAULT_REPO } else { "https://github.com/TimUx/TeamVault.git" }
@@ -197,7 +197,7 @@ if (-not (Test-Path ".env")) {
     @(
       "TEAMVAULT_PUBLISH_PORT=$Port"
       "TEAMVAULT_UNLOCK_KEY_HOST=./secrets/teamvault_unlock"
-      "TEAMVAULT_IMAGE=ghcr.io/timux/teamvault:latest"
+      "TEAMVAULT_IMAGE=ghcr.io/timux/teamvault:1.3.26"
       "TEAMVAULT_PULL_POLICY=always"
     ) | Set-Content -Encoding ascii ".env"
   }
@@ -214,7 +214,7 @@ if ($ForceBuild) {
   & docker compose @composeArgs up -d --build
   if ($LASTEXITCODE -ne 0) { throw "docker compose build/up fehlgeschlagen" }
 } else {
-  Set-EnvKey ".env" "TEAMVAULT_IMAGE" "ghcr.io/timux/teamvault:latest"
+  Set-EnvKey ".env" "TEAMVAULT_IMAGE" "ghcr.io/timux/teamvault:1.3.26"
   & docker compose @composeArgs pull
   if ($LASTEXITCODE -ne 0) {
     throw "GHCR-Pull fehlgeschlagen. docker login ghcr.io prüfen oder TEAMVAULT_BUILD=1 für lokalen Build."

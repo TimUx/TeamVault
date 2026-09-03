@@ -12,7 +12,7 @@
 
 set -euo pipefail
 
-REPO_REF="${TEAMVAULT_REF:-main}"
+REPO_REF="${TEAMVAULT_REF:-v1.3.26}"
 FORCE_BUILD="${TEAMVAULT_BUILD:-0}"
 RAW_BASE="${TEAMVAULT_RAW_BASE:-https://raw.githubusercontent.com/TimUx/TeamVault/${REPO_REF}}"
 REPO_URL="${TEAMVAULT_REPO:-https://github.com/TimUx/TeamVault.git}"
@@ -235,7 +235,7 @@ if [[ ! -f .env ]]; then
     cat >.env <<EOF
 TEAMVAULT_PUBLISH_PORT=${PORT}
 TEAMVAULT_UNLOCK_KEY_HOST=${KEY_HOST}
-TEAMVAULT_IMAGE=ghcr.io/timux/teamvault:latest
+TEAMVAULT_IMAGE=ghcr.io/timux/teamvault:1.3.26
 TEAMVAULT_PULL_POLICY=always
 EOF
   fi
@@ -252,7 +252,7 @@ if [[ "$FORCE_BUILD" == "1" ]]; then
   COMPOSE+=(-f docker-compose.build.yml)
   "${COMPOSE[@]}" up -d --build
 else
-  set_env_key "TEAMVAULT_IMAGE" "ghcr.io/timux/teamvault:latest"
+  set_env_key "TEAMVAULT_IMAGE" "ghcr.io/timux/teamvault:1.3.26"
   if ! "${COMPOSE[@]}" pull; then
     echo "" >&2
     echo "GHCR-Pull fehlgeschlagen." >&2

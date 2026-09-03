@@ -34,23 +34,32 @@ func NormalizeCode(code string) string {
 }
 
 func Validate(code, secret string) bool {
+	_, ok := ValidateCounter(code, secret, time.Now().UTC())
+	return ok
+}
+
+// ValidateCounter validates a code and returns the accepted time-step.
+// Checking individual steps lets callers reject replayed codes.
+func ValidateCounter(code, secret string, now time.Time) (int64, bool) {
 	code = NormalizeCode(code)
 	secret = strings.TrimSpace(secret)
 	if code == "" || secret == "" {
-		return false
+		return 0, false
 	}
-	ok, err := totp.ValidateCustom(
-		code,
-		secret,
-		time.Now().UTC(),
-		totp.ValidateOpts{
-			Period:    30,
-			Skew:      2,
+	const period = int64(30)
+	current := now.Unix() / period
+	for offset := int64(-2); offset <= 2; offset++ {
+		ok, err := totp.ValidateCustom(code, secret, time.Unix((current+offset)*period, 0).UTC(), totp.ValidateOpts{
+			Period:    uint(period),
+			Skew:      0,
 			Digits:    otp.DigitsSix,
 			Algorithm: otp.AlgorithmSHA1,
-		},
-	)
-	return err == nil && ok
+		})
+		if err == nil && ok {
+			return current + offset, true
+		}
+	}
+	return 0, false
 }
 
 // LegacySeal encodes the TOTP shared secret as base64 (Phase 4; migrate via SealWith).
