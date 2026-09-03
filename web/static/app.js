@@ -1340,6 +1340,8 @@ function touchIdle() {
     const overlay = document.getElementById("lockOverlay");
     if (overlay) {
       overlay.hidden = false;
+      const status = document.getElementById("securityStatus");
+      if (status) status.textContent = "Vault gesperrt";
       const mpw = overlay.querySelector("#lockMpw");
       if (mpw) mpw.value = "";
       const err = overlay.querySelector("#lockErr");
@@ -1722,11 +1724,12 @@ function renderApp(app) {
           ${navLink("vault:import", "upload", "Import")}
           ${navLink("vault:backup", "download", "Sicherung")}
         `)}
-        ${navSection("account", "Konto", `
-          ${navLink("account", "user", "Konto")}
+        ${navSection("account", "Konto &amp; Sicherheit", `
+          ${navLink("account", "user", "Sicherheitsübersicht")}
           <a class="sidebar-link" href="${tvPath("/help")}" target="_blank" rel="noopener"><span class="nav-ico">${icon("book")}</span><span>Hilfe</span></a>
         `)}
         ${navSection("admin", "Administration", `
+          <div class="sidebar-nav-group-label">Tenant-Administration</div>
           ${navSubSection("admin-org", "Benutzer &amp; Gruppen", `
             ${navLink("admin:users", "users", "Benutzer", "admin-link", 'data-admin-only')}
             ${navLink("admin:groups", "group", "Gruppen", "admin-link", 'data-admin-only')}
@@ -1742,6 +1745,7 @@ function renderApp(app) {
             ${navLink("admin:recovery", "lock", "Recovery &amp; Escrow", "admin-link", 'data-admin-only')}
             ${navLink("admin:apikeys", "key", "API-Keys", "admin-link", 'data-admin-only data-platform-only')}
           `)}
+          <div class="sidebar-nav-group-label">Plattform-Administration</div>
           ${navSubSection("admin-platform", "Plattform", `
             ${navLink("admin:platform", "building", "Tenants &amp; Migration", "admin-link platform-link", 'data-admin-only data-platform-only hidden')}
             ${navLink("admin:system", "info", "System", "admin-link", 'data-admin-only data-platform-only')}
@@ -1760,6 +1764,8 @@ function renderApp(app) {
         <button type="button" class="menu-toggle btn-icon" id="menuToggle" aria-label="Menü">${icon("menu")}</button>
         <h1 id="pageTitle">Vault</h1>
         <div class="app-topbar-actions">
+          <span class="app-security-status" id="securityStatus" role="status">Vault entsperrt</span>
+          <button type="button" class="btn-ghost btn-sm btn-with-ico" id="lockNow">${btnLabel("lock", "Sperren")}</button>
           <button type="button" class="btn-icon" data-theme-toggle aria-label="Dunkelmodus" title="Dunkelmodus">${icon("moon")}</button>
         </div>
       </header>
@@ -3813,6 +3819,18 @@ function renderApp(app) {
       err.hidden = false; err.textContent = e.message;
     }
   };
+  n.querySelector("#lockNow").onclick = () => {
+    if (!vault.sk) return;
+    clearVaultKey();
+    const overlay = n.querySelector("#lockOverlay");
+    if (overlay) {
+      overlay.hidden = false;
+      overlay.querySelector("#lockMpw")?.focus();
+    }
+    const status = n.querySelector("#securityStatus");
+    if (status) status.textContent = "Vault gesperrt";
+    announceA11y("Vault gesperrt");
+  };
   n.querySelector("#mpw").addEventListener("keydown", (ev) => {
     if (ev.key === "Enter") n.querySelector("#ulock").click();
   });
@@ -3829,6 +3847,8 @@ function renderApp(app) {
       n.querySelector("#lockOverlay").hidden = true;
       touchIdle();
       n.querySelector("#lockMpw").value = "";
+      const status = n.querySelector("#securityStatus");
+      if (status) status.textContent = "Vault entsperrt";
     } catch (e) {
       err.hidden = false; err.textContent = e.message;
     }
