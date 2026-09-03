@@ -126,7 +126,8 @@ function bindPanelTabs(root, group, opts = {}) {
     (btn) => btn.closest("[data-panel-group]") === scope
   );
   const panes = [...scope.querySelectorAll(`[data-panel-pane]`)].filter(
-    (pane) => pane.closest("[data-panel-group]") === scope
+    (pane) => pane.closest("[data-panel-group]") === scope &&
+      (group !== "account" || ["totp", "passkeys", "login", "master"].includes(pane.dataset.panelPane))
   );
   function show(id) {
     tabs.forEach((btn) => {
@@ -1292,11 +1293,11 @@ function isTenantAdminOnly() {
 
 const PLATFORM_ADMIN_NAV = new Set([
   "admin:trust", "admin:access", "admin:smtp", "admin:crypto",
-  "admin:apikeys", "admin:platform", "admin:system",
+  "admin:apikeys", "admin:clients", "admin:platform", "admin:system",
 ]);
 
 const PLATFORM_ADMIN_SECTIONS = new Set([
-  "trust", "access", "smtp", "crypto", "apikeys", "platform", "system",
+  "trust", "access", "smtp", "crypto", "apikeys", "clients", "platform", "system",
 ]);
 
 function canAccessAdminNav(nav) {
@@ -1742,6 +1743,7 @@ function renderApp(app) {
             ${navLink("admin:access", "network", "Zugriff &amp; Proxy", "admin-link", 'data-admin-only data-platform-only')}
             ${navLink("admin:ldap", "network", "LDAP", "admin-link", 'data-admin-only')}
             ${navLink("admin:smtp", "mail", "SMTP", "admin-link", 'data-admin-only data-platform-only')}
+            ${navLink("admin:clients", "download", "Client-Integrationen", "admin-link", 'data-admin-only data-platform-only')}
           `)}
           ${navSubSection("admin-security", "Sicherheit", `
             ${navLink("admin:crypto", "shield", "Krypto &amp; Policy", "admin-link", 'data-admin-only data-platform-only')}
@@ -2093,8 +2095,13 @@ function renderApp(app) {
 
           <div class="app-tab" data-pane="account">
             <div class="panel account-panel" data-panel-group="account">
+              <div class="panel-tabs" role="tablist" aria-label="Konto und Sicherheit">
+                 <button type="button" class="panel-tab active" role="tab" data-panel-tab="totp" aria-selected="true">2FA</button>
+                 <button type="button" class="panel-tab" role="tab" data-panel-tab="passkeys" aria-selected="false">Passkeys</button>
+                 <button type="button" class="panel-tab" role="tab" data-panel-tab="login" aria-selected="false">Login-Passwort</button>
+                 <button type="button" class="panel-tab" role="tab" data-panel-tab="master" aria-selected="false">Master-Passwort</button>
+              </div>
               <div class="panel-tab-pane account-page active" role="tabpanel" data-panel-pane="totp">
-               <h2>Passwörter &amp; 2FA</h2>
                 ${hintBox("Zwei-Faktor per Authenticator-App (nur Login). QR-Code kommt vom Server (scannbar).")}
                 <div class="row">
                   <button class="btn-accent" type="button" id="totpSetup">TOTP einrichten</button>
@@ -2120,7 +2127,6 @@ function renderApp(app) {
               </div>
 
               <div class="panel-tab-pane account-page" role="tabpanel" data-panel-pane="passkeys">
-                <h2>Passkeys</h2>
                 ${hintBox("Passkeys werden vom Browser bzw. Betriebssystem eingerichtet (Windows Hello, Face ID, Sicherheitsschlüssel). TeamVault erzeugt dafür keinen eigenen QR.")}
                 <label>Name</label><input id="pkname" value="Mein Passkey" />
                 <div id="pklist" class="list"></div>
@@ -2129,7 +2135,6 @@ function renderApp(app) {
               </div>
 
               <div class="panel-tab-pane account-page" role="tabpanel" data-panel-pane="login">
-                <h2>Login-Passwort</h2>
                 ${hintBox("Nur bei lokalem Auth-Backend. LDAP-User ändern das Passwort im Verzeichnis (LDAP/AD-Richtlinie).")}
                 <label>Aktuelles Login-Passwort</label><input id="lpw_cur" type="password" autocomplete="current-password" />
                 <label>Neues Login-Passwort (${PASSWORD_POLICY})</label><input id="lpw_new" type="password" autocomplete="new-password" minlength="16" />
@@ -2137,7 +2142,6 @@ function renderApp(app) {
               </div>
 
               <div class="panel-tab-pane account-page" role="tabpanel" data-panel-pane="master">
-                <h2>Master-Passwort</h2>
                 ${hintBox("Clientseitig: Private Key wird neu versiegelt; Server speichert nur Ciphertexte. Recovery-Kit / Escrow wird mit erneuert. Neues Passwort: " + PASSWORD_POLICY + ".")}
                 <label>Aktuelles Master-Passwort</label><input id="mpw_cur" type="password" autocomplete="current-password" />
                 <label>Neues Master-Passwort (${PASSWORD_POLICY})</label><input id="mpw_new" type="password" autocomplete="new-password" minlength="16" />
@@ -2146,7 +2150,6 @@ function renderApp(app) {
               </div>
 
               <div class="panel-tab-pane account-page" role="tabpanel" data-panel-pane="offline" hidden>
-                <h2>Offline-Vault</h2>
                 ${hintBox("Verschlüsselte Kopie für Offline-Lesen (30 Tage, nur Ciphertext). Schreiben bleibt online.", { id: "offlineAccHint" })}
                 <p class="hint" id="offlineAccStatus">—</p>
                 <label class="inline"><input id="offline_optin" type="checkbox" /> Offline-Kopie nach Entsperren aktualisieren</label>
@@ -2157,13 +2160,11 @@ function renderApp(app) {
               </div>
 
               <div class="panel-tab-pane account-page" role="tabpanel" data-panel-pane="clients" hidden>
-                <h2>Clients</h2>
                 ${hintBox("CLI und Browser-Extension von dieser Instanz — Zero-Knowledge bleibt erhalten (Entschlüsselung nur lokal).")}
                 <div id="clientDownloadsApp" class="client-dl-grid"></div>
                 <div class="hint-box" id="accClientsHelp" hidden></div>
               </div>
               <div class="panel-tab-pane account-page" role="tabpanel" data-panel-pane="profile" hidden>
-                <h2>Einstellungen</h2>
                 ${hintBox("Persönliche Angaben für Ihr Konto. Änderungen betreffen nur Ihren TeamVault-Benutzer.")}
                 <label for="profile_username">Username</label>
                 <input id="profile_username" readonly />
@@ -2332,6 +2333,13 @@ function renderApp(app) {
                     <button class="btn-ghost" type="button" id="mail_test">SMTP testen</button>
                   </div>
                 </div>
+                <div class="admin-section" data-admin-section="clients">
+                  ${hintBox("Steuern Sie, welche Client-Integrationen in den Konto-Einstellungen und der Hilfe angeboten werden.")}
+                  <label class="inline"><input id="admin_cli_integration" type="checkbox" /> CLI-Integration aktivieren</label>
+                  <label class="inline"><input id="admin_browser_integration" type="checkbox" /> Browser-Extension aktivieren</label>
+                  <p class="hint">Ist keine Integration aktiviert, wird der Menüeintrag Konto → Clients ausgeblendet.</p>
+                  <div class="row"><button class="btn-accent" type="button" id="client_policy_save">Client-Einstellungen speichern</button></div>
+                </div>
                 <div class="admin-section" data-admin-section="crypto" data-panel-group="crypto">
                   <div class="panel-tabs" role="tablist" aria-label="Krypto und Policy">
                     <button type="button" class="panel-tab active" role="tab" data-panel-tab="kdf" aria-selected="true">Argon2 / KDF</button>
@@ -2352,9 +2360,6 @@ function renderApp(app) {
                     <label class="inline"><input id="totp_req" type="checkbox" /> TOTP Pflicht (Hinweis nach Login)</label>
                     <label class="inline"><input id="admin_env_only" type="checkbox" /> Admins: Secret-Liste nur mit Envelope</label>
                     <label class="inline"><input id="offline_cache" type="checkbox" checked /> Offline-Vault-Cache erlauben (Ciphertext auf Geräten)</label>
-                    <label class="inline"><input id="cli_integration" type="checkbox" /> CLI-Integration anzeigen (Konto, Hilfe)</label>
-                    <label class="inline"><input id="browser_integration" type="checkbox" /> Browser-Extension-Integration anzeigen (Konto, Hilfe)</label>
-                    ${hintBox("CLI/Extension standardmäßig ausgeblendet — sinnvoll wenn Firmen-GPOs die Browser-Installation blockieren. IT kann Artefakte weiterhin unter /downloads/ bereitstellen.")}
                     <div class="row">
                       <button class="btn-accent" type="button" id="policy_save">Policy speichern</button>
                     </div>
@@ -2484,6 +2489,7 @@ function renderApp(app) {
     "account:offline": "Offline-Vault",
     "account:clients": "Clients",
     "account:profile": "Einstellungen",
+    "admin:clients": "Client-Integrationen",
     "admin:users": "Benutzer",
     "admin:groups": "Gruppen",
     "admin:trust": "Firmen-CA",
@@ -2714,6 +2720,7 @@ function renderApp(app) {
       if (accountPage === "security") {
         refreshPasskeys().catch(() => {});
         syncAccountAuthUI();
+        n.querySelector('[data-panel-group="account"] .panel-tab.active')?.click();
       }
       if (accountPage === "offline") updateOfflineAccountUI(vault.offlineSnapshot);
       if (accountPage === "clients") refreshClientDownloadsUI().catch(() => {});
@@ -2910,10 +2917,10 @@ function renderApp(app) {
   }
 
   function syncAccountClientsUI() {
-    const tab = n.querySelector('[data-panel-tab="clients"]');
     const pane = n.querySelector('[data-panel-pane="clients"]');
+    const nav = n.querySelector('.sidebar-link[data-nav="account:clients"]');
     const show = anyClientIntegrationEnabled();
-    if (tab) tab.hidden = !show;
+    if (nav) nav.hidden = !show;
     if (pane && !show) pane.hidden = true;
     const helpHint = n.querySelector("#accClientsHelp");
     if (helpHint) {
@@ -2926,6 +2933,7 @@ function renderApp(app) {
   }
 
   bindPanelTabs(n, "backup");
+  bindPanelTabs(n, "account");
   bindPanelTabs(n, "crypto");
   bindPanelTabs(n, "recovery");
   bindPanelTabs(n, "platform");
@@ -6096,9 +6104,9 @@ function renderApp(app) {
       n.querySelector("#admin_env_only").checked = !!pol.admin_secrets_envelope_only;
       const offlineCache = n.querySelector("#offline_cache");
       if (offlineCache) offlineCache.checked = pol.offline_cache_allowed !== false;
-      const cliInt = n.querySelector("#cli_integration");
+      const cliInt = n.querySelector("#admin_cli_integration");
       if (cliInt) cliInt.checked = !!pol.cli_integration_enabled;
-      const browserInt = n.querySelector("#browser_integration");
+      const browserInt = n.querySelector("#admin_browser_integration");
       if (browserInt) browserInt.checked = !!pol.browser_integration_enabled;
       const keys = await api("/api/admin/api-keys");
       n.querySelector("#klist").innerHTML = keys.map((k) => {
@@ -6419,8 +6427,8 @@ function renderApp(app) {
           totp_required: n.querySelector("#totp_req").checked,
           admin_secrets_envelope_only: n.querySelector("#admin_env_only").checked,
           offline_cache_allowed: n.querySelector("#offline_cache").checked,
-          cli_integration_enabled: n.querySelector("#cli_integration").checked,
-          browser_integration_enabled: n.querySelector("#browser_integration").checked,
+          cli_integration_enabled: n.querySelector("#admin_cli_integration").checked,
+          browser_integration_enabled: n.querySelector("#admin_browser_integration").checked,
           session_hours: 8,
           unlock_idle_minutes: vault.idleMin || 15,
           escrow_shamir_k: Number(n.querySelector("#shamir_k").value) || 3,
@@ -6428,6 +6436,22 @@ function renderApp(app) {
           ldap_sync_hours: 24,
         }),
       });
+    } catch (e) { err.hidden = false; err.textContent = e.message; }
+  };
+  n.querySelector("#client_policy_save").onclick = async () => {
+    const err = n.querySelector("#aerr"); err.hidden = true;
+    try {
+      const pol = await api("/api/admin/policy");
+      await api("/api/admin/policy", {
+        method: "PUT",
+        body: JSON.stringify({
+          ...pol,
+          cli_integration_enabled: n.querySelector("#admin_cli_integration").checked,
+          browser_integration_enabled: n.querySelector("#admin_browser_integration").checked,
+        }),
+      });
+      vault.policy = await api("/api/policy/client");
+      syncAccountClientsUI();
     } catch (e) { err.hidden = false; err.textContent = e.message; }
   };
   n.querySelector("#rec_save").onclick = async () => {
