@@ -2717,6 +2717,8 @@ function renderApp(app) {
           ["totp", "passkeys", "login", "master"].includes(page.dataset.panelPane);
         page.hidden = page.dataset.panelPane !== accountPage && !isSecurity;
       });
+      const accountTabsBar = n.querySelector('[data-panel-group="account"] > .panel-tabs');
+      if (accountTabsBar) accountTabsBar.hidden = accountPage !== "security";
       if (accountPage === "security") {
         refreshPasskeys().catch(() => {});
         syncAccountAuthUI();
