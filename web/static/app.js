@@ -2093,8 +2093,7 @@ function renderApp(app) {
 
           <div class="app-tab" data-pane="account">
             <div class="panel account-panel" data-panel-group="account">
-              ${hintBox("Login-Absicherung und Geräte-Kopie — der Vault bleibt Master-Passwort-pflichtig.")}
-             <div class="panel-tabs" role="tablist" aria-label="Konto-Bereiche" hidden>
+              <div class="panel-tabs" role="tablist" aria-label="Konto-Bereiche" hidden>
                <button type="button" class="panel-tab active" role="tab" data-panel-tab="totp" aria-selected="true">Passwörter &amp; 2FA</button>
                <button type="button" class="panel-tab" role="tab" data-panel-tab="passkeys" aria-selected="false">Passkeys</button>
                <button type="button" class="panel-tab" role="tab" data-panel-tab="login" aria-selected="false">Login-Passwort</button>
@@ -2181,7 +2180,7 @@ function renderApp(app) {
                 <input id="profile_display" autocomplete="name" />
                 <label for="profile_email">E-Mail-Adresse</label>
                 <input id="profile_email" type="email" autocomplete="email" />
-                <div class="row"><button class="btn-accent" type="button" id="profile_save">Kontoeinstellungen speichern</button></div>
+                <div class="row"><button class="btn-accent" type="button" id="profile_save">Einstellungen speichern</button></div>
                 <div class="error" id="profile_err" hidden></div>
                 <div class="ok" id="profile_ok" hidden></div>
               </div>
@@ -3173,7 +3172,7 @@ function renderApp(app) {
       n.querySelector("#profile_display").value = vault.me.display_name || "";
       n.querySelector("#profile_email").value = vault.me.email || "";
       ok.hidden = false;
-      ok.textContent = "Kontoeinstellungen gespeichert.";
+      ok.textContent = "Einstellungen gespeichert.";
     } catch (e) {
       err.hidden = false;
       err.textContent = e.message;
