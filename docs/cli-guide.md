@@ -2,7 +2,7 @@
 
 Step-by-step für Endanwender. Interaktive Fassung auf der laufenden Instanz: **`/help/cli`**.
 
-![Konto → Clients](images/account-clients.png)
+![Konto & Sicherheit → Clients](images/account-clients.png)
 
 ## Installation
 
@@ -22,7 +22,7 @@ curl -fsSL "https://IHRE-VAULT-URL/help/install/tvcli.sh" | TEAMVAULT_URL="https
 
 Die Skripte laden das Binary von `https://…/downloads/` (im Docker-Image automatisch bereitgestellt).
 
-In der Web-App: **Konto → Clients** oder Hilfe **`/help/cli`** — Download und Installations-Einzeiler für Ihre Instanz (sichtbar nur, wenn der Plattform-Administrator die CLI-Integration aktiviert hat; `/downloads/` bleibt immer verfügbar).
+In der Web-App: **Konto & Sicherheit → Clients** oder Hilfe **`/help/cli`** — Download und Installations-Einzeiler für Ihre Instanz (sichtbar nur, wenn der Plattform-Administrator die CLI-Integration aktiviert hat; `/downloads/` bleibt immer verfügbar).
 
 ### Manuell
 

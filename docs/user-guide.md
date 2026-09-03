@@ -52,7 +52,7 @@ Nach dem Login erscheint **Vault entsperren**. Master-Passwort eingeben → **En
 - Bei Inaktivität (Default ca. 15 Minuten) sperrt die App den Vault erneut (opakes Overlay).
 - Logout beendet die Server-Session; der Schlüssel im Speicher wird gelöscht.
 
-Oben rechts: Theme-Umschalter als **Sonne/Mond-Icon** (wird lokal gespeichert), Sicherheitsstatus und **Sperren**. Die Sidebar nutzt flache Inline-Icons; die Hauptbereiche **Vault**, **Konto & Sicherheit** und **Administration** sind einklappbar (Zustand wird im Browser gemerkt). Administration ist zusätzlich in **Tenant-Administration** und **Plattform-Administration** getrennt. Auf schmalen Viewports: Menü-Taste öffnet die Sidebar (Schließen mit Backdrop oder **Escape**).
+Oben rechts: Theme-Umschalter als **Sonne/Mond-Icon** (wird lokal gespeichert), Sicherheitsstatus und **Sperren**. Die Sidebar nutzt flache Inline-Icons; die Hauptbereiche **Vault**, **Konto & Sicherheit** und **Administration** sind einklappbar (Zustand wird im Browser gemerkt). Unter **Konto & Sicherheit** sind **Passwörter & 2FA**, **Offline-Vault**, **Clients** und **Kontoeinstellungen** getrennte Menüpunkte. Administration ist zusätzlich in **Tenant-Administration** und **Plattform-Administration** getrennt. Auf schmalen Viewports: Menü-Taste öffnet die Sidebar (Schließen mit Backdrop oder **Escape**).
 
 ![Dark Theme](images/theme-dark.png)
 
@@ -195,6 +195,8 @@ Instanz-weites Ciphertext-Backup (Tenants, User, Secrets): siehe [Admin Guide](a
 Sidebar **Konto & Sicherheit**:
 
 ![Konto](images/account.png)
+
+Die persönlichen Angaben ändern Sie unter **Kontoeinstellungen**. Dort können Name und E-Mail-Adresse angepasst werden; der Username bleibt unveränderlich.
 
 ### Login-2FA (TOTP)
 

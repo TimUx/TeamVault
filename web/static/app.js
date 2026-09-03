@@ -293,7 +293,7 @@ function saveNavSubsectionState(subId, collapsed) {
 }
 
 function navSectionIdForRoute(nav) {
-  if (nav === "account") return "account";
+  if (nav === "account" || (nav && nav.startsWith("account:"))) return "account";
   if (nav && nav.startsWith("admin:")) return "admin";
   return "vault";
 }
@@ -1725,7 +1725,10 @@ function renderApp(app) {
           ${navLink("vault:backup", "download", "Sicherung")}
         `)}
         ${navSection("account", "Konto &amp; Sicherheit", `
-          ${navLink("account", "user", "Sicherheitsübersicht")}
+          ${navLink("account:security", "shield", "Passwörter &amp; 2FA")}
+          ${navLink("account:offline", "lock", "Offline-Vault")}
+          ${navLink("account:clients", "download", "Clients")}
+          ${navLink("account:profile", "user", "Kontoeinstellungen")}
           <a class="sidebar-link" href="${tvPath("/help")}" target="_blank" rel="noopener"><span class="nav-ico">${icon("book")}</span><span>Hilfe</span></a>
         `)}
         ${navSection("admin", "Administration", `
@@ -2098,6 +2101,7 @@ function renderApp(app) {
                 <button type="button" class="panel-tab" role="tab" data-panel-tab="master" aria-selected="false">Master-Passwort</button>
                 <button type="button" class="panel-tab" role="tab" data-panel-tab="offline" aria-selected="false">Offline-Vault</button>
                 <button type="button" class="panel-tab" role="tab" data-panel-tab="clients" aria-selected="false" hidden>Clients</button>
+                <button type="button" class="panel-tab" role="tab" data-panel-tab="profile" aria-selected="false">Kontoeinstellungen</button>
               </div>
 
               <div class="panel-tab-pane active" role="tabpanel" data-panel-pane="totp">
@@ -2162,6 +2166,18 @@ function renderApp(app) {
                 ${hintBox("CLI und Browser-Extension von dieser Instanz — Zero-Knowledge bleibt erhalten (Entschlüsselung nur lokal).")}
                 <div id="clientDownloadsApp" class="client-dl-grid"></div>
                 <div class="hint-box" id="accClientsHelp" hidden></div>
+              </div>
+              <div class="panel-tab-pane" role="tabpanel" data-panel-pane="profile" hidden>
+                ${hintBox("Persönliche Angaben für Ihr Konto. Änderungen betreffen nur Ihren TeamVault-Benutzer.")}
+                <label for="profile_username">Username</label>
+                <input id="profile_username" readonly />
+                <label for="profile_display">Name</label>
+                <input id="profile_display" autocomplete="name" />
+                <label for="profile_email">E-Mail-Adresse</label>
+                <input id="profile_email" type="email" autocomplete="email" />
+                <div class="row"><button class="btn-accent" type="button" id="profile_save">Kontoeinstellungen speichern</button></div>
+                <div class="error" id="profile_err" hidden></div>
+                <div class="ok" id="profile_ok" hidden></div>
               </div>
 
               <div class="error" id="acc_err" hidden></div>
@@ -2468,7 +2484,10 @@ function renderApp(app) {
     "vault:create": "Neu anlegen",
     "vault:import": "Import",
     "vault:backup": "Sicherung",
-    account: "Konto",
+    "account:security": "Passwörter & 2FA",
+    "account:offline": "Offline-Vault",
+    "account:clients": "Clients",
+    "account:profile": "Kontoeinstellungen",
     "admin:users": "Benutzer",
     "admin:groups": "Gruppen",
     "admin:trust": "Firmen-CA",
@@ -2657,7 +2676,7 @@ function renderApp(app) {
     let pane = "vault";
     let vaultSec = null;
     let adminSec = null;
-    if (nav === "account") {
+    if (nav.startsWith("account:") || nav === "account") {
       pane = "account";
     } else if (nav.startsWith("admin:")) {
       pane = "admin";
@@ -2687,7 +2706,19 @@ function renderApp(app) {
       });
     }
     closeMobileNav();
-    if (nav === "account") updateOfflineAccountUI(vault.offlineSnapshot);
+    if (nav === "account" || nav.startsWith("account:")) {
+      const accountTab = nav === "account:offline" ? "offline"
+        : nav === "account:clients" ? "clients"
+          : nav === "account:profile" ? "profile" : "totp";
+      const tab = n.querySelector(`[data-panel-tab="${accountTab}"]`);
+      if (tab) tab.click();
+      if (accountTab === "offline") updateOfflineAccountUI(vault.offlineSnapshot);
+      if (accountTab === "profile") {
+        n.querySelector("#profile_username").value = vault.me?.username || "";
+        n.querySelector("#profile_display").value = vault.me?.display_name || "";
+        n.querySelector("#profile_email").value = vault.me?.email || "";
+      }
+    }
   }
 
   const offlineUrlParam = new URLSearchParams(location.search).get("offline") === "1";
@@ -3119,6 +3150,28 @@ function renderApp(app) {
       n.querySelector("#lpw_new").value = "";
       ok.hidden = false; ok.textContent = "Login-Passwort geändert.";
     } catch (e) { err.hidden = false; err.textContent = e.message; }
+  };
+  n.querySelector("#profile_save").onclick = async () => {
+    const err = n.querySelector("#profile_err");
+    const ok = n.querySelector("#profile_ok");
+    err.hidden = true; ok.hidden = true;
+    try {
+      await api("/api/me/profile", {
+        method: "PUT",
+        body: JSON.stringify({
+          display_name: n.querySelector("#profile_display").value.trim(),
+          email: n.querySelector("#profile_email").value.trim(),
+        }),
+      });
+      vault.me = await api("/api/me");
+      n.querySelector("#profile_display").value = vault.me.display_name || "";
+      n.querySelector("#profile_email").value = vault.me.email || "";
+      ok.hidden = false;
+      ok.textContent = "Kontoeinstellungen gespeichert.";
+    } catch (e) {
+      err.hidden = false;
+      err.textContent = e.message;
+    }
   };
 
   n.querySelector("#mpw_save").onclick = async () => {

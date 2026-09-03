@@ -169,6 +169,7 @@ func (a *API) Handler() http.Handler {
 	mux.HandleFunc("POST /api/auth/login", a.handleLogin)
 	mux.HandleFunc("POST /api/auth/logout", a.handleLogout)
 	mux.HandleFunc("GET /api/me", a.handleMe)
+	mux.HandleFunc("PUT /api/me/profile", a.requireAuth(a.handleUpdateProfile))
 	mux.HandleFunc("GET /api/vault/status", a.requireAuth(a.handleVaultStatus))
 	mux.HandleFunc("GET /api/vault/crypto-params", a.requireAuth(a.handleCryptoParams))
 	mux.HandleFunc("POST /api/vault/onboard", a.requireAuth(a.handleVaultOnboard))
@@ -659,7 +660,7 @@ func (a *API) handleMe(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"user_id": sess.UserID, "tenant_id": sess.TenantID, "tenant_name": tenantName, "tenant_slug": tenantSlug,
-		"username": sess.Username, "roles": sess.Roles,
+		"username": sess.Username, "display_name": u.DisplayName, "email": u.Email, "roles": sess.Roles,
 		"needs_vault_onboard": u.OnboardedAt == nil, "totp_enabled": u.TotpEnabled,
 		"auth_backend": u.AuthBackend,
 		"passkey_count": func() int {
@@ -670,9 +671,34 @@ func (a *API) handleMe(w http.ResponseWriter, r *http.Request) {
 			if ten != nil {
 				return ten.RecoveryMode
 			}
+
 			return ""
 		}(),
 	})
+}
+
+func (a *API) handleUpdateProfile(w http.ResponseWriter, r *http.Request) {
+	sess, _ := a.sessionFrom(r)
+	var body struct {
+		DisplayName string `json:"display_name"`
+		Email       string `json:"email"`
+	}
+	if err := readJSON(r, &body); err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	u, err := a.App.Vault.GetUser(r.Context(), sess.TenantID, sess.UserID)
+	if err != nil {
+		writeErr(w, http.StatusNotFound, "user not found")
+		return
+	}
+	u.DisplayName = strings.TrimSpace(body.DisplayName)
+	u.Email = strings.TrimSpace(body.Email)
+	if err := a.App.Vault.UpsertUser(r.Context(), *u); err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "updated"})
 }
 
 func (a *API) handleVaultStatus(w http.ResponseWriter, r *http.Request) {

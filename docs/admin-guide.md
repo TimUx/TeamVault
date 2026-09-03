@@ -239,7 +239,7 @@ Sidebar **Administration → Krypto & Policy**:
 
 - Argon2-Defaults / Presets für neue Onboardings
 - TOTP-Pflicht (Hinweis/Policy nach Login)
-- **CLI-Integration anzeigen** / **Browser-Extension-Integration anzeigen** (Plattform-Administrator): steuert, ob **Konto → Clients** und die Hilfe-Einträge CLI/Extension sichtbar sind. Default: aus (GPO-/Rollout-Gründe). Downloads unter `/downloads/` bleiben unabhängig davon erreichbar.
+- **CLI-Integration anzeigen** / **Browser-Extension-Integration anzeigen** (Plattform-Administrator): steuert, ob **Konto & Sicherheit → Clients** und die Hilfe-Einträge CLI/Extension sichtbar sind. Default: aus (GPO-/Rollout-Gründe). Downloads unter `/downloads/` bleiben unabhängig davon erreichbar.
 - **Offline-Vault-Cache erlauben:** Mandantenweit Opt-in für clientseitige Ciphertext-Kopie (IndexedDB, 30 Tage TTL). Aus = Nutzer können keine Offline-Kopie anlegen; bestehende Kopien auf Geräten werden beim nächsten Online-Besuch nicht mehr aktualisiert.
 - Idle-Lock der Vault-Session (Default 15 min) — nur Client-Unlock
 - **Admins: Secret-Liste nur mit Envelope** (`admin_secrets_envelope_only`): Wenn aktiv, sehen Tenant-Admins in der Secret-Liste nur Einträge, für die sie selbst ein Envelope haben (Inventar-Metadaten anderer Secrets ausgeblendet). Default: aus — Admins sehen alle Secret-Metadaten (IDs, Title-Ciphertext), Klartext bleibt Zero-Knowledge-geschützt.
@@ -307,7 +307,7 @@ Unlock-Key nie ins Image legen.
 
 **Docker-Image:** `tvcli` (vier Plattformen), `teamvault-extension.crx` / `.zip` / `.xpi` sowie Policy-Vorlagen (`extension/updates.xml`, `chrome-policy.json`, …) sind im Image unter `/opt/teamvault/bundled-downloads/` enthalten. Beim Serverstart werden fehlende oder ältere Dateien nach **`<data-dir>/downloads/`** kopiert und unter **`/downloads/`** ausgeliefert.
 
-**Web-App:** Nutzer finden Downloads unter **Konto → Clients**; die Hilfe unter **`/help/cli`** und **`/help/extension`** zeigt dieselben Buttons und Installations-Einzeiler.
+**Web-App:** Nutzer finden Downloads unter **Konto & Sicherheit → Clients**; die Hilfe unter **`/help/cli`** und **`/help/extension`** zeigt dieselben Buttons und Installations-Einzeiler.
 
 **Extension (normal):** Nutzer führen einmal `extension-user.ps1` aus (setzt `ExtensionSettings` + `ExtensionInstallSources` für Chrome/Edge), danach klicken sie auf **Extension installieren**. IT kann stattdessen `extension-policy.ps1` zentral (HKLM/GPO) ausrollen.
 
