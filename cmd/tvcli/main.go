@@ -23,6 +23,7 @@ import (
 	"runtime"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/teamvault/teamvault/internal/cryptocore"
 	"github.com/teamvault/teamvault/internal/shamir"
@@ -234,7 +235,11 @@ func newClient(base, apiKey string) (*client, error) {
 	if err != nil {
 		return nil, err
 	}
-	c := &client{base: strings.TrimRight(base, "/"), apiKey: apiKey, http: &http.Client{Jar: jar}}
+	c := &client{
+		base: strings.TrimRight(base, "/"),
+		apiKey: apiKey,
+		http: &http.Client{Jar: jar, Timeout: 30 * time.Second},
+	}
 	dir, err := os.UserConfigDir()
 	if err != nil {
 		return c, nil
