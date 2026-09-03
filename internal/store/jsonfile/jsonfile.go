@@ -392,6 +392,9 @@ func (s *Store) UpdateWebAuthnSignCount(_ context.Context, tenant store.TenantID
 	defer s.mu.Unlock()
 	for i := range s.data.WebAuthn {
 		if s.data.WebAuthn[i].TenantID == tenant && s.data.WebAuthn[i].ID == id {
+			if signCount < s.data.WebAuthn[i].SignCount {
+				return nil
+			}
 			s.data.WebAuthn[i].SignCount = signCount
 			return s.flush()
 		}

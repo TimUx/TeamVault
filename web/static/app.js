@@ -1784,7 +1784,7 @@ function renderApp(app) {
           <label id="offlineSnapLabel" hidden for="offlineSnap">Gespeicherte Offline-Kopie</label>
           <select id="offlineSnap" hidden></select>
           <label>Master-Passwort</label><input id="mpw" type="password" autocomplete="current-password" />
-          <div class="error" id="uerr" hidden></div>
+          <div class="error" id="uerr" hidden role="alert" aria-live="assertive"></div>
           <div class="row"><button class="btn-accent btn-with-ico" type="button" id="ulock">${btnLabel("unlock", "Entsperren")}</button></div>
         </div>
 
