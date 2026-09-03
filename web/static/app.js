@@ -1728,7 +1728,7 @@ function renderApp(app) {
           ${navLink("account:security", "shield", "Passwörter &amp; 2FA")}
           ${navLink("account:offline", "lock", "Offline-Vault")}
           ${navLink("account:clients", "download", "Clients")}
-          ${navLink("account:profile", "user", "Kontoeinstellungen")}
+          ${navLink("account:profile", "user", "Einstellungen")}
           <a class="sidebar-link" href="${tvPath("/help")}" target="_blank" rel="noopener"><span class="nav-ico">${icon("book")}</span><span>Hilfe</span></a>
         `)}
         ${navSection("admin", "Administration", `
@@ -2094,17 +2094,17 @@ function renderApp(app) {
           <div class="app-tab" data-pane="account">
             <div class="panel account-panel" data-panel-group="account">
               ${hintBox("Login-Absicherung und Geräte-Kopie — der Vault bleibt Master-Passwort-pflichtig.")}
-              <div class="panel-tabs" role="tablist" aria-label="Konto-Bereiche">
-                <button type="button" class="panel-tab active" role="tab" data-panel-tab="totp" aria-selected="true">TOTP</button>
-                <button type="button" class="panel-tab" role="tab" data-panel-tab="passkeys" aria-selected="false">Passkeys</button>
-                <button type="button" class="panel-tab" role="tab" data-panel-tab="login" aria-selected="false" hidden>Login-Passwort</button>
-                <button type="button" class="panel-tab" role="tab" data-panel-tab="master" aria-selected="false">Master-Passwort</button>
-                <button type="button" class="panel-tab" role="tab" data-panel-tab="offline" aria-selected="false">Offline-Vault</button>
-                <button type="button" class="panel-tab" role="tab" data-panel-tab="clients" aria-selected="false" hidden>Clients</button>
-                <button type="button" class="panel-tab" role="tab" data-panel-tab="profile" aria-selected="false">Kontoeinstellungen</button>
-              </div>
-
+             <div class="panel-tabs" role="tablist" aria-label="Konto-Bereiche" hidden>
+               <button type="button" class="panel-tab active" role="tab" data-panel-tab="totp" aria-selected="true">Passwörter &amp; 2FA</button>
+               <button type="button" class="panel-tab" role="tab" data-panel-tab="passkeys" aria-selected="false">Passkeys</button>
+               <button type="button" class="panel-tab" role="tab" data-panel-tab="login" aria-selected="false">Login-Passwort</button>
+               <button type="button" class="panel-tab" role="tab" data-panel-tab="master" aria-selected="false">Master-Passwort</button>
+               <button type="button" class="panel-tab" role="tab" data-panel-tab="offline" aria-selected="false">Offline-Vault</button>
+               <button type="button" class="panel-tab" role="tab" data-panel-tab="clients" aria-selected="false">Clients</button>
+               <button type="button" class="panel-tab" role="tab" data-panel-tab="profile" aria-selected="false">Einstellungen</button>
+             </div>
               <div class="panel-tab-pane active" role="tabpanel" data-panel-pane="totp">
+               <h2>Passwörter &amp; 2FA</h2>
                 ${hintBox("Zwei-Faktor per Authenticator-App (nur Login). QR-Code kommt vom Server (scannbar).")}
                 <div class="row">
                   <button class="btn-accent" type="button" id="totpSetup">TOTP einrichten</button>
@@ -2130,6 +2130,7 @@ function renderApp(app) {
               </div>
 
               <div class="panel-tab-pane" role="tabpanel" data-panel-pane="passkeys" hidden>
+                <h2>Passwörter &amp; 2FA</h2>
                 ${hintBox("Passkeys werden vom Browser bzw. Betriebssystem eingerichtet (Windows Hello, Face ID, Sicherheitsschlüssel). TeamVault erzeugt dafür keinen eigenen QR.")}
                 <label>Name</label><input id="pkname" value="Mein Passkey" />
                 <div id="pklist" class="list"></div>
@@ -2138,6 +2139,7 @@ function renderApp(app) {
               </div>
 
               <div class="panel-tab-pane" role="tabpanel" data-panel-pane="login" hidden>
+                <h2>Passwörter &amp; 2FA</h2>
                 ${hintBox("Nur bei lokalem Auth-Backend. LDAP-User ändern das Passwort im Verzeichnis (LDAP/AD-Richtlinie).")}
                 <label>Aktuelles Login-Passwort</label><input id="lpw_cur" type="password" autocomplete="current-password" />
                 <label>Neues Login-Passwort (${PASSWORD_POLICY})</label><input id="lpw_new" type="password" autocomplete="new-password" minlength="16" />
@@ -2145,6 +2147,7 @@ function renderApp(app) {
               </div>
 
               <div class="panel-tab-pane" role="tabpanel" data-panel-pane="master" hidden>
+                <h2>Passwörter &amp; 2FA</h2>
                 ${hintBox("Clientseitig: Private Key wird neu versiegelt; Server speichert nur Ciphertexte. Recovery-Kit / Escrow wird mit erneuert. Neues Passwort: " + PASSWORD_POLICY + ".")}
                 <label>Aktuelles Master-Passwort</label><input id="mpw_cur" type="password" autocomplete="current-password" />
                 <label>Neues Master-Passwort (${PASSWORD_POLICY})</label><input id="mpw_new" type="password" autocomplete="new-password" minlength="16" />
@@ -2153,6 +2156,7 @@ function renderApp(app) {
               </div>
 
               <div class="panel-tab-pane" role="tabpanel" data-panel-pane="offline" hidden>
+                <h2>Offline-Vault</h2>
                 ${hintBox("Verschlüsselte Kopie für Offline-Lesen (30 Tage, nur Ciphertext). Schreiben bleibt online.", { id: "offlineAccHint" })}
                 <p class="hint" id="offlineAccStatus">—</p>
                 <label class="inline"><input id="offline_optin" type="checkbox" /> Offline-Kopie nach Entsperren aktualisieren</label>
@@ -2163,11 +2167,13 @@ function renderApp(app) {
               </div>
 
               <div class="panel-tab-pane" role="tabpanel" data-panel-pane="clients" hidden>
+                <h2>Clients</h2>
                 ${hintBox("CLI und Browser-Extension von dieser Instanz — Zero-Knowledge bleibt erhalten (Entschlüsselung nur lokal).")}
                 <div id="clientDownloadsApp" class="client-dl-grid"></div>
                 <div class="hint-box" id="accClientsHelp" hidden></div>
               </div>
               <div class="panel-tab-pane" role="tabpanel" data-panel-pane="profile" hidden>
+                <h2>Einstellungen</h2>
                 ${hintBox("Persönliche Angaben für Ihr Konto. Änderungen betreffen nur Ihren TeamVault-Benutzer.")}
                 <label for="profile_username">Username</label>
                 <input id="profile_username" readonly />
@@ -2487,7 +2493,7 @@ function renderApp(app) {
     "account:security": "Passwörter & 2FA",
     "account:offline": "Offline-Vault",
     "account:clients": "Clients",
-    "account:profile": "Kontoeinstellungen",
+    "account:profile": "Einstellungen",
     "admin:users": "Benutzer",
     "admin:groups": "Gruppen",
     "admin:trust": "Firmen-CA",

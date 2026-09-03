@@ -538,6 +538,10 @@ async function main() {
   await unlockVault(page);
   await showAccountTab(page, "totp");
   await shot(page, "account.png", { fullPage: true });
+  await page.click('[data-nav="account:profile"]');
+  await page.waitForSelector('[data-panel-pane="profile"]:not([hidden])', { timeout: 10000 });
+  await page.waitForTimeout(400);
+  await shot(page, "account-settings.png", { fullPage: true });
   const needsTotpSetup = await page.evaluate(() => {
     const btn = document.querySelector("#totpSetup");
     return !!(btn && !btn.disabled && !btn.hidden);

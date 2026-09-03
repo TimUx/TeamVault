@@ -196,7 +196,19 @@ Sidebar **Konto & Sicherheit**:
 
 ![Konto](images/account.png)
 
-Die persönlichen Angaben ändern Sie unter **Kontoeinstellungen**. Dort können Name und E-Mail-Adresse angepasst werden; der Username bleibt unveränderlich.
+Die persönlichen Angaben ändern Sie unter **Einstellungen**. Dort können Name und E-Mail-Adresse angepasst werden; der Username bleibt unveränderlich.
+
+### Einstellungen
+
+Unter **Einstellungen** bearbeiten Sie ausschließlich Ihre persönlichen Kontodaten:
+
+- Anzeigename
+- E-Mail-Adresse
+- unveränderlicher Username (nur Anzeige)
+
+![Einstellungen](images/account-settings.png)
+
+Passwörter, TOTP und Passkeys befinden sich separat unter **Passwörter & 2FA**. Offline-Vault und Client-Downloads haben ebenfalls eigene Menüpunkte.
 
 ### Login-2FA (TOTP)
 
