@@ -15,8 +15,9 @@ Version und Entwickler (Timo Braun) sehen Sie unten in der App bzw. unter Login.
 - [Konto & Sicherheit](#6-konto--sicherheit-totp-passkeys-passwörter)
 - [Browser-Extension](#7-browser-extension)
 - [CLI](#8-cli-tvcli)
-- [Gute Praxis](#9-gute-praxis)
-- [Hilfe](#10-hilfe)
+- [Desktop-App](#9-desktop-app)
+- [Gute Praxis](#10-gute-praxis)
+- [Hilfe](#11-hilfe)
 
 ![Login](images/login.png)
 
@@ -292,7 +293,15 @@ Nur `read` → keine Admin- oder Schreibaktionen. Cookie-Login ohne API-Key ist 
 
 **Legacy-Keys** (vor Scope-Pflicht angelegt, ohne `scopes`): nur lesende GET-Requests — für Automation/CLI neuen Key mit passenden Scopes ausstellen lassen.
 
-## 9. Gute Praxis
+## 9. Desktop-App
+
+Native, eigenständige App für Linux und Windows — reine Vault-Funktionen (kein Konto-/Backup-/Admin-Bereich), inklusive Offline-Modus, Tray-Icon und Autostart, ohne Adminrechte installier-/ausführbar. Kurzanleitung: **Hilfe → Desktop-App** bzw. `/help/desktop`. Markdown: [`docs/desktop-guide.md`](desktop-guide.md).
+
+![Konto → Clients](images/account-clients.png)
+
+In der App: **Konto → Clients** — empfohlener Download für die erkannte Plattform (Linux/Windows), plus AppImage bzw. Pro-Benutzer-Installer als Alternative, sofern der Plattform-Administrator die Desktop-Integration aktiviert hat (Standard: ausgeblendet; Downloads unter `/downloads/` bleiben für IT verfügbar).
+
+## 10. Gute Praxis
 
 - Master-Passwort einzigartig (mindestens 16 Zeichen, Groß-/Klein, Ziffer, Sonderzeichen, keine Umlaute); Recovery-Kit offline sichern  
 - Login-Passwort ≠ Master-Passwort  
@@ -302,7 +311,7 @@ Nur `read` → keine Admin- oder Schreibaktionen. Cookie-Login ohne API-Key ist 
 - Klartext-Export (JSON/CSV) sicher ablegen und zeitnah löschen  
 - `.tvbak` und Backup-Passwort getrennt vom Unlock-Key und Master-Passwort aufbewahren  
 
-## 10. Hilfe
+## 11. Hilfe
 
 Übersicht Web-App / Vault / Konto (TOTP & Passkeys) / CLI / Extension auf der Instanz unter **`/help`** (auch Sidebar **Hilfe** oder Login-Header):
 

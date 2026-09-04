@@ -2,6 +2,14 @@
 
 Native Desktop-App für Linux und Windows (Wails v2 / Go). **Reine Vault-Funktionen** — keine Konto-&-Sicherung- oder Administrations-Screens; diese bleiben der Web-UI vorbehalten. Nutzt denselben Zero-Knowledge-Server (REST-API) wie Web-UI, `tvcli` und die Browser-Extension: Entschlüsselung findet ausschließlich lokal im Desktop-Prozess statt, niemals auf dem Server.
 
+Interaktive Fassung auf der laufenden Instanz: **`/help/desktop`**.
+
+![Konto & Sicherheit → Clients](images/account-clients.png)
+
+Download: In der Web-App unter **Konto & Sicherheit → Clients** oder Hilfe **`/help/desktop`** — empfohlenes Artefakt für die erkannte Plattform, alternative Artefakte (AppImage/Installer) sowie alle Downloads (sichtbar nur, wenn der Plattform-Administrator die Desktop-Integration unter **Administration → Client-Integrationen** aktiviert hat; `/downloads/` bleibt immer verfügbar).
+
+![Hilfe → Desktop-App](images/help-desktop-download.png)
+
 ## Was die App kann
 
 | Bereich | Funktion |
@@ -34,6 +42,8 @@ WebKitGTK (`libwebkit2gtk-4.1`) muss auf dem System vorhanden sein (auf den meis
 2. **Login** (Benutzername/Passwort, ggf. TOTP-Code) — identisch zum Web-Login.
 3. **Master-Passwort** zum Entsperren des Vaults (verlässt nie das Gerät).
 4. Vault-Liste: Suche, Ordner-Filter, Favoriten, Secret öffnen zum Ansehen/Kopieren/TOTP.
+
+![Desktop-App – Vault-Ansicht](images/help-desktop.png)
 
 Nach jedem erfolgreichen Online-Entsperren wird automatisch ein Ciphertext-Snapshot lokal aktualisiert (Einstellungen → „Offline-Sync“ auch manuell möglich).
 

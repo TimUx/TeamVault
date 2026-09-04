@@ -15,6 +15,13 @@ fi
 
 echo "Packing client artifacts for screenshots…"
 (cd "$ROOT" && go run ./cmd/pack-extension && ./scripts/build-tvcli.sh)
+# Desktop-App (Wails) benötigt WebKitGTK/WebView2 nativ und wird hier nicht
+# gebaut; Platzhalter-Artefakte reichen aus, damit die Download-Karten in den
+# Screenshots echte Inhalte statt "nicht verfügbar" zeigen.
+for f in teamvault-desktop-linux-amd64 teamvault-desktop-linux-amd64.AppImage \
+         teamvault-desktop-windows-amd64.exe teamvault-desktop-windows-amd64-setup.exe; do
+  [[ -f "$ROOT/dist/$f" ]] || echo "placeholder" > "$ROOT/dist/$f"
+done
 
 docker rm -f "$CONTAINER" 2>/dev/null || true
 

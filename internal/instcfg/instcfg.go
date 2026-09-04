@@ -41,6 +41,7 @@ type Policy struct {
 	OfflineCacheAllowed      *bool `json:"offline_cache_allowed,omitempty"` // nil = enabled (default)
 	CLIIntegrationEnabled    *bool `json:"cli_integration_enabled,omitempty"`       // nil/false = hide CLI in Konto/Hilfe
 	BrowserIntegrationEnabled *bool `json:"browser_integration_enabled,omitempty"` // nil/false = hide Extension in Konto/Hilfe
+	DesktopIntegrationEnabled *bool `json:"desktop_integration_enabled,omitempty"` // nil/false = hide Desktop-App in Konto/Hilfe
 }
 
 // PublicAccess configures how clients reach this instance (reverse proxy, subpath, canonical URL).
@@ -68,6 +69,11 @@ func (p Policy) ShowCLIIntegration() bool {
 // ShowBrowserIntegration reports whether browser extension integration is shown in Konto and Hilfe.
 func (p Policy) ShowBrowserIntegration() bool {
 	return p.BrowserIntegrationEnabled != nil && *p.BrowserIntegrationEnabled
+}
+
+// ShowDesktopIntegration reports whether the desktop client is shown in Konto and Hilfe.
+func (p Policy) ShowDesktopIntegration() bool {
+	return p.DesktopIntegrationEnabled != nil && *p.DesktopIntegrationEnabled
 }
 
 // LDAPConnection is a per-tenant LDAP bind config (OQ-09).

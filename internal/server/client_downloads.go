@@ -24,6 +24,7 @@ func (a *API) handleClientDownloads(w http.ResponseWriter, r *http.Request) {
 	m.Features = clients.IntegrationFeatures{
 		CLI:              p.ShowCLIIntegration(),
 		BrowserExtension: p.ShowBrowserIntegration(),
+		Desktop:          p.ShowDesktopIntegration(),
 	}
 	writeJSON(w, http.StatusOK, m)
 }

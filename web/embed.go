@@ -48,6 +48,9 @@ func HandlerFor(baseFn func(*http.Request) string) http.Handler {
 		case "/help/extension", "/help/extension/":
 			serveHelp(w, sub, "help/extension.html", base)
 			return
+		case "/help/desktop", "/help/desktop/":
+			serveHelp(w, sub, "help/desktop.html", base)
+			return
 		case "/help/vault", "/help/vault/":
 			serveHelp(w, sub, "help/vault.html", base)
 			return

@@ -22,6 +22,13 @@ export GOFLAGS="-mod=mod"
 echo "Packing client artifacts for screenshots…"
 go run ./cmd/pack-extension
 bash ./scripts/build-tvcli.sh
+# Desktop-App (Wails) benötigt WebKitGTK/WebView2 nativ und wird hier nicht
+# gebaut; Platzhalter-Artefakte reichen aus, damit die Download-Karten in den
+# Screenshots echte Inhalte statt "nicht verfügbar" zeigen.
+for f in teamvault-desktop-linux-amd64 teamvault-desktop-linux-amd64.AppImage \
+         teamvault-desktop-windows-amd64.exe teamvault-desktop-windows-amd64-setup.exe; do
+  [[ -f "$ROOT/dist/$f" ]] || echo "placeholder" > "$ROOT/dist/$f"
+done
 export TEAMVAULT_BUNDLED_DOWNLOADS="$ROOT/dist"
 
 SERVER_BIN="$(mktemp)"

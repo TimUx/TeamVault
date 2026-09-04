@@ -2,7 +2,7 @@
 
 **Endnutzer-Anleitungen:** [CLI](../docs/cli-guide.md) · [Extension](../docs/extension-guide.md) · [Desktop](../docs/desktop-guide.md) · [User Guide](../docs/user-guide.md)  
 **Server-Installation:** [Installationsanleitung](../docs/install-guide.md)  
-Auf der laufenden Instanz: **`/help`**, **`/help/cli`**, **`/help/extension`**.
+Auf der laufenden Instanz: **`/help`**, **`/help/cli`**, **`/help/extension`**, **`/help/desktop`**.
 
 ## Crypto (geteilt)
 

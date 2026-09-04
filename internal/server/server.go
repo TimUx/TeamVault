@@ -202,6 +202,7 @@ func (a *API) Handler() http.Handler {
 	mux.Handle("GET /help", webUI)
 	mux.Handle("GET /help/cli", webUI)
 	mux.Handle("GET /help/extension", webUI)
+	mux.Handle("GET /help/desktop", webUI)
 	mux.Handle("GET /help/vault", webUI)
 	mux.Handle("GET /help/account", webUI)
 	mux.Handle("GET /help/", webUI)
