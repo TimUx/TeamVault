@@ -10,15 +10,17 @@
   }
 
   function clientsNavSection(active, features) {
-    const show = features.cli || features.browser_extension;
+    const show = features.cli || features.browser_extension || features.desktop;
     if (!show) return "";
     const cliLink = features.cli ? link("/help/cli", "CLI (tvcli)", active === "cli") : "";
     const extLink = features.browser_extension ? link("/help/extension", "Browser-Extension", active === "extension") : "";
+    const desktopLink = features.desktop ? link("/help/desktop", "Desktop-App", active === "desktop") : "";
     return `
         <div class="help-sec">
           <div class="help-sec-title">Clients</div>
           ${cliLink}
           ${extLink}
+          ${desktopLink}
           ${active === "extension" && features.browser_extension ? `
             <a class="help-side-link sub" href="#install">Installation</a>
             <a class="help-side-link sub" href="#fallback">Fallback</a>
@@ -27,6 +29,12 @@
           ${active === "cli" && features.cli ? `
             <a class="help-side-link sub" href="#install">Installation</a>
             <a class="help-side-link sub" href="#nutzen">Befehle</a>
+          ` : ""}
+          ${active === "desktop" && features.desktop ? `
+            <a class="help-side-link sub" href="#install">Installation</a>
+            <a class="help-side-link sub" href="#nutzen">Nutzen</a>
+            <a class="help-side-link sub" href="#offline">Offline-Modus</a>
+            <a class="help-side-link sub" href="#tray">Tray &amp; Autostart</a>
           ` : ""}
         </div>`;
   }
@@ -119,10 +127,10 @@
   }
 
   /**
-   * @param {string} active page key: overview|vault|account|cli|extension
+   * @param {string} active page key: overview|vault|account|cli|extension|desktop
    */
   async function tvHelpNav(active) {
-    let features = { cli: false, browser_extension: false };
+    let features = { cli: false, browser_extension: false, desktop: false };
     if (typeof tvFetchClientFeatures === "function") {
       features = await tvFetchClientFeatures();
     }

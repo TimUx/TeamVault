@@ -37,6 +37,7 @@ func (a *API) handleClientPolicy(w http.ResponseWriter, r *http.Request) {
 		"offline_cache_allowed":       p.OfflineCacheEnabled(),
 		"cli_integration_enabled":     p.ShowCLIIntegration(),
 		"browser_integration_enabled": p.ShowBrowserIntegration(),
+		"desktop_integration_enabled": p.ShowDesktopIntegration(),
 	})
 }
 

@@ -13,6 +13,10 @@ var BundledArtifactNames = []string{
 	"tvcli-linux-arm64",
 	"tvcli-windows-amd64.exe",
 	"tvcli-windows-arm64.exe",
+	"teamvault-desktop-linux-amd64",
+	"teamvault-desktop-linux-amd64.AppImage",
+	"teamvault-desktop-windows-amd64.exe",
+	"teamvault-desktop-windows-amd64-setup.exe",
 	"teamvault-extension.zip",
 	"teamvault-extension.crx",
 	"teamvault-extension.xpi",
@@ -29,6 +33,7 @@ type Artifact struct {
 	Name     string `json:"name"`
 	Platform string `json:"platform,omitempty"`
 	Arch     string `json:"arch,omitempty"`
+	Kind     string `json:"kind,omitempty"` // e.g. "portable", "appimage", "installer" (desktop only)
 	Size     int64  `json:"size"`
 	URL      string `json:"url"`
 }
@@ -48,12 +53,14 @@ type ExtensionInfo struct {
 type IntegrationFeatures struct {
 	CLI              bool `json:"cli"`
 	BrowserExtension bool `json:"browser_extension"`
+	Desktop          bool `json:"desktop"`
 }
 
 // Manifest is returned by GET /api/client-downloads.
 type Manifest struct {
 	Features  IntegrationFeatures `json:"features"`
 	CLI       []Artifact          `json:"cli"`
+	Desktop   []Artifact          `json:"desktop"`
 	Extension ExtensionInfo       `json:"extension"`
 	Install   struct {
 		CLIWindows        string `json:"cli_windows"`
@@ -157,6 +164,9 @@ func BuildManifest(dir, publicBase string) Manifest {
 		if strings.HasPrefix(name, "teamvault-extension") || strings.HasPrefix(name, "extension/") {
 			continue
 		}
+		if strings.HasPrefix(name, "teamvault-desktop-") {
+			continue
+		}
 		path := filepath.Join(dir, filepath.FromSlash(name))
 		fi, err := os.Stat(path)
 		if err != nil || !fi.Mode().IsRegular() {
@@ -165,6 +175,21 @@ func BuildManifest(dir, publicBase string) Manifest {
 		plat, arch := parseCLIPlatform(name)
 		m.CLI = append(m.CLI, Artifact{
 			Name: name, Platform: plat, Arch: arch, Size: fi.Size(),
+			URL: "/downloads/" + name,
+		})
+	}
+	for _, name := range BundledArtifactNames {
+		if !strings.HasPrefix(name, "teamvault-desktop-") {
+			continue
+		}
+		path := filepath.Join(dir, filepath.FromSlash(name))
+		fi, err := os.Stat(path)
+		if err != nil || !fi.Mode().IsRegular() {
+			continue
+		}
+		plat, arch, kind := parseDesktopPlatform(name)
+		m.Desktop = append(m.Desktop, Artifact{
+			Name: name, Platform: plat, Arch: arch, Kind: kind, Size: fi.Size(),
 			URL: "/downloads/" + name,
 		})
 	}
@@ -199,6 +224,36 @@ func parseCLIPlatform(name string) (platform, arch string) {
 	rest := strings.TrimPrefix(strings.TrimPrefix(name, "tvcli-windows-"), "tvcli-linux-")
 	rest = strings.TrimSuffix(rest, ".exe")
 	return platform, rest
+}
+
+// parseDesktopPlatform derives platform/arch/kind from a
+// teamvault-desktop-<os>-<arch>[.AppImage|.exe|-setup.exe] filename.
+func parseDesktopPlatform(name string) (platform, arch, kind string) {
+	rest := strings.TrimPrefix(name, "teamvault-desktop-")
+	switch {
+	case strings.HasPrefix(rest, "windows-"):
+		platform = "windows"
+		rest = strings.TrimPrefix(rest, "windows-")
+	case strings.HasPrefix(rest, "linux-"):
+		platform = "linux"
+		rest = strings.TrimPrefix(rest, "linux-")
+	default:
+		return "", "", ""
+	}
+	switch {
+	case strings.HasSuffix(rest, "-setup.exe"):
+		kind = "installer"
+		rest = strings.TrimSuffix(rest, "-setup.exe")
+	case strings.HasSuffix(rest, ".exe"):
+		kind = "portable"
+		rest = strings.TrimSuffix(rest, ".exe")
+	case strings.HasSuffix(rest, ".AppImage"):
+		kind = "appimage"
+		rest = strings.TrimSuffix(rest, ".AppImage")
+	default:
+		kind = "portable"
+	}
+	return platform, rest, kind
 }
 
 // DownloadContentType returns the MIME type for client download files.

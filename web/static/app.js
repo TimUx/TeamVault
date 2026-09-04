@@ -1425,8 +1425,12 @@ function browserIntegrationEnabled() {
   return vault.policy?.browser_integration_enabled === true;
 }
 
+function desktopIntegrationEnabled() {
+  return vault.policy?.desktop_integration_enabled === true;
+}
+
 function anyClientIntegrationEnabled() {
-  return cliIntegrationEnabled() || browserIntegrationEnabled();
+  return cliIntegrationEnabled() || browserIntegrationEnabled() || desktopIntegrationEnabled();
 }
 
 function formatOfflineSessionInfo(snapshot) {
@@ -2160,7 +2164,7 @@ function renderApp(app) {
               </div>
 
               <div class="panel-tab-pane account-page" role="tabpanel" data-panel-pane="clients" hidden>
-                ${hintBox("CLI und Browser-Extension von dieser Instanz — Zero-Knowledge bleibt erhalten (Entschlüsselung nur lokal).")}
+                ${hintBox("CLI, Browser-Extension und Desktop-App von dieser Instanz — Zero-Knowledge bleibt erhalten (Entschlüsselung nur lokal).")}
                 <div id="clientDownloadsApp" class="client-dl-grid"></div>
                 <div class="hint-box" id="accClientsHelp" hidden></div>
               </div>
@@ -2337,6 +2341,7 @@ function renderApp(app) {
                   ${hintBox("Steuern Sie, welche Client-Integrationen in den Konto-Einstellungen und der Hilfe angeboten werden.")}
                   <label class="inline"><input id="admin_cli_integration" type="checkbox" /> CLI-Integration aktivieren</label>
                   <label class="inline"><input id="admin_browser_integration" type="checkbox" /> Browser-Extension aktivieren</label>
+                  <label class="inline"><input id="admin_desktop_integration" type="checkbox" /> Desktop-App aktivieren</label>
                   <p class="hint">Ist keine Integration aktiviert, wird der Menüeintrag Konto → Clients ausgeblendet.</p>
                   <div class="row"><button class="btn-accent" type="button" id="client_policy_save">Client-Einstellungen speichern</button></div>
                 </div>
@@ -2932,6 +2937,7 @@ function renderApp(app) {
       const links = [];
       if (cliIntegrationEnabled()) links.push(`<a href="${tvPath("/help/cli")}" target="_blank" rel="noopener">CLI</a>`);
       if (browserIntegrationEnabled()) links.push(`<a href="${tvPath("/help/extension")}" target="_blank" rel="noopener">Extension</a>`);
+      if (desktopIntegrationEnabled()) links.push(`<a href="${tvPath("/help/desktop")}" target="_blank" rel="noopener">Desktop-App</a>`);
       helpHint.hidden = !links.length;
       if (links.length) helpHint.innerHTML = `Ausführliche Anleitung: ${links.join(" · ")}`;
     }
@@ -2966,6 +2972,9 @@ function renderApp(app) {
       cli[0]
     );
   }
+  function pickDesktopArtifact(desktop, platform, kind) {
+    return desktop.find((d) => d.platform === platform && d.kind === kind);
+  }
   async function copyClientText(text, btn) {
     await copyText(text);
     if (btn) flashCopy(btn);
@@ -2974,7 +2983,7 @@ function renderApp(app) {
     const root = n.querySelector("#clientDownloadsApp");
     if (!root) return;
     if (!anyClientIntegrationEnabled()) {
-      root.innerHTML = hintBox("CLI und Browser-Extension sind auf dieser Instanz deaktiviert (Plattform-Policy).");
+      root.innerHTML = hintBox("CLI, Browser-Extension und Desktop-App sind auf dieser Instanz deaktiviert (Plattform-Policy).");
       return;
     }
     root.innerHTML = "<p class='hint'>Lade Downloads…</p>";
@@ -2983,6 +2992,7 @@ function renderApp(app) {
     const data = await res.json();
     const showCli = cliIntegrationEnabled();
     const showExt = browserIntegrationEnabled();
+    const showDesktop = desktopIntegrationEnabled();
     const plat = detectClientPlatform();
     const arch = detectClientArch();
     const cli = data.cli || [];
@@ -2992,6 +3002,13 @@ function renderApp(app) {
     ).join("");
     const ext = data.extension || {};
     const crx = ext.crx;
+    const desktop = data.desktop || [];
+    const desktopPortable = pickDesktopArtifact(desktop, plat, "portable");
+    const desktopAppImage = pickDesktopArtifact(desktop, "linux", "appimage");
+    const desktopInstaller = pickDesktopArtifact(desktop, "windows", "installer");
+    const desktopLinks = desktop.map((d) =>
+      `<li><a href="${tvPath(d.url)}" download>${d.name}</a> <span class="hint">(${fmtClientBytes(d.size)})</span></li>`
+    ).join("");
     const cliInstall = plat === "windows" ? data.install.cli_windows : data.install.cli_unix;
     const extInstall = plat === "windows" ? (data.install.extension_user_ps || data.install.extension_windows) : data.install.extension_unix;
     const cards = [];
@@ -3019,6 +3036,26 @@ function renderApp(app) {
              </div>
              ${hintBox(`Extension-ID: <code>${ext.id || "—"}</code> · <a href="${tvPath("/help/extension")}" target="_blank" rel="noopener">Anleitung</a> · <a href="${tvPath("/help/extension")}#fallback">Entwicklermodus</a>`)}`
           : hintBox("Extension noch nicht bereitgestellt.")}
+      </div>`);
+    }
+    if (showDesktop) {
+      const primary = desktopPortable || desktop[0];
+      const altBtn = plat === "linux" && desktopAppImage
+        ? `<a class="btn-ghost btn-sm" href="${tvPath(desktopAppImage.url)}" download>AppImage</a>`
+        : plat === "windows" && desktopInstaller
+          ? `<a class="btn-ghost btn-sm" href="${tvPath(desktopInstaller.url)}" download>Pro-Benutzer-Installer</a>`
+          : "";
+      cards.push(`<div class="client-dl-card">
+        <h4>Desktop-App</h4>
+        ${primary
+          ? `${hintBox(`Empfohlen: ${primary.platform} (portabel, keine Adminrechte nötig)`)}
+             <div class="row">
+               <a class="btn-accent" href="${tvPath(primary.url)}" download>Desktop-App herunterladen</a>
+               ${altBtn}
+             </div>
+             <ul class="client-dl-links">${desktopLinks}</ul>
+             ${hintBox(`Reine Vault-Funktionen, Offline-Cache, Tray &amp; Autostart. <a href="${tvPath("/help/desktop")}" target="_blank" rel="noopener">Anleitung</a>`)}`
+          : hintBox("Desktop-Binaries noch nicht bereitgestellt.")}
       </div>`);
     }
     root.innerHTML = cards.join("");
@@ -6113,6 +6150,8 @@ function renderApp(app) {
       if (cliInt) cliInt.checked = !!pol.cli_integration_enabled;
       const browserInt = n.querySelector("#admin_browser_integration");
       if (browserInt) browserInt.checked = !!pol.browser_integration_enabled;
+      const desktopInt = n.querySelector("#admin_desktop_integration");
+      if (desktopInt) desktopInt.checked = !!pol.desktop_integration_enabled;
       const keys = await api("/api/admin/api-keys");
       n.querySelector("#klist").innerHTML = keys.map((k) => {
         const scopeLabel = k.legacy_no_scopes ? "legacy (nur read)" : (k.scopes || []).join(", ") || "?";
@@ -6434,6 +6473,7 @@ function renderApp(app) {
           offline_cache_allowed: n.querySelector("#offline_cache").checked,
           cli_integration_enabled: n.querySelector("#admin_cli_integration").checked,
           browser_integration_enabled: n.querySelector("#admin_browser_integration").checked,
+          desktop_integration_enabled: n.querySelector("#admin_desktop_integration").checked,
           session_hours: 8,
           unlock_idle_minutes: vault.idleMin || 15,
           escrow_shamir_k: Number(n.querySelector("#shamir_k").value) || 3,
@@ -6453,6 +6493,7 @@ function renderApp(app) {
           ...pol,
           cli_integration_enabled: n.querySelector("#admin_cli_integration").checked,
           browser_integration_enabled: n.querySelector("#admin_browser_integration").checked,
+          desktop_integration_enabled: n.querySelector("#admin_desktop_integration").checked,
         }),
       });
       vault.policy = await api("/api/policy/client");

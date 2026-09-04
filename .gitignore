@@ -19,6 +19,11 @@ unlock-docs-shot.key
 /bin/
 /dist/
 
+# Wails desktop client build output
+clients/desktop/build/bin/
+clients/desktop/frontend/wailsjs/
+/.tmp/
+
 # Docker / unlock material (never commit real keys)
 /secrets/*
 !/secrets/.gitkeep

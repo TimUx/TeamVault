@@ -28,6 +28,19 @@ $env:GOFLAGS = "-mod=mod"
 Write-Host "Packing client artifacts for screenshots..."
 go run ./cmd/pack-extension
 & "$PSScriptRoot\build-tvcli.ps1"
+# Desktop-App (Wails) benötigt WebView2 nativ und wird hier nicht gebaut;
+# Platzhalter-Artefakte reichen aus, damit die Download-Karten in den
+# Screenshots echte Inhalte statt "nicht verfügbar" zeigen.
+$DesktopPlaceholders = @(
+  "teamvault-desktop-linux-amd64",
+  "teamvault-desktop-linux-amd64.AppImage",
+  "teamvault-desktop-windows-amd64.exe",
+  "teamvault-desktop-windows-amd64-setup.exe"
+)
+foreach ($f in $DesktopPlaceholders) {
+  $p = Join-Path $Root "dist\$f"
+  if (-not (Test-Path $p)) { Set-Content -Path $p -Value "placeholder" }
+}
 $env:TEAMVAULT_BUNDLED_DOWNLOADS = Join-Path $Root "dist"
 
 $serverBin = Join-Path $env:LOCALAPPDATA "teamvault-screenshot-server.exe"

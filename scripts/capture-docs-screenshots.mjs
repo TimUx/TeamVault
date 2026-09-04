@@ -189,6 +189,7 @@ async function enableDemoPolicies(page) {
         offline_cache_allowed: true,
         cli_integration_enabled: true,
         browser_integration_enabled: true,
+        desktop_integration_enabled: true,
       }),
     });
     if (!res.ok) throw new Error(`policy update failed: ${res.status}`);
@@ -565,12 +566,16 @@ async function main() {
       if (!root) return;
       const cli = data.cli?.[0];
       const crx = data.extension?.crx;
+      const desktop = data.desktop?.[0];
       root.innerHTML = [
         `<div class="client-dl-card"><h4>CLI (tvcli)</h4>`,
         cli ? `<a class="btn-accent" href="${base}${cli.url}">tvcli herunterladen</a>` : `<p class="hint">CLI-Binaries noch nicht bereitgestellt.</p>`,
         `</div>`,
         `<div class="client-dl-card"><h4>Browser-Extension</h4>`,
         crx ? `<a class="btn-accent" href="${base}${crx.url}">Extension installieren</a>` : `<p class="hint">Extension noch nicht bereitgestellt.</p>`,
+        `</div>`,
+        `<div class="client-dl-card"><h4>Desktop-App</h4>`,
+        desktop ? `<a class="btn-accent" href="${base}${desktop.url}">Desktop-App herunterladen</a>` : `<p class="hint">Desktop-Binaries noch nicht bereitgestellt.</p>`,
         `</div>`,
       ].join("");
     }, BASE);
@@ -759,6 +764,9 @@ async function main() {
   await page.goto(`${BASE}/help/cli`);
   await page.waitForSelector("#clientDlCli .help-actions, #clientDlCli .help-note", { timeout: 15000 }).catch(() => {});
   await shotElement(page, "#clientDlCli", "help-cli.png", { waitMs: 400 });
+  await page.goto(`${BASE}/help/desktop`);
+  await page.waitForSelector("#clientDlDesktop .help-actions, #clientDlDesktop .help-note", { timeout: 15000 }).catch(() => {});
+  await shotElement(page, "#clientDlDesktop", "help-desktop-download.png", { waitMs: 400 });
 
   await page.goto(`${BASE}/app`);
   await unlockVault(page);

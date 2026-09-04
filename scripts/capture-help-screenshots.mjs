@@ -53,7 +53,11 @@ await page.goto(`${BASE}/help/extension`);
 await page.waitForSelector("#clientDlExt .help-install-steps, #clientDlExt .help-note", { timeout: 15000 }).catch(() => {});
 await shotElement("#clientDlExt", "help-extension.png");
 
-for (const f of ["help.png", "help-vault.png", "help-account.png", "help-cli.png", "help-extension.png"]) {
+await page.goto(`${BASE}/help/desktop`);
+await page.waitForSelector("#clientDlDesktop .help-actions, #clientDlDesktop .help-note", { timeout: 15000 }).catch(() => {});
+await shotElement("#clientDlDesktop", "help-desktop-download.png");
+
+for (const f of ["help.png", "help-vault.png", "help-account.png", "help-cli.png", "help-extension.png", "help-desktop-download.png"]) {
   fs.copyFileSync(path.join(OUT, f), path.join(HELP, f));
 }
 

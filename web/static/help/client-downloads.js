@@ -77,6 +77,42 @@
     }
   }
 
+  function pickDesktop(list, platform, kind) {
+    return list.find((d) => d.platform === platform && d.kind === kind);
+  }
+
+  function renderDesktop(root, data) {
+    if (!root) return;
+    const desktop = data.desktop || [];
+    if (!desktop.length) {
+      root.innerHTML = `<p class="help-note warn">Desktop-Binaries sind auf diesem Server noch nicht verfügbar. Bitte Admin kontaktieren.</p>`;
+      return;
+    }
+    const plat = detectPlatform();
+    const portable = pickDesktop(desktop, plat, "portable");
+    const appimage = pickDesktop(desktop, "linux", "appimage");
+    const installer = pickDesktop(desktop, "windows", "installer");
+    const rec = portable || desktop[0];
+    const all = desktop
+      .map((d) => `<li><a href="${absUrl(d.url)}" download>${d.name}</a> <span class="hint">(${fmtBytes(d.size)})</span></li>`)
+      .join("");
+    const altParts = [];
+    if (plat === "linux" && appimage) {
+      altParts.push(`<span class="hint">oder </span>${dlBtn(appimage, "AppImage herunterladen")}`);
+    }
+    if (plat === "windows" && installer) {
+      altParts.push(`<span class="hint">oder </span>${dlBtn(installer, "Pro-Benutzer-Installer herunterladen")}`);
+    }
+    root.innerHTML = `
+      <p class="hint">Empfohlen für Ihr Gerät (${plat}, portabel — kein Installer, keine Adminrechte nötig):</p>
+      <div class="help-actions">${dlBtn(rec, "Desktop-App herunterladen")} ${altParts.join(" ")}</div>
+      <details class="help-dl-more">
+        <summary>Alle Plattformen</summary>
+        <ul class="help-dl-list">${all}</ul>
+      </details>
+      <p class="hint">Linux: portables Binary <em>und</em> AppImage — beide ohne root ausführbar. Windows: portable <code>.exe</code> (kein UAC) und optional ein Pro-Benutzer-Installer.</p>`;
+  }
+
   function renderExtension(root, data) {
     if (!root) return;
     const ext = data.extension || {};
@@ -188,17 +224,19 @@
     return {
       cli: f.cli === true,
       browser_extension: f.browser_extension === true,
+      desktop: f.desktop === true,
     };
   }
 
   function disabledIntegrationMsg(kind) {
-    const label = kind === "cli" ? "CLI" : "Browser-Extension";
+    const label = kind === "cli" ? "CLI" : kind === "desktop" ? "Desktop-App" : "Browser-Extension";
     return `<p class="help-note warn">${label}-Integration ist auf dieser Instanz deaktiviert (Plattform-Administrator). IT kann Artefakte weiterhin unter <code>/downloads/</code> bereitstellen.</p>`;
   }
 
   async function tvInitClientDownloads(mode) {
     const cliRoot = document.getElementById("clientDlCli");
     const extRoot = document.getElementById("clientDlExt");
+    const desktopRoot = document.getElementById("clientDlDesktop");
     let data;
     try {
       data = await fetchClientManifest();
@@ -206,9 +244,11 @@
       const msg = `<p class="help-note warn">Download-Liste konnte nicht geladen werden.</p>`;
       if (mode === "cli" && cliRoot) cliRoot.innerHTML = msg;
       if (mode === "extension" && extRoot) extRoot.innerHTML = msg;
+      if (mode === "desktop" && desktopRoot) desktopRoot.innerHTML = msg;
       if (mode === "both") {
         if (cliRoot) cliRoot.innerHTML = msg;
         if (extRoot) extRoot.innerHTML = msg;
+        if (desktopRoot) desktopRoot.innerHTML = msg;
       }
       return integrationFeatures(null);
     }
@@ -229,6 +269,14 @@
         bindCopy(extRoot);
       }
     }
+    if (mode === "desktop" || mode === "both") {
+      if (!features.desktop) {
+        if (desktopRoot) desktopRoot.innerHTML = disabledIntegrationMsg("desktop");
+      } else {
+        renderDesktop(desktopRoot, data);
+        bindCopy(desktopRoot);
+      }
+    }
     return features;
   }
 
@@ -236,7 +284,7 @@
     try {
       return integrationFeatures(await fetchClientManifest());
     } catch {
-      return { cli: false, browser_extension: false };
+      return { cli: false, browser_extension: false, desktop: false };
     }
   };
 

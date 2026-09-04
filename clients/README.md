@@ -1,8 +1,8 @@
 # TeamVault Clients
 
-**Endnutzer-Anleitungen:** [CLI](../docs/cli-guide.md) · [Extension](../docs/extension-guide.md) · [User Guide](../docs/user-guide.md)  
+**Endnutzer-Anleitungen:** [CLI](../docs/cli-guide.md) · [Extension](../docs/extension-guide.md) · [Desktop](../docs/desktop-guide.md) · [User Guide](../docs/user-guide.md)  
 **Server-Installation:** [Installationsanleitung](../docs/install-guide.md)  
-Auf der laufenden Instanz: **`/help`**, **`/help/cli`**, **`/help/extension`**.
+Auf der laufenden Instanz: **`/help`**, **`/help/cli`**, **`/help/extension`**, **`/help/desktop`**.
 
 ## Crypto (geteilt)
 
@@ -11,8 +11,9 @@ Auf der laufenden Instanz: **`/help`**, **`/help/cli`**, **`/help/extension`**.
 | WebUI | `web/static/cryptocore.js` |
 | Extension | `clients/extension/cryptocore.js` (= Kopie von `clients/js/cryptocore.js`) |
 | CLI | `internal/cryptocore` (Go, Phase 2) |
+| Desktop | `internal/cryptocore` (Go, direkt referenziert via nested Go-Modul, kein JS-Crypto) |
 
-Keine eigene Kryptologik in Extension/CLI — nur die Phase-2-Primitive.
+Keine eigene Kryptologik in Extension/CLI/Desktop — nur die Phase-2-Primitive.
 
 Bei Änderungen an der JS-Crypto: `web/static/cryptocore.js` ist die Quelle; nach `clients/js/` und `clients/extension/` kopieren. CI prüft die SHA-256-Gleichheit der drei Dateien.
 
@@ -56,6 +57,23 @@ go run ./cmd/tvcli whoami
 ```
 
 `secrets create` Flags (Auswahl): `-urls`, `-url` (wiederholbar), `-notes`, `-totp`, `-tags`, `-favorite`, `-folder`, `-visibility private|shared`, `-share-user` / `-share-group` (wiederholbar), `-ssh-private[-file]`, `-ssh-public[-file]`, `-s3-access`, `-s3-secret`, `-cert[-file]`, `-extra` / `-extra-file` (`type=label:value`). `secrets update -id …` ändert nur gesetzte Felder. `secrets list` nutzt paginierte API-Antworten. `secrets get` gibt den Payload als JSON aus.
+
+## Desktop-App (`clients/desktop`)
+
+Native Vault-App (Wails v2/Go) für Linux/Windows — eigenständige, schlanke Oberfläche (kein Reuse der Web-UI), reine Vault-Funktionen (kein Konto-/Backup-/Admin-Bereich), Offline-Ciphertext-Cache, Tray-Icon, Autostart ohne Adminrechte. Details: [Desktop Guide](../docs/desktop-guide.md).
+
+Eigenes, nested Go-Modul (`clients/desktop/go.mod`, `replace … => ../..`), referenziert `internal/cryptocore` des Hauptmoduls direkt — kein separater Krypto-Code, gesamte Netzwerk-/Krypto-Logik läuft im Go-Backend (nicht im WebView-JS).
+
+```bash
+./scripts/build-desktop.sh          # Linux: Binary + AppImage (linuxdeploy)
+```
+
+```powershell
+.\scripts\build-desktop.ps1              # Windows: portable .exe
+.\scripts\build-desktop.ps1 -Installer   # zusätzlich Pro-Benutzer-NSIS-Installer
+```
+
+CI (Tag `v*`): `.github/workflows/release.yml`, Jobs `desktop-linux` / `desktop-windows` bauen und veröffentlichen die Artefakte am GitHub-Release.
 
 ## Extension (MV3)
 
