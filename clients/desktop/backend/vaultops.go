@@ -29,6 +29,11 @@ type Session struct {
 	Offline bool // true if the current view is served from the local cache
 }
 
+// ErrInvalidMasterPassword indicates the master password did not match the
+// sealed identity (as opposed to a network/connectivity failure). Callers
+// use this to decide whether falling back to the offline cache makes sense.
+var ErrInvalidMasterPassword = errors.New("Master-Passwort falsch oder Schlüssel beschädigt")
+
 func mustB64(s string) []byte {
 	if s == "" {
 		return nil
@@ -113,7 +118,7 @@ func Unlock(c *Client, masterPassword []byte, cached *OfflineSnapshot) (*Session
 		zero(mk)
 	}
 	if err != nil {
-		return nil, errors.New("Master-Passwort falsch oder Schlüssel beschädigt")
+		return nil, ErrInvalidMasterPassword
 	}
 	sess.sk = sk
 	sess.params = params

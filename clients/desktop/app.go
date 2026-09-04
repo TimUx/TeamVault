@@ -101,7 +101,13 @@ func (a *App) Unlock(masterPassword string, tenant, username string) (UnlockResu
 			a.session = sess
 			return UnlockResult{Offline: false}, nil
 		}
-		// Fall through to offline cache only for network-shaped errors.
+		if errors.Is(err, backend.ErrInvalidMasterPassword) {
+			// Definitely a wrong password, not a connectivity problem —
+			// surface it directly instead of confusingly retrying offline.
+			return UnlockResult{}, err
+		}
+		// Any other error (network unreachable, server down, etc.) falls
+		// through to the offline cache below.
 	}
 	snap, ok, loadErr := backend.LoadOfflineSnapshot(tenant, username)
 	if loadErr != nil || !ok {
