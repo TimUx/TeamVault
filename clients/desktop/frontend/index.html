@@ -66,9 +66,15 @@
         <input id="vSearch" class="search" type="search" placeholder="Suchen…" />
         <div class="filters">
           <button id="fAll" class="filter-btn active" data-filter="all">Alle</button>
-          <button id="fFav" class="filter-btn" data-filter="favorites">Favoriten</button>
+          <button id="fMine" class="filter-btn" data-filter="mine">Eigene</button>
+          <button id="fShared" class="filter-btn" data-filter="shared">Geteilt</button>
+          <button id="fFav" class="filter-btn" data-filter="favorites">★</button>
         </div>
-        <div id="vFolders" class="folders"></div>
+        <div class="tag-filter-head">
+          <span>Tags</span>
+          <button id="vTagsClear" class="btn-link btn-sm" type="button" hidden>Filter leeren</button>
+        </div>
+        <div id="vTags" class="tag-filter-list"></div>
         <div class="sidebar-foot">
           <button id="vNew" class="btn-primary btn-sm">+ Neues Secret</button>
           <button id="vSync" class="btn-ghost btn-sm">Offline-Sync</button>
@@ -94,7 +100,6 @@
       <label>URLs (eine pro Zeile) <textarea id="fUrls" rows="2"></textarea></label>
       <label>TOTP-Seed <input id="fTotp" type="text" /></label>
       <label>Tags (Komma-getrennt) <input id="fTags" type="text" /></label>
-      <label>Ordner <input id="fFolder" type="text" /></label>
       <label>Notizen <textarea id="fNotes" rows="3"></textarea></label>
       <label class="checkbox"><input id="fFavorite" type="checkbox" /> Favorit</label>
       <div class="form-actions">
@@ -118,6 +123,45 @@
         <button id="sBack" class="btn-link">Zurück</button>
       </div>
       <p id="sError" class="error" hidden></p>
+    </div>
+  </section>
+
+  <!-- Sharing management -->
+  <section id="screenShare" class="screen" hidden>
+    <div class="card card-wide">
+      <h1>Freigabe verwalten</h1>
+      <p id="shTitle" class="hint"></p>
+      <p id="shMeta" class="hint"></p>
+
+      <h2 class="section-title">Aktuelle Freigaben</h2>
+      <div id="shCurrent" class="share-list"></div>
+
+      <h2 class="section-title">Neue Freigabe</h2>
+      <div class="share-add-row">
+        <select id="shTargetType">
+          <option value="user">Nutzer</option>
+          <option value="group">Gruppe</option>
+        </select>
+        <select id="shTarget"></select>
+        <select id="shCapability">
+          <option value="read">Lesen</option>
+          <option value="write" selected>Bearbeiten</option>
+          <option value="share">Freigeben</option>
+          <option value="admin">Admin</option>
+        </select>
+        <button id="shAdd" class="btn-primary btn-sm">Freigeben</button>
+      </div>
+      <p id="shError" class="error" hidden></p>
+
+      <div id="shGapsWrap" hidden>
+        <h2 class="section-title">Fehlende Gruppen-Schlüssel</h2>
+        <p class="hint">Gruppenmitglieder, die nach der Freigabe beigetreten sind, brauchen einen eigenen Schlüssel.</p>
+        <div id="shGaps" class="share-list"></div>
+      </div>
+
+      <div class="form-actions">
+        <button id="shBack" class="btn-link">Zurück</button>
+      </div>
     </div>
   </section>
 

@@ -8,7 +8,7 @@
   const App = () => window.go.main.App;
   const $ = (id) => document.getElementById(id);
 
-  const screens = ["screenConnect", "screenLogin", "screenUnlock", "screenVault", "screenForm", "screenSettings"];
+  const screens = ["screenConnect", "screenLogin", "screenUnlock", "screenVault", "screenForm", "screenSettings", "screenShare"];
   function showScreen(id) {
     for (const s of screens) $(s).hidden = s !== id;
   }
@@ -19,11 +19,12 @@
     offline: false,
     secrets: [],
     filter: "all",
-    folder: null,
+    tagFilters: [],
     search: "",
     selectedId: null,
     editingId: null,
     totpTimer: null,
+    shareSecretId: null,
   };
 
   function setError(id, msg) {
@@ -159,27 +160,51 @@
       state.secrets = [];
       console.error(errMsg(err));
     }
-    renderFolders();
+    pruneTagFilters();
+    renderTagFilters();
     renderList();
   }
 
-  function renderFolders() {
-    const folders = Array.from(new Set(state.secrets.map((s) => s.folder).filter(Boolean))).sort();
-    const box = $("vFolders");
+  function allTags() {
+    return Array.from(new Set(state.secrets.flatMap((s) => s.tags || []).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+  }
+
+  function pruneTagFilters() {
+    const have = new Set(allTags());
+    state.tagFilters = state.tagFilters.filter((t) => have.has(t));
+  }
+
+  function toggleTagFilter(tag) {
+    const i = state.tagFilters.indexOf(tag);
+    if (i === -1) state.tagFilters.push(tag);
+    else state.tagFilters.splice(i, 1);
+    renderTagFilters();
+    renderList();
+  }
+
+  function renderTagFilters() {
+    const box = $("vTags");
     box.innerHTML = "";
-    const allBtn = document.createElement("button");
-    allBtn.className = "folder-btn" + (state.folder === null ? " active" : "");
-    allBtn.textContent = "Alle Ordner";
-    allBtn.addEventListener("click", () => { state.folder = null; renderFolders(); renderList(); });
-    box.appendChild(allBtn);
-    for (const f of folders) {
+    const tags = allTags();
+    for (const t of tags) {
       const b = document.createElement("button");
-      b.className = "folder-btn" + (state.folder === f ? " active" : "");
-      b.textContent = f;
-      b.addEventListener("click", () => { state.folder = f; renderFolders(); renderList(); });
+      b.type = "button";
+      b.className = "tag-filter-btn" + (state.tagFilters.includes(t) ? " active" : "");
+      b.textContent = t;
+      b.addEventListener("click", () => toggleTagFilter(t));
       box.appendChild(b);
     }
+    if (tags.length === 0) {
+      box.innerHTML = '<p class="hint" style="margin:4px 0;">Keine Tags vorhanden.</p>';
+    }
+    $("vTagsClear").hidden = state.tagFilters.length === 0;
   }
+
+  $("vTagsClear").addEventListener("click", () => {
+    state.tagFilters = [];
+    renderTagFilters();
+    renderList();
+  });
 
   function renderList() {
     const list = $("vList");
@@ -187,14 +212,23 @@
     const q = state.search.toLowerCase();
     const rows = state.secrets.filter((s) => {
       if (state.filter === "favorites" && !s.favorite) return false;
-      if (state.folder && s.folder !== state.folder) return false;
+      if (state.filter === "mine" && !s.is_owner) return false;
+      if (state.filter === "shared" && s.is_owner) return false;
+      if (state.tagFilters.length) {
+        const have = s.tags || [];
+        if (!state.tagFilters.every((t) => have.includes(t))) return false;
+      }
       if (q && !s.title.toLowerCase().includes(q)) return false;
       return true;
     });
     for (const s of rows) {
       const row = document.createElement("div");
       row.className = "list-item" + (s.id === state.selectedId ? " active" : "");
-      row.innerHTML = `<span class="fav">${s.favorite ? "★" : ""}</span><span class="title">${escapeHtml(s.title)}</span>${s.folder ? `<span class="folder-tag">${escapeHtml(s.folder)}</span>` : ""}`;
+      const ownerBadge = s.is_owner
+        ? ""
+        : `<span class="owner-tag" title="Angelegt von ${escapeHtml(s.owner || "?")}">geteilt${s.owner ? " · " + escapeHtml(s.owner) : ""}</span>`;
+      const tagsHtml = (s.tags || []).map((t) => `<span class="tag-chip">${escapeHtml(t)}</span>`).join("");
+      row.innerHTML = `<span class="fav">${s.favorite ? "★" : ""}</span><span class="title">${escapeHtml(s.title)}</span>${ownerBadge}${tagsHtml}`;
       row.addEventListener("click", () => openDetail(s.id));
       list.appendChild(row);
     }
@@ -209,11 +243,14 @@
 
   $("vSearch").addEventListener("input", (e) => { state.search = e.target.value; renderList(); });
   $("fAll").addEventListener("click", () => setFilter("all"));
+  $("fMine").addEventListener("click", () => setFilter("mine"));
+  $("fShared").addEventListener("click", () => setFilter("shared"));
   $("fFav").addEventListener("click", () => setFilter("favorites"));
   function setFilter(f) {
     state.filter = f;
-    $("fAll").classList.toggle("active", f === "all");
-    $("fFav").classList.toggle("active", f === "favorites");
+    for (const id of ["fAll", "fMine", "fShared", "fFav"]) {
+      $(id).classList.toggle("active", $(id).dataset.filter === f);
+    }
     renderList();
   }
 
@@ -327,6 +364,14 @@
     h.textContent = det.title;
     box.appendChild(h);
 
+    const ownerLine = document.createElement("p");
+    ownerLine.className = "hint";
+    const bits = [det.is_owner ? "Eigenes Secret" : `Geteilt von ${escapeHtml(det.owner || "?")}`];
+    if (det.shared_users && det.shared_users.length) bits.push("Nutzer: " + det.shared_users.map(escapeHtml).join(", "));
+    if (det.shared_groups && det.shared_groups.length) bits.push("Gruppen: " + det.shared_groups.map(escapeHtml).join(", "));
+    ownerLine.innerHTML = bits.join(" · ");
+    box.appendChild(ownerLine);
+
     const body = det.body || {};
     if (body.username) plainField("Benutzername", body.username, box);
     if (body.password) revealField("Passwort", body.password, box);
@@ -371,6 +416,12 @@
     editBtn.disabled = state.offline;
     editBtn.addEventListener("click", () => openForm(det));
     actions.appendChild(editBtn);
+    const shareBtn = document.createElement("button");
+    shareBtn.className = "btn-secondary";
+    shareBtn.textContent = "Freigabe verwalten";
+    shareBtn.disabled = state.offline;
+    shareBtn.addEventListener("click", () => openShareScreen(det.id, det.title));
+    actions.appendChild(shareBtn);
     const delBtn = document.createElement("button");
     delBtn.className = "btn-secondary";
     delBtn.textContent = "Löschen";
@@ -402,7 +453,6 @@
     $("fUrls").value = Array.isArray(body.urls) ? body.urls.join("\n") : "";
     $("fTotp").value = body.totp_seed || "";
     $("fTags").value = Array.isArray(body.tags) ? body.tags.join(",") : "";
-    $("fFolder").value = (det && det.folder) || "";
     $("fNotes").value = body.notes || "";
     $("fFavorite").checked = !!(det && det.favorite);
     setError("fError", "");
@@ -427,7 +477,6 @@
       totp_seed: $("fTotp").value.trim(),
       tags: $("fTags").value.split(",").map((s) => s.trim()).filter(Boolean),
       favorite: $("fFavorite").checked,
-      folder: $("fFolder").value.trim(),
       extra: [],
     };
     try {
@@ -477,6 +526,180 @@
     } catch (err) {
       alert(errMsg(err));
     }
+  });
+
+  // --- Sharing management ----------------------------------------------------
+
+  const capabilityLabels = { read: "Lesen", write: "Bearbeiten", share: "Freigeben", admin: "Admin" };
+  function capLabel(c) { return capabilityLabels[c] || c || ""; }
+
+  let shareAccess = null;
+  let shareGroups = [];
+
+  async function openShareScreen(id, title) {
+    state.shareSecretId = id;
+    $("shTitle").textContent = title || "";
+    $("shMeta").textContent = "Lade Freigaben…";
+    $("shCurrent").innerHTML = "";
+    $("shGaps").innerHTML = "";
+    $("shGapsWrap").hidden = true;
+    setError("shError", "");
+    showScreen("screenShare");
+    try {
+      const [access, groups, gaps] = await Promise.all([
+        App().GetSecretAccess(id),
+        App().ListMyGroups(),
+        App().ListGroupShareGaps().catch(() => []),
+      ]);
+      shareAccess = access;
+      shareGroups = groups || [];
+      renderShareMeta();
+      renderShareCurrent();
+      renderShareTargetOptions();
+      renderShareGaps((gaps || []).filter((g) => g.secret_id === id));
+    } catch (err) {
+      $("shMeta").textContent = "";
+      setError("shError", errMsg(err));
+    }
+  }
+
+  function renderShareMeta() {
+    if (!shareAccess) return;
+    $("shMeta").textContent =
+      `Sichtbarkeit: ${shareAccess.visibility === "shared" ? "Geteilt" : "Privat"} · Meine Rechte: ${capLabel(shareAccess.my_capability)}`;
+  }
+
+  function shareRow(labelText, capability, onRemove) {
+    const row = document.createElement("div");
+    row.className = "share-row";
+    const label = document.createElement("span");
+    label.className = "share-row-name";
+    label.textContent = labelText;
+    row.appendChild(label);
+    const cap = document.createElement("span");
+    cap.className = "share-row-cap";
+    cap.textContent = capLabel(capability);
+    row.appendChild(cap);
+    if (onRemove) {
+      const btn = document.createElement("button");
+      btn.className = "btn-ghost btn-sm";
+      btn.textContent = "Entfernen";
+      btn.addEventListener("click", onRemove);
+      row.appendChild(btn);
+    }
+    return row;
+  }
+
+  function renderShareCurrent() {
+    const box = $("shCurrent");
+    box.innerHTML = "";
+    if (!shareAccess) return;
+    box.appendChild(shareRow((shareAccess.owner && shareAccess.owner.username) || "Eigentümer", "admin", null));
+    for (const u of shareAccess.shared_users || []) {
+      box.appendChild(shareRow(u.username || u.id, u.capability, () => removeShare({ userIds: [u.id] })));
+    }
+    for (const g of shareAccess.shared_groups || []) {
+      box.appendChild(shareRow("👥 " + (g.name || g.id), g.capability, () => removeShare({ groupIds: [g.id] })));
+    }
+    if (!(shareAccess.shared_users || []).length && !(shareAccess.shared_groups || []).length) {
+      box.innerHTML += '<p class="hint">Noch nicht geteilt.</p>';
+    }
+  }
+
+  function renderShareTargetOptions() {
+    const type = $("shTargetType").value;
+    const sel = $("shTarget");
+    sel.innerHTML = "";
+    const opts = type === "group" ? shareAvailableGroups() : (shareAccess && shareAccess.available_users) || [];
+    for (const o of opts) {
+      const opt = document.createElement("option");
+      opt.value = o.id;
+      opt.textContent = o.username || o.name || o.id;
+      sel.appendChild(opt);
+    }
+    if (opts.length === 0) {
+      const opt = document.createElement("option");
+      opt.value = "";
+      opt.textContent = type === "group" ? "Keine weiteren Gruppen" : "Keine weiteren Nutzer";
+      sel.appendChild(opt);
+    }
+  }
+
+  function shareAvailableGroups() {
+    const shared = new Set((shareAccess && shareAccess.shared_groups || []).map((g) => g.id));
+    return shareGroups.filter((g) => !shared.has(g.id));
+  }
+
+  $("shTargetType").addEventListener("change", renderShareTargetOptions);
+
+  $("shAdd").addEventListener("click", async () => {
+    setError("shError", "");
+    const type = $("shTargetType").value;
+    const targetId = $("shTarget").value;
+    const capability = $("shCapability").value;
+    if (!targetId) {
+      setError("shError", "Kein Ziel verfügbar.");
+      return;
+    }
+    try {
+      if (type === "group") {
+        await App().ShareSecretWithGroup(state.shareSecretId, targetId, capability);
+      } else {
+        await App().ShareSecretWithUser(state.shareSecretId, targetId, capability);
+      }
+      await refreshShareScreen();
+    } catch (err) {
+      setError("shError", errMsg(err));
+    }
+  });
+
+  async function removeShare({ userIds = [], groupIds = [] }) {
+    setError("shError", "");
+    if (!confirm("Freigabe wirklich entfernen?")) return;
+    try {
+      await App().UnshareSecret(state.shareSecretId, userIds, groupIds);
+      await refreshShareScreen();
+    } catch (err) {
+      setError("shError", errMsg(err));
+    }
+  }
+
+  function renderShareGaps(gaps) {
+    const box = $("shGaps");
+    box.innerHTML = "";
+    $("shGapsWrap").hidden = gaps.length === 0;
+    for (const gap of gaps) {
+      const row = document.createElement("div");
+      row.className = "share-row";
+      const label = document.createElement("span");
+      label.className = "share-row-name";
+      label.textContent = `${gap.username || gap.user_id} (Gruppe ${gap.group_id})`;
+      row.appendChild(label);
+      const btn = document.createElement("button");
+      btn.className = "btn-secondary btn-sm";
+      btn.textContent = "Nachschlüsseln";
+      btn.addEventListener("click", async () => {
+        setError("shError", "");
+        try {
+          await App().FixGroupShareGap(gap);
+          await refreshShareScreen();
+        } catch (err) {
+          setError("shError", errMsg(err));
+        }
+      });
+      row.appendChild(btn);
+      box.appendChild(row);
+    }
+  }
+
+  async function refreshShareScreen() {
+    await openShareScreen(state.shareSecretId, $("shTitle").textContent);
+    await reloadList();
+  }
+
+  $("shBack").addEventListener("click", async () => {
+    showScreen("screenVault");
+    if (state.shareSecretId) await openDetail(state.shareSecretId);
   });
 
   window.addEventListener("DOMContentLoaded", init);

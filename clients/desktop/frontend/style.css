@@ -113,9 +113,10 @@ button {
 .filters { display: flex; gap: 6px; }
 .filter-btn { background: none; color: var(--text-dim); border: 1px solid var(--border); flex: 1; }
 .filter-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
-.folders { flex: 1; overflow: auto; display: flex; flex-direction: column; gap: 4px; }
-.folder-btn { text-align: left; background: none; color: var(--text-dim); border: none; padding: 6px 4px; }
-.folder-btn.active { color: var(--text); font-weight: 600; }
+.tag-filter-head { display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: var(--text-dim); margin-top: 6px; }
+.tag-filter-list { flex: 1; overflow: auto; display: flex; flex-wrap: wrap; gap: 4px; align-content: flex-start; }
+.tag-filter-btn { background: var(--bg); color: var(--text-dim); border: 1px solid var(--border); border-radius: 999px; padding: 3px 9px; font-size: 12px; }
+.tag-filter-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
 .sidebar-foot { display: flex; flex-direction: column; gap: 6px; }
 
 .main { overflow: auto; padding: 14px; }
@@ -133,7 +134,7 @@ button {
 .list-item.active { background: var(--bg-alt); border-color: var(--accent); }
 .list-item .fav { color: #ffcf5c; }
 .list-item .title { flex: 1; }
-.list-item .folder-tag { color: var(--text-dim); font-size: 12px; }
+.list-item .owner-tag { color: var(--text-dim); font-size: 11px; background: var(--bg); border: 1px solid var(--border); border-radius: 999px; padding: 1px 8px; }
 
 .detail {
   border-left: 1px solid var(--border);
@@ -154,3 +155,15 @@ button {
 .form-actions { display: flex; gap: 8px; margin-top: 12px; }
 .form-actions button { flex: 1; }
 [hidden] { display: none !important; }
+
+.section-title { font-size: 13px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.04em; margin: 18px 0 8px; }
+.share-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+.share-row { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-alt); }
+.share-row-name { flex: 1; }
+.share-row-cap { color: var(--text-dim); font-size: 12px; }
+.share-row button { width: auto; margin-top: 0; flex-shrink: 0; }
+.share-add-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+.share-add-row select { flex: 1; min-width: 120px; }
+.share-add-row button { width: auto; margin-top: 0; }
+.btn-ghost { background: none; border: 1px solid var(--border); color: var(--text-dim); }
+.btn-sm { padding: 3px 10px; font-size: 12px; }
