@@ -1,0 +1,13 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "teamvault-desktop",
+  "outputfilename": "teamvault-desktop",
+  "frontend:install": "",
+  "frontend:build": "",
+  "frontend:dev:watcher": "",
+  "wailsjsdir": "./frontend",
+  "author": {
+    "name": "Timo Braun",
+    "email": ""
+  }
+}

@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>TeamVault</title>
+<link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <div id="offlineBadge" class="badge badge-offline" hidden>Offline-Modus</div>
+
+  <!-- Connect -->
+  <section id="screenConnect" class="screen">
+    <div class="card">
+      <h1>TeamVault</h1>
+      <p class="hint">Server-Adresse deiner TeamVault-Instanz.</p>
+      <label>Server-URL
+        <input id="cServer" type="text" placeholder="https://vault.firma.local" autocomplete="url" />
+      </label>
+      <label>Mandant (Tenant)
+        <input id="cTenant" type="text" placeholder="firma" autocomplete="username" />
+      </label>
+      <button id="cConnect" class="btn-primary">Weiter</button>
+      <button id="cOfflineOpen" class="btn-secondary" hidden>Offline öffnen</button>
+      <p id="cError" class="error" hidden></p>
+    </div>
+  </section>
+
+  <!-- Login -->
+  <section id="screenLogin" class="screen" hidden>
+    <div class="card">
+      <h1>Anmelden</h1>
+      <label>Benutzername
+        <input id="lUser" type="text" autocomplete="username" />
+      </label>
+      <label>Passwort
+        <input id="lPass" type="password" autocomplete="current-password" />
+      </label>
+      <label>TOTP-Code (falls aktiviert)
+        <input id="lTotp" type="text" inputmode="numeric" maxlength="6" />
+      </label>
+      <button id="lLogin" class="btn-primary">Anmelden</button>
+      <button id="lBack" class="btn-link">Zurück</button>
+      <p id="lError" class="error" hidden></p>
+    </div>
+  </section>
+
+  <!-- Unlock -->
+  <section id="screenUnlock" class="screen" hidden>
+    <div class="card">
+      <h1>Vault entsperren</h1>
+      <p class="hint">Master-Passwort — wird nie an den Server gesendet.</p>
+      <label>Master-Passwort
+        <input id="uPass" type="password" autocomplete="current-password" />
+      </label>
+      <button id="uUnlock" class="btn-primary">Entsperren</button>
+      <p id="uError" class="error" hidden></p>
+    </div>
+  </section>
+
+  <!-- Vault -->
+  <section id="screenVault" class="screen" hidden>
+    <div class="app-frame">
+      <aside class="sidebar">
+        <div class="brand">🔐 TeamVault</div>
+        <input id="vSearch" class="search" type="search" placeholder="Suchen…" />
+        <div class="filters">
+          <button id="fAll" class="filter-btn active" data-filter="all">Alle</button>
+          <button id="fFav" class="filter-btn" data-filter="favorites">Favoriten</button>
+        </div>
+        <div id="vFolders" class="folders"></div>
+        <div class="sidebar-foot">
+          <button id="vNew" class="btn-primary btn-sm">+ Neues Secret</button>
+          <button id="vSync" class="btn-ghost btn-sm">Offline-Sync</button>
+          <button id="vSettings" class="btn-ghost btn-sm">Einstellungen</button>
+          <button id="vLock" class="btn-ghost btn-sm">Sperren</button>
+          <button id="vLogout" class="btn-ghost btn-sm">Abmelden</button>
+        </div>
+      </aside>
+      <main class="main">
+        <div id="vList" class="list"></div>
+      </main>
+      <aside id="vDetail" class="detail" hidden></aside>
+    </div>
+  </section>
+
+  <!-- Create / Edit -->
+  <section id="screenForm" class="screen" hidden>
+    <div class="card card-wide">
+      <h1 id="formTitle">Neues Secret</h1>
+      <label>Titel <input id="fTitle" type="text" /></label>
+      <label>Benutzername <input id="fUsername" type="text" /></label>
+      <label>Passwort <input id="fPassword" type="text" /></label>
+      <label>URLs (eine pro Zeile) <textarea id="fUrls" rows="2"></textarea></label>
+      <label>TOTP-Seed <input id="fTotp" type="text" /></label>
+      <label>Tags (Komma-getrennt) <input id="fTags" type="text" /></label>
+      <label>Ordner <input id="fFolder" type="text" /></label>
+      <label>Notizen <textarea id="fNotes" rows="3"></textarea></label>
+      <label class="checkbox"><input id="fFavorite" type="checkbox" /> Favorit</label>
+      <div class="form-actions">
+        <button id="fSave" class="btn-primary">Speichern</button>
+        <button id="fCancel" class="btn-link">Abbrechen</button>
+      </div>
+      <p id="fError" class="error" hidden></p>
+    </div>
+  </section>
+
+  <!-- Settings -->
+  <section id="screenSettings" class="screen" hidden>
+    <div class="card">
+      <h1>Einstellungen</h1>
+      <label class="checkbox"><input id="sAutostart" type="checkbox" /> Autostart (mit Betriebssystem starten)</label>
+      <label class="checkbox"><input id="sCloseTray" type="checkbox" /> Schließen minimiert in den Tray</label>
+      <p class="hint">Server: <span id="sServer"></span> · Mandant: <span id="sTenant"></span></p>
+      <button id="sForgetOffline" class="btn-secondary">Offline-Kopie auf diesem Gerät löschen</button>
+      <div class="form-actions">
+        <button id="sSave" class="btn-primary">Speichern</button>
+        <button id="sBack" class="btn-link">Zurück</button>
+      </div>
+      <p id="sError" class="error" hidden></p>
+    </div>
+  </section>
+
+  <script src="./app.js"></script>
+</body>
+</html>

@@ -15,7 +15,7 @@ Secrets und Titel werden nur im Browser entschlüsselt — Server und Storage se
 | **Vault-UX** | Favoriten (lokal), Sortierung A–Z/Z–A/Recent, Suche/Tags, Import/Export |
 | **Onboarding** | Erzwungenes Master-Passwort + Schlüsselpaar; Recovery-Kit oder Admin-Escrow (Shamir) |
 | **Admin** | User/Gruppen, Firmen-CA, LDAP, SMTP, Krypto/Policy, Audit, API-Keys (`read`/`vault`/`admin`), Tenants, Storage-Migration, Instanz-Backup/Restore |
-| **Clients** | Web-UI, CLI (`tvcli`), Browser-Extension (Chrome/Edge/Firefox; Fill/Copy mit Origin-Match; Sichtbarkeit per Policy) |
+| **Clients** | Web-UI, CLI (`tvcli`), Browser-Extension (Chrome/Edge/Firefox; Fill/Copy mit Origin-Match; Sichtbarkeit per Policy), Desktop-App (Linux/Windows, reine Vault-Funktionen, Offline-Cache, Tray, Autostart) |
 
 ![Vault mit Sidebar und Secrets](docs/images/vault-secrets.png)
 
@@ -35,6 +35,7 @@ Details: [`.cursor/rules/security-principles.mdc`](.cursor/rules/security-princi
 | [**Installationsanleitung**](docs/install-guide.md) | One-Liner Docker / Go, `.env`, Unlock-Key |
 | [**User Guide**](docs/user-guide.md) | Alltag: Login, Onboarding, Vault, Sharing, Import/Export, Hilfe (`/help`, `/help/vault`) |
 | [**CLI Guide**](docs/cli-guide.md) | tvcli installieren & nutzen (auch in der App: `/help/cli`) |
+| [**Desktop Guide**](docs/desktop-guide.md) | Native Desktop-App (Linux/Windows): Installation ohne Adminrechte, Offline-Vault, Tray, Autostart |
 | [**Extension Guide**](docs/extension-guide.md) | Browser-Extension (auch: `/help/extension`) |
 | [**Admin Guide**](docs/admin-guide.md) | Betrieb: Setup, LDAP/SMTP, Escrow, Proxy/TLS, Instanz-Backup, CI |
 | [**Roadmap**](docs/planning/roadmap-phase9plus.md) | Weitere Ausbaupfade (Hardening, UX, Perf, Features) |
@@ -57,7 +58,7 @@ Die laufende Version liefert `GET /api/version` bzw. `teamvault -version` (Build
 | Web-UI | Vanilla JS eingebettet (`web/static`) |
 | Client-Crypto | `web/static/cryptocore.js` / `internal/cryptocore` (Argon2id, NaCl) |
 | Storage | SQLite (Default) oder JSON-File |
-| Clients | `tvcli` (standalone Win/Linux), Browser-Extension |
+| Clients | `tvcli` (standalone Win/Linux), Browser-Extension, Desktop-App (Wails, Win/Linux) |
 
 ## Schnellstart
 
@@ -131,6 +132,18 @@ Dateien: `Dockerfile`, `docker-compose.yml`, `docker-compose.build.yml`, `.env.e
 ```
 
 Extension: Ordner `clients/extension` in Chrome/Edge (Entwicklermodus) laden — siehe [clients/README.md](clients/README.md).
+
+## Desktop-App (Linux/Windows)
+
+Native, reine Vault-App (Wails v2/Go) mit Offline-Cache, Tray-Icon und Autostart — ohne Adminrechte installier-/ausführbar. Details: [Desktop Guide](docs/desktop-guide.md).
+
+```bash
+./scripts/build-desktop.sh          # Linux: Binary + AppImage
+```
+
+```powershell
+.\scripts\build-desktop.ps1 -Installer   # Windows: portable .exe + Pro-Benutzer-Installer
+```
 
 ## CI (GitHub Actions)
 
