@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/pquerna/otp/totp"
@@ -166,13 +167,30 @@ func (s *Session) Lock() {
 
 // SecretListItem is a UI-friendly, already-decrypted (title) row.
 type SecretListItem struct {
-	ID         string `json:"id"`
-	Title      string `json:"title"`
-	HasAccess  bool   `json:"has_access"`
-	Visibility string `json:"visibility"`
-	Favorite   bool   `json:"favorite"`
-	Folder     string `json:"folder"`
-	Owner      string `json:"owner"`
+	ID           string   `json:"id"`
+	Title        string   `json:"title"`
+	HasAccess    bool     `json:"has_access"`
+	Visibility   string   `json:"visibility"`
+	Favorite     bool     `json:"favorite"`
+	Tags         []string `json:"tags"`
+	Owner        string   `json:"owner"`
+	IsOwner      bool     `json:"is_owner"`
+	SharedUsers  []string `json:"shared_users"`
+	SharedGroups []string `json:"shared_groups"`
+}
+
+func stringSlice(v any) []string {
+	arr, ok := v.([]any)
+	if !ok {
+		return nil
+	}
+	out := make([]string, 0, len(arr))
+	for _, e := range arr {
+		if s, ok := e.(string); ok && s != "" {
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
 // FetchAllSecrets pages through GET /api/secrets.
@@ -234,8 +252,9 @@ func numberOr(v any, def float64) float64 {
 	return def
 }
 
-// ListSecrets returns decrypted-title rows, sorted A-Z. When online it
-// also refreshes the on-disk offline snapshot (best-effort).
+// ListSecrets returns decrypted-title rows, sorted A-Z, including tags and
+// favorite/sharing metadata (own vs. shared with me). When online it also
+// refreshes the on-disk offline snapshot (best-effort).
 func (s *Session) ListSecrets() ([]SecretListItem, error) {
 	if s.sk == nil {
 		return nil, errors.New("gesperrt")
@@ -244,15 +263,17 @@ func (s *Session) ListSecrets() ([]SecretListItem, error) {
 	if err != nil {
 		return nil, err
 	}
-	out := make([]SecretListItem, 0, len(items))
-	for _, it := range items {
+	meID := str(s.Me["user_id"])
+	out := make([]SecretListItem, len(items))
+	for i, it := range items {
 		li := SecretListItem{
-			ID:         str(it["id"]),
-			HasAccess:  it["has_access"] == true,
-			Visibility: str(it["visibility"]),
-			Favorite:   it["favorite"] == true,
-			Folder:     str(it["folder"]),
-			Owner:      str(it["created_by_username"]),
+			ID:           str(it["id"]),
+			HasAccess:    it["has_access"] == true,
+			Visibility:   str(it["visibility"]),
+			Owner:        str(it["created_by_username"]),
+			IsOwner:      str(it["created_by"]) == meID && meID != "",
+			SharedUsers:  stringSlice(it["shared_users"]),
+			SharedGroups: stringSlice(it["shared_groups"]),
 		}
 		if li.Visibility == "" {
 			li.Visibility = "private"
@@ -266,23 +287,60 @@ func (s *Session) ListSecrets() ([]SecretListItem, error) {
 		} else {
 			li.Title = "(kein Zugriff)"
 		}
-		out = append(out, li)
+		out[i] = li
 	}
+	// Enrich tags/favorite from each accessible secret's encrypted body, with
+	// bounded concurrency (mirrors the web app's enrichSecretMeta pool).
+	s.enrichListMeta(out)
 	sort.Slice(out, func(i, j int) bool { return strings.ToLower(out[i].Title) < strings.ToLower(out[j].Title) })
 	return out, nil
 }
 
+// enrichListMeta fills in Tags/Favorite for accessible items by fetching and
+// decrypting each secret's full body, using a small worker pool.
+func (s *Session) enrichListMeta(items []SecretListItem) {
+	const workers = 4
+	jobs := make(chan int, len(items))
+	var wg sync.WaitGroup
+	for w := 0; w < workers; w++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for idx := range jobs {
+				if !items[idx].HasAccess {
+					continue
+				}
+				det, err := s.GetSecret(items[idx].ID)
+				if err != nil {
+					continue
+				}
+				items[idx].Tags = det.Tags
+				items[idx].Favorite = det.Favorite
+			}
+		}()
+	}
+	for i := range items {
+		jobs <- i
+	}
+	close(jobs)
+	wg.Wait()
+}
+
 // SecretDetail is the fully decrypted secret shown in the UI.
 type SecretDetail struct {
-	ID         string         `json:"id"`
-	Title      string         `json:"title"`
-	KeyVersion uint32         `json:"key_version"`
-	Body       map[string]any `json:"body"`
-	TOTPCode   string         `json:"totp_code,omitempty"`
-	TOTPSecs   int            `json:"totp_seconds_left,omitempty"`
-	Visibility string         `json:"visibility"`
-	Favorite   bool           `json:"favorite"`
-	Folder     string         `json:"folder"`
+	ID           string         `json:"id"`
+	Title        string         `json:"title"`
+	KeyVersion   uint32         `json:"key_version"`
+	Body         map[string]any `json:"body"`
+	TOTPCode     string         `json:"totp_code,omitempty"`
+	TOTPSecs     int            `json:"totp_seconds_left,omitempty"`
+	Visibility   string         `json:"visibility"`
+	Favorite     bool           `json:"favorite"`
+	Tags         []string       `json:"tags"`
+	Owner        string         `json:"owner"`
+	IsOwner      bool           `json:"is_owner"`
+	SharedUsers  []string       `json:"shared_users"`
+	SharedGroups []string       `json:"shared_groups"`
 }
 
 // GetSecret fetches and fully decrypts one secret (title + body payload).
@@ -328,14 +386,19 @@ func (s *Session) decryptDetail(det map[string]any) (*SecretDetail, error) {
 	if err := json.Unmarshal(bodyPT, &body); err != nil {
 		body = map[string]any{"raw": string(bodyPT)}
 	}
+	meID := str(s.Me["user_id"])
 	out := &SecretDetail{
-		ID:         str(det["id"]),
-		Title:      string(titlePT),
-		KeyVersion: kv,
-		Body:       body,
-		Visibility: str(det["visibility"]),
-		Favorite:   det["favorite"] == true,
-		Folder:     str(det["folder"]),
+		ID:           str(det["id"]),
+		Title:        string(titlePT),
+		KeyVersion:   kv,
+		Body:         body,
+		Visibility:   str(det["visibility"]),
+		Favorite:     body["favorite"] == true,
+		Tags:         stringSlice(body["tags"]),
+		Owner:        str(det["created_by_username"]),
+		IsOwner:      str(det["created_by"]) == meID && meID != "",
+		SharedUsers:  stringSlice(det["shared_users"]),
+		SharedGroups: stringSlice(det["shared_groups"]),
 	}
 	if seed, ok := body["totp_seed"].(string); ok && strings.TrimSpace(seed) != "" {
 		if code, err := totp.GenerateCode(strings.TrimSpace(seed), time.Now().UTC()); err == nil {
@@ -357,7 +420,6 @@ type SecretInput struct {
 	TOTPSeed string              `json:"totp_seed"`
 	Tags     []string            `json:"tags"`
 	Favorite bool                `json:"favorite"`
-	Folder   string              `json:"folder"`
 	Extra    []map[string]string `json:"extra"`
 }
 
@@ -444,9 +506,6 @@ func (s *Session) CreateSecret(in SecretInput) (string, error) {
 				"wrapped_dk_b64":    b64(env.Ciphertext),
 			},
 		},
-	}
-	if in.Folder != "" {
-		body["collection_id"] = in.Folder
 	}
 	resp, err := s.Client.PostJSON("/api/secrets", body)
 	if err != nil {
@@ -540,10 +599,12 @@ func (s *Session) SyncOfflineSnapshot() error {
 			NonceB64:           str(det["nonce_b64"]),
 			KeyVersion:         uint32(numberOr(det["key_version"], 1)),
 			Envelope:           env,
-			Favorite:           det["favorite"] == true,
-			Folder:             str(det["folder"]),
 			Visibility:         str(det["visibility"]),
 			HasAccess:          true,
+			CreatedBy:          str(det["created_by"]),
+			CreatedByUsername:  str(det["created_by_username"]),
+			SharedUsers:        stringSlice(det["shared_users"]),
+			SharedGroups:       stringSlice(det["shared_groups"]),
 		})
 	}
 	var params cryptocore.Argon2Params
@@ -571,11 +632,13 @@ func (s *Session) SyncOfflineSnapshot() error {
 	return SaveOfflineSnapshot(snap)
 }
 
-// ListSecretsOffline decrypts titles straight from the local snapshot.
+// ListSecretsOffline decrypts titles and tags/favorite straight from the
+// local snapshot (no network needed — the body ciphertext is cached too).
 func (s *Session) ListSecretsOffline(snap OfflineSnapshot) ([]SecretListItem, error) {
 	if s.sk == nil {
 		return nil, errors.New("gesperrt")
 	}
+	meID := str(s.Me["user_id"])
 	out := make([]SecretListItem, 0, len(snap.Secrets))
 	for _, it := range snap.Secrets {
 		item := map[string]any{
@@ -584,7 +647,11 @@ func (s *Session) ListSecretsOffline(snap OfflineSnapshot) ([]SecretListItem, er
 			"title_nonce_b64":      it.TitleNonceB64,
 			"title_ciphertext_b64": it.TitleCiphertextB64,
 		}
-		li := SecretListItem{ID: it.ID, HasAccess: true, Visibility: it.Visibility, Favorite: it.Favorite, Folder: it.Folder}
+		li := SecretListItem{
+			ID: it.ID, HasAccess: true, Visibility: it.Visibility,
+			Owner: it.CreatedByUsername, IsOwner: it.CreatedBy == meID && meID != "",
+			SharedUsers: it.SharedUsers, SharedGroups: it.SharedGroups,
+		}
 		if li.Visibility == "" {
 			li.Visibility = "private"
 		}
@@ -593,10 +660,41 @@ func (s *Session) ListSecretsOffline(snap OfflineSnapshot) ([]SecretListItem, er
 		} else {
 			li.Title = li.ID
 		}
+		if det, err := s.decryptDetail(offlineSecretToDetailMap(it)); err == nil {
+			li.Tags = det.Tags
+			li.Favorite = det.Favorite
+		}
 		out = append(out, li)
 	}
 	sort.Slice(out, func(i, j int) bool { return strings.ToLower(out[i].Title) < strings.ToLower(out[j].Title) })
 	return out, nil
+}
+
+// offlineSecretToDetailMap rebuilds the map[string]any shape decryptDetail
+// expects from a cached OfflineSecret.
+func offlineSecretToDetailMap(it OfflineSecret) map[string]any {
+	return map[string]any{
+		"id":                   it.ID,
+		"envelope":             it.Envelope,
+		"key_version":          float64(it.KeyVersion),
+		"title_nonce_b64":      it.TitleNonceB64,
+		"title_ciphertext_b64": it.TitleCiphertextB64,
+		"nonce_b64":            it.NonceB64,
+		"ciphertext_b64":       it.CiphertextB64,
+		"visibility":           it.Visibility,
+		"created_by":           it.CreatedBy,
+		"created_by_username":  it.CreatedByUsername,
+		"shared_users":         toAnySlice(it.SharedUsers),
+		"shared_groups":        toAnySlice(it.SharedGroups),
+	}
+}
+
+func toAnySlice(ss []string) []any {
+	out := make([]any, len(ss))
+	for i, s := range ss {
+		out[i] = s
+	}
+	return out
 }
 
 // GetSecretOffline decrypts one cached secret by ID.
@@ -608,19 +706,7 @@ func (s *Session) GetSecretOffline(snap OfflineSnapshot, id string) (*SecretDeta
 		if it.ID != id {
 			continue
 		}
-		det := map[string]any{
-			"id":                   it.ID,
-			"envelope":             it.Envelope,
-			"key_version":          float64(it.KeyVersion),
-			"title_nonce_b64":      it.TitleNonceB64,
-			"title_ciphertext_b64": it.TitleCiphertextB64,
-			"nonce_b64":            it.NonceB64,
-			"ciphertext_b64":       it.CiphertextB64,
-			"visibility":           it.Visibility,
-			"favorite":             it.Favorite,
-			"folder":               it.Folder,
-		}
-		return s.decryptDetail(det)
+		return s.decryptDetail(offlineSecretToDetailMap(it))
 	}
 	return nil, errors.New("Secret nicht im Offline-Cache")
 }

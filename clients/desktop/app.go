@@ -225,6 +225,88 @@ func (a *App) SyncOfflineCache() error {
 	return a.session.SyncOfflineSnapshot()
 }
 
+// --- Sharing --------------------------------------------------------------
+
+func (a *App) ListPublicKeys() ([]backend.PublicKeyInfo, error) {
+	if a.session == nil {
+		return nil, errors.New("gesperrt")
+	}
+	if a.session.Offline {
+		return nil, errors.New("Freigabe verwalten ist offline nicht möglich — bitte online anmelden")
+	}
+	return a.session.ListPublicKeys()
+}
+
+func (a *App) ListMyGroups() ([]backend.MyGroup, error) {
+	if a.session == nil {
+		return nil, errors.New("gesperrt")
+	}
+	if a.session.Offline {
+		return nil, errors.New("Freigabe verwalten ist offline nicht möglich — bitte online anmelden")
+	}
+	return a.session.ListMyGroups()
+}
+
+func (a *App) GetSecretAccess(id string) (*backend.SecretAccess, error) {
+	if a.session == nil {
+		return nil, errors.New("gesperrt")
+	}
+	if a.session.Offline {
+		return nil, errors.New("Freigabe verwalten ist offline nicht möglich — bitte online anmelden")
+	}
+	return a.session.GetSecretAccess(id)
+}
+
+func (a *App) ShareSecretWithUser(id, userID, capability string) error {
+	if a.session == nil {
+		return errors.New("gesperrt")
+	}
+	if a.session.Offline {
+		return errors.New("Freigabe ist offline nicht möglich — bitte online anmelden")
+	}
+	return a.session.ShareSecretWithUser(id, userID, capability)
+}
+
+func (a *App) ShareSecretWithGroup(id, groupID, capability string) error {
+	if a.session == nil {
+		return errors.New("gesperrt")
+	}
+	if a.session.Offline {
+		return errors.New("Freigabe ist offline nicht möglich — bitte online anmelden")
+	}
+	return a.session.ShareSecretWithGroup(id, groupID, capability)
+}
+
+func (a *App) UnshareSecret(id string, dropUserIDs, dropGroupIDs []string) error {
+	if a.session == nil {
+		return errors.New("gesperrt")
+	}
+	if a.session.Offline {
+		return errors.New("Freigabe entziehen ist offline nicht möglich — bitte online anmelden")
+	}
+	return a.session.UnshareSecret(id, dropUserIDs, dropGroupIDs)
+}
+
+func (a *App) ListGroupShareGaps() ([]backend.GroupShareGap, error) {
+	if a.session == nil {
+		return nil, errors.New("gesperrt")
+	}
+	if a.session.Offline {
+		return nil, errors.New("nicht offline möglich — bitte online anmelden")
+	}
+	return a.session.ListGroupShareGaps()
+}
+
+func (a *App) FixGroupShareGap(gap backend.GroupShareGap) error {
+	if a.session == nil {
+		return errors.New("gesperrt")
+	}
+	if a.session.Offline {
+		return errors.New("nicht offline möglich — bitte online anmelden")
+	}
+	return a.session.FixGroupShareGap(gap)
+}
+
 func (a *App) HasOfflineCache(tenant, username string) bool {
 	snap, ok, err := backend.LoadOfflineSnapshot(tenant, username)
 	if err != nil || !ok {
