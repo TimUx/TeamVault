@@ -1,7 +1,22 @@
-/* Palette mirrors the web app's dark theme (web/static/styles.css
-   html[data-theme="dark"]) so the desktop client looks consistent with
-   the WebUI. */
+/* Palette mirrors the web app's theme system (web/static/styles.css):
+   :root holds the light theme, html[data-theme="dark"] overrides it —
+   so the desktop client looks consistent with the WebUI in both modes. */
 :root {
+  --bg: #f4f6f8;
+  --bg-alt: #ffffff;
+  --card: #ffffff;
+  --border: #e2e6eb;
+  --text: #1a1d21;
+  --text-dim: #5b6572;
+  --accent: #2f5d8c;
+  --accent-dark: #274d75;
+  --danger: #a70240;
+  --ok: #2f6b3a;
+  --radius: 6px;
+  --font: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+}
+
+html[data-theme="dark"] {
   --bg: #121417;
   --bg-alt: #1a1d21;
   --card: #1a1d21;
@@ -12,8 +27,6 @@
   --accent-dark: #588bc4;
   --danger: #c43b66;
   --ok: #7bc47f;
-  --radius: 6px;
-  --font: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
 }
 
 * { box-sizing: border-box; }

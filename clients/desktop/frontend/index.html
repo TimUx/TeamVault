@@ -114,6 +114,13 @@
   <section id="screenSettings" class="screen" hidden>
     <div class="card">
       <h1>Einstellungen</h1>
+      <label>Design
+        <select id="sTheme">
+          <option value="system">Systemeinstellung</option>
+          <option value="light">Hell</option>
+          <option value="dark">Dunkel</option>
+        </select>
+      </label>
       <label class="checkbox"><input id="sAutostart" type="checkbox" /> Autostart (mit Betriebssystem starten)</label>
       <label class="checkbox"><input id="sCloseTray" type="checkbox" /> Schließen minimiert in den Tray</label>
       <p class="hint">Server: <span id="sServer"></span> · Mandant: <span id="sTenant"></span></p>

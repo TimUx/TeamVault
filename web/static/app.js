@@ -313,6 +313,22 @@ function btnLabel(icoName, label) {
   return `${icon(icoName, "btn-ico")}<span>${label}</span>`;
 }
 
+const THEME_STORAGE_KEY = "tv-theme";
+const themeMediaQuery = typeof window !== "undefined" && window.matchMedia
+  ? window.matchMedia("(prefers-color-scheme: dark)")
+  : null;
+
+function getThemePref() {
+  let t = "system";
+  try { t = localStorage.getItem(THEME_STORAGE_KEY) || "system"; } catch (_) {}
+  return t === "light" || t === "dark" ? t : "system";
+}
+
+function resolveTheme(pref) {
+  if (pref === "light" || pref === "dark") return pref;
+  return themeMediaQuery && themeMediaQuery.matches ? "dark" : "light";
+}
+
 function syncThemeToggles(theme) {
   const dark = theme === "dark";
   document.querySelectorAll("[data-theme-toggle]").forEach((btn) => {
@@ -321,19 +337,28 @@ function syncThemeToggles(theme) {
     btn.title = dark ? "Hellmodus" : "Dunkelmodus";
     btn.innerHTML = icon(dark ? "sun" : "moon");
   });
+  document.querySelectorAll("[data-theme-select]").forEach((sel) => {
+    sel.value = getThemePref();
+  });
 }
 
-function applyTheme(theme) {
-  const t = theme === "dark" ? "dark" : "light";
-  document.documentElement.setAttribute("data-theme", t);
-  try { localStorage.setItem("tv-theme", t); } catch (_) {}
-  syncThemeToggles(t);
+function applyTheme(pref) {
+  const p = pref === "light" || pref === "dark" ? pref : "system";
+  try { localStorage.setItem(THEME_STORAGE_KEY, p); } catch (_) {}
+  const effective = resolveTheme(p);
+  document.documentElement.setAttribute("data-theme", effective);
+  syncThemeToggles(effective);
 }
 
 function initTheme() {
-  let t = "light";
-  try { t = localStorage.getItem("tv-theme") || "light"; } catch (_) {}
-  applyTheme(t);
+  applyTheme(getThemePref());
+  if (themeMediaQuery) {
+    const onSystemChange = () => {
+      if (getThemePref() === "system") applyTheme("system");
+    };
+    if (themeMediaQuery.addEventListener) themeMediaQuery.addEventListener("change", onSystemChange);
+    else if (themeMediaQuery.addListener) themeMediaQuery.addListener(onSystemChange);
+  }
 }
 
 function ensureHeaderControls() {
@@ -2177,6 +2202,15 @@ function renderApp(app) {
                 <div class="row"><button class="btn-accent" type="button" id="profile_save">Einstellungen speichern</button></div>
                 <div class="error" id="profile_err" hidden></div>
                 <div class="ok" id="profile_ok" hidden></div>
+
+                <h2>Darstellung</h2>
+                ${hintBox("Legt fest, ob TeamVault im hellen oder dunklen Design angezeigt wird — oder automatisch der Systemeinstellung folgt.")}
+                <label for="theme_pref">Design</label>
+                <select id="theme_pref" data-theme-select>
+                  <option value="system">Systemeinstellung</option>
+                  <option value="light">Hell</option>
+                  <option value="dark">Dunkel</option>
+                </select>
               </div>
 
               <div class="error" id="acc_err" hidden></div>
@@ -2733,6 +2767,8 @@ function renderApp(app) {
         n.querySelector("#profile_username").value = vault.me?.username || "";
         n.querySelector("#profile_display").value = vault.me?.display_name || "";
         n.querySelector("#profile_email").value = vault.me?.email || "";
+        const themeSel = n.querySelector("#theme_pref");
+        if (themeSel) themeSel.value = getThemePref();
       }
     }
   }
@@ -2864,6 +2900,7 @@ function renderApp(app) {
     applyTheme(cur === "dark" ? "light" : "dark");
   };
   syncThemeToggles(document.documentElement.getAttribute("data-theme") || "light");
+  n.querySelector("#theme_pref").onchange = (ev) => applyTheme(ev.target.value);
 
   n.querySelector("#offline_optin").onchange = () => {
     if (!TVOfflineStore?.isAvailable()) return;

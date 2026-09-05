@@ -25,7 +25,33 @@
     editingId: null,
     totpTimer: null,
     shareSecretId: null,
+    themePref: "system",
   };
+
+  // --- Theme (light/dark/system) ----------------------------------------
+
+  const themeMediaQuery = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
+
+  function resolveTheme(pref) {
+    if (pref === "light" || pref === "dark") return pref;
+    return themeMediaQuery && themeMediaQuery.matches ? "dark" : "light";
+  }
+
+  function applyTheme(pref) {
+    const p = pref === "light" || pref === "dark" ? pref : "system";
+    state.themePref = p;
+    document.documentElement.setAttribute("data-theme", resolveTheme(p));
+    const sel = $("sTheme");
+    if (sel) sel.value = p;
+  }
+
+  if (themeMediaQuery) {
+    const onSystemChange = () => {
+      if (state.themePref === "system") applyTheme("system");
+    };
+    if (themeMediaQuery.addEventListener) themeMediaQuery.addEventListener("change", onSystemChange);
+    else if (themeMediaQuery.addListener) themeMediaQuery.addListener(onSystemChange);
+  }
 
   function setError(id, msg) {
     const el = $(id);
@@ -49,6 +75,7 @@
     try {
       settings = (await App().GetSettings()) || {};
     } catch (_) {}
+    applyTheme(settings.theme || "system");
     $("cServer").value = settings.server_url || "";
     $("cTenant").value = settings.tenant_slug || "";
     state.tenant = settings.tenant_slug || "";
@@ -512,6 +539,7 @@
     $("sServer").textContent = s.server_url || "";
     $("sTenant").textContent = s.tenant_slug || "";
     $("sCloseTray").checked = !!s.close_to_tray;
+    $("sTheme").value = s.theme || "system";
     try {
       $("sAutostart").checked = !!(await App().IsAutostartEnabled());
     } catch (_) {
@@ -520,12 +548,14 @@
     showScreen("screenSettings");
   }
 
+  $("sTheme").addEventListener("change", (e) => applyTheme(e.target.value));
+
   $("sBack").addEventListener("click", () => showScreen("screenVault"));
   $("sSave").addEventListener("click", async () => {
     setError("sError", "");
     try {
       await App().SetAutostart($("sAutostart").checked);
-      await saveSettingsPartial({ close_to_tray: $("sCloseTray").checked });
+      await saveSettingsPartial({ close_to_tray: $("sCloseTray").checked, theme: $("sTheme").value });
       showScreen("screenVault");
     } catch (err) {
       setError("sError", errMsg(err));

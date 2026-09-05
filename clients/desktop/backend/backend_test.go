@@ -7,7 +7,7 @@ import (
 
 func TestSettingsRoundTrip(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	in := Settings{ServerURL: "https://vault.example.test", TenantSlug: "acme", Username: "alice", AutostartOn: true, CloseToTray: true}
+	in := Settings{ServerURL: "https://vault.example.test", TenantSlug: "acme", Username: "alice", AutostartOn: true, CloseToTray: true, Theme: "dark"}
 	if err := SaveSettings(in); err != nil {
 		t.Fatalf("SaveSettings: %v", err)
 	}
