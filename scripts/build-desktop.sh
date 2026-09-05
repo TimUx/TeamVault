@@ -29,7 +29,7 @@ if ! command -v "$WAILS_BIN" >/dev/null 2>&1; then
 fi
 
 echo "Building teamvault-desktop (linux/amd64, version=${VERSION})..."
-"$WAILS_BIN" build -clean -platform linux/amd64 -ldflags "-X main.version=${VERSION}"
+"$WAILS_BIN" build -clean -platform linux/amd64 -tags webkit2_41 -ldflags "-X main.version=${VERSION}"
 
 BIN="build/bin/teamvault-desktop"
 if [ ! -f "$BIN" ]; then
