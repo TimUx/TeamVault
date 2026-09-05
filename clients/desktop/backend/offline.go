@@ -29,10 +29,12 @@ type OfflineSecret struct {
 	NonceB64           string         `json:"nonce_b64"`
 	KeyVersion         uint32         `json:"key_version"`
 	Envelope           map[string]any `json:"envelope"`
-	Favorite           bool           `json:"favorite"`
-	Folder             string         `json:"folder,omitempty"`
 	Visibility         string         `json:"visibility,omitempty"`
 	HasAccess          bool           `json:"has_access"`
+	CreatedBy          string         `json:"created_by,omitempty"`
+	CreatedByUsername  string         `json:"created_by_username,omitempty"`
+	SharedUsers        []string       `json:"shared_users,omitempty"`
+	SharedGroups       []string       `json:"shared_groups,omitempty"`
 }
 
 // OfflineSnapshot is a full, ciphertext-only vault snapshot cached to disk

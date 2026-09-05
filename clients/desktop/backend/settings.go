@@ -17,6 +17,9 @@ type Settings struct {
 	CloseToTray    bool   `json:"close_to_tray"`
 	OfflineOptIn   bool   `json:"offline_opt_in"`
 	StartMinimized bool   `json:"start_minimized"`
+	// Theme is the user's appearance preference: "system" (default when
+	// empty), "light", or "dark". Applied client-side in app.js.
+	Theme string `json:"theme"`
 }
 
 func configDir() (string, error) {
