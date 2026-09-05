@@ -32,7 +32,7 @@
     "http://127.0.0.1/*",
     "http://localhost/*"
   ],
-  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAsWx1+j39e2nNyEz/+UGTigOLTlmdfz4z6cO+87fg8y7cVooWrDR3sANIzZvx3fleg5D0YBI9XRieJdi7cnwlVMHLCa7q1Rb/yMSOBibTU4i5/T3qfNwPNLWJylTuVpLpGxyyuS7cbH2KdLhi+W3SR5tPNemaYPOW1KYkcP1OfYH/G/aXZ3OLzHsTi4qt2ALzKCCjstOm3f3H/9uSHCaTLb00dVx8OESN4RnUoHaHT5+eAKUwnnoGzKVPXOva96r8JpPSC2rIlpOiIej1B4poGe33+QeFVe3f0CTHwDQrVG9+u2QXvaMa2jOMmrN+ntkEfCZwrHxUjsZJ3VVvEEfG4wIDAQAB",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAsDzvKitzi4J6IG/oD4rGv6BFCLcg5fJZmxIAocevpyjI3URDnEqN8UTtRfXO/C2LDfPDnNdlUM/Jf3xGkhF2F9xffmozDnScDBN05zKaNcrMu++Z4jll/Wuv5rJLI0avvOGQYfwiQXT1ikYiBO3TVVsVmu3gOlEr3wKKg0z7G/orwDoMwWC77iJooL/EtQ4uFBep470hugEnfarE3rKkXlMIPl+ifj2SHhwUotPCjvwl2LafCVL4nD/Zo1/LDgBJJo3OZv1jPnbkurY5rckvMku35RlC8AmupBGyH+vY9UB/CTnix5Za5HhK9syljZ5IQnvJ3ov0fIo9/2/T+F+7AQIDAQAB",
   "manifest_version": 3,
   "name": "TeamVault",
   "optional_host_permissions": [
