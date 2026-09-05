@@ -16,6 +16,8 @@
     button.ghost { background: transparent; border: 1px solid #ccc; color: var(--t); }
     .err { color: var(--p); margin-top: 0.5rem; white-space: pre-wrap; }
     .hint { color: #666; font-size: 0.8rem; }
+    .update { border: 1px solid var(--a); padding: 0.45rem 0.55rem; margin: 0.6rem 0 0; background: #fff; }
+    .update a { color: #006699; font-weight: 700; }
     .list { max-height: 280px; overflow: auto; margin-top: 0.5rem; }
     .row-item { display: flex; justify-content: space-between; gap: 0.4rem; padding: 0.4rem 0; border-bottom: 1px solid var(--bd); align-items: flex-start; }
     .title { flex: 1; min-width: 0; word-break: break-word; }
@@ -36,6 +38,7 @@
       <label>Server-URL</label>
       <input id="base" placeholder="http://127.0.0.1:8080" />
       <button id="saveBase" type="button">Speichern</button>
+      <p class="update" id="update" hidden></p>
     </section>
     <section id="login">
       <label>Tenant</label><input id="tenant" />
