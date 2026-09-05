@@ -27,6 +27,7 @@ import (
 
 	"github.com/teamvault/teamvault/internal/cryptocore"
 	"github.com/teamvault/teamvault/internal/shamir"
+	"github.com/teamvault/teamvault/internal/versioncheck"
 	"golang.org/x/term"
 )
 
@@ -189,6 +190,10 @@ func main() {
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
 		_ = enc.Encode(me)
+	case "update-check":
+		if err := c.updateCheck(); err != nil {
+			fatal(err)
+		}
 	default:
 		usage()
 		os.Exit(2)
@@ -215,6 +220,7 @@ Usage:
 
   tvcli escrow-split -k 3 -n 5 -in escrow.sk
   tvcli escrow-combine share1.hex share2.hex share3.hex
+  tvcli -base URL update-check
   tvcli version
 
 Auth: session cookie after login, or TEAMVAULT_API_KEY / -api-key.
@@ -228,6 +234,68 @@ type client struct {
 	apiKey string
 	http   *http.Client
 	state  string
+}
+
+type downloadArtifact struct {
+	Name     string `json:"name"`
+	Platform string `json:"platform"`
+	Arch     string `json:"arch"`
+	URL      string `json:"url"`
+}
+
+type clientDownloads struct {
+	CLI []downloadArtifact `json:"cli"`
+}
+
+func (c *client) updateCheck() error {
+	info, err := c.getJSON("/api/version")
+	if err != nil {
+		return err
+	}
+	remote := str(info["version"])
+	fmt.Printf("Lokal:  tvcli %s (%s) %s/%s\n", version, commit, runtime.GOOS, runtime.GOARCH)
+	fmt.Printf("Server: TeamVault %s\n", remote)
+	if !versioncheck.Newer(version, remote) {
+		if _, ok := versioncheck.Compare(version, remote); !ok {
+			fmt.Println("Update-Prüfung: Versionsvergleich für dev/unbekannte Versionen nicht möglich.")
+		} else {
+			fmt.Println("Update-Prüfung: aktuell.")
+		}
+		return nil
+	}
+	fmt.Printf("Update verfügbar: %s\n", remote)
+	if url := c.cliDownloadURL(); url != "" {
+		fmt.Printf("Download: %s\n", url)
+	}
+	return nil
+}
+
+func (c *client) cliDownloadURL() string {
+	raw, err := c.getRaw("/api/client-downloads")
+	if err != nil {
+		return ""
+	}
+	var dl clientDownloads
+	if json.Unmarshal(raw, &dl) != nil {
+		return ""
+	}
+	for _, a := range dl.CLI {
+		if a.Platform == runtime.GOOS && a.Arch == runtime.GOARCH && a.URL != "" {
+			return absoluteURL(c.base, a.URL)
+		}
+	}
+	return ""
+}
+
+func absoluteURL(base, ref string) string {
+	if ref == "" {
+		return ""
+	}
+	u, err := url.Parse(ref)
+	if err == nil && u.IsAbs() {
+		return ref
+	}
+	return strings.TrimRight(base, "/") + "/" + strings.TrimLeft(ref, "/")
 }
 
 func newClient(base, apiKey string) (*client, error) {

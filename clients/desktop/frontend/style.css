@@ -118,6 +118,15 @@ button {
 .copy-icon-btn.copied { border-color: var(--ok); color: var(--ok); }
 
 .error { color: var(--danger); font-size: 13px; margin-top: 10px; }
+.update-note {
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-size: 13px;
+  margin: 12px 0;
+  padding: 10px;
+}
+.update-note a { color: var(--accent); font-weight: 600; }
 
 .badge {
   position: fixed;

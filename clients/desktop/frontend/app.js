@@ -70,6 +70,38 @@
     return err.message || String(err);
   }
 
+  function showUpdate(info) {
+    const el = $("cUpdate");
+    el.textContent = "";
+    if (!info || !info.update) {
+      el.hidden = true;
+      return;
+    }
+    el.append("Update verfügbar: TeamVault Desktop ", info.latest || "", " ist bereit.");
+    if (info.download_url) {
+      el.append(" ");
+      const a = document.createElement("a");
+      a.href = info.download_url;
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      a.textContent = "Download";
+      el.append(a);
+    }
+    el.hidden = false;
+  }
+
+  async function checkForUpdate(serverURL) {
+    if (!serverURL) {
+      showUpdate(null);
+      return;
+    }
+    try {
+      showUpdate(await App().CheckForUpdate(serverURL));
+    } catch (_) {
+      showUpdate(null);
+    }
+  }
+
   async function init() {
     let settings = {};
     try {
@@ -86,6 +118,7 @@
         $("cOfflineOpen").hidden = !has;
       } catch (_) {}
     }
+    checkForUpdate(settings.server_url || "");
     showScreen("screenConnect");
   }
 
@@ -103,6 +136,7 @@
     try {
       await App().Connect(url);
       await saveSettingsPartial({ server_url: url, tenant_slug: tenant });
+      checkForUpdate(url);
       $("lUser").value = state.username || "";
       showScreen("screenLogin");
     } catch (err) {

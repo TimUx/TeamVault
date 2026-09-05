@@ -21,6 +21,9 @@ type App struct {
 	tray    *backend.Tray
 }
 
+// Set by build scripts via -ldflags "-X main.version=…".
+var version = "dev"
+
 func NewApp() *App {
 	return &App{}
 }
@@ -49,6 +52,10 @@ func (a *App) GetSettings() backend.Settings {
 
 func (a *App) SaveSettings(s backend.Settings) error {
 	return backend.SaveSettings(s)
+}
+
+func (a *App) CheckForUpdate(serverURL string) (backend.UpdateInfo, error) {
+	return backend.CheckForUpdate(serverURL, version)
 }
 
 func (a *App) IsAutostartEnabled() (bool, error) {
