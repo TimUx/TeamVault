@@ -497,10 +497,8 @@ function totpSecondsLeft() {
 
 function flashCopy(btn) {
   if (!btn) return;
-  const prev = btn.innerHTML;
-  btn.innerHTML = btnLabel("copy", "Kopiert");
   btn.classList.add("copied");
-  setTimeout(() => { btn.innerHTML = prev; btn.classList.remove("copied"); }, 1200);
+  setTimeout(() => { btn.classList.remove("copied"); }, 1200);
 }
 
 function flashCopyIcon(btn) {
@@ -1464,7 +1462,7 @@ function fieldRow(label, value, opts = {}) {
   const copyAttr = copy && display !== "—" ? `data-copy="${encodeURIComponent(String(value))}"` : "";
   const dlAttr = download && display !== "—" ? `data-download="${encodeURIComponent(String(value))}" data-dlname="${encodeURIComponent(opts.filename || label || "download.txt")}"` : "";
   const actions = [];
-  if (copy && display !== "—") actions.push(`<button type="button" class="copy-btn" ${copyAttr} title="Kopieren" aria-label="Kopieren">${btnLabel("copy", "Kopieren")}</button>`);
+  if (copy && display !== "—") actions.push(`<button type="button" class="copy-btn copy-btn-icon" ${copyAttr} title="Kopieren" aria-label="Kopieren">${icon("copy")}</button>`);
   if (download && display !== "—") actions.push(`<button type="button" class="copy-btn" ${dlAttr} title="Download" aria-label="Download">${btnLabel("download", "Download")}</button>`);
   return `<div class="secret-field${multiline ? " secret-field-block" : ""}">
     <div class="sf-label">${escapeHtml(label)}</div>
@@ -4948,7 +4946,7 @@ function renderApp(app) {
               <div class="sf-label">TOTP</div>
               <div class="sf-value mono"><span id="dtotpCode">······</span>
                 <span class="hint" id="dtotpLeft"></span></div>
-              <button type="button" class="copy-btn" id="dtotpCopy">${btnLabel("copy", "Kopieren")}</button>
+              <button type="button" class="copy-btn copy-btn-icon" id="dtotpCopy" title="Kopieren" aria-label="Kopieren">${icon("copy")}</button>
             </div>`;
         html += fieldRow("TOTP-Seed", totpSeed, { mask: true });
       }

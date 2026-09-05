@@ -1,21 +1,26 @@
+/* Palette mirrors the web app's dark theme (web/static/styles.css
+   html[data-theme="dark"]) so the desktop client looks consistent with
+   the WebUI. */
 :root {
-  --bg: #0f1520;
-  --bg-alt: #161e2c;
-  --card: #1b2434;
-  --border: #2a3547;
-  --text: #e6ebf2;
-  --text-dim: #96a2b5;
-  --accent: #4f8cff;
-  --accent-dark: #3a6fd6;
-  --danger: #e5484d;
-  --radius: 10px;
+  --bg: #121417;
+  --bg-alt: #1a1d21;
+  --card: #1a1d21;
+  --border: #2a2f36;
+  --text: #e8eaed;
+  --text-dim: #a0a7b2;
+  --accent: #6b9bd2;
+  --accent-dark: #588bc4;
+  --danger: #c43b66;
+  --ok: #7bc47f;
+  --radius: 6px;
+  --font: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
 }
 
 * { box-sizing: border-box; }
 
 body {
   margin: 0;
-  font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-family: var(--font);
   background: var(--bg);
   color: var(--text);
   min-height: 100vh;
@@ -54,33 +59,50 @@ label {
 label.checkbox { display: flex; align-items: center; gap: 8px; color: var(--text); }
 label.checkbox input { width: auto; }
 
-input[type="text"], input[type="password"], input[type="search"], textarea {
+input[type="text"], input[type="password"], input[type="search"], textarea, select {
   width: 100%;
   margin-top: 4px;
   padding: 9px 10px;
   background: var(--bg-alt);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius);
   color: var(--text);
   font-size: 14px;
+  font-family: inherit;
 }
 textarea { resize: vertical; font-family: inherit; }
 
 button {
   cursor: pointer;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius);
   padding: 9px 14px;
   font-size: 14px;
+  font-family: inherit;
+  font-weight: 600;
 }
 .btn-primary { background: var(--accent); color: #fff; width: 100%; margin-top: 4px; }
-.btn-primary:hover { background: var(--accent-dark); }
+.btn-primary:hover { filter: brightness(0.95); }
 .btn-secondary { background: var(--bg-alt); color: var(--text); width: 100%; margin-top: 8px; border: 1px solid var(--border); }
 .btn-link { background: none; color: var(--text-dim); width: 100%; margin-top: 8px; }
 .btn-link:hover { color: var(--text); }
 .btn-ghost { background: none; color: var(--text-dim); border: 1px solid var(--border); }
 .btn-ghost:hover { color: var(--text); border-color: var(--accent); }
 .btn-sm { font-size: 12px; padding: 7px 10px; }
+.btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+}
+.btn-icon:hover { color: var(--text); border-color: var(--accent); }
+.btn-icon .ico { width: 16px; height: 16px; }
+.copy-icon-btn.copied { border-color: var(--ok); color: var(--ok); }
 
 .error { color: var(--danger); font-size: 13px; margin-top: 10px; }
 
@@ -165,5 +187,3 @@ button {
 .share-add-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
 .share-add-row select { flex: 1; min-width: 120px; }
 .share-add-row button { width: auto; margin-top: 0; }
-.btn-ghost { background: none; border: 1px solid var(--border); color: var(--text-dim); }
-.btn-sm { padding: 3px 10px; font-size: 12px; }

@@ -1373,6 +1373,12 @@ body.admin-modal-open { overflow: hidden; }
 }
 .copy-btn:hover { background: var(--color-hover); }
 .copy-btn.copied { border-color: var(--color-ok); color: var(--color-ok); }
+.copy-btn-icon {
+  padding: 0;
+  width: 2rem;
+  justify-content: center;
+}
+.copy-btn-icon .ico { width: 1.1rem; height: 1.1rem; }
 
 .gen-row { align-items: center; gap: 0.5rem; }
 .gen-opts {

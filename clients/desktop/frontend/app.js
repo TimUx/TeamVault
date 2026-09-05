@@ -298,15 +298,27 @@
     renderDetail(det);
   }
 
+  const COPY_ICON_SVG =
+    '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+    '<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>' +
+    "</svg>";
+
   function copyBtn(value) {
     const b = document.createElement("button");
-    b.className = "btn-ghost btn-sm";
-    b.textContent = "Kopieren";
+    b.type = "button";
+    b.className = "btn-icon copy-icon-btn";
+    b.innerHTML = COPY_ICON_SVG;
+    b.title = "Kopieren";
+    b.setAttribute("aria-label", "Kopieren");
     b.addEventListener("click", async () => {
       try {
         await navigator.clipboard.writeText(value || "");
-        b.textContent = "Kopiert!";
-        setTimeout(() => (b.textContent = "Kopieren"), 1200);
+        b.classList.add("copied");
+        b.setAttribute("aria-label", "Kopiert");
+        setTimeout(() => {
+          b.classList.remove("copied");
+          b.setAttribute("aria-label", "Kopieren");
+        }, 1200);
       } catch (_) {}
     });
     return b;
