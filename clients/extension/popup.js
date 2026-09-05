@@ -61,6 +61,66 @@ function hostsMatch(a, b) {
   return a === b || a.endsWith("." + b) || b.endsWith("." + a);
 }
 
+function parseVersion(v) {
+  const m = String(v || "").trim().replace(/^v/, "").match(/^(\d+)(?:\.(\d+))?(?:\.(\d+))?(?:[-+].*)?$/);
+  if (!m) return null;
+  return [Number(m[1]), Number(m[2] || 0), Number(m[3] || 0)];
+}
+
+function newerVersion(local, remote) {
+  const a = parseVersion(local);
+  const b = parseVersion(remote);
+  if (!a || !b) return false;
+  for (let i = 0; i < 3; i++) {
+    if (b[i] > a[i]) return true;
+    if (b[i] < a[i]) return false;
+  }
+  return false;
+}
+
+function absoluteUrl(base, path) {
+  if (!path || /^https?:\/\//i.test(path)) return path || "";
+  return base.replace(/\/$/, "") + "/" + String(path).replace(/^\//, "");
+}
+
+async function extensionDownloadUrl() {
+  try {
+    const meta = await apiFetch("/api/client-downloads");
+    let preferred = meta.extension?.crx || meta.extension?.zip;
+    if (api.runtime.getBrowserInfo) {
+      const info = await api.runtime.getBrowserInfo().catch(() => null);
+      if (String(info?.name || "").toLowerCase().includes("firefox")) preferred = meta.extension?.xpi || preferred;
+    }
+    return absoluteUrl(state.base, preferred?.url || "");
+  } catch (_) {
+    return "";
+  }
+}
+
+async function checkForUpdate() {
+  const el = document.getElementById("update");
+  el.textContent = "";
+  el.hidden = true;
+  try {
+    const remote = await apiFetch("/api/version");
+    const latest = remote.version || "";
+    const current = api.runtime.getManifest().version;
+    if (!newerVersion(current, latest)) return;
+    el.append("Update verfügbar: TeamVault Extension ", latest, " ist bereit.");
+    const url = await extensionDownloadUrl();
+    if (url) {
+      el.append(" ");
+      const a = document.createElement("a");
+      a.href = url;
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      a.textContent = "Download";
+      el.append(a);
+    }
+    el.hidden = false;
+  } catch (_) {}
+}
+
 /** Minimal TOTP (RFC 6238, SHA-1, 6 digits) — secret base32 or otpauth URL. */
 async function totpNow(seed) {
   if (!seed) return "";
@@ -97,6 +157,7 @@ async function boot() {
   const cfg = await api.storage.local.get(["base", "tenant", "user"]);
   state.base = (cfg.base || "http://127.0.0.1:8080").replace(/\/$/, "");
   document.getElementById("base").value = state.base;
+  checkForUpdate();
   if (cfg.tenant) document.getElementById("tenant").value = cfg.tenant;
   if (cfg.user) document.getElementById("user").value = cfg.user;
   try {
@@ -127,6 +188,7 @@ document.getElementById("saveBase").onclick = async () => {
     } catch (_) {}
   }
   showErr("");
+  checkForUpdate();
 };
 
 document.getElementById("doLogin").onclick = async () => {
