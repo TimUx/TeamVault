@@ -4,19 +4,21 @@ import (
 	"github.com/getlantern/systray"
 )
 
-// Tray wires up the systray icon with Open / Lock / Quit actions. It is
-// started via systray.Run from main() and must run on the main OS thread
-// on some platforms, so callers should invoke it directly from main().
+// Tray wires up the systray icon with Open / Lock / Quit actions. Start it
+// via Start() from main(); the platform specific implementations take care
+// of the threading requirements (on Linux systray shares the GTK main loop
+// with the Wails frontend, elsewhere it runs its own loop).
 type Tray struct {
 	OnOpen func()
 	OnLock func()
 	OnQuit func()
+
+	started bool
 }
 
 func (t *Tray) onReady() {
 	systray.SetIcon(trayIconPNG)
-	systray.SetTitle("")
-	systray.SetTooltip("TeamVault")
+	setTrayLabels()
 
 	mOpen := systray.AddMenuItem("Öffnen", "Fenster anzeigen")
 	mLock := systray.AddMenuItem("Sperren", "Vault sperren")
@@ -38,7 +40,7 @@ func (t *Tray) onReady() {
 				if t.OnQuit != nil {
 					t.OnQuit()
 				}
-				systray.Quit()
+				t.Quit()
 				return
 			}
 		}
@@ -47,13 +49,11 @@ func (t *Tray) onReady() {
 
 func (t *Tray) onExit() {}
 
-// Run starts the systray event loop (blocking). Call in its own goroutine
-// (or on the main thread, per-platform requirement) from main().
-func (t *Tray) Run() {
-	systray.Run(t.onReady, t.onExit)
-}
-
-// Quit stops the systray loop programmatically (e.g. app-initiated quit).
+// Quit stops/hides the systray icon (e.g. app-initiated quit). It is a no-op
+// when the tray was never started.
 func (t *Tray) Quit() {
+	if !t.started {
+		return
+	}
 	systray.Quit()
 }
