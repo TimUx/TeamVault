@@ -16,6 +16,7 @@ Download: In der Web-App unter **Konto & Sicherheit → Clients** oder Hilfe **`
 |---------|----------|
 | Vault | Secrets ansehen/anlegen/bearbeiten/löschen, Suche, Tag-Filter, Favoriten, TOTP-Code-Anzeige |
 | Sharing | Eigene und mit mir geteilte Secrets werden unterschieden (Filter „Eigene“/„Geteilt“); Freigaben an Nutzer/Gruppen verwalten (hinzufügen, Capability wählen, entziehen), fehlende Gruppen-Schlüssel nachschlüsseln |
+| Darstellung | Theme in den Einstellungen wählbar: **Systemeinstellung** (folgt automatisch der Betriebssystem-Präferenz, live), **Hell** oder **Dunkel** — Farben/Radius/Schrift analog zur Web-UI |
 | Offline | Ciphertext-Snapshot lokal zwischengespeichert (max. 30 Tage) — Lesen ohne Netzwerk möglich; Anlegen/Ändern/Löschen/Freigabe-Verwaltung nur online |
 | Tray | Icon in der Systemleiste: Öffnen / Sperren / Beenden; Fenster schließen minimiert optional in den Tray statt zu beenden |
 | Autostart | Ein/Aus in den Einstellungen — ganz ohne Admin-/Root-Rechte |
@@ -68,6 +69,7 @@ Nach jedem erfolgreichen Online-Entsperren wird automatisch ein Ciphertext-Snaps
 
 - **Einstellungen → Autostart**: registriert einen reinen Pro-Benutzer-Eintrag (Windows: `HKCU\...\Run`; Linux: `~/.config/autostart/*.desktop`) — kein root/Admin nötig, wirkt nur für den aktuellen Benutzer.
 - **Tray-Icon**: Rechtsklick/Klick → Öffnen, Sperren, Beenden. „Schließen minimiert in den Tray“ ist in den Einstellungen umschaltbar.
+- **Design**: In den Einstellungen zwischen **Systemeinstellung**, **Hell** und **Dunkel** wählen; die Auswahl wird sofort angewendet und dauerhaft gespeichert. Bei „Systemeinstellung“ reagiert die App live auf Änderungen der Betriebssystem-Theme-Einstellung.
 
 ## Selbst bauen
 
