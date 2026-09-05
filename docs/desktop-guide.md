@@ -69,6 +69,7 @@ Nach jedem erfolgreichen Online-Entsperren wird automatisch ein Ciphertext-Snaps
 
 - **Einstellungen → Autostart**: registriert einen reinen Pro-Benutzer-Eintrag (Windows: `HKCU\...\Run`; Linux: `~/.config/autostart/*.desktop`) — kein root/Admin nötig, wirkt nur für den aktuellen Benutzer.
 - **Tray-Icon**: Rechtsklick/Klick → Öffnen, Sperren, Beenden. „Schließen minimiert in den Tray“ ist in den Einstellungen umschaltbar.
+- **Linux**: Das Tray-Icon nutzt dieselbe GTK-Hauptschleife wie das App-Fenster (AppIndicator). Auf Desktops ohne AppIndicator-Unterstützung kann es mit `TEAMVAULT_NO_TRAY=1` deaktiviert werden — die App startet dann ohne Tray-Symbol.
 - **Design**: In den Einstellungen zwischen **Systemeinstellung**, **Hell** und **Dunkel** wählen; die Auswahl wird sofort angewendet und dauerhaft gespeichert. Bei „Systemeinstellung“ reagiert die App live auf Änderungen der Betriebssystem-Theme-Einstellung.
 
 ## Selbst bauen

@@ -40,7 +40,9 @@ func main() {
 		OnQuit: app.Quit,
 	}
 	app.tray = tray
-	go tray.Run()
+	// Must run before wails.Run(): on Linux the tray shares the GTK main
+	// loop of the Wails frontend and has to be registered on the main thread.
+	tray.Start()
 
 	err := wails.Run(&options.App{
 		Title:             "TeamVault",
