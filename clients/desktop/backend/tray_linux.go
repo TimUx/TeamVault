@@ -5,6 +5,8 @@ package backend
 import (
 	"os"
 	"runtime"
+	"strconv"
+	"strings"
 
 	"github.com/getlantern/systray"
 )
@@ -17,12 +19,16 @@ import (
 // before Wails initialises GTK – and let the gtk_main() loop of Wails
 // dispatch the tray events.
 //
-// Start must be called from the main goroutine before wails.Run(). Setting
-// TEAMVAULT_NO_TRAY=1 disables the tray icon completely, e.g. on desktops
-// without AppIndicator support.
+// Start must be called from the main goroutine before wails.Run(); it
+// intentionally leaves that goroutine locked to its OS thread for the rest of
+// the process lifetime. Setting TEAMVAULT_NO_TRAY (1/true/yes) disables the
+// tray icon completely, e.g. on desktops without AppIndicator support.
 func (t *Tray) Start() {
-	if os.Getenv("TEAMVAULT_NO_TRAY") == "1" {
-		return
+	if noTray := os.Getenv("TEAMVAULT_NO_TRAY"); noTray != "" {
+		b, err := strconv.ParseBool(noTray)
+		if (err == nil && b) || strings.EqualFold(noTray, "yes") {
+			return
+		}
 	}
 	// Pin the main goroutine to the OS thread that initialises GTK; Wails
 	// does the same for its own frontend thread.
