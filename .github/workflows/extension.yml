@@ -1,0 +1,108 @@
+# Store-readiness checks for the browser extension (clients/extension).
+# Fails on anything that would block a Chrome Web Store / Firefox AMO
+# submission: broken manifest, missing icons, external CDN/script refs,
+# committed signing keys, or failing unit / web-ext lint checks.
+name: Extension
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "clients/extension/**"
+      - "scripts/pack-extension.mjs"
+      - "cmd/pack-extension/**"
+      - ".github/workflows/extension.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "clients/extension/**"
+      - "scripts/pack-extension.mjs"
+      - "cmd/pack-extension/**"
+      - ".github/workflows/extension.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: extension-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  extension-checks:
+    name: Manifest, icons, no-CDN, no-secrets, unit tests, web-ext lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: "22"
+
+      - name: No private signing keys in the tree
+        run: |
+          set -euo pipefail
+          if git ls-files clients/extension clients/*.pem clients/*.key 2>/dev/null | grep -E '\.(pem|key|p12|pfx)$'; then
+            echo "Private signing key material must never be committed (see clients/extension/.gitignore rules)."
+            exit 1
+          fi
+          if git grep -lE 'BEGIN (RSA |OPENSSH |EC )?PRIVATE KEY' -- clients/extension; then
+            echo "Found an embedded private key inside clients/extension."
+            exit 1
+          fi
+          echo "OK: no private key material tracked."
+
+      - name: Manifest is valid JSON and store-relevant fields are present
+        run: |
+          node -e '
+            const fs = require("fs");
+            const m = JSON.parse(fs.readFileSync("clients/extension/manifest.json", "utf8"));
+            const required = ["manifest_version", "name", "version", "description", "icons", "action"];
+            const missing = required.filter((k) => !(k in m));
+            if (missing.length) { console.error("manifest.json missing keys:", missing.join(", ")); process.exit(1); }
+            if (m.manifest_version !== 3) { console.error("manifest_version must be 3"); process.exit(1); }
+            for (const size of ["16", "32", "48", "128"]) {
+              if (!m.icons || !m.icons[size]) { console.error("manifest.json is missing icons." + size); process.exit(1); }
+              if (!fs.existsSync("clients/extension/" + m.icons[size])) {
+                console.error("Missing icon file referenced in manifest.json:", m.icons[size]);
+                process.exit(1);
+              }
+            }
+            console.log("OK: manifest.json fields + icon files present.");
+          '
+
+      - name: 128x128 icon present for Chrome Web Store packaging
+        run: test -f clients/extension/icons/icon-128.png
+
+      - name: No external CDN / remote script references
+        run: |
+          set -euo pipefail
+          if grep -rnE '(src|href)\s*=\s*"https?://' clients/extension --include='*.html'; then
+            echo "Extension HTML must not reference remote resources."
+            exit 1
+          fi
+          if grep -rnE '(import\s+.*from\s+"https?://|importScripts\(\s*"https?://)' clients/extension --include='*.js'; then
+            echo "Extension JS must not import remote code."
+            exit 1
+          fi
+          echo "OK: no remote script/CDN references found."
+
+      - name: No hardcoded production TeamVault server URL
+        run: |
+          set -euo pipefail
+          # Any concrete "https://teamvault...." host baked into extension code
+          # would violate the self-hosted architecture. localhost/127.0.0.1
+          # dev defaults and generic example placeholders are allowed.
+          if grep -rnE 'https://teamvault\.[a-z0-9.-]+' clients/extension; then
+            echo "Found a hardcoded production TeamVault server URL in the extension."
+            exit 1
+          fi
+          echo "OK: no fixed production TeamVault server URL in the extension."
+
+      - name: Extension unit tests (origin matching, TOTP, navigation protection)
+        run: node --test clients/extension/tests/*.test.mjs
+
+      - name: web-ext lint (Firefox AMO compatibility)
+        run: npx --yes web-ext@8 lint --source-dir clients/extension --no-config-discovery --pretty

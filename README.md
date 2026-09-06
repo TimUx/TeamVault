@@ -37,6 +37,7 @@ Details: [`.cursor/rules/security-principles.mdc`](.cursor/rules/security-princi
 | [**CLI Guide**](docs/cli-guide.md) | tvcli installieren & nutzen (auch in der App: `/help/cli`) |
 | [**Desktop Guide**](docs/desktop-guide.md) | Native Desktop-App (Linux/Windows): Installation ohne Adminrechte, Offline-Vault, Tray, Autostart |
 | [**Extension Guide**](docs/extension-guide.md) | Browser-Extension (auch: `/help/extension`) |
+| [Extension Store-Vorbereitung](docs/extension-store/) | Chrome Web Store / Firefox AMO: Listing, Privacy Policy, Permissions, Store-Readiness |
 | [**Admin Guide**](docs/admin-guide.md) | Betrieb: Setup, LDAP/SMTP, Escrow, Proxy/TLS, Instanz-Backup, CI |
 | [**Roadmap**](docs/planning/roadmap-phase9plus.md) | Weitere Ausbaupfade (Hardening, UX, Perf, Features) |
 | [**Vergleich Password Manager**](docs/planning/competitive-comparison.md) | TeamVault vs. Bitwarden, Vaultwarden, Passbolt, … |
@@ -132,6 +133,39 @@ Dateien: `Dockerfile`, `docker-compose.yml`, `docker-compose.build.yml`, `.env.e
 ```
 
 Extension: Ordner `clients/extension` in Chrome/Edge (Entwicklermodus) laden — siehe [clients/README.md](clients/README.md).
+
+## Browser Extension
+
+Die Browser-Extension (Chrome, Edge, Firefox) ist ein reiner Client für
+Ihren **eigenen** TeamVault-Server. Es gibt keinen zentralen,
+TeamVault-betriebenen Cloud-Dienst — jede Installation läuft unter der
+vom Kunden gewählten Adresse.
+
+> The TeamVault browser extension connects to the TeamVault server
+> configured by the user. TeamVault is self-hosted and can be operated
+> under any customer-controlled URL.
+
+- **Self-Hosted Server:** Server-URL wird im Popup selbst konfiguriert —
+  `https://vault.company.de`, `https://passwords.example`, interne
+  DNS-Namen, private IPs, `http://127.0.0.1:8080` (lokaler
+  Entwicklungs-Default) oder beliebige weitere selbst gehostete Adresse.
+  Kein fester Produktions-Server ist im Code hinterlegt.
+- **Autofill:** Füllt Login-Formulare nur nach exaktem Origin-Match
+  (Schema, Host, Port) und prüft die aktuelle Navigation unmittelbar vor
+  dem Fill-Vorgang erneut (Phishing-/Navigations-Schutz), siehe
+  [Security-Architektur](docs/extension-store/security-architecture.md).
+- **TOTP:** RFC-6238-konforme 6-stellige Codes, lokal aus dem
+  entschlüsselten Vault-Eintrag berechnet.
+- **Security:** Zero-Knowledge (Master-Passwort/private Key verlassen nie
+  das Gerät), keine externen CDNs, keine Analytics/Tracking/Telemetrie.
+- **Installation — Store:** Chrome Web Store / Firefox AMO (sobald
+  veröffentlicht) — Store übernimmt Signierung und Auto-Update.
+  Store-Vorbereitung: [docs/extension-store/](docs/extension-store/)
+  (Listing-Texte, Privacy Policy, Permission-Begründung, Store-Readiness).
+- **Installation — Enterprise/Self-Hosted:** weiterhin über
+  `scripts/pack-extension.mjs` / `cmd/pack-extension` als CRX/XPI/ZIP +
+  Update-Manifest + Chrome/Firefox-Policy-Vorlagen, siehe
+  [Extension Guide](docs/extension-guide.md).
 
 ## Desktop-App (Linux/Windows)
 
