@@ -1,37 +1,46 @@
 {
   "action": {
     "default_popup": "popup.html",
-    "default_title": "TeamVault"
+    "default_title": "TeamVault",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    }
   },
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "background.js",
+    "scripts": [
+      "background.js"
+    ]
   },
   "browser_specific_settings": {
     "gecko": {
       "id": "teamvault@local",
-      "strict_min_version": "109.0"
+      "strict_min_version": "140.0",
+      "data_collection_permissions": {
+        "required": [
+          "none"
+        ]
+      }
     }
   },
-  "content_scripts": [
-    {
-      "js": [
-        "content.js"
-      ],
-      "matches": [
-        "http://*/*",
-        "https://*/*"
-      ],
-      "run_at": "document_idle"
-    }
-  ],
   "content_security_policy": {
     "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
   },
   "description": "Zero-Knowledge vault client — decrypts only in the browser extension.",
+  "homepage_url": "https://github.com/TimUx/TeamVault",
   "host_permissions": [
     "http://127.0.0.1/*",
     "http://localhost/*"
   ],
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAsDzvKitzi4J6IG/oD4rGv6BFCLcg5fJZmxIAocevpyjI3URDnEqN8UTtRfXO/C2LDfPDnNdlUM/Jf3xGkhF2F9xffmozDnScDBN05zKaNcrMu++Z4jll/Wuv5rJLI0avvOGQYfwiQXT1ikYiBO3TVVsVmu3gOlEr3wKKg0z7G/orwDoMwWC77iJooL/EtQ4uFBep470hugEnfarE3rKkXlMIPl+ifj2SHhwUotPCjvwl2LafCVL4nD/Zo1/LDgBJJo3OZv1jPnbkurY5rckvMku35RlC8AmupBGyH+vY9UB/CTnix5Za5HhK9syljZ5IQnvJ3ov0fIo9/2/T+F+7AQIDAQAB",
   "manifest_version": 3,
   "name": "TeamVault",

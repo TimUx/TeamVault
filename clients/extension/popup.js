@@ -33,50 +33,7 @@ function openDK(env) {
   );
 }
 
-function originFromUrl(u) {
-  try {
-    const x = new URL(u);
-    return x.protocol + "//" + x.host;
-  } catch {
-    return "";
-  }
-}
-
-function hostFromUrl(u) {
-  try {
-    return new URL(u).hostname.replace(/^www\./, "").toLowerCase();
-  } catch {
-    return "";
-  }
-}
-
-function originsMatch(a, b) {
-  return !!(a && b && a.toLowerCase() === b.toLowerCase());
-}
-
-function hostsMatch(a, b) {
-  if (!a || !b) return false;
-  a = a.replace(/^www\./, "").toLowerCase();
-  b = b.replace(/^www\./, "").toLowerCase();
-  return a === b || a.endsWith("." + b) || b.endsWith("." + a);
-}
-
-function parseVersion(v) {
-  const m = String(v || "").trim().replace(/^v/, "").match(/^(\d+)(?:\.(\d+))?(?:\.(\d+))?(?:[-+].*)?$/);
-  if (!m) return null;
-  return [Number(m[1]), Number(m[2] || 0), Number(m[3] || 0)];
-}
-
-function newerVersion(local, remote) {
-  const a = parseVersion(local);
-  const b = parseVersion(remote);
-  if (!a || !b) return false;
-  for (let i = 0; i < 3; i++) {
-    if (b[i] > a[i]) return true;
-    if (b[i] < a[i]) return false;
-  }
-  return false;
-}
+const { originFromUrl, hostFromUrl, originsMatch, hostsMatch, parseVersion, newerVersion } = TVMatch;
 
 function absoluteUrl(base, path) {
   if (!path || /^https?:\/\//i.test(path)) return path || "";
@@ -121,37 +78,8 @@ async function checkForUpdate() {
   } catch (_) {}
 }
 
-/** Minimal TOTP (RFC 6238, SHA-1, 6 digits) — secret base32 or otpauth URL. */
-async function totpNow(seed) {
-  if (!seed) return "";
-  let secret = seed.trim();
-  if (secret.startsWith("otpauth://")) {
-    try {
-      secret = new URL(secret).searchParams.get("secret") || "";
-    } catch {
-      return "";
-    }
-  }
-  const cleaned = secret.replace(/\s+/g, "").toUpperCase().replace(/=+$/, "");
-  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
-  let bits = "";
-  for (const c of cleaned) {
-    const v = alphabet.indexOf(c);
-    if (v < 0) continue;
-    bits += v.toString(2).padStart(5, "0");
-  }
-  const bytes = [];
-  for (let i = 0; i + 8 <= bits.length; i += 8) bytes.push(parseInt(bits.slice(i, i + 8), 2));
-  const key = await crypto.subtle.importKey("raw", new Uint8Array(bytes), { name: "HMAC", hash: "SHA-1" }, false, ["sign"]);
-  const counter = Math.floor(Date.now() / 1000 / 30);
-  const buf = new ArrayBuffer(8);
-  const view = new DataView(buf);
-  view.setUint32(4, counter);
-  const sig = new Uint8Array(await crypto.subtle.sign("HMAC", key, buf));
-  const off = sig[sig.length - 1] & 0xf;
-  const code = ((sig[off] & 0x7f) << 24) | (sig[off + 1] << 16) | (sig[off + 2] << 8) | sig[off + 3];
-  return String(code % 1e6).padStart(6, "0");
-}
+/** TOTP (RFC 6238, SHA-1, 6 digits) — see lib/tv-totp.js */
+const totpNow = TVTotp.totpNow;
 
 async function boot() {
   const cfg = await api.storage.local.get(["base", "tenant", "user"]);
@@ -179,12 +107,34 @@ async function boot() {
   } catch (_) {}
 }
 
+/**
+ * The extension ships fixed host_permissions only for the built-in local
+ * dev defaults (http://127.0.0.1/*, http://localhost/*). Manifest host
+ * match patterns without an explicit port match any port (Chrome treats
+ * an unspecified port as a wildcard; Firefox doesn't support port
+ * matching at all — see MDN "Match patterns"), so these two static
+ * patterns already cover any port, e.g. http://127.0.0.1:8080. Any other
+ * self-hosted TeamVault server — internal DNS name, private IP, custom
+ * port, HTTP or HTTPS — is granted on demand via the optional
+ * "https://" and "http://" wildcard host permissions declared in
+ * manifest.json, requested only once the user actually configures that
+ * server URL.
+ */
+function isBuiltinLocalOrigin(base) {
+  try {
+    const u = new URL(base);
+    return u.protocol === "http:" && (u.hostname === "127.0.0.1" || u.hostname === "localhost");
+  } catch {
+    return false;
+  }
+}
+
 document.getElementById("saveBase").onclick = async () => {
   state.base = document.getElementById("base").value.trim().replace(/\/$/, "");
   await api.storage.local.set({ base: state.base });
-  if (state.base.startsWith("https://") && api.permissions?.request) {
+  if (!isBuiltinLocalOrigin(state.base) && api.permissions?.request) {
     try {
-      await api.permissions.request({ origins: [state.base.replace(/\/$/, "") + "/*"] });
+      await api.permissions.request({ origins: [state.base + "/*"] });
     } catch (_) {}
   }
   showErr("");
