@@ -109,7 +109,11 @@ async function boot() {
 
 /**
  * The extension ships fixed host_permissions only for the built-in local
- * dev defaults (http://127.0.0.1/*, http://localhost/*). Any other
+ * dev defaults (http://127.0.0.1/*, http://localhost/*). Manifest host
+ * match patterns without an explicit port match any port (Chrome treats
+ * an unspecified port as a wildcard; Firefox doesn't support port
+ * matching at all — see MDN "Match patterns"), so these two static
+ * patterns already cover any port, e.g. http://127.0.0.1:8080. Any other
  * self-hosted TeamVault server — internal DNS name, private IP, custom
  * port, HTTP or HTTPS — is granted on demand via the optional
  * "https://" and "http://" wildcard host permissions declared in
@@ -130,7 +134,7 @@ document.getElementById("saveBase").onclick = async () => {
   await api.storage.local.set({ base: state.base });
   if (!isBuiltinLocalOrigin(state.base) && api.permissions?.request) {
     try {
-      await api.permissions.request({ origins: [state.base.replace(/\/$/, "") + "/*"] });
+      await api.permissions.request({ origins: [state.base + "/*"] });
     } catch (_) {}
   }
   showErr("");

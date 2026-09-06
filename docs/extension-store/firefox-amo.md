@@ -34,7 +34,14 @@ Zero-knowledge access to your self-hosted TeamVault vault. View, copy, and secur
 - `manifest_version: 3` with a dual `background.service_worker` +
   `background.scripts` declaration, so Chrome/Edge use the MV3 service
   worker while Firefox falls back to its supported `scripts` background
-  page.
+  page. This is a documented cross-browser MV3 compatibility pattern
+  (declaring both keys side by side): Chrome's manifest parser ignores
+  the `scripts` key it doesn't use for MV3 background pages (verified:
+  the extension loads and the service worker registers correctly under
+  Chromium with this manifest), while `web-ext lint` confirms Firefox
+  correctly falls back to `scripts` and only emits an informational
+  `BACKGROUND_SERVICE_WORKER_IGNORED` notice (not an error) about the
+  unused `service_worker` key.
 - `browser_specific_settings.gecko.strict_min_version` is set to `140.0`.
   This is required because the extension relies on
   `optional_host_permissions` (Firefox 128+) and declares

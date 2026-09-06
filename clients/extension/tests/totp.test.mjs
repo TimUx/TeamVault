@@ -47,15 +47,19 @@ test("totpAt matches RFC 6238 SHA-1 test vectors (last 6 digits)", async () => {
 test("totpNow accepts an otpauth:// URL and extracts the secret", async () => {
   const TVTotp = require("../lib/tv-totp.js");
   const otpauth = `otpauth://totp/Example:alice@example.com?secret=${RFC6238_SECRET_B32}&issuer=Example`;
-  const direct = await TVTotp.totpAt(RFC6238_SECRET_B32, 59, 30);
-  const viaUrl = await (async () => {
-    // totpNow() uses Date.now(); reuse totpAt with the same fixed instant
-    // by extracting the same seed path totpNow() takes internally.
-    const url = new URL(otpauth);
-    const secret = url.searchParams.get("secret");
-    return TVTotp.totpAt(secret, 59, 30);
-  })();
-  assert.equal(viaUrl, direct);
+  const fixedSeconds = 59;
+  const expected = await TVTotp.totpAt(RFC6238_SECRET_B32, fixedSeconds, 30);
+
+  // Exercise the real totpNow() otpauth-parsing branch (inside totpAt) by
+  // freezing Date.now() to the same fixed instant used above.
+  const realDateNow = Date.now;
+  Date.now = () => fixedSeconds * 1000;
+  try {
+    const viaUrl = await TVTotp.totpNow(otpauth);
+    assert.equal(viaUrl, expected);
+  } finally {
+    Date.now = realDateNow;
+  }
 });
 
 test("totpAt returns empty string for empty seed", async () => {
