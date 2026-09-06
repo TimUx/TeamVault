@@ -50,6 +50,12 @@ func TestSetupCommitAndLoginHTTP(t *testing.T) {
 	}
 
 	jar := &cookieJar{m: map[string]string{}}
+	autoLogin := postJSON(t, ts.URL+"/api/auth/login", map[string]string{
+		"username": "admin", "password": "Password1234!!!!",
+	}, jar)
+	if autoLogin["tenant_slug"] != "t1" {
+		t.Fatalf("single-tenant login: %#v", autoLogin)
+	}
 	login := postJSON(t, ts.URL+"/api/auth/login", map[string]string{
 		"tenant_slug": "t1", "username": "admin", "password": "Password1234!!!!",
 	}, jar)

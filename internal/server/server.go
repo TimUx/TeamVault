@@ -577,7 +577,7 @@ func (a *API) handleTenantlessLogin(w http.ResponseWriter, r *http.Request, req 
 		if uerr != nil {
 			continue
 		}
-		if !authenticateUser(a, r, tenant, user, req.Password) || user.Status == "disabled" {
+		if !authenticateUser(a, &tenant, user, req.Password) || user.Status == "disabled" {
 			continue
 		}
 		matches = append(matches, pendingCandidate{UserID: user.ID, TenantID: tenant.ID, Slug: tenant.Slug, Name: tenant.Name})
@@ -612,7 +612,7 @@ func (a *API) handleTenantlessLogin(w http.ResponseWriter, r *http.Request, req 
 	a.writeLoginSuccess(w, r, users[0], tenant)
 }
 
-func authenticateUser(a *API, r *http.Request, tenant *store.Tenant, user *store.UserRecord, pass string) bool {
+func authenticateUser(a *API, tenant *store.Tenant, user *store.UserRecord, pass string) bool {
 	switch user.AuthBackend {
 	case "local":
 		ok, err := password.Verify(pass, user.LocalPasswordHash)

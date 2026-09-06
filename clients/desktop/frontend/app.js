@@ -185,7 +185,8 @@
         return;
       }
       state.username = user;
-      await saveSettingsPartial({ username: user });
+      if (res && res.tenant_slug) state.tenant = res.tenant_slug;
+      await saveSettingsPartial({ username: user, tenant_slug: state.tenant });
       $("lPass").value = "";
       $("lTotp").value = "";
       showScreen("screenUnlock");

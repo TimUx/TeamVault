@@ -179,6 +179,10 @@ document.getElementById("doLogin").onclick = async () => {
     }
     if (res.needs_vault_onboard) throw new Error("Bitte zuerst im Web-UI onboarden");
     state.me = res;
+    if (res.tenant_slug) {
+      document.getElementById("tenant").value = res.tenant_slug;
+      await api.storage.local.set({ tenant: res.tenant_slug });
+    }
     document.getElementById("login").hidden = true;
     document.getElementById("unlock").hidden = false;
     document.getElementById("who").textContent = res.username;
@@ -199,6 +203,7 @@ document.getElementById("doTotp").onclick = async () => {
     });
     if (res.needs_vault_onboard) throw new Error("Bitte zuerst im Web-UI onboarden");
     state.me = res;
+    if (res.tenant_slug) await api.storage.local.set({ tenant: res.tenant_slug });
     document.getElementById("totpStep").hidden = true;
     document.getElementById("unlock").hidden = false;
     document.getElementById("who").textContent = res.username;
