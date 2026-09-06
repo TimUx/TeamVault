@@ -86,7 +86,6 @@ async function boot() {
   state.base = (cfg.base || "http://127.0.0.1:8080").replace(/\/$/, "");
   document.getElementById("base").value = state.base;
   checkForUpdate();
-  if (cfg.tenant) document.getElementById("tenant").value = cfg.tenant;
   if (cfg.user) document.getElementById("user").value = cfg.user;
   try {
     const [tab] = await api.tabs.query({ active: true, currentWindow: true });
@@ -146,6 +145,7 @@ document.getElementById("doLogin").onclick = async () => {
   try {
     const tenant = document.getElementById("tenant").value.trim();
     const user = document.getElementById("user").value.trim();
+    const selectionToken = document.getElementById("doLogin").dataset.loginToken || "";
     await api.storage.local.set({ tenant, user, base: state.base });
     const res = await apiFetch("/api/auth/login", {
       method: "POST",
@@ -153,12 +153,53 @@ document.getElementById("doLogin").onclick = async () => {
         tenant_slug: tenant,
         username: user,
         password: document.getElementById("lpw").value,
+        ...(selectionToken ? { login_token: selectionToken } : {}),
+      }),
+    });
+    if (res.needs_tenant && res.login_token) {
+      const select = document.getElementById("tenant");
+      select.innerHTML = "";
+      for (const t of res.tenants || []) {
+        const option = document.createElement("option");
+        option.value = t.slug;
+        option.textContent = t.name === t.slug ? t.name : `${t.name} (${t.slug})`;
+        select.appendChild(option);
+      }
+      select.hidden = false;
+      document.getElementById("tenantLabel").hidden = false;
+      document.getElementById("doLogin").dataset.loginToken = res.login_token;
+      document.getElementById("doLogin").textContent = "Tenant auswählen";
+      return;
+    }
+    if (res.needs_totp && res.login_token) {
+      document.getElementById("doLogin").dataset.loginToken = res.login_token;
+      document.getElementById("login").hidden = true;
+      document.getElementById("totpStep").hidden = false;
+      return;
+    }
+    if (res.needs_vault_onboard) throw new Error("Bitte zuerst im Web-UI onboarden");
+    state.me = res;
+    document.getElementById("login").hidden = true;
+    document.getElementById("unlock").hidden = false;
+    document.getElementById("who").textContent = res.username;
+  } catch (e) {
+    showErr(e.message);
+  }
+};
+
+document.getElementById("doTotp").onclick = async () => {
+  showErr("");
+  try {
+    const res = await apiFetch("/api/auth/login", {
+      method: "POST",
+      body: JSON.stringify({
+        login_token: document.getElementById("doLogin").dataset.loginToken || "",
         totp_code: document.getElementById("totp").value.trim(),
       }),
     });
     if (res.needs_vault_onboard) throw new Error("Bitte zuerst im Web-UI onboarden");
     state.me = res;
-    document.getElementById("login").hidden = true;
+    document.getElementById("totpStep").hidden = true;
     document.getElementById("unlock").hidden = false;
     document.getElementById("who").textContent = res.username;
   } catch (e) {

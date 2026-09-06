@@ -84,11 +84,18 @@ func (a *App) Connect(serverURL string) error {
 	return nil
 }
 
-func (a *App) Login(tenant, username, password, totpCode string) error {
+func (a *App) Login(tenant, username, password, totpCode string) (map[string]any, error) {
 	if a.client == nil {
-		return errors.New("nicht verbunden: Connect() zuerst aufrufen")
+		return nil, errors.New("nicht verbunden: Connect() zuerst aufrufen")
 	}
 	return backend.Login(a.client, tenant, username, password, totpCode)
+}
+
+func (a *App) LoginStep(loginToken, tenant, username string, totpCode string) (map[string]any, error) {
+	if a.client == nil {
+		return nil, errors.New("nicht verbunden: Connect() zuerst aufrufen")
+	}
+	return backend.LoginStep(a.client, tenant, username, "", totpCode, loginToken)
 }
 
 // UnlockResult tells the frontend whether the vault was unlocked online

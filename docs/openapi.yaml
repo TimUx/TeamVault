@@ -127,17 +127,26 @@ paths:
           application/json:
             schema:
               type: object
-              required: [tenant_slug, username, password]
+              required: [username, password]
               properties:
                 tenant_slug: { type: string }
                 username: { type: string }
                 password: { type: string }
                 totp_code: { type: string }
+                login_token: { type: string, description: Token from a previous tenant or TOTP step }
       responses:
         '200':
-          description: Sets tv_session cookie
+          description: Sets tv_session cookie, or returns needs_tenant with login_token and the user's tenant choices, or needs_totp with login_token
         '401':
           description: Invalid credentials
+  /api/auth/tenants:
+    get:
+      tags: [auth]
+      security: []
+      summary: List active tenants (for WebApp tenant selection)
+      responses:
+        '200':
+          description: Tenant slug/name pairs
   /api/auth/logout:
     post:
       tags: [auth]

@@ -465,6 +465,24 @@ func (a *API) handleLogin(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	if req.LoginToken != "" && req.TenantSlug != "" {
+		pending, ok := a.pendingLogins.consumeSelection(req.LoginToken, strings.TrimSpace(req.TenantSlug))
+		if !ok {
+			a.handleLoginTOTPStep(w, r, req.LoginToken, req.TOTPCode, ip)
+			return
+		}
+		user, err := a.App.Vault.GetUser(r.Context(), pending.TenantID, pending.UserID)
+		tenant, terr := a.App.Vault.GetTenant(r.Context(), pending.TenantID)
+		if err != nil || terr != nil || user.Status == "disabled" || tenant.Status == "disabled" {
+			writeErr(w, http.StatusUnauthorized, "invalid login")
+			return
+		}
+		if !a.gateTOTPOrIssueToken(w, user, tenant, req.TOTPCode) {
+			return
+		}
+		a.writeLoginSuccess(w, r, user, tenant)
+		return
+	}
 	if req.LoginToken != "" {
 		a.handleLoginTOTPStep(w, r, req.LoginToken, req.TOTPCode, ip)
 		return
@@ -472,6 +490,10 @@ func (a *API) handleLogin(w http.ResponseWriter, r *http.Request) {
 	userKey := strings.ToLower(strings.TrimSpace(req.TenantSlug)) + ":" + strings.ToLower(strings.TrimSpace(req.Username))
 	if userKey != ":" && !a.loginRL.allow("login:user:"+userKey, 10, time.Minute) {
 		writeErr(w, http.StatusTooManyRequests, "too many login attempts")
+		return
+	}
+	if strings.TrimSpace(req.TenantSlug) == "" {
+		a.handleTenantlessLogin(w, r, req)
 		return
 	}
 	tenant, err := a.App.Vault.GetTenantBySlug(r.Context(), req.TenantSlug)
@@ -537,6 +559,74 @@ func (a *API) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.writeLoginSuccess(w, r, user, tenant)
+}
+
+func (a *API) handleTenantlessLogin(w http.ResponseWriter, r *http.Request, req loginReq) {
+	tenants, err := a.App.Vault.ListTenants(r.Context())
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "tenant lookup failed")
+		return
+	}
+	var matches []pendingCandidate
+	var users []*store.UserRecord
+	for _, tenant := range tenants {
+		if tenant.Status == "disabled" {
+			continue
+		}
+		user, uerr := a.App.Vault.GetUserByUsername(r.Context(), tenant.ID, req.Username)
+		if uerr != nil {
+			continue
+		}
+		if !authenticateUser(a, r, tenant, user, req.Password) || user.Status == "disabled" {
+			continue
+		}
+		matches = append(matches, pendingCandidate{UserID: user.ID, TenantID: tenant.ID, Slug: tenant.Slug, Name: tenant.Name})
+		users = append(users, user)
+	}
+	if len(matches) == 0 {
+		writeErr(w, http.StatusUnauthorized, "invalid credentials")
+		return
+	}
+	if len(matches) > 1 {
+		token := a.pendingLogins.issueSelection(matches)
+		type tenantChoice struct {
+			Slug string `json:"slug"`
+			Name string `json:"name"`
+		}
+		choices := make([]tenantChoice, 0, len(matches))
+		for _, c := range matches {
+			choices = append(choices, tenantChoice{Slug: c.Slug, Name: c.Name})
+		}
+		sort.Slice(choices, func(i, j int) bool { return choices[i].Name < choices[j].Name })
+		writeJSON(w, http.StatusOK, map[string]any{"needs_tenant": true, "login_token": token, "tenants": choices})
+		return
+	}
+	tenant, err := a.App.Vault.GetTenant(r.Context(), matches[0].TenantID)
+	if err != nil {
+		writeErr(w, http.StatusUnauthorized, "invalid credentials")
+		return
+	}
+	if !a.gateTOTPOrIssueToken(w, users[0], tenant, req.TOTPCode) {
+		return
+	}
+	a.writeLoginSuccess(w, r, users[0], tenant)
+}
+
+func authenticateUser(a *API, r *http.Request, tenant *store.Tenant, user *store.UserRecord, pass string) bool {
+	switch user.AuthBackend {
+	case "local":
+		ok, err := password.Verify(pass, user.LocalPasswordHash)
+		return err == nil && ok
+	case "ldap":
+		cfg := a.ldapConfigFor(tenant.ID)
+		if !cfg.Enabled {
+			return false
+		}
+		_, err := ldapauth.Authenticate(cfg, user.Username, pass)
+		return err == nil
+	default:
+		return false
+	}
 }
 
 func normalizeTOTPCode(s string) string {

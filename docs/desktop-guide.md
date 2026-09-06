@@ -42,10 +42,12 @@ WebKitGTK (`libwebkit2gtk-4.1`) muss auf dem System vorhanden sein (auf den meis
 
 ## Erste Schritte
 
-1. **Server-URL + Mandant** eingeben → „Weiter“.
-2. **Login** (Benutzername/Passwort, ggf. TOTP-Code) — identisch zum Web-Login.
-3. **Master-Passwort** zum Entsperren des Vaults (verlässt nie das Gerät).
-4. Vault-Liste: Suche, Tag-Filter, Favoriten, Filter „Eigene“/„Geteilt“, Secret öffnen zum Ansehen/Kopieren/TOTP/Freigabe-Verwaltung.
+1. **Server-URL** eingeben → „Weiter“.
+2. **Login** (Benutzername/Passwort).
+3. Bei mehreren Tenant-Zuordnungen den Tenant im Dropdown auswählen; bei genau einem Tenant wird er automatisch verwendet.
+4. Falls aktiviert, den TOTP-Code in einem eigenen zweiten Schritt eingeben.
+5. **Master-Passwort** zum Entsperren des Vaults (verlässt nie das Gerät).
+6. Vault-Liste: Suche, Tag-Filter, Favoriten, Filter „Eigene“/„Geteilt“, Secret öffnen zum Ansehen/Kopieren/TOTP/Freigabe-Verwaltung.
 
 ![Desktop-App – Vault-Ansicht](images/help-desktop.png)
 
