@@ -8,7 +8,7 @@
   const App = () => window.go.main.App;
   const $ = (id) => document.getElementById(id);
 
-  const screens = ["screenConnect", "screenLogin", "screenUnlock", "screenVault", "screenForm", "screenSettings", "screenShare"];
+  const screens = ["screenConnect", "screenLogin", "screenTenant", "screenTotp", "screenUnlock", "screenVault", "screenForm", "screenSettings", "screenShare"];
   function showScreen(id) {
     for (const s of screens) $(s).hidden = s !== id;
   }
@@ -109,7 +109,6 @@
     } catch (_) {}
     applyTheme(settings.theme || "system");
     $("cServer").value = settings.server_url || "";
-    $("cTenant").value = settings.tenant_slug || "";
     state.tenant = settings.tenant_slug || "";
     state.username = settings.username || "";
     if (settings.server_url) {
@@ -127,15 +126,14 @@
   $("cConnect").addEventListener("click", async () => {
     setError("cError", "");
     const url = $("cServer").value.trim();
-    const tenant = $("cTenant").value.trim();
-    if (!url || !tenant) {
-      setError("cError", "Server-URL und Mandant sind erforderlich.");
+    if (!url) {
+      setError("cError", "Server-URL ist erforderlich.");
       return;
     }
-    state.tenant = tenant;
+    state.tenant = "";
     try {
       await App().Connect(url);
-      await saveSettingsPartial({ server_url: url, tenant_slug: tenant });
+      await saveSettingsPartial({ server_url: url, tenant_slug: "" });
       checkForUpdate(url);
       $("lUser").value = state.username || "";
       showScreen("screenLogin");
@@ -147,8 +145,7 @@
   $("cOfflineOpen").addEventListener("click", async () => {
     setError("cError", "");
     const url = $("cServer").value.trim();
-    const tenant = $("cTenant").value.trim();
-    state.tenant = tenant;
+    const tenant = state.tenant;
     try {
       await App().Connect(url);
     } catch (_) {
@@ -163,20 +160,69 @@
     setError("lError", "");
     const user = $("lUser").value.trim();
     const pass = $("lPass").value;
-    const totp = $("lTotp").value.trim();
     if (!user || !pass) {
       setError("lError", "Benutzername und Passwort erforderlich.");
       return;
     }
     try {
-      await App().Login(state.tenant, user, pass, totp);
       state.username = user;
-      await saveSettingsPartial({ username: user });
+      const res = await App().Login(state.tenant, user, pass, "");
+      if (res && res.needs_tenant) {
+        state.loginToken = res.login_token;
+        $("lTenant").innerHTML = "";
+        for (const tenant of res.tenants || []) {
+          const option = document.createElement("option");
+          option.value = tenant.slug;
+          option.textContent = tenant.name === tenant.slug ? tenant.name : `${tenant.name} (${tenant.slug})`;
+          $("lTenant").appendChild(option);
+        }
+        showScreen("screenTenant");
+        return;
+      }
+      if (res && res.needs_totp) {
+        state.loginToken = res.login_token;
+        showScreen("screenTotp");
+        return;
+      }
+      state.username = user;
+      if (res && res.tenant_slug) state.tenant = res.tenant_slug;
+      await saveSettingsPartial({ username: user, tenant_slug: state.tenant });
       $("lPass").value = "";
       $("lTotp").value = "";
       showScreen("screenUnlock");
     } catch (err) {
       setError("lError", errMsg(err));
+    }
+  });
+
+  $("lTenantSelect").addEventListener("click", async () => {
+    setError("ltError", "");
+    try {
+      state.tenant = $("lTenant").value;
+      const res = await App().LoginStep(state.loginToken, state.tenant, state.username, "");
+      if (res && res.needs_totp) {
+        state.loginToken = res.login_token;
+        showScreen("screenTotp");
+        return;
+      }
+      await saveSettingsPartial({ tenant_slug: state.tenant });
+      showScreen("screenUnlock");
+    } catch (err) {
+      setError("ltError", errMsg(err));
+    }
+  });
+
+  $("lTotpSubmit").addEventListener("click", async () => {
+    setError("lpError", "");
+    try {
+      const res = await App().LoginStep(state.loginToken, "", state.username, $("lTotp").value.trim());
+      state.username = state.username || "";
+      $("lTotp").value = "";
+      if (res && res.tenant_slug) state.tenant = res.tenant_slug;
+      await saveSettingsPartial({ username: state.username, tenant_slug: state.tenant });
+      showScreen("screenUnlock");
+    } catch (err) {
+      setError("lpError", errMsg(err));
     }
   });
 

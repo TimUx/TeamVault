@@ -794,11 +794,13 @@ function renderLogin(app) {
     <h1>Login</h1>
     <div id="loginStep1">
       ${hintBox("Login-Passwort oder Passkey. Zum Entschlüsseln des Vaults brauchen Sie weiterhin Ihr Master-Passwort.")}
-      <label>Organisation</label>
-      <select id="slug" autocomplete="organization" disabled>
-        <option value="">Lade Organisationen…</option>
-      </select>
-      ${hintBox("Bestehende Mandanten — Auswahl für diesen Login.")}
+      <div id="tenantChoice">
+        <label>Organisation</label>
+        <select id="slug" autocomplete="organization" disabled>
+          <option value="">Lade Organisationen…</option>
+        </select>
+        ${hintBox("Bestehende Mandanten — Auswahl für diesen Login.")}
+      </div>
       <label>Username</label><input id="user" autocomplete="username" />
       <label>Passwort</label><input id="pw" type="password" autocomplete="current-password" />
       <div class="error login-err" hidden></div>
@@ -825,6 +827,7 @@ function renderLogin(app) {
     </div>
   </div>`);
   const slugSel = n.querySelector("#slug");
+  const tenantChoice = n.querySelector("#tenantChoice");
   const step1 = n.querySelector("#loginStep1");
   const step2 = n.querySelector("#loginStep2");
   let pendingLoginToken = "";
@@ -889,6 +892,7 @@ function renderLogin(app) {
         slugSel.appendChild(o);
       }
       slugSel.disabled = false;
+      if (tenants.length === 1) tenantChoice.hidden = true;
       if (saved && tenants.some((t) => t.slug === saved)) slugSel.value = saved;
       else if (tenants.length === 1) slugSel.value = tenants[0].slug;
     } catch (_) {
@@ -898,8 +902,8 @@ function renderLogin(app) {
   n.querySelector("#doLogin").onclick = async () => {
     setLoginErr("");
     try {
-      const tenantSlug = slugSel.value.trim();
-      if (!tenantSlug) throw new Error("Bitte Organisation wählen");
+      const tenantSlug = tenantChoice.hidden ? "" : slugSel.value.trim();
+      if (!tenantChoice.hidden && !tenantSlug) throw new Error("Bitte Organisation wählen");
       const res = await api("/api/auth/login", {
         method: "POST",
         body: JSON.stringify({

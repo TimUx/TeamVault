@@ -41,11 +41,16 @@
       <p class="update" id="update" hidden></p>
     </section>
     <section id="login">
-      <label>Tenant</label><input id="tenant" />
       <label>User</label><input id="user" />
       <label>Login-Passwort</label><input id="lpw" type="password" />
-      <label>TOTP</label><input id="totp" />
+      <label id="tenantLabel" hidden>Tenant</label>
+      <select id="tenant" hidden></select>
       <button id="doLogin" type="button">Anmelden</button>
+    </section>
+    <section id="totpStep" hidden>
+      <p class="hint">Gib den 6-stelligen Code deiner Authenticator-App ein.</p>
+      <label>TOTP</label><input id="totp" inputmode="numeric" maxlength="6" />
+      <button id="doTotp" type="button">Bestätigen</button>
     </section>
     <section id="unlock" hidden>
       <p class="hint" id="who"></p>

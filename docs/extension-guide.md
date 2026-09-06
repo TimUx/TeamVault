@@ -84,9 +84,9 @@ Lädt `teamvault-extension.zip`, entpackt lokal, dann **Entpackte Erweiterung la
 
 1. Popup öffnen → Server-URL = Ihre TeamVault-URL.
 2. Bei HTTPS: optionale Host-Berechtigung für die Domain erlauben.
-3. Login (Tenant / User / Passwort, optional TOTP im selben Formular) → Master-Passwort (nur lokal).
+3. Login: Server-URL → User/Passwort → bei mehreren Zuordnungen Tenant aus dem Dropdown wählen → bei aktiviertem TOTP den 6-stelligen Code in einem eigenen Schritt → Master-Passwort (nur lokal).
 
-Die Web-App trennt TOTP in einen zweiten Schritt; die Extension sendet TOTP optional zusammen mit Passwort.
+Die Extension verwendet wie die Web-App einen eigenen TOTP-Schritt. Der Tenant wird serverseitig anhand der User-Zuordnungen angeboten; eine freie Tenant-Eingabe ist nicht erforderlich.
 
 ## Nutzen
 

@@ -18,9 +18,6 @@
       <label>Server-URL
         <input id="cServer" type="text" placeholder="https://vault.firma.local" autocomplete="url" />
       </label>
-      <label>Mandant (Tenant)
-        <input id="cTenant" type="text" placeholder="firma" autocomplete="username" />
-      </label>
       <button id="cConnect" class="btn-primary">Weiter</button>
       <button id="cOfflineOpen" class="btn-secondary" hidden>Offline öffnen</button>
       <p id="cError" class="error" hidden></p>
@@ -37,13 +34,30 @@
       <label>Passwort
         <input id="lPass" type="password" autocomplete="current-password" />
       </label>
-      <label>TOTP-Code (falls aktiviert)
-        <input id="lTotp" type="text" inputmode="numeric" maxlength="6" />
-      </label>
       <button id="lLogin" class="btn-primary">Anmelden</button>
       <button id="lBack" class="btn-link">Zurück</button>
       <p id="lError" class="error" hidden></p>
     </div>
+  </section>
+
+  <section id="screenTenant" class="screen" hidden>
+   <div class="card">
+     <h1>Organisation wählen</h1>
+     <select id="lTenant"></select>
+     <button id="lTenantSelect" class="btn-primary">Weiter</button>
+     <p id="ltError" class="error" hidden></p>
+   </div>
+  </section>
+
+  <section id="screenTotp" class="screen" hidden>
+   <div class="card">
+     <h1>Zwei-Faktor-Authentifizierung</h1>
+     <label>TOTP-Code
+       <input id="lTotp" type="text" inputmode="numeric" maxlength="6" />
+     </label>
+     <button id="lTotpSubmit" class="btn-primary">Bestätigen</button>
+     <p id="lpError" class="error" hidden></p>
+   </div>
   </section>
 
   <!-- Unlock -->

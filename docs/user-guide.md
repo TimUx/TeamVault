@@ -33,7 +33,7 @@ Der Server sieht niemals Ihr Master-Passwort und niemals Klartext-Secrets (Zero-
 ## 2. Erste Anmeldung
 
 1. URL Ihrer Instanz öffnen → **Login**
-2. **Schritt 1:** **Organisation** (Dropdown der Mandanten), Username, Login-Passwort — optional **Passkey** statt Passwort
+2. **Schritt 1:** Bei mehreren Mandanten **Organisation** (Dropdown), Username, Login-Passwort — bei genau einem Mandanten wird die Auswahl ausgeblendet; optional **Passkey** statt Passwort
 3. **Schritt 2 (nur bei aktivem TOTP):** Nach erfolgreicher Prüfung von Passwort oder Passkey erscheint ein zweiter Schritt mit **sechs Einzelfeldern** für den Authenticator-Code. Ohne eingerichtetes TOTP entfällt dieser Schritt.
 4. **Login-Passwort (lokal):** mindestens 16 Zeichen, Groß- und Kleinbuchstaben, Ziffer, Sonderzeichen, **keine Umlaute** (LDAP-User nutzen ihr AD-Passwort)
 
