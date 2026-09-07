@@ -151,6 +151,12 @@ input, select, textarea {
   color: var(--color-text);
   font: inherit;
 }
+input[readonly], input:disabled, select:disabled, textarea[readonly], textarea:disabled {
+  background: var(--color-muted);
+  color: var(--color-text);
+  opacity: 0.65;
+  cursor: not-allowed;
+}
 .row { display: flex; gap: 0.75rem; flex-wrap: wrap; margin-top: 1.25rem; align-items: center; }
 button {
   border: none;
