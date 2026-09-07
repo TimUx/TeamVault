@@ -4717,6 +4717,12 @@ function renderApp(app) {
     if (!it.has_access || !it.envelope || !vault.sk) return;
     try {
       const payload = await loadSecretPayload(it);
+      if (isUserFavorite(it.id) && !payload.favorite && !vault.offlineMode) {
+        try {
+          await persistFavoriteToSecret(it, true);
+          payload.favorite = true;
+        } catch (_) {}
+      }
       it._username = payload.username || "";
       it._tags = payload.tags || [];
       it._favorite = !!payload.favorite;
