@@ -141,9 +141,20 @@ button {
 
 .app-frame {
   display: grid;
-  grid-template-columns: 240px 1fr 360px;
+  /* Column template is set from JS (applyFrameColumns): the side panels are
+     resizable via drag splitters and the hidden detail panel takes no space. */
+  grid-template-columns: var(--sidebar-w, 240px) 6px 1fr 0 0;
   height: 100vh;
+  overflow: hidden;
 }
+.splitter {
+  width: 6px;
+  cursor: col-resize;
+  background: transparent;
+  z-index: 5;
+}
+.splitter:hover, .splitter.active { background: var(--accent); }
+.splitter[hidden] { display: none; }
 .sidebar {
   background: var(--bg-alt);
   border-right: 1px solid var(--border);
@@ -163,7 +174,7 @@ button {
 .tag-filter-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
 .sidebar-foot { display: flex; flex-direction: column; gap: 6px; }
 
-.main { overflow: auto; padding: 14px; }
+.main { overflow: auto; padding: 14px; min-width: 0; }
 .list { display: flex; flex-direction: column; gap: 4px; }
 .list-item {
   display: flex;
@@ -177,7 +188,7 @@ button {
 .list-item:hover { background: var(--bg-alt); }
 .list-item.active { background: var(--bg-alt); border-color: var(--accent); }
 .list-item .fav { color: #ffcf5c; }
-.list-item .title { flex: 1; }
+.list-item .title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .list-item .owner-tag { color: var(--text-dim); font-size: 11px; background: var(--bg); border: 1px solid var(--border); border-radius: 999px; padding: 1px 8px; }
 
 .detail {
@@ -185,6 +196,7 @@ button {
   padding: 16px;
   overflow: auto;
   background: var(--bg-alt);
+  min-width: 0;
 }
 .detail h2 { margin-top: 0; }
 .field { margin-bottom: 12px; }

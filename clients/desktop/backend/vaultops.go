@@ -186,6 +186,16 @@ type SecretListItem struct {
 	SharedGroups []string `json:"shared_groups"`
 }
 
+// isMine reports whether the item was created by the current user. The
+// user_id comparison is authoritative; the username fallback keeps the
+// own/shared split working when /api/me yields no user_id.
+func (s *Session) isMine(createdBy, createdByUsername string) bool {
+	if meID := str(s.Me["user_id"]); meID != "" {
+		return createdBy == meID
+	}
+	return s.Username != "" && createdByUsername == s.Username
+}
+
 func stringSlice(v any) []string {
 	arr, ok := v.([]any)
 	if !ok {
@@ -270,7 +280,6 @@ func (s *Session) ListSecrets() ([]SecretListItem, error) {
 	if err != nil {
 		return nil, err
 	}
-	meID := str(s.Me["user_id"])
 	out := make([]SecretListItem, len(items))
 	for i, it := range items {
 		li := SecretListItem{
@@ -278,7 +287,7 @@ func (s *Session) ListSecrets() ([]SecretListItem, error) {
 			HasAccess:    it["has_access"] == true,
 			Visibility:   str(it["visibility"]),
 			Owner:        str(it["created_by_username"]),
-			IsOwner:      str(it["created_by"]) == meID && meID != "",
+			IsOwner:      s.isMine(str(it["created_by"]), str(it["created_by_username"])),
 			SharedUsers:  stringSlice(it["shared_users"]),
 			SharedGroups: stringSlice(it["shared_groups"]),
 		}
@@ -393,7 +402,6 @@ func (s *Session) decryptDetail(det map[string]any) (*SecretDetail, error) {
 	if err := json.Unmarshal(bodyPT, &body); err != nil {
 		body = map[string]any{"raw": string(bodyPT)}
 	}
-	meID := str(s.Me["user_id"])
 	out := &SecretDetail{
 		ID:           str(det["id"]),
 		Title:        string(titlePT),
@@ -403,7 +411,7 @@ func (s *Session) decryptDetail(det map[string]any) (*SecretDetail, error) {
 		Favorite:     body["favorite"] == true,
 		Tags:         stringSlice(body["tags"]),
 		Owner:        str(det["created_by_username"]),
-		IsOwner:      str(det["created_by"]) == meID && meID != "",
+		IsOwner:      s.isMine(str(det["created_by"]), str(det["created_by_username"])),
 		SharedUsers:  stringSlice(det["shared_users"]),
 		SharedGroups: stringSlice(det["shared_groups"]),
 	}
@@ -645,7 +653,6 @@ func (s *Session) ListSecretsOffline(snap OfflineSnapshot) ([]SecretListItem, er
 	if s.sk == nil {
 		return nil, errors.New("gesperrt")
 	}
-	meID := str(s.Me["user_id"])
 	out := make([]SecretListItem, 0, len(snap.Secrets))
 	for _, it := range snap.Secrets {
 		item := map[string]any{
@@ -656,7 +663,7 @@ func (s *Session) ListSecretsOffline(snap OfflineSnapshot) ([]SecretListItem, er
 		}
 		li := SecretListItem{
 			ID: it.ID, HasAccess: true, Visibility: it.Visibility,
-			Owner: it.CreatedByUsername, IsOwner: it.CreatedBy == meID && meID != "",
+			Owner: it.CreatedByUsername, IsOwner: s.isMine(it.CreatedBy, it.CreatedByUsername),
 			SharedUsers: it.SharedUsers, SharedGroups: it.SharedGroups,
 		}
 		if li.Visibility == "" {
