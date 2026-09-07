@@ -160,6 +160,13 @@ vom Kunden gewählten Adresse.
   das Gerät), keine externen CDNs, keine Analytics/Tracking/Telemetrie.
 - **Installation — Store:** Chrome Web Store / Firefox AMO (sobald
   veröffentlicht) — Store übernimmt Signierung und Auto-Update.
+  Jedes Release liefert fertige Upload-Pakete
+  (`teamvault-extension-chrome-<version>.zip`,
+  `teamvault-extension-firefox-<version>.zip`) sowie
+  `teamvault-extension-store-assets-<version>.zip` mit automatisch
+  erzeugten Store-Screenshots und Listing-Texten
+  (`scripts/pack-extension-stores.mjs`,
+  `scripts/capture-extension-screenshots.mjs`).
   Store-Vorbereitung: [docs/extension-store/](docs/extension-store/)
   (Listing-Texte, Privacy Policy, Permission-Begründung, Store-Readiness).
 - **Installation — Enterprise/Self-Hosted:** weiterhin über

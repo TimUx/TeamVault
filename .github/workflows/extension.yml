@@ -10,6 +10,7 @@ on:
     paths:
       - "clients/extension/**"
       - "scripts/pack-extension.mjs"
+      - "scripts/pack-extension-stores.mjs"
       - "cmd/pack-extension/**"
       - ".github/workflows/extension.yml"
   pull_request:
@@ -17,6 +18,7 @@ on:
     paths:
       - "clients/extension/**"
       - "scripts/pack-extension.mjs"
+      - "scripts/pack-extension-stores.mjs"
       - "cmd/pack-extension/**"
       - ".github/workflows/extension.yml"
   workflow_dispatch:
@@ -106,3 +108,29 @@ jobs:
 
       - name: web-ext lint (Firefox AMO compatibility)
         run: npx --yes web-ext@8 lint --source-dir clients/extension --no-config-discovery --pretty
+
+      - name: Store packages build and stay lint-clean
+        run: |
+          set -euo pipefail
+          node scripts/pack-extension-stores.mjs
+          ver="$(node -p 'require("./clients/extension/manifest.json").version')"
+          test -f "dist/teamvault-extension-chrome-${ver}.zip"
+          test -f "dist/teamvault-extension-firefox-${ver}.zip"
+          npx --yes web-ext@8 lint --source-dir "dist/teamvault-extension-firefox-${ver}.zip" --no-config-discovery --pretty
+          # The upload packages must never contain signing material or the
+          # Chrome-only "key" field (stores assign their own extension ID).
+          for target in chrome firefox; do
+            if unzip -l "dist/teamvault-extension-${target}-${ver}.zip" | grep -E '\.(pem|key)$'; then
+              echo "Signing material leaked into the ${target} store package."
+              exit 1
+            fi
+            unzip -p "dist/teamvault-extension-${target}-${ver}.zip" manifest.json | node -e '
+              let raw = "";
+              process.stdin.on("data", (c) => (raw += c));
+              process.stdin.on("end", () => {
+                const m = JSON.parse(raw);
+                if ("key" in m) { console.error("store package manifest must not contain a key field"); process.exit(1); }
+              });
+            '
+          done
+          git diff --exit-code clients/extension/manifest.json

@@ -352,6 +352,37 @@ Danach funktionieren z. B.:
 $env:TEAMVAULT_URL='https://vault.example'; irm "$env:TEAMVAULT_URL/help/install/tvcli.ps1" | iex
 ```
 
+### 4.2 Store-Pakete der Extension (Maintainer)
+
+Jedes Release (`.github/workflows/release.yml`, Job *extension store
+packages*) erzeugt zusätzlich browser-spezifische Upload-Pakete plus
+Listing-Assets:
+
+| Asset | Verwendung |
+|-------|------------|
+| `teamvault-extension-chrome-<version>.zip` | Upload im Chrome Web Store / Edge Add-ons (MV3 Service Worker, ohne `key`-Feld und ohne Gecko-Einträge) |
+| `teamvault-extension-firefox-<version>.zip` | Upload auf addons.mozilla.org (MV3 mit `background.scripts`, stabile Gecko-ID) |
+| `teamvault-extension-store-assets-<version>.zip` | `screenshots/` (1280×800, automatisch erzeugt), `listing/` (Listing-Texte, Privacy Policy), `icon-128.png` |
+
+Lokal reproduzierbar:
+
+```bash
+npm install --prefix scripts
+npx --prefix scripts playwright install chromium
+node scripts/capture-extension-screenshots.mjs
+node scripts/pack-extension-stores.mjs --screenshots dist/extension-store-screenshots
+```
+
+Die Screenshots zeigen ausschließlich synthetische Demo-Daten
+(`demo-user`, `demo-app.example`) — das Popup wird mit gestubbter
+WebExtension-/Server-/Krypto-Schicht gerendert, es wird kein echter Vault
+geöffnet. Screenshots werden von den Stores **nicht** aus dem
+Extension-Paket gelesen, sondern separat im Developer-Dashboard
+hochgeladen; deshalb liegen sie im Assets-ZIP und nicht im Upload-Paket.
+
+Die selbst gehostete Verteilung (`scripts/pack-extension.mjs` /
+`cmd/pack-extension` mit CRX/XPI + `updates.xml`) bleibt davon unberührt.
+
 ## 5. Backup
 
 | Was | Hinweis |

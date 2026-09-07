@@ -21,6 +21,38 @@ full-browser screenshot is not required by the store.
 | 6 | Server configuration | Show the "Server-URL" settings field and the optional host-permission flow | Popup with the Server-URL field being edited, e.g. `https://vault.example.com` | 360×~400 or 1280×800 | Example domain `vault.example.com` |
 | 7 | Lock / Security | Show the Lock/Logout controls | Unlocked vault view with the "Sperren" (Lock) and "Logout" buttons visible | 360×~400 or 1280×800 | Same demo entries as #2 |
 
+## Automatisch erzeugte Screenshots (Release-Artefakt)
+
+Bei jedem Release (`.github/workflows/release.yml`, Job
+*extension store packages*) werden die Store-Screenshots automatisch
+erzeugt und als ZIP veröffentlicht:
+
+```bash
+npm install --prefix scripts
+npx --prefix scripts playwright install chromium
+node scripts/capture-extension-screenshots.mjs            # → dist/extension-store-screenshots/*.png
+node scripts/pack-extension-stores.mjs --screenshots dist/extension-store-screenshots
+```
+
+`scripts/capture-extension-screenshots.mjs` rendert das echte Popup
+(`clients/extension/popup.html` inkl. CSS/JS) in Chromium; WebExtension-
+API, Server-API und Krypto-Layer werden gestubbt, sodass ausschließlich
+synthetische Demo-Daten (`demo-user`, `demo-app.example`) angezeigt
+werden — kein echter Vault, keine echten Schlüssel, kein Netzwerkzugriff.
+Jeder Screenshot wird auf 1280×800 mit neutralem Hintergrund und
+Beschriftung komponiert (Chrome Web Store und AMO akzeptieren dieses
+Format).
+
+Ergebnis: `01-login.png`, `02-unlock.png`, `03-vault.png`,
+`04-domain-match.png`, `05-settings.png`, `06-autofill.png`.
+
+Die Dateien liegen im Release-Asset
+`teamvault-extension-store-assets-<version>.zip` unter `screenshots/`
+zusammen mit den Listing-Texten. **Wichtig:** Screenshots werden von
+den Stores nie aus dem Extension-Paket gelesen, sondern im Developer-
+Dashboard separat hochgeladen — deshalb sind sie bewusst nicht Teil der
+Upload-ZIPs (AMO markiert unbenutzte Dateien im Paket).
+
 ## Notes
 
 - Do not include real tenant names, usernames, internal domains, IP
