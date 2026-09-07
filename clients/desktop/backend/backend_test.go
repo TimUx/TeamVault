@@ -1,6 +1,7 @@
 package backend
 
 import (
+	"net/http"
 	"testing"
 	"time"
 )
@@ -73,5 +74,36 @@ func TestStringSliceAcceptsJSONAndNativeSlices(t *testing.T) {
 	}
 	if got := stringSlice([]any{"one", "", 42, "two"}); len(got) != 2 || got[1] != "two" {
 		t.Fatalf("JSON slice was not normalized: %#v", got)
+	}
+}
+
+func TestClientSetsOriginForMutatingRequests(t *testing.T) {
+	c, err := NewClient("https://vault.example.test/base", "")
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+
+	for _, method := range []string{http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete} {
+		req, err := c.newRequest(method, "/api/me/preferences", []byte("{}"))
+		if err != nil {
+			t.Fatalf("newRequest(%s): %v", method, err)
+		}
+		if got, want := req.Header.Get("Origin"), "https://vault.example.test"; got != want {
+			t.Fatalf("%s Origin = %q, want %q", method, got, want)
+		}
+	}
+}
+
+func TestClientDoesNotSetOriginForReadRequests(t *testing.T) {
+	c, err := NewClient("https://vault.example.test", "")
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+	req, err := c.newRequest(http.MethodGet, "/api/me", nil)
+	if err != nil {
+		t.Fatalf("newRequest: %v", err)
+	}
+	if got := req.Header.Get("Origin"); got != "" {
+		t.Fatalf("GET Origin = %q, want empty", got)
 	}
 }
