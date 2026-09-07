@@ -2,6 +2,20 @@
 const api = typeof browser !== "undefined" ? browser : chrome;
 const state = { base: "", sk: null, me: null, cache: [], tabHost: "", tabOrigin: "" };
 const accentOptions = new Set(["blue", "indigo", "teal", "graphite", "rose", "amber", "emerald"]);
+const icons = {
+  fill:
+    '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+    '<path d="M21 2l-2 2m-7.6 7.6a5.5 5.5 0 1 1-7.8 7.8 5.5 5.5 0 0 1 7.8-7.8zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3m-3.5 3.5L19 4"/>' +
+    "</svg>",
+  copy:
+    '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+    '<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>' +
+    "</svg>",
+};
+
+function btnLabel(iconName, label) {
+  return icons[iconName] + `<span>${label}</span>`;
+}
 
 function applyAccent(pref) {
   const accent = accentOptions.has(pref) ? pref : "blue";
@@ -387,7 +401,10 @@ function paintList() {
     actions.className = "actions";
     const fill = document.createElement("button");
     fill.type = "button";
-    fill.textContent = "Fill";
+    fill.className = "btn-with-ico";
+    fill.innerHTML = btnLabel("fill", "Ausfüllen");
+    fill.title = "Ausfüllen";
+    fill.setAttribute("aria-label", "Ausfüllen");
     fill.onclick = async () => {
       try {
         const [tab] = await api.tabs.query({ active: true, currentWindow: true });
@@ -409,8 +426,10 @@ function paintList() {
     };
     const copy = document.createElement("button");
     copy.type = "button";
-    copy.className = "ghost";
-    copy.textContent = "Copy";
+    copy.className = "ghost btn-with-ico";
+    copy.innerHTML = btnLabel("copy", "Kopieren");
+    copy.title = "Kopieren";
+    copy.setAttribute("aria-label", "Kopieren");
     copy.onclick = async () => {
       try {
         if (!urlOriginsAllowed(it, state.tabOrigin)) {

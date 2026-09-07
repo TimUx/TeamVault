@@ -175,6 +175,7 @@ const ICO = {
   search: '<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>',
   rotate: '<path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/>',
   eye: '<path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/>',
+  edit: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
   spark: '<path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M18.4 5.6l-2.8 2.8M8.4 15.6l-2.8 2.8"/>',
   save: '<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/>',
   menu: '<path d="M4 6h16M4 12h16M4 18h16"/>',
@@ -2035,7 +2036,7 @@ function renderApp(app) {
                   <div class="secret-modal-head">
                     <h1 id="dtitle">Secret</h1>
                     <div class="row row-compact">
-                      <button class="btn-accent btn-sm btn-with-ico" type="button" id="dedit">${btnLabel("save", "Bearbeiten")}</button>
+                      <button class="btn-accent btn-sm btn-with-ico" type="button" id="dedit">${btnLabel("edit", "Bearbeiten")}</button>
                       <button class="btn-ghost btn-sm" type="button" id="sdetailClose">Schließen</button>
                     </div>
                   </div>
