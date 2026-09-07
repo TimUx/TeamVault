@@ -85,7 +85,7 @@ Die Presets gelten konsistent in Web-UI, Browser-Extension und Desktop-App.
 
 - Linke Sidebar (~240px), Sektionen Vault (Meine Secrets / Geteilte Secrets / Neu / Import / Sicherung) / Konto & Sicherheit / Administration mit Tenant- und Plattform-Administration
 - Sticky Topbar mit Seitentitel, Theme-Toggle als Icon (Sonne/Mond) und akzentuierter Header-Fläche
-- Flache Inline-SVG-Icons in Sidebar und Primäraktionen über alle Clients (kein Icon-CDN, Air-Gap)  
+- Flache Inline-SVG-Icons in Sidebar und Primäraktionen über alle Clients (kein Icon-CDN, Air-Gap)
 - Secrets-Ansicht: Liste / Tabelle / Kacheln (`tv-secrets-view` in localStorage); Mehrfachauswahl für Export  
 - Sidebar Vault: Meine Secrets / Geteilte Secrets / Neu / Import / Sicherung  
 - Mobile: Drawer + Backdrop  

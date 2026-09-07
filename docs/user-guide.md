@@ -309,7 +309,7 @@ In der App: **Konto → Clients** — empfohlener Download für die erkannte Pla
 - Login-Passwort ≠ Master-Passwort  
 - Nach Teilen nur notwendige Personen; bei Austritt Admin um Entzug/Rotation bitten  
 - Öffentliche/geteilte Rechner: nach Nutzung **Logout** und Browser schließen  
-- Phishing: nur die bekannte Firmen-URL verwenden; Extension Ausfüllen/Kopieren nur bei exakter Origin-Match (Schema+Host+Port)  
+- Phishing: nur die bekannte Firmen-URL verwenden; Extension Ausfüllen/Kopieren nur bei exakter Origin-Match (Schema+Host+Port)
 - Klartext-Export (JSON/CSV) sicher ablegen und zeitnah löschen  
 - `.tvbak` und Backup-Passwort getrennt vom Unlock-Key und Master-Passwort aufbewahren  
 
