@@ -46,10 +46,22 @@ func (c *Client) newRequest(method, path string, body []byte) (*http.Request, er
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
+	if isMutatingMethod(method) && req.URL.Scheme != "" && req.URL.Host != "" {
+		req.Header.Set("Origin", req.URL.Scheme+"://"+req.URL.Host)
+	}
 	if c.apiKey != "" {
 		req.Header.Set("Authorization", "Bearer "+c.apiKey)
 	}
 	return req, nil
+}
+
+func isMutatingMethod(method string) bool {
+	switch method {
+	case http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
+		return true
+	default:
+		return false
+	}
 }
 
 func (c *Client) do(method, path string, body any) ([]byte, int, error) {

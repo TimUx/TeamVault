@@ -505,16 +505,42 @@
     renderDetail(det);
   }
 
-  const COPY_ICON_SVG =
-    '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-    '<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>' +
-    "</svg>";
+  const icons = {
+    copy:
+      '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+      '<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>' +
+      "</svg>",
+    eye:
+      '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+      '<path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6Z"/><circle cx="12" cy="12" r="3"/>' +
+      "</svg>",
+    eyeOff:
+      '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+      '<path d="m3 3 18 18"/><path d="M10.6 10.6A3 3 0 0 0 12 15a3 3 0 0 0 2.4-1.2"/><path d="M9.9 5.2A10.6 10.6 0 0 1 12 5c6.5 0 10 7 10 7a18 18 0 0 1-3.3 4.1"/><path d="M6.6 6.6A18 18 0 0 0 2 12s3.5 7 10 7c1.6 0 3-.4 4.2-1"/>' +
+      "</svg>",
+    edit:
+      '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+      '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>' +
+      "</svg>",
+    share:
+      '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+      '<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 10.5 6.8-4"/><path d="m8.6 13.5 6.8 4"/>' +
+      "</svg>",
+    trash:
+      '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+      '<path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="m19 6-1 14H6L5 6"/><path d="M10 11v5"/><path d="M14 11v5"/>' +
+      "</svg>",
+  };
+
+  function iconLabel(icon, label) {
+    return icon + `<span>${escapeHtml(label)}</span>`;
+  }
 
   function copyBtn(value) {
     const b = document.createElement("button");
     b.type = "button";
     b.className = "btn-icon copy-icon-btn";
-    b.innerHTML = COPY_ICON_SVG;
+    b.innerHTML = icons.copy;
     b.title = "Kopieren";
     b.setAttribute("aria-label", "Kopieren");
     b.addEventListener("click", async () => {
@@ -545,11 +571,17 @@
     input.value = value || "";
     row.appendChild(input);
     const toggle = document.createElement("button");
-    toggle.className = "btn-ghost btn-sm";
-    toggle.textContent = "Anzeigen";
+    toggle.type = "button";
+    toggle.className = "btn-icon";
+    toggle.innerHTML = icons.eye;
+    toggle.title = "Anzeigen";
+    toggle.setAttribute("aria-label", "Anzeigen");
     toggle.addEventListener("click", () => {
       input.type = input.type === "password" ? "text" : "password";
-      toggle.textContent = input.type === "password" ? "Anzeigen" : "Verbergen";
+      const hidden = input.type === "password";
+      toggle.innerHTML = hidden ? icons.eye : icons.eyeOff;
+      toggle.title = hidden ? "Anzeigen" : "Verbergen";
+      toggle.setAttribute("aria-label", toggle.title);
     });
     row.appendChild(toggle);
     row.appendChild(copyBtn(value));
@@ -631,20 +663,23 @@
     const actions = document.createElement("div");
     actions.className = "detail-actions";
     const editBtn = document.createElement("button");
-    editBtn.className = "btn-secondary";
-    editBtn.textContent = "Bearbeiten";
+    editBtn.type = "button";
+    editBtn.className = "btn-secondary detail-action-btn";
+    editBtn.innerHTML = iconLabel(icons.edit, "Bearbeiten");
     editBtn.disabled = state.offline;
     editBtn.addEventListener("click", () => openForm(det));
     actions.appendChild(editBtn);
     const shareBtn = document.createElement("button");
-    shareBtn.className = "btn-secondary";
-    shareBtn.textContent = "Freigabe verwalten";
+    shareBtn.type = "button";
+    shareBtn.className = "btn-secondary detail-action-btn";
+    shareBtn.innerHTML = iconLabel(icons.share, "Freigabe verwalten");
     shareBtn.disabled = state.offline;
     shareBtn.addEventListener("click", () => openShareScreen(det.id, det.title));
     actions.appendChild(shareBtn);
     const delBtn = document.createElement("button");
-    delBtn.className = "btn-secondary";
-    delBtn.textContent = "Löschen";
+    delBtn.type = "button";
+    delBtn.className = "btn-secondary detail-action-btn detail-action-danger";
+    delBtn.innerHTML = iconLabel(icons.trash, "Löschen");
     delBtn.disabled = state.offline;
     delBtn.addEventListener("click", async () => {
       if (!confirm("Secret wirklich löschen?")) return;

@@ -15,7 +15,7 @@ Secrets und Titel werden nur im Browser entschlüsselt — Server und Storage se
 | **Vault-UX** | Favoriten (lokal), Sortierung A–Z/Z–A/Recent, Suche/Tags, flache App-Shell mit abgesetzter Sidebar/Header und wählbarem Farbdesign |
 | **Onboarding** | Erzwungenes Master-Passwort + Schlüsselpaar; Recovery-Kit oder Admin-Escrow (Shamir) |
 | **Admin** | User/Gruppen, Firmen-CA, LDAP, SMTP, Krypto/Policy, Audit, API-Keys (`read`/`vault`/`admin`), Tenants, Storage-Migration, Instanz-Backup/Restore |
-| **Clients** | Web-UI, CLI (`tvcli`), Browser-Extension (Chrome/Edge/Firefox; Fill/Copy mit Origin-Match; Sichtbarkeit per Policy), Desktop-App (Linux/Windows, reine Vault-Funktionen, Offline-Cache, Tray, Autostart) |
+| **Clients** | Web-UI, CLI (`tvcli`), Browser-Extension (Chrome/Edge/Firefox; Ausfüllen/Kopieren mit Origin-Match; Sichtbarkeit per Policy), Desktop-App (Linux/Windows, reine Vault-Funktionen, Offline-Cache, Tray, Autostart) |
 
 ![Vault mit Sidebar und Secrets](docs/images/vault-secrets.png)
 
@@ -152,7 +152,7 @@ vom Kunden gewählten Adresse.
   Kein fester Produktions-Server ist im Code hinterlegt.
 - **Autofill:** Füllt Login-Formulare nur nach exaktem Origin-Match
   (Schema, Host, Port) und prüft die aktuelle Navigation unmittelbar vor
-  dem Fill-Vorgang erneut (Phishing-/Navigations-Schutz), siehe
+  dem Ausfüll-Vorgang erneut (Phishing-/Navigations-Schutz), siehe
   [Security-Architektur](docs/extension-store/security-architecture.md).
 - **TOTP:** RFC-6238-konforme 6-stellige Codes, lokal aus dem
   entschlüsselten Vault-Eintrag berechnet.
@@ -176,7 +176,7 @@ vom Kunden gewählten Adresse.
 
 ## Desktop-App (Linux/Windows)
 
-Native, reine Vault-App (Wails v2/Go) mit Offline-Cache, Tray-Icon und Autostart — ohne Adminrechte installier-/ausführbar. Details: [Desktop Guide](docs/desktop-guide.md).
+Native, reine Vault-App (Wails v2/Go) mit Offline-Cache, Tray-Icon, Autostart und konsistenten Icon+Text-Detailaktionen — ohne Adminrechte installier-/ausführbar. Details: [Desktop Guide](docs/desktop-guide.md).
 
 ```bash
 ./scripts/build-desktop.sh          # Linux: Binary + AppImage

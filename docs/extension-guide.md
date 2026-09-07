@@ -83,7 +83,7 @@ Lädt `teamvault-extension.zip`, entpackt lokal, dann **Entpackte Erweiterung la
 ## Einrichten
 
 1. Popup öffnen → Server-URL = Ihre TeamVault-URL.
-2. Optional **Farbdesign** wählen: Blau (Standard), Indigo, Teal oder Graphit — identisch zu Web-UI und Desktop-App.
+2. Optional **Farbdesign** wählen: Blau (Standard), Indigo, Teal, Graphit, Rose, Amber oder Emerald — identisch zu Web-UI und Desktop-App.
 3. Bei HTTPS: optionale Host-Berechtigung für die Domain erlauben.
 4. Login: Server-URL → User/Passwort → bei mehreren Zuordnungen Tenant aus dem Dropdown wählen → bei aktiviertem TOTP den 6-stelligen Code in einem eigenen Schritt → Master-Passwort (nur lokal).
 
@@ -92,7 +92,7 @@ Die Extension verwendet wie die Web-App einen eigenen TOTP-Schritt. Der Tenant w
 ## Nutzen
 
 1. Seite öffnen, die zur Secret-URL passt.
-2. Popup → Eintrag filtern (Alle / Privat / Geteilt) → **Fill** oder **Copy**.
-3. Ohne URL im Secret: Fill/Copy erlaubt. Mit URL: Aktion nur bei **exakter Origin-Match** (Schema, Host und Port — Phishing-Schutz).
+2. Popup → Eintrag filtern (Alle / Privat / Geteilt) → per Icon+Text-Button **Ausfüllen** oder **Kopieren**.
+3. Ohne URL im Secret: Ausfüllen/Kopieren erlaubt. Mit URL: Aktion nur bei **exakter Origin-Match** (Schema, Host und Port — Phishing-Schutz).
 
 Admin: `scripts/pack-clients.ps1` erzeugt CLI + Extension-Artefakte (`dist/`) → im Docker-Image unter `/opt/teamvault/bundled-downloads`.
