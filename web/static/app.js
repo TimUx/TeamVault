@@ -1345,8 +1345,6 @@ async function persistFavoriteToSecret(it, on) {
       }),
     });
     it._payload = payload;
-    it._copyShortcuts = buildCopyShortcuts(payload);
-    if (currentSecret && currentSecret.id === it.id) currentSecretPayload = payload;
   } finally {
     dk.fill(0);
   }
