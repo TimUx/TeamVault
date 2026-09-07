@@ -11,7 +11,10 @@ repository.
 - [x] Manifest V3 (`manifest_version: 3`)
 - [x] Icon 128x128 (`clients/extension/icons/icon-128.png`, referenced in
       `manifest.json` → `icons.128` and `action.default_icon.128`)
-- [ ] Screenshots captured and uploaded (guidance ready: [screenshots.md](./screenshots.md))
+- [x] Screenshots generated automatically on release
+      (`scripts/capture-extension-screenshots.mjs`, shipped in
+      `teamvault-extension-store-assets-<version>.zip`); upload in the
+      dashboard is manual — see [screenshots.md](./screenshots.md)
 - [x] Description (short + detailed text ready: [chrome-store.md](./chrome-store.md))
 - [x] Single Purpose statement ready: [chrome-store.md](./chrome-store.md#single-purpose)
 - [x] Permission justification table ready: [chrome-store.md](./chrome-store.md#permission-justification)
@@ -20,9 +23,11 @@ repository.
       `https://` script/import reference under `clients/extension`)
 - [x] No tracking/analytics/telemetry (verified by code review; no
       network calls other than to the user-configured server URL)
-- [ ] Production package built via `scripts/pack-extension.mjs` /
-      `cmd/pack-extension` with the real (secret, not-committed) signing
-      key and uploaded to the Chrome Developer Dashboard
+- [x] Store upload package built automatically on release
+      (`scripts/pack-extension-stores.mjs` →
+      `teamvault-extension-chrome-<version>.zip`, without the `key` field
+      and without Gecko-only manifest entries); the upload itself to the
+      Chrome Developer Dashboard is manual
 - [ ] Manual test pass completed on a real Chrome/Edge install (see
       test plan below)
 
@@ -31,7 +36,10 @@ repository.
 - [x] Manifest V3 with Firefox-compatible `background.scripts` fallback
 - [x] Stable Extension ID (`teamvault@local`, unchanged)
 - [x] Icon (`icons/icon-128.png`, plus 16/32/48)
-- [ ] Screenshots captured and uploaded (guidance ready: [screenshots.md](./screenshots.md))
+- [x] Screenshots generated automatically on release
+      (`scripts/capture-extension-screenshots.mjs`, shipped in
+      `teamvault-extension-store-assets-<version>.zip`); upload in the
+      dashboard is manual — see [screenshots.md](./screenshots.md)
 - [x] Description ready: [firefox-amo.md](./firefox-amo.md)
 - [x] Privacy policy drafted: [privacy-policy.md](./privacy-policy.md)
 - [x] Source code available (public GitHub repository; vendor libraries
@@ -109,7 +117,10 @@ this work:
 
 - Register/pay for a Chrome Web Store developer account and a Firefox
   AMO developer account.
-- Capture the actual store screenshots (guidance: [screenshots.md](./screenshots.md)).
+- Upload the generated store screenshots
+  (`teamvault-extension-store-assets-<version>.zip` → `screenshots/`) in
+  each dashboard; regenerate them with
+  `node scripts/capture-extension-screenshots.mjs` if the UI changes.
 - Host `privacy-policy.md` at a publicly reachable URL and link it from
   both store listings.
 - Submit the built package to each store and complete their respective
