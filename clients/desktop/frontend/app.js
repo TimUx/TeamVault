@@ -372,8 +372,10 @@
     const q = state.search.toLowerCase();
     const rows = state.secrets.filter((s) => {
       if (state.filter === "favorites" && !s.favorite) return false;
-      if (state.filter === "mine" && !s.is_owner) return false;
-      if (state.filter === "shared" && s.is_owner) return false;
+      // Visibility is authoritative here: a secret owned by the current user
+      // can still be shared and belongs in the shared view in that case.
+      if (state.filter === "mine" && s.visibility === "shared") return false;
+      if (state.filter === "shared" && s.visibility !== "shared") return false;
       if (state.tagFilters.length) {
         const have = s.tags || [];
         if (!state.tagFilters.every((t) => have.includes(t))) return false;
