@@ -20,6 +20,8 @@ type Settings struct {
 	// Theme is the user's appearance preference: "system" (default when
 	// empty), "light", or "dark". Applied client-side in app.js.
 	Theme string `json:"theme"`
+	// Accent is the user's color design preset. Empty means "blue".
+	Accent string `json:"accent"`
 }
 
 func configDir() (string, error) {

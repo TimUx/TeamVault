@@ -1,6 +1,14 @@
 /* TeamVault extension popup — mature autofill + domain match (ZK: keys only here). */
 const api = typeof browser !== "undefined" ? browser : chrome;
 const state = { base: "", sk: null, me: null, cache: [], tabHost: "", tabOrigin: "" };
+const accentOptions = new Set(["blue", "indigo", "teal", "graphite"]);
+
+function applyAccent(pref) {
+  const accent = accentOptions.has(pref) ? pref : "blue";
+  document.documentElement.setAttribute("data-accent", accent);
+  const sel = document.getElementById("accent");
+  if (sel) sel.value = accent;
+}
 
 function showErr(msg) {
   const el = document.getElementById("err");
@@ -82,7 +90,8 @@ async function checkForUpdate() {
 const totpNow = TVTotp.totpNow;
 
 async function boot() {
-  const cfg = await api.storage.local.get(["base", "tenant", "user"]);
+  const cfg = await api.storage.local.get(["base", "tenant", "user", "accent"]);
+  applyAccent(cfg.accent || "blue");
   state.base = (cfg.base || "http://127.0.0.1:8080").replace(/\/$/, "");
   document.getElementById("base").value = state.base;
   checkForUpdate();
@@ -130,7 +139,9 @@ function isBuiltinLocalOrigin(base) {
 
 document.getElementById("saveBase").onclick = async () => {
   state.base = document.getElementById("base").value.trim().replace(/\/$/, "");
-  await api.storage.local.set({ base: state.base });
+  const accent = document.getElementById("accent").value;
+  applyAccent(accent);
+  await api.storage.local.set({ base: state.base, accent });
   if (!isBuiltinLocalOrigin(state.base) && api.permissions?.request) {
     try {
       await api.permissions.request({ origins: [state.base + "/*"] });
@@ -138,6 +149,12 @@ document.getElementById("saveBase").onclick = async () => {
   }
   showErr("");
   checkForUpdate();
+};
+
+document.getElementById("accent").onchange = async (ev) => {
+  const accent = ev.target.value;
+  applyAccent(accent);
+  await api.storage.local.set({ accent });
 };
 
 document.getElementById("doLogin").onclick = async () => {

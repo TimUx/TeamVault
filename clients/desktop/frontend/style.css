@@ -8,8 +8,13 @@
   --border: #e2e6eb;
   --text: #1a1d21;
   --text-dim: #5b6572;
-  --accent: #2f5d8c;
-  --accent-dark: #274d75;
+  --accent: #1f66d1;
+  --accent-dark: #174ea6;
+  --sidebar-bg: #123d8e;
+  --sidebar-bg-strong: #0b2d6b;
+  --sidebar-text: #f7faff;
+  --sidebar-muted: #bfd2f2;
+  --sidebar-hover: rgba(255, 255, 255, 0.12);
   --danger: #a70240;
   --ok: #2f6b3a;
   --radius: 6px;
@@ -24,9 +29,50 @@ html[data-theme="dark"] {
   --text: #e8eaed;
   --text-dim: #a0a7b2;
   --accent: #6b9bd2;
-  --accent-dark: #588bc4;
+  --accent-dark: #4b7fc0;
+  --sidebar-bg: #0f2a5f;
+  --sidebar-bg-strong: #0a1f49;
+  --sidebar-text: #f7faff;
+  --sidebar-muted: #b7c8e8;
+  --sidebar-hover: rgba(255, 255, 255, 0.12);
   --danger: #c43b66;
   --ok: #7bc47f;
+}
+
+html[data-accent="indigo"] {
+  --accent: #6750d8;
+  --accent-dark: #513db4;
+  --sidebar-bg: #24195f;
+  --sidebar-bg-strong: #1a1247;
+}
+
+html[data-accent="teal"] {
+  --accent: #078a83;
+  --accent-dark: #066e69;
+  --sidebar-bg: #064f4e;
+  --sidebar-bg-strong: #043b3a;
+}
+
+html[data-accent="graphite"] {
+  --accent: #4b6178;
+  --accent-dark: #37485a;
+  --sidebar-bg: #26313e;
+  --sidebar-bg-strong: #1c2530;
+}
+
+html[data-theme="dark"][data-accent="indigo"] {
+  --accent: #9b8cff;
+  --accent-dark: #8170ef;
+}
+
+html[data-theme="dark"][data-accent="teal"] {
+  --accent: #4bc7be;
+  --accent-dark: #32afa7;
+}
+
+html[data-theme="dark"][data-accent="graphite"] {
+  --accent: #93a4b8;
+  --accent-dark: #788ca3;
 }
 
 * { box-sizing: border-box; }
@@ -156,23 +202,37 @@ button {
 .splitter:hover, .splitter.active { background: var(--accent); }
 .splitter[hidden] { display: none; }
 .sidebar {
-  background: var(--bg-alt);
-  border-right: 1px solid var(--border);
+  background: linear-gradient(180deg, var(--sidebar-bg), var(--sidebar-bg-strong));
+  border-right: 1px solid color-mix(in srgb, var(--sidebar-bg), #000 12%);
+  color: var(--sidebar-text);
   display: flex;
   flex-direction: column;
   padding: 14px;
   gap: 10px;
 }
-.brand { font-weight: 600; margin-bottom: 4px; }
+.brand { font-weight: 700; margin-bottom: 4px; }
 .search { margin: 0; }
 .filters { display: flex; gap: 6px; }
-.filter-btn { background: none; color: var(--text-dim); border: 1px solid var(--border); flex: 1; }
-.filter-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
-.tag-filter-head { display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: var(--text-dim); margin-top: 6px; }
+.filter-btn { background: rgba(255, 255, 255, 0.08); color: var(--sidebar-muted); border: 1px solid rgba(255, 255, 255, 0.16); flex: 1; }
+.filter-btn:hover { background: var(--sidebar-hover); color: var(--sidebar-text); }
+.filter-btn.active { background: rgba(255, 255, 255, 0.2); color: #fff; border-color: rgba(255, 255, 255, 0.32); }
+.tag-filter-head { display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: var(--sidebar-muted); margin-top: 6px; }
 .tag-filter-list { flex: 1; overflow: auto; display: flex; flex-wrap: wrap; gap: 4px; align-content: flex-start; }
-.tag-filter-btn { background: var(--bg); color: var(--text-dim); border: 1px solid var(--border); border-radius: 999px; padding: 3px 9px; font-size: 12px; }
-.tag-filter-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.tag-filter-btn { background: rgba(255, 255, 255, 0.08); color: var(--sidebar-muted); border: 1px solid rgba(255, 255, 255, 0.16); border-radius: 999px; padding: 3px 9px; font-size: 12px; }
+.tag-filter-btn:hover { background: var(--sidebar-hover); color: var(--sidebar-text); }
+.tag-filter-btn.active { background: rgba(255, 255, 255, 0.2); color: #fff; border-color: rgba(255, 255, 255, 0.32); }
 .sidebar-foot { display: flex; flex-direction: column; gap: 6px; }
+.sidebar .btn-ghost,
+.sidebar .btn-link {
+  color: var(--sidebar-muted);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+.sidebar .btn-ghost:hover,
+.sidebar .btn-link:hover {
+  color: var(--sidebar-text);
+  border-color: rgba(255, 255, 255, 0.32);
+  background: var(--sidebar-hover);
+}
 
 .main { overflow: auto; padding: 14px; min-width: 0; }
 .list { display: flex; flex-direction: column; gap: 4px; }
