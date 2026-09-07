@@ -880,6 +880,17 @@
     if (state.shareSecretId) await openDetail(state.shareSecretId);
   });
 
+  // Disable webview zoom (Ctrl+scroll / pinch / Ctrl+±) so the fixed app
+  // layout can never be scaled out of the window — in both WebView2
+  // (Windows) and WebKitGTK (Linux).
+  document.addEventListener("wheel", (e) => {
+    if (e.ctrlKey || e.metaKey) e.preventDefault();
+  }, { passive: false });
+  document.addEventListener("keydown", (e) => {
+    if ((e.ctrlKey || e.metaKey) && ["+", "-", "=", "0"].includes(e.key)) e.preventDefault();
+  });
+  document.addEventListener("gesturestart", (e) => e.preventDefault());
+
   window.addEventListener("DOMContentLoaded", () => {
     initSplitters();
     init();
