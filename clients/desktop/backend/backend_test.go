@@ -66,3 +66,12 @@ func TestBuildBodyDefaultsToEmptySlices(t *testing.T) {
 		t.Fatalf("expected non-nil default slices, got %+v", body)
 	}
 }
+
+func TestStringSliceAcceptsJSONAndNativeSlices(t *testing.T) {
+	if got := stringSlice([]string{"one", "two"}); len(got) != 2 || got[1] != "two" {
+		t.Fatalf("native slice was not preserved: %#v", got)
+	}
+	if got := stringSlice([]any{"one", "", 42, "two"}); len(got) != 2 || got[1] != "two" {
+		t.Fatalf("JSON slice was not normalized: %#v", got)
+	}
+}

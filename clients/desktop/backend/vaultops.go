@@ -197,6 +197,9 @@ func (s *Session) isMine(createdBy, createdByUsername string) bool {
 }
 
 func stringSlice(v any) []string {
+	if arr, ok := v.([]string); ok {
+		return append([]string(nil), arr...)
+	}
 	arr, ok := v.([]any)
 	if !ok {
 		return nil
