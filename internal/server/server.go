@@ -411,11 +411,12 @@ func (a *API) handleSetupCommit(w http.ResponseWriter, r *http.Request) {
 }
 
 type loginReq struct {
-	TenantSlug string `json:"tenant_slug"`
-	Username   string `json:"username"`
-	Password   string `json:"password"`
-	TOTPCode   string `json:"totp_code"`
-	LoginToken string `json:"login_token"`
+	TenantSlug    string `json:"tenant_slug"`
+	Username      string `json:"username"`
+	Password      string `json:"password"`
+	TOTPCode      string `json:"totp_code"`
+	LoginToken    string `json:"login_token"`
+	RememberLogin bool   `json:"remember_login"`
 }
 
 func (a *API) handleAuthTenants(w http.ResponseWriter, r *http.Request) {
@@ -478,10 +479,10 @@ func (a *API) handleLogin(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, http.StatusUnauthorized, "invalid login")
 			return
 		}
-		if !a.gateTOTPOrIssueToken(w, user, tenant, req.TOTPCode) {
+		if !a.gateTOTPOrIssueToken(w, user, tenant, req.TOTPCode, pending.Remember) {
 			return
 		}
-		a.writeLoginSuccess(w, r, user, tenant)
+		a.writeLoginSuccess(w, r, user, tenant, pending.Remember)
 		return
 	}
 	if req.LoginToken != "" {
@@ -556,10 +557,10 @@ func (a *API) handleLogin(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusForbidden, "account disabled")
 		return
 	}
-	if !a.gateTOTPOrIssueToken(w, user, tenant, req.TOTPCode) {
+	if !a.gateTOTPOrIssueToken(w, user, tenant, req.TOTPCode, req.RememberLogin) {
 		return
 	}
-	a.writeLoginSuccess(w, r, user, tenant)
+	a.writeLoginSuccess(w, r, user, tenant, req.RememberLogin)
 }
 
 func (a *API) handleTenantlessLogin(w http.ResponseWriter, r *http.Request, req loginReq) {
@@ -589,7 +590,7 @@ func (a *API) handleTenantlessLogin(w http.ResponseWriter, r *http.Request, req 
 		return
 	}
 	if len(matches) > 1 {
-		token := a.pendingLogins.issueSelection(matches)
+		token := a.pendingLogins.issueSelection(matches, req.RememberLogin)
 		type tenantChoice struct {
 			Slug string `json:"slug"`
 			Name string `json:"name"`
@@ -607,10 +608,10 @@ func (a *API) handleTenantlessLogin(w http.ResponseWriter, r *http.Request, req 
 		writeErr(w, http.StatusUnauthorized, "invalid credentials")
 		return
 	}
-	if !a.gateTOTPOrIssueToken(w, users[0], tenant, req.TOTPCode) {
+	if !a.gateTOTPOrIssueToken(w, users[0], tenant, req.TOTPCode, req.RememberLogin) {
 		return
 	}
-	a.writeLoginSuccess(w, r, users[0], tenant)
+	a.writeLoginSuccess(w, r, users[0], tenant, req.RememberLogin)
 }
 
 func authenticateUser(a *API, tenant *store.Tenant, user *store.UserRecord, pass string) bool {
@@ -640,14 +641,14 @@ func normalizeTOTPCode(s string) string {
 	return b.String()
 }
 
-func (a *API) gateTOTPOrIssueToken(w http.ResponseWriter, user *store.UserRecord, tenant *store.Tenant, totpCode string) bool {
+func (a *API) gateTOTPOrIssueToken(w http.ResponseWriter, user *store.UserRecord, tenant *store.Tenant, totpCode string, remember bool) bool {
 	if !user.TotpEnabled {
 		return true
 	}
 
 	code := normalizeTOTPCode(totpCode)
 	if code == "" {
-		token := a.pendingLogins.issue(user.ID, tenant.ID)
+		token := a.pendingLogins.issue(user.ID, tenant.ID, remember)
 		writeJSON(w, http.StatusOK, map[string]any{
 			"needs_totp":  true,
 			"login_token": token,
@@ -707,15 +708,15 @@ func (a *API) handleLoginTOTPStep(w http.ResponseWriter, r *http.Request, loginT
 		writeErr(w, http.StatusUnauthorized, "invalid login")
 		return
 	}
-	a.writeLoginSuccess(w, r, user, tenant)
+	a.writeLoginSuccess(w, r, user, tenant, pending.Remember)
 }
 
-func (a *API) writeLoginSuccess(w http.ResponseWriter, r *http.Request, user *store.UserRecord, tenant *store.Tenant) {
+func (a *API) writeLoginSuccess(w http.ResponseWriter, r *http.Request, user *store.UserRecord, tenant *store.Tenant, remember bool) {
 	var roles []string
 	_ = json.Unmarshal([]byte(user.RolesJSON), &roles)
 	// Single active cookie session per user: revoke prior logins (stolen-session / shared-device hygiene).
 	a.Sessions.DeleteByUser(user.ID)
-	sess := a.Sessions.Create(user.ID, tenant.ID, user.Username, roles)
+	sess := a.Sessions.CreateWithTTL(user.ID, tenant.ID, user.Username, roles, rememberLoginTTL(remember), remember)
 	a.setSessionCookie(w, r, sess)
 	writeJSON(w, http.StatusOK, map[string]any{
 		"username": user.Username, "tenant_id": tenant.ID, "tenant_name": tenant.Name, "tenant_slug": tenant.Slug,
@@ -724,7 +725,16 @@ func (a *API) writeLoginSuccess(w http.ResponseWriter, r *http.Request, user *st
 		"needs_totp_setup": a.bundle().Policy.TOTPRequired && !user.TotpEnabled,
 		"recovery_mode":    tenant.RecoveryMode,
 		"preferences":      userPreferences(user),
+		"remembered_login": sess.Remembered,
+		"session_expires_at": sess.ExpiresAt,
 	})
+}
+
+func rememberLoginTTL(remember bool) time.Duration {
+	if remember {
+		return session.MaxRememberedTTL
+	}
+	return 0
 }
 
 func (a *API) handleLogout(w http.ResponseWriter, r *http.Request) {

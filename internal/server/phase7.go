@@ -202,11 +202,12 @@ func (a *API) handleWALoginFinish(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		TenantSlug   string          `json:"tenant_slug"`
-		Username     string          `json:"username"`
-		ChallengeKey string          `json:"challenge_key"`
-		Credential   json.RawMessage `json:"credential"`
-		TOTPCode     string          `json:"totp_code"`
+		TenantSlug    string          `json:"tenant_slug"`
+		Username      string          `json:"username"`
+		ChallengeKey  string          `json:"challenge_key"`
+		Credential    json.RawMessage `json:"credential"`
+		TOTPCode      string          `json:"totp_code"`
+		RememberLogin bool            `json:"remember_login"`
 	}
 	b, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
 	r.Body.Close()
@@ -253,13 +254,14 @@ func (a *API) handleWALoginFinish(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if u.TotpEnabled {
-		if !a.gateTOTPOrIssueToken(w, u, tenant, body.TOTPCode) {
+		if !a.gateTOTPOrIssueToken(w, u, tenant, body.TOTPCode, body.RememberLogin) {
 			return
 		}
 	}
 	var roles []string
 	_ = json.Unmarshal([]byte(u.RolesJSON), &roles)
-	sess := a.Sessions.Create(u.ID, tenant.ID, u.Username, roles)
+	a.Sessions.DeleteByUser(u.ID)
+	sess := a.Sessions.CreateWithTTL(u.ID, tenant.ID, u.Username, roles, rememberLoginTTL(body.RememberLogin), body.RememberLogin)
 	a.setSessionCookie(w, r, sess)
 	_ = a.App.Vault.AppendAudit(r.Context(), store.AuditEvent{
 		ID: newID("aud"), TenantID: tenant.ID, ActorID: string(u.ID),
@@ -273,5 +275,7 @@ func (a *API) handleWALoginFinish(w http.ResponseWriter, r *http.Request) {
 		"recovery_mode":    tenant.RecoveryMode,
 		"auth": "passkey",
 		"note": "vault unlock still requires master password",
+		"remembered_login": sess.Remembered,
+		"session_expires_at": sess.ExpiresAt,
 	})
 }

@@ -27,6 +27,7 @@
     shareSecretId: null,
     themePref: "system",
     accentPref: "blue",
+    rememberLogin: false,
     sidebarW: 240,
     detailW: 360,
   };
@@ -218,6 +219,16 @@
       await App().Connect(url);
       await saveSettingsPartial({ server_url: url, tenant_slug: "" });
       checkForUpdate(url);
+      try {
+        const me = await App().CurrentUser();
+        if (me && me.username) {
+          state.username = me.username;
+          state.tenant = me.tenant_slug || state.tenant;
+          await saveSettingsPartial({ username: state.username, tenant_slug: state.tenant });
+          showScreen("screenUnlock");
+          return;
+        }
+      } catch (_) {}
       $("lUser").value = state.username || "";
       showScreen("screenLogin");
     } catch (err) {
@@ -249,7 +260,8 @@
     }
     try {
       state.username = user;
-      const res = await App().Login(state.tenant, user, pass, "");
+      state.rememberLogin = !!$("lRemember").checked;
+      const res = await App().Login(state.tenant, user, pass, "", state.rememberLogin);
       if (res && res.needs_tenant) {
         state.loginToken = res.login_token;
         $("lTenant").innerHTML = "";
@@ -282,7 +294,7 @@
     setError("ltError", "");
     try {
       state.tenant = $("lTenant").value;
-      const res = await App().LoginStep(state.loginToken, state.tenant, state.username, "");
+      const res = await App().LoginStep(state.loginToken, state.tenant, state.username, "", state.rememberLogin);
       if (res && res.needs_totp) {
         state.loginToken = res.login_token;
         showScreen("screenTotp");
@@ -298,7 +310,7 @@
   $("lTotpSubmit").addEventListener("click", async () => {
     setError("lpError", "");
     try {
-      const res = await App().LoginStep(state.loginToken, "", state.username, $("lTotp").value.trim());
+      const res = await App().LoginStep(state.loginToken, "", state.username, $("lTotp").value.trim(), state.rememberLogin);
       state.username = state.username || "";
       $("lTotp").value = "";
       if (res && res.tenant_slug) state.tenant = res.tenant_slug;

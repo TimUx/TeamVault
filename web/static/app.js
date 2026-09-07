@@ -860,6 +860,7 @@ function renderLogin(app) {
       </div>
       <label>Username</label><input id="user" autocomplete="username" />
       <label>Passwort</label><input id="pw" type="password" autocomplete="current-password" />
+      <label class="inline"><input id="rememberLogin" type="checkbox" /> Login merken (max. 90 Tage, Master-Passwort bleibt erforderlich)</label>
       <div class="error login-err" hidden></div>
       <div class="row">
         <button class="btn-accent" type="button" id="doLogin">Anmelden</button>
@@ -967,6 +968,7 @@ function renderLogin(app) {
           tenant_slug: tenantSlug,
           username: n.querySelector("#user").value.trim(),
           password: n.querySelector("#pw").value,
+          remember_login: n.querySelector("#rememberLogin").checked,
         }),
       });
       await finishAuth(res, tenantSlug);
@@ -1000,6 +1002,7 @@ function renderLogin(app) {
           username,
           challenge_key: begin.challenge_key,
           credential: credentialToJSON(cred),
+          remember_login: n.querySelector("#rememberLogin").checked,
         }),
       });
       await finishAuth(res, tenant);
@@ -1015,7 +1018,7 @@ function renderLogin(app) {
       if (!pendingLoginToken) throw new Error("Anmeldung abgelaufen — bitte erneut anmelden");
       const res = await api("/api/auth/login", {
         method: "POST",
-        body: JSON.stringify({ login_token: pendingLoginToken, totp_code: code }),
+        body: JSON.stringify({ login_token: pendingLoginToken, totp_code: code, remember_login: n.querySelector("#rememberLogin").checked }),
       });
       await finishAuth(res, slugSel.value.trim());
     } catch (e) {

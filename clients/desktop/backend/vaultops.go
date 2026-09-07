@@ -55,16 +55,17 @@ func str(v any) string {
 
 // Login authenticates against /api/auth/login (local or LDAP bind); the
 // server sets a session cookie tracked by the client's cookie jar.
-func Login(c *Client, tenant, username, password, totpCode string) (map[string]any, error) {
-	return LoginStep(c, tenant, username, password, totpCode, "")
+func Login(c *Client, tenant, username, password, totpCode string, remember bool) (map[string]any, error) {
+	return LoginStep(c, tenant, username, password, totpCode, "", remember)
 }
 
-func LoginStep(c *Client, tenant, username, password, totpCode, loginToken string) (map[string]any, error) {
-	body := map[string]string{
-		"tenant_slug": tenant,
-		"username":    username,
-		"password":    password,
-		"totp_code":   totpCode,
+func LoginStep(c *Client, tenant, username, password, totpCode, loginToken string, remember bool) (map[string]any, error) {
+	body := map[string]any{
+		"tenant_slug":    tenant,
+		"username":       username,
+		"password":       password,
+		"totp_code":      totpCode,
+		"remember_login": remember,
 	}
 	if loginToken != "" {
 		body["login_token"] = loginToken

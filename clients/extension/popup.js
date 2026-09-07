@@ -184,6 +184,7 @@ document.getElementById("doLogin").onclick = async () => {
         tenant_slug: tenant,
         username: user,
         password: document.getElementById("lpw").value,
+        remember_login: document.getElementById("rememberLogin").checked,
         ...(selectionToken ? { login_token: selectionToken } : {}),
       }),
     });
@@ -231,6 +232,7 @@ document.getElementById("doTotp").onclick = async () => {
       body: JSON.stringify({
         login_token: document.getElementById("doLogin").dataset.loginToken || "",
         totp_code: document.getElementById("totp").value.trim(),
+        remember_login: document.getElementById("rememberLogin").checked,
       }),
     });
     if (res.needs_vault_onboard) throw new Error("Bitte zuerst im Web-UI onboarden");
