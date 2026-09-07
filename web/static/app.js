@@ -1316,21 +1316,72 @@ function favoriteStateForItem(it) {
   return isUserFavorite(it.id);
 }
 
-function setUserFavorite(secretId, on) {
+async function persistFavoriteToSecret(it, on) {
+  if (!it || vault.offlineMode || !vault.sk) return;
+  if (!it.has_access) throw new Error("Kein Zugriff");
+  const det = await api("/api/secrets/" + it.id);
+  const dk = openDKFromEnvelope(det.envelope);
+  try {
+    const kv = det.key_version || det.envelope?.key_version || 1;
+    const pt = await TVCrypto.decryptPayload(
+      TVCrypto.b64dec(det.ciphertext_b64),
+      TVCrypto.b64dec(det.nonce_b64),
+      dk, kv
+    );
+    const payload = normalizeSecretPayload(JSON.parse(new TextDecoder().decode(pt)));
+    payload.favorite = !!on;
+    const bodyEnc = await TVCrypto.encryptPayload(
+      new TextEncoder().encode(JSON.stringify(payload)),
+      dk, kv
+    );
+    await api("/api/secrets/" + it.id, {
+      method: "PUT",
+      body: JSON.stringify({
+        title_ciphertext_b64: det.title_ciphertext_b64,
+        title_nonce_b64: det.title_nonce_b64,
+        ciphertext_b64: TVCrypto.b64enc(bodyEnc.ciphertext),
+        nonce_b64: TVCrypto.b64enc(bodyEnc.nonce),
+        key_version: kv,
+      }),
+    });
+    it._payload = payload;
+    it._copyShortcuts = buildCopyShortcuts(payload);
+    if (currentSecret && currentSecret.id === it.id) currentSecretPayload = payload;
+  } finally {
+    dk.fill(0);
+  }
+}
+
+async function setUserFavorite(secretId, on) {
   if (!secretId) return;
+  const it = vault.secretsCache.find((s) => s.id === secretId);
+  const previous = favoriteStateForItem(it);
   if (on) vault.userFavoriteIds.add(secretId);
   else vault.userFavoriteIds.delete(secretId);
-  const it = vault.secretsCache.find((s) => s.id === secretId);
   if (it) {
     it.favorite = !!on;
     it._favorite = !!on;
+    if (it._payload) it._payload.favorite = !!on;
   }
   persistUserFavorites();
+  try {
+    await persistFavoriteToSecret(it, on);
+  } catch (e) {
+    if (previous) vault.userFavoriteIds.add(secretId);
+    else vault.userFavoriteIds.delete(secretId);
+    if (it) {
+      it.favorite = previous;
+      it._favorite = previous;
+      if (it._payload) it._payload.favorite = previous;
+    }
+    persistUserFavorites();
+    throw e;
+  }
 }
 
-function toggleUserFavorite(secretId) {
+async function toggleUserFavorite(secretId) {
   const current = favoriteStateForItem(vault.secretsCache.find((s) => s.id === secretId));
-  setUserFavorite(secretId, !current);
+  await setUserFavorite(secretId, !current);
 }
 
 function removeUserFavorite(secretId) {
@@ -4523,10 +4574,18 @@ function renderApp(app) {
   function bindFavoriteToggles(root) {
     if (!root) return;
     root.querySelectorAll("[data-fav-toggle]").forEach((btn) => {
-      btn.onclick = (ev) => {
+      btn.onclick = async (ev) => {
         ev.stopPropagation();
-        toggleUserFavorite(btn.dataset.favToggle);
-        paintSecretList();
+        ev.preventDefault();
+        try {
+          btn.disabled = true;
+          await toggleUserFavorite(btn.dataset.favToggle);
+        } catch (e) {
+          alert(e.message || String(e));
+        } finally {
+          btn.disabled = false;
+          paintSecretList();
+        }
       };
     });
   }
