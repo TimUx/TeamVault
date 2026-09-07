@@ -26,6 +26,7 @@
     totpTimer: null,
     shareSecretId: null,
     themePref: "system",
+    accentPref: "blue",
     sidebarW: 240,
     detailW: 360,
   };
@@ -83,7 +84,7 @@
   // --- Theme (light/dark/system) ----------------------------------------
 
   const themeMediaQuery = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
-  const accentOptions = new Set(["blue", "indigo", "teal", "graphite"]);
+  const accentOptions = new Set(["blue", "indigo", "teal", "graphite", "rose", "amber", "emerald"]);
 
   function resolveTheme(pref) {
     if (pref === "light" || pref === "dark") return pref;
@@ -96,6 +97,11 @@
     document.documentElement.setAttribute("data-theme", resolveTheme(p));
     const sel = $("sTheme");
     if (sel) sel.value = p;
+    document.querySelectorAll("[data-theme-choice]").forEach((btn) => {
+      const on = btn.dataset.themeChoice === p;
+      btn.classList.toggle("active", on);
+      btn.setAttribute("aria-pressed", on ? "true" : "false");
+    });
   }
 
   function applyAccent(pref) {
@@ -104,6 +110,21 @@
     document.documentElement.setAttribute("data-accent", p);
     const sel = $("sAccent");
     if (sel) sel.value = p;
+    document.querySelectorAll("[data-accent-choice]").forEach((btn) => {
+      const on = btn.dataset.accentChoice === p;
+      btn.classList.toggle("active", on);
+      btn.setAttribute("aria-pressed", on ? "true" : "false");
+    });
+  }
+
+  async function syncRemoteAppearance() {
+    if (state.offline) return;
+    try {
+      const prefs = (await App().GetAppearancePreferences()) || {};
+      if (prefs.accent) applyAccent(prefs.accent);
+      if (prefs.theme) applyTheme(prefs.theme);
+      await saveSettingsPartial({ theme: state.themePref, accent: state.accentPref });
+    } catch (_) {}
   }
 
   if (themeMediaQuery) {
@@ -300,6 +321,7 @@
       $("uPass").value = "";
       state.offline = !!(res && res.offline);
       $("offlineBadge").hidden = !state.offline;
+      await syncRemoteAppearance();
       await enterVault();
     } catch (err) {
       setError("uError", errMsg(err));
@@ -687,8 +709,8 @@
     $("sServer").textContent = s.server_url || "";
     $("sTenant").textContent = s.tenant_slug || "";
     $("sCloseTray").checked = !!s.close_to_tray;
-    $("sTheme").value = s.theme || "system";
-    $("sAccent").value = s.accent || "blue";
+    applyTheme(state.themePref || s.theme || "system");
+    applyAccent(state.accentPref || s.accent || "blue");
     try {
       $("sAutostart").checked = !!(await App().IsAutostartEnabled());
     } catch (_) {
@@ -697,15 +719,20 @@
     showScreen("screenSettings");
   }
 
-  $("sTheme").addEventListener("change", (e) => applyTheme(e.target.value));
-  $("sAccent").addEventListener("change", (e) => applyAccent(e.target.value));
+  document.querySelectorAll("[data-theme-choice]").forEach((btn) => {
+    btn.addEventListener("click", () => applyTheme(btn.dataset.themeChoice));
+  });
+  document.querySelectorAll("[data-accent-choice]").forEach((btn) => {
+    btn.addEventListener("click", () => applyAccent(btn.dataset.accentChoice));
+  });
 
   $("sBack").addEventListener("click", () => showScreen("screenVault"));
   $("sSave").addEventListener("click", async () => {
     setError("sError", "");
     try {
       await App().SetAutostart($("sAutostart").checked);
-      await saveSettingsPartial({ close_to_tray: $("sCloseTray").checked, theme: $("sTheme").value, accent: $("sAccent").value });
+      await saveSettingsPartial({ close_to_tray: $("sCloseTray").checked, theme: state.themePref, accent: state.accentPref });
+      if (!state.offline) await App().SaveAppearancePreferences(state.themePref, state.accentPref);
       showScreen("screenVault");
     } catch (err) {
       setError("sError", errMsg(err));

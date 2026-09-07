@@ -315,7 +315,7 @@ function btnLabel(icoName, label) {
 
 const THEME_STORAGE_KEY = "tv-theme";
 const ACCENT_STORAGE_KEY = "tv-accent";
-const ACCENT_OPTIONS = new Set(["blue", "indigo", "teal", "graphite"]);
+const ACCENT_OPTIONS = new Set(["blue", "indigo", "teal", "graphite", "rose", "amber", "emerald"]);
 const themeMediaQuery = typeof window !== "undefined" && window.matchMedia
   ? window.matchMedia("(prefers-color-scheme: dark)")
   : null;
@@ -348,34 +348,70 @@ function syncThemeToggles(theme) {
   document.querySelectorAll("[data-theme-select]").forEach((sel) => {
     sel.value = getThemePref();
   });
+  document.querySelectorAll("[data-theme-choice]").forEach((btn) => {
+    const on = btn.dataset.themeChoice === getThemePref();
+    btn.classList.toggle("active", on);
+    btn.setAttribute("aria-pressed", on ? "true" : "false");
+  });
   document.querySelectorAll("[data-accent-select]").forEach((sel) => {
     sel.value = getAccentPref();
   });
+  document.querySelectorAll("[data-accent-choice]").forEach((btn) => {
+    const on = btn.dataset.accentChoice === getAccentPref();
+    btn.classList.toggle("active", on);
+    btn.setAttribute("aria-pressed", on ? "true" : "false");
+  });
 }
 
-function applyTheme(pref) {
+function currentAppearancePrefs() {
+  return { theme: getThemePref(), accent: getAccentPref() };
+}
+
+function saveRemoteAppearance() {
+  if (typeof vault === "undefined" || !vault.me || vault.offlineMode) return;
+  api("/api/me/preferences", {
+    method: "PUT",
+    body: JSON.stringify(currentAppearancePrefs()),
+  }).catch((e) => console.warn("appearance preferences", e));
+}
+
+function applyUserPreferences(me) {
+  const prefs = me && me.preferences;
+  if (!prefs || typeof prefs !== "object") return;
+  applyAccent(prefs.accent, { remote: false });
+  applyTheme(prefs.theme, { remote: false });
+}
+
+function applyTheme(pref, opts = {}) {
   const p = pref === "light" || pref === "dark" ? pref : "system";
   try { localStorage.setItem(THEME_STORAGE_KEY, p); } catch (_) {}
   const effective = resolveTheme(p);
   document.documentElement.setAttribute("data-theme", effective);
   syncThemeToggles(effective);
+  if (opts.remote !== false) saveRemoteAppearance();
 }
 
-function applyAccent(pref) {
+function applyAccent(pref, opts = {}) {
   const p = ACCENT_OPTIONS.has(pref) ? pref : "blue";
   try { localStorage.setItem(ACCENT_STORAGE_KEY, p); } catch (_) {}
   document.documentElement.setAttribute("data-accent", p);
   document.querySelectorAll("[data-accent-select]").forEach((sel) => {
     sel.value = p;
   });
+  document.querySelectorAll("[data-accent-choice]").forEach((btn) => {
+    const on = btn.dataset.accentChoice === p;
+    btn.classList.toggle("active", on);
+    btn.setAttribute("aria-pressed", on ? "true" : "false");
+  });
+  if (opts.remote !== false) saveRemoteAppearance();
 }
 
 function initTheme() {
-  applyAccent(getAccentPref());
-  applyTheme(getThemePref());
+  applyAccent(getAccentPref(), { remote: false });
+  applyTheme(getThemePref(), { remote: false });
   if (themeMediaQuery) {
     const onSystemChange = () => {
-      if (getThemePref() === "system") applyTheme("system");
+      if (getThemePref() === "system") applyTheme("system", { remote: false });
     };
     if (themeMediaQuery.addEventListener) themeMediaQuery.addEventListener("change", onSystemChange);
     else if (themeMediaQuery.addListener) themeMediaQuery.addListener(onSystemChange);
@@ -2296,20 +2332,23 @@ function renderApp(app) {
                 <div class="ok" id="profile_ok" hidden></div>
 
                 <h2>Darstellung</h2>
-                ${hintBox("Legt fest, ob TeamVault im hellen oder dunklen Design angezeigt wird — oder automatisch der Systemeinstellung folgt.")}
-                <label for="theme_pref">Design</label>
-                <select id="theme_pref" data-theme-select>
-                  <option value="system">Systemeinstellung</option>
-                  <option value="light">Hell</option>
-                  <option value="dark">Dunkel</option>
-                </select>
-                <label for="accent_pref">Farbdesign</label>
-                <select id="accent_pref" data-accent-select>
-                  <option value="blue">Blau (Standard)</option>
-                  <option value="indigo">Indigo</option>
-                  <option value="teal">Teal</option>
-                  <option value="graphite">Graphit</option>
-                </select>
+                ${hintBox("Darstellung wird pro Benutzer gespeichert und nach dem Anmelden auf Web-UI, Desktop-App und Erweiterung übernommen.")}
+                <div class="setting-label">Design</div>
+                <div class="segmented-control" role="group" aria-label="Design">
+                  <button type="button" data-theme-choice="system">${btnLabel("spark", "System")}</button>
+                  <button type="button" data-theme-choice="light">${btnLabel("sun", "Hell")}</button>
+                  <button type="button" data-theme-choice="dark">${btnLabel("moon", "Dunkel")}</button>
+                </div>
+                <div class="setting-label">Farbdesign</div>
+                <div class="accent-scale" role="group" aria-label="Farbdesign">
+                  <button type="button" data-accent-choice="blue"><span class="accent-dot accent-blue"></span><span>Blau</span></button>
+                  <button type="button" data-accent-choice="indigo"><span class="accent-dot accent-indigo"></span><span>Indigo</span></button>
+                  <button type="button" data-accent-choice="teal"><span class="accent-dot accent-teal"></span><span>Teal</span></button>
+                  <button type="button" data-accent-choice="graphite"><span class="accent-dot accent-graphite"></span><span>Graphit</span></button>
+                  <button type="button" data-accent-choice="rose"><span class="accent-dot accent-rose"></span><span>Rose</span></button>
+                  <button type="button" data-accent-choice="amber"><span class="accent-dot accent-amber"></span><span>Amber</span></button>
+                  <button type="button" data-accent-choice="emerald"><span class="accent-dot accent-emerald"></span><span>Emerald</span></button>
+                </div>
               </div>
 
               <div class="error" id="acc_err" hidden></div>
@@ -2866,10 +2905,7 @@ function renderApp(app) {
         n.querySelector("#profile_username").value = vault.me?.username || "";
         n.querySelector("#profile_display").value = vault.me?.display_name || "";
         n.querySelector("#profile_email").value = vault.me?.email || "";
-        const themeSel = n.querySelector("#theme_pref");
-        if (themeSel) themeSel.value = getThemePref();
-        const accentSel = n.querySelector("#accent_pref");
-        if (accentSel) accentSel.value = getAccentPref();
+        syncThemeToggles(document.documentElement.getAttribute("data-theme") || "light");
       }
     }
   }
@@ -3001,8 +3037,12 @@ function renderApp(app) {
     applyTheme(cur === "dark" ? "light" : "dark");
   };
   syncThemeToggles(document.documentElement.getAttribute("data-theme") || "light");
-  n.querySelector("#theme_pref").onchange = (ev) => applyTheme(ev.target.value);
-  n.querySelector("#accent_pref").onchange = (ev) => applyAccent(ev.target.value);
+  n.querySelectorAll("[data-theme-choice]").forEach((btn) => {
+    btn.onclick = () => applyTheme(btn.dataset.themeChoice);
+  });
+  n.querySelectorAll("[data-accent-choice]").forEach((btn) => {
+    btn.onclick = () => applyAccent(btn.dataset.accentChoice);
+  });
 
   n.querySelector("#offline_optin").onchange = () => {
     if (!TVOfflineStore?.isAvailable()) return;
@@ -3739,6 +3779,7 @@ function renderApp(app) {
   async function afterUnlock() {
     try {
       vault.me = await api("/api/me");
+      applyUserPreferences(vault.me);
       loadUserFavoritesFromStorage();
       paintSessionBar(n, { me: vault.me });
     } catch (_) {}

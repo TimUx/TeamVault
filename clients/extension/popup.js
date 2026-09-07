@@ -1,13 +1,20 @@
 /* TeamVault extension popup — mature autofill + domain match (ZK: keys only here). */
 const api = typeof browser !== "undefined" ? browser : chrome;
 const state = { base: "", sk: null, me: null, cache: [], tabHost: "", tabOrigin: "" };
-const accentOptions = new Set(["blue", "indigo", "teal", "graphite"]);
+const accentOptions = new Set(["blue", "indigo", "teal", "graphite", "rose", "amber", "emerald"]);
 
 function applyAccent(pref) {
   const accent = accentOptions.has(pref) ? pref : "blue";
   document.documentElement.setAttribute("data-accent", accent);
   const sel = document.getElementById("accent");
   if (sel) sel.value = accent;
+}
+
+async function applyRemotePreferences(me) {
+  const prefs = me && me.preferences;
+  if (!prefs || typeof prefs !== "object") return;
+  applyAccent(prefs.accent);
+  await api.storage.local.set({ accent: accentOptions.has(prefs.accent) ? prefs.accent : "blue" });
 }
 
 function showErr(msg) {
@@ -109,6 +116,7 @@ async function boot() {
   try {
     const me = await apiFetch("/api/me");
     state.me = me;
+    await applyRemotePreferences(me);
     document.getElementById("login").hidden = true;
     document.getElementById("unlock").hidden = false;
     document.getElementById("who").textContent = me.username + " · " + me.tenant_id;
@@ -155,6 +163,12 @@ document.getElementById("accent").onchange = async (ev) => {
   const accent = ev.target.value;
   applyAccent(accent);
   await api.storage.local.set({ accent });
+  if (state.me) {
+    apiFetch("/api/me/preferences", {
+      method: "PUT",
+      body: JSON.stringify({ accent }),
+    }).catch(() => {});
+  }
 };
 
 document.getElementById("doLogin").onclick = async () => {
@@ -196,6 +210,7 @@ document.getElementById("doLogin").onclick = async () => {
     }
     if (res.needs_vault_onboard) throw new Error("Bitte zuerst im Web-UI onboarden");
     state.me = res;
+    await applyRemotePreferences(res);
     if (res.tenant_slug) {
       document.getElementById("tenant").value = res.tenant_slug;
       await api.storage.local.set({ tenant: res.tenant_slug });

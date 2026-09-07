@@ -54,6 +54,31 @@ func (a *App) SaveSettings(s backend.Settings) error {
 	return backend.SaveSettings(s)
 }
 
+func (a *App) GetAppearancePreferences() (map[string]any, error) {
+	if a.client == nil {
+		return map[string]any{}, nil
+	}
+	me, err := a.client.GetJSON("/api/me")
+	if err != nil {
+		return nil, err
+	}
+	if prefs, ok := me["preferences"].(map[string]any); ok {
+		return prefs, nil
+	}
+	return map[string]any{}, nil
+}
+
+func (a *App) SaveAppearancePreferences(theme, accent string) error {
+	if a.client == nil {
+		return nil
+	}
+	_, err := a.client.PutJSON("/api/me/preferences", map[string]string{
+		"theme":  theme,
+		"accent": accent,
+	})
+	return err
+}
+
 func (a *App) CheckForUpdate(serverURL string) (backend.UpdateInfo, error) {
 	return backend.CheckForUpdate(serverURL, version)
 }

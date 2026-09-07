@@ -132,21 +132,22 @@
   <section id="screenSettings" class="screen" hidden>
     <div class="card">
       <h1>Einstellungen</h1>
-      <label>Design
-        <select id="sTheme">
-          <option value="system">Systemeinstellung</option>
-          <option value="light">Hell</option>
-          <option value="dark">Dunkel</option>
-        </select>
-      </label>
-      <label>Farbdesign
-        <select id="sAccent">
-          <option value="blue">Blau (Standard)</option>
-          <option value="indigo">Indigo</option>
-          <option value="teal">Teal</option>
-          <option value="graphite">Graphit</option>
-        </select>
-      </label>
+      <div class="setting-label">Design</div>
+      <div class="segmented-control" role="group" aria-label="Design">
+        <button type="button" data-theme-choice="system">◐ System</button>
+        <button type="button" data-theme-choice="light">☀ Hell</button>
+        <button type="button" data-theme-choice="dark">☾ Dunkel</button>
+      </div>
+      <div class="setting-label">Farbdesign</div>
+      <div class="accent-scale" role="group" aria-label="Farbdesign">
+        <button type="button" data-accent-choice="blue"><span class="accent-dot accent-blue"></span><span>Blau</span></button>
+        <button type="button" data-accent-choice="indigo"><span class="accent-dot accent-indigo"></span><span>Indigo</span></button>
+        <button type="button" data-accent-choice="teal"><span class="accent-dot accent-teal"></span><span>Teal</span></button>
+        <button type="button" data-accent-choice="graphite"><span class="accent-dot accent-graphite"></span><span>Graphit</span></button>
+        <button type="button" data-accent-choice="rose"><span class="accent-dot accent-rose"></span><span>Rose</span></button>
+        <button type="button" data-accent-choice="amber"><span class="accent-dot accent-amber"></span><span>Amber</span></button>
+        <button type="button" data-accent-choice="emerald"><span class="accent-dot accent-emerald"></span><span>Emerald</span></button>
+      </div>
       <label class="checkbox"><input id="sAutostart" type="checkbox" /> Autostart (mit Betriebssystem starten)</label>
       <label class="checkbox"><input id="sCloseTray" type="checkbox" /> Schließen minimiert in den Tray</label>
       <p class="hint">Server: <span id="sServer"></span> · Mandant: <span id="sTenant"></span></p>

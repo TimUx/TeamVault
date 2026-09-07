@@ -170,6 +170,7 @@ func (a *API) Handler() http.Handler {
 	mux.HandleFunc("POST /api/auth/logout", a.handleLogout)
 	mux.HandleFunc("GET /api/me", a.handleMe)
 	mux.HandleFunc("PUT /api/me/profile", a.requireAuth(a.handleUpdateProfile))
+	mux.HandleFunc("PUT /api/me/preferences", a.requireAuth(a.handleUpdatePreferences))
 	mux.HandleFunc("GET /api/vault/status", a.requireAuth(a.handleVaultStatus))
 	mux.HandleFunc("GET /api/vault/crypto-params", a.requireAuth(a.handleCryptoParams))
 	mux.HandleFunc("POST /api/vault/onboard", a.requireAuth(a.handleVaultOnboard))
@@ -722,6 +723,7 @@ func (a *API) writeLoginSuccess(w http.ResponseWriter, r *http.Request, user *st
 		"needs_vault_onboard": user.OnboardedAt == nil, "totp_enabled": user.TotpEnabled,
 		"needs_totp_setup": a.bundle().Policy.TOTPRequired && !user.TotpEnabled,
 		"recovery_mode":    tenant.RecoveryMode,
+		"preferences":      userPreferences(user),
 	})
 }
 
@@ -754,6 +756,7 @@ func (a *API) handleMe(w http.ResponseWriter, r *http.Request) {
 		"username": sess.Username, "display_name": u.DisplayName, "email": u.Email, "roles": sess.Roles,
 		"needs_vault_onboard": u.OnboardedAt == nil, "totp_enabled": u.TotpEnabled,
 		"auth_backend": u.AuthBackend,
+		"preferences":  userPreferences(u),
 		"passkey_count": func() int {
 			creds, _ := a.App.Vault.ListWebAuthnCredentials(r.Context(), sess.TenantID, sess.UserID)
 			return len(creds)
@@ -790,6 +793,67 @@ func (a *API) handleUpdateProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "updated"})
+}
+
+func validThemePref(v string) string {
+	if v == "light" || v == "dark" {
+		return v
+	}
+	return "system"
+}
+
+func validAccentPref(v string) string {
+	switch v {
+	case "blue", "indigo", "teal", "graphite", "rose", "amber", "emerald":
+		return v
+	default:
+		return "blue"
+	}
+}
+
+func userPreferences(u *store.UserRecord) map[string]string {
+	out := map[string]string{"theme": "system", "accent": "blue"}
+	if u == nil || strings.TrimSpace(u.PreferencesJSON) == "" {
+		return out
+	}
+	var raw map[string]string
+	if json.Unmarshal([]byte(u.PreferencesJSON), &raw) != nil {
+		return out
+	}
+	out["theme"] = validThemePref(raw["theme"])
+	out["accent"] = validAccentPref(raw["accent"])
+	return out
+}
+
+func (a *API) handleUpdatePreferences(w http.ResponseWriter, r *http.Request) {
+	sess, _ := a.sessionFrom(r)
+	var body struct {
+		Theme  string `json:"theme"`
+		Accent string `json:"accent"`
+	}
+	if err := readJSON(r, &body); err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	u, err := a.App.Vault.GetUser(r.Context(), sess.TenantID, sess.UserID)
+	if err != nil {
+		writeErr(w, http.StatusNotFound, "user not found")
+		return
+	}
+	prefs := userPreferences(u)
+	if body.Theme != "" {
+		prefs["theme"] = validThemePref(body.Theme)
+	}
+	if body.Accent != "" {
+		prefs["accent"] = validAccentPref(body.Accent)
+	}
+	raw, _ := json.Marshal(prefs)
+	u.PreferencesJSON = string(raw)
+	if err := a.App.Vault.UpsertUser(r.Context(), *u); err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"status": "updated", "preferences": prefs})
 }
 
 func (a *API) handleVaultStatus(w http.ResponseWriter, r *http.Request) {
