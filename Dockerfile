@@ -56,7 +56,8 @@ RUN --mount=type=secret,id=tv_extension_pem,required=false \
     go build -trimpath -o /out/pack-extension ./cmd/pack-extension && \
     TV_EXTENSION_UPDATE_BASE=https://teamvault.local /out/pack-extension && \
     cp dist/teamvault-extension.* /out/downloads/ && \
-    cp -r dist/extension /out/downloads/
+    cp -r dist/extension /out/downloads/ && \
+    for f in dist/teamvault-desktop-*; do [ -e "$f" ] && cp "$f" /out/downloads/; done; true
 
 FROM build AS bin
 ARG VERSION=dev

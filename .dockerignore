@@ -16,9 +16,10 @@ secrets/
 
 # Build artifacts
 bin/
-dist/
+dist/*
 *.exe
 *.test
+!dist/teamvault-desktop-*
 
 # Not required for the server image (static UI is under web/)
 docs/
