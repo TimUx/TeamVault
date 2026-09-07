@@ -11,10 +11,10 @@ func TestPendingLoginSelection(t *testing.T) {
 	token := s.issueSelection([]pendingCandidate{
 		{UserID: "u1", TenantID: "t1", Slug: "one", Name: "One"},
 		{UserID: "u2", TenantID: "t2", Slug: "two", Name: "Two"},
-	})
+	}, true)
 
 	p, ok := s.consumeSelection(token, "two")
-	if !ok || p.UserID != store.UserID("u2") || p.TenantID != store.TenantID("t2") {
+	if !ok || p.UserID != store.UserID("u2") || p.TenantID != store.TenantID("t2") || !p.Remember {
 		t.Fatalf("selection returned %#v, ok=%v", p, ok)
 	}
 	if _, ok := s.consumeSelection(token, "two"); ok {

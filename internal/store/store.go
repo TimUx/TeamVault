@@ -47,6 +47,7 @@ type UserRecord struct {
 	TotpEnabled                 bool
 	OnboardedAt                 *time.Time
 	KdfParamsJSON               string // Argon2id params used to seal EncryptedPrivateKey
+	PreferencesJSON             string // JSON object for non-secret per-user UI preferences
 	CreatedAt                   time.Time
 	UpdatedAt                   time.Time
 }

@@ -16,7 +16,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const schemaVersion = 8
+const schemaVersion = 9
 
 type Store struct {
 	db *sql.DB
@@ -84,6 +84,7 @@ CREATE TABLE IF NOT EXISTS users (
   totp_secret_enc BLOB,
   totp_enabled INTEGER NOT NULL DEFAULT 0,
   kdf_params_json TEXT NOT NULL DEFAULT '',
+  preferences_json TEXT NOT NULL DEFAULT '',
   onboarded_at TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
@@ -208,6 +209,7 @@ CREATE TABLE IF NOT EXISTS secret_group_shares (
 )`,
 		`ALTER TABLE secrets ADD COLUMN visibility TEXT NOT NULL DEFAULT 'private'`,
 		`ALTER TABLE users ADD COLUMN kdf_params_json TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE users ADD COLUMN preferences_json TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE secret_direct_shares ADD COLUMN capability TEXT NOT NULL DEFAULT 'write'`,
 		`ALTER TABLE secret_group_shares ADD COLUMN capability TEXT NOT NULL DEFAULT 'write'`,
 	} {
@@ -346,8 +348,8 @@ func (s *Store) UpsertUser(ctx context.Context, u store.UserRecord) error {
 	_, err := s.db.ExecContext(ctx, `
 INSERT INTO users(id, tenant_id, username, display_name, email, auth_backend, local_password_hash,
   status, roles_json, public_key, encrypted_private_key, encrypted_private_key_recovery,
-  escrow_envelope, totp_secret_enc, totp_enabled, kdf_params_json, onboarded_at, created_at, updated_at)
-VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+  escrow_envelope, totp_secret_enc, totp_enabled, kdf_params_json, preferences_json, onboarded_at, created_at, updated_at)
+VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
 ON CONFLICT(tenant_id, id) DO UPDATE SET
   username=excluded.username, display_name=excluded.display_name, email=excluded.email,
   auth_backend=excluded.auth_backend, local_password_hash=excluded.local_password_hash,
@@ -356,11 +358,12 @@ ON CONFLICT(tenant_id, id) DO UPDATE SET
   encrypted_private_key_recovery=excluded.encrypted_private_key_recovery,
   escrow_envelope=excluded.escrow_envelope, totp_secret_enc=excluded.totp_secret_enc,
   totp_enabled=excluded.totp_enabled, kdf_params_json=excluded.kdf_params_json,
+  preferences_json=excluded.preferences_json,
   onboarded_at=excluded.onboarded_at, updated_at=excluded.updated_at
 `, u.ID, u.TenantID, u.Username, u.DisplayName, u.Email, u.AuthBackend, u.LocalPasswordHash,
 		u.Status, u.RolesJSON, u.PublicKey, u.EncryptedPrivateKey, u.EncryptedPrivateKeyRecovery,
 		u.EscrowEnvelope, u.TotpSecretEnc, boolToInt(u.TotpEnabled), u.KdfParamsJSON,
-		onboarded, u.CreatedAt.Format(time.RFC3339Nano), u.UpdatedAt.Format(time.RFC3339Nano))
+		u.PreferencesJSON, onboarded, u.CreatedAt.Format(time.RFC3339Nano), u.UpdatedAt.Format(time.RFC3339Nano))
 	return err
 }
 
@@ -370,11 +373,11 @@ func scanUser(row scanner) (*store.UserRecord, error) {
 	var u store.UserRecord
 	var onboarded, cAt, uAt sql.NullString
 	var totpEnabled int
-	var kdf sql.NullString
+	var kdf, prefs sql.NullString
 	if err := row.Scan(&u.ID, &u.TenantID, &u.Username, &u.DisplayName, &u.Email, &u.AuthBackend,
 		&u.LocalPasswordHash, &u.Status, &u.RolesJSON, &u.PublicKey, &u.EncryptedPrivateKey,
 		&u.EncryptedPrivateKeyRecovery, &u.EscrowEnvelope, &u.TotpSecretEnc, &totpEnabled, &kdf,
-		&onboarded, &cAt, &uAt); err != nil {
+		&prefs, &onboarded, &cAt, &uAt); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, store.ErrNotFound
 		}
@@ -383,6 +386,9 @@ func scanUser(row scanner) (*store.UserRecord, error) {
 	u.TotpEnabled = totpEnabled == 1
 	if kdf.Valid {
 		u.KdfParamsJSON = kdf.String
+	}
+	if prefs.Valid {
+		u.PreferencesJSON = prefs.String
 	}
 	if onboarded.Valid {
 		t, _ := time.Parse(time.RFC3339Nano, onboarded.String)
@@ -400,7 +406,7 @@ func (s *Store) GetUser(ctx context.Context, tenant store.TenantID, id store.Use
 	row := s.db.QueryRowContext(ctx, `
 SELECT id, tenant_id, username, display_name, email, auth_backend, local_password_hash, status, roles_json,
   public_key, encrypted_private_key, encrypted_private_key_recovery, escrow_envelope, totp_secret_enc, totp_enabled,
-  kdf_params_json, onboarded_at, created_at, updated_at
+  kdf_params_json, preferences_json, onboarded_at, created_at, updated_at
 FROM users WHERE tenant_id = ? AND id = ?`, tenant, id)
 	return scanUser(row)
 }
@@ -412,7 +418,7 @@ func (s *Store) GetUserByUsername(ctx context.Context, tenant store.TenantID, us
 	row := s.db.QueryRowContext(ctx, `
 SELECT id, tenant_id, username, display_name, email, auth_backend, local_password_hash, status, roles_json,
   public_key, encrypted_private_key, encrypted_private_key_recovery, escrow_envelope, totp_secret_enc, totp_enabled,
-  kdf_params_json, onboarded_at, created_at, updated_at
+  kdf_params_json, preferences_json, onboarded_at, created_at, updated_at
 FROM users WHERE tenant_id = ? AND lower(username) = lower(?)`, tenant, username)
 	return scanUser(row)
 }
@@ -428,7 +434,7 @@ func (s *Store) ListUsers(ctx context.Context, tenant store.TenantID, q store.Us
 	rows, err := s.db.QueryContext(ctx, `
 SELECT id, tenant_id, username, display_name, email, auth_backend, local_password_hash, status, roles_json,
   public_key, encrypted_private_key, encrypted_private_key_recovery, escrow_envelope, totp_secret_enc, totp_enabled,
-  kdf_params_json, onboarded_at, created_at, updated_at
+  kdf_params_json, preferences_json, onboarded_at, created_at, updated_at
 FROM users WHERE tenant_id = ?
 ORDER BY username LIMIT ?`, tenant, limit)
 	if err != nil {

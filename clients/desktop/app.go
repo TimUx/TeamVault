@@ -54,6 +54,31 @@ func (a *App) SaveSettings(s backend.Settings) error {
 	return backend.SaveSettings(s)
 }
 
+func (a *App) GetAppearancePreferences() (map[string]any, error) {
+	if a.client == nil {
+		return map[string]any{}, nil
+	}
+	me, err := a.client.GetJSON("/api/me")
+	if err != nil {
+		return nil, err
+	}
+	if prefs, ok := me["preferences"].(map[string]any); ok {
+		return prefs, nil
+	}
+	return map[string]any{}, nil
+}
+
+func (a *App) SaveAppearancePreferences(theme, accent string) error {
+	if a.client == nil {
+		return nil
+	}
+	_, err := a.client.PutJSON("/api/me/preferences", map[string]string{
+		"theme":  theme,
+		"accent": accent,
+	})
+	return err
+}
+
 func (a *App) CheckForUpdate(serverURL string) (backend.UpdateInfo, error) {
 	return backend.CheckForUpdate(serverURL, version)
 }
@@ -80,22 +105,53 @@ func (a *App) Connect(serverURL string) error {
 	if err != nil {
 		return err
 	}
+	if sessionID, ok := backend.LoadRememberedLogin(serverURL); ok {
+		c.SetSessionCookie(sessionID)
+	}
 	a.client = c
 	return nil
 }
 
-func (a *App) Login(tenant, username, password, totpCode string) (map[string]any, error) {
+func (a *App) CurrentUser() (map[string]any, error) {
 	if a.client == nil {
 		return nil, errors.New("nicht verbunden: Connect() zuerst aufrufen")
 	}
-	return backend.Login(a.client, tenant, username, password, totpCode)
+	return a.client.GetJSON("/api/me")
 }
 
-func (a *App) LoginStep(loginToken, tenant, username string, totpCode string) (map[string]any, error) {
+func (a *App) Login(tenant, username, password, totpCode string, remember bool) (map[string]any, error) {
 	if a.client == nil {
 		return nil, errors.New("nicht verbunden: Connect() zuerst aufrufen")
 	}
-	return backend.LoginStep(a.client, tenant, username, "", totpCode, loginToken)
+	res, err := backend.Login(a.client, tenant, username, password, totpCode, remember)
+	if err == nil {
+		a.saveRememberedLoginIfComplete(remember, res)
+	}
+	return res, err
+}
+
+func (a *App) LoginStep(loginToken, tenant, username string, totpCode string, remember bool) (map[string]any, error) {
+	if a.client == nil {
+		return nil, errors.New("nicht verbunden: Connect() zuerst aufrufen")
+	}
+	res, err := backend.LoginStep(a.client, tenant, username, "", totpCode, loginToken, remember)
+	if err == nil {
+		a.saveRememberedLoginIfComplete(remember, res)
+	}
+	return res, err
+}
+
+func (a *App) saveRememberedLoginIfComplete(remember bool, res map[string]any) {
+	if res == nil || res["needs_tenant"] == true || res["needs_totp"] == true {
+		return
+	}
+	if !remember {
+		_ = backend.ClearRememberedLogin()
+		return
+	}
+	if a.client != nil {
+		_ = backend.SaveRememberedLogin(a.client.BaseURL(), a.client.SessionCookieValue())
+	}
 }
 
 // UnlockResult tells the frontend whether the vault was unlocked online
@@ -156,6 +212,7 @@ func (a *App) Logout() {
 	if a.client != nil {
 		backend.Logout(a.client)
 	}
+	_ = backend.ClearRememberedLogin()
 	a.Lock()
 	a.client = nil
 }

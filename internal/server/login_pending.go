@@ -14,6 +14,7 @@ const pendingLoginTTL = 5 * time.Minute
 type pendingLogin struct {
 	UserID     store.UserID
 	TenantID   store.TenantID
+	Remember   bool
 	Expires    time.Time
 	Candidates []pendingCandidate
 }
@@ -34,7 +35,7 @@ func newPendingLoginStore() *pendingLoginStore {
 	return &pendingLoginStore{m: map[string]pendingLogin{}}
 }
 
-func (s *pendingLoginStore) issue(userID store.UserID, tenantID store.TenantID) string {
+func (s *pendingLoginStore) issue(userID store.UserID, tenantID store.TenantID, remember bool) string {
 	b := make([]byte, 24)
 	_, _ = rand.Read(b)
 	token := hex.EncodeToString(b)
@@ -42,20 +43,20 @@ func (s *pendingLoginStore) issue(userID store.UserID, tenantID store.TenantID) 
 	defer s.mu.Unlock()
 	s.pruneLocked(time.Now().UTC())
 	s.m[token] = pendingLogin{
-		UserID: userID, TenantID: tenantID,
+		UserID: userID, TenantID: tenantID, Remember: remember,
 		Expires: time.Now().UTC().Add(pendingLoginTTL),
 	}
 	return token
 }
 
-func (s *pendingLoginStore) issueSelection(candidates []pendingCandidate) string {
+func (s *pendingLoginStore) issueSelection(candidates []pendingCandidate, remember bool) string {
 	b := make([]byte, 24)
 	_, _ = rand.Read(b)
 	token := hex.EncodeToString(b)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.pruneLocked(time.Now().UTC())
-	s.m[token] = pendingLogin{Candidates: candidates, Expires: time.Now().UTC().Add(pendingLoginTTL)}
+	s.m[token] = pendingLogin{Candidates: candidates, Remember: remember, Expires: time.Now().UTC().Add(pendingLoginTTL)}
 	return token
 }
 
@@ -71,7 +72,7 @@ func (s *pendingLoginStore) consumeSelection(token, slug string) (pendingLogin, 
 	for _, c := range p.Candidates {
 		if c.Slug == slug {
 			delete(s.m, token)
-			return pendingLogin{UserID: c.UserID, TenantID: c.TenantID}, true
+			return pendingLogin{UserID: c.UserID, TenantID: c.TenantID, Remember: p.Remember}, true
 		}
 	}
 	return pendingLogin{}, false

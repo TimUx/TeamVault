@@ -21,7 +21,10 @@ type Session struct {
 	Scopes     []string // API-key scopes; empty = unrestricted (cookie sessions)
 	ExpiresAt  time.Time
 	LastSeenAt time.Time
+	Remembered bool
 }
+
+const MaxRememberedTTL = 90 * 24 * time.Hour
 
 // Store holds sessions in memory and optionally persists to a JSON file (Phase 9.5).
 // Single-node: file survives process restart. Multi-replica: sticky sessions or shared store required
@@ -51,16 +54,25 @@ func NewPersistent(path string, ttl time.Duration) *Store {
 }
 
 func (s *Store) Create(userID store.UserID, tenantID store.TenantID, username string, roles []string) Session {
+	return s.CreateWithTTL(userID, tenantID, username, roles, 0, false)
+}
+
+func (s *Store) CreateWithTTL(userID store.UserID, tenantID store.TenantID, username string, roles []string, ttl time.Duration, remembered bool) Session {
 	b := make([]byte, 32)
 	_, _ = rand.Read(b)
 	id := hex.EncodeToString(b)
 	now := time.Now().UTC()
 	s.mu.Lock()
-	ttl := s.ttl
+	if ttl <= 0 {
+		ttl = s.ttl
+	}
 	s.mu.Unlock()
+	if ttl > MaxRememberedTTL {
+		ttl = MaxRememberedTTL
+	}
 	sess := Session{
 		ID: id, UserID: userID, TenantID: tenantID, Username: username, Roles: roles,
-		ExpiresAt: now.Add(ttl), LastSeenAt: now,
+		ExpiresAt: now.Add(ttl), LastSeenAt: now, Remembered: remembered,
 	}
 	s.mu.Lock()
 	s.sessions[id] = sess
@@ -73,6 +85,9 @@ func (s *Store) Create(userID store.UserID, tenantID store.TenantID, username st
 func (s *Store) SetTTL(ttl time.Duration) {
 	if ttl <= 0 {
 		ttl = 8 * time.Hour
+	}
+	if ttl > MaxRememberedTTL {
+		ttl = MaxRememberedTTL
 	}
 	s.mu.Lock()
 	s.ttl = ttl
@@ -98,7 +113,7 @@ func (s *Store) Get(id string) (Session, bool) {
 		delete(s.sessions, id)
 		return Session{}, false
 	}
-	if s.idle > 0 && !sess.LastSeenAt.IsZero() && now.Sub(sess.LastSeenAt) > s.idle {
+	if !sess.Remembered && s.idle > 0 && !sess.LastSeenAt.IsZero() && now.Sub(sess.LastSeenAt) > s.idle {
 		delete(s.sessions, id)
 		return Session{}, false
 	}
