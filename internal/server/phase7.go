@@ -269,13 +269,13 @@ func (a *API) handleWALoginFinish(w http.ResponseWriter, r *http.Request) {
 	})
 	writeJSON(w, http.StatusOK, map[string]any{
 		"username": u.Username, "tenant_id": tenant.ID, "tenant_name": tenant.Name, "tenant_slug": tenant.Slug,
-		"roles": roles,
+		"roles":               roles,
 		"needs_vault_onboard": u.OnboardedAt == nil, "totp_enabled": u.TotpEnabled,
-		"needs_totp_setup": a.bundle().Policy.TOTPRequired && !u.TotpEnabled,
-		"recovery_mode":    tenant.RecoveryMode,
-		"auth": "passkey",
-		"note": "vault unlock still requires master password",
-		"remembered_login": sess.Remembered,
+		"needs_totp_setup":   a.bundle().Policy.TOTPRequired && !u.TotpEnabled,
+		"recovery_mode":      tenant.RecoveryMode,
+		"auth":               "passkey",
+		"note":               "vault unlock still requires master password",
+		"remembered_login":   sess.Remembered,
 		"session_expires_at": sess.ExpiresAt,
 	})
 }

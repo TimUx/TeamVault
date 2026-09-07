@@ -722,10 +722,10 @@ func (a *API) writeLoginSuccess(w http.ResponseWriter, r *http.Request, user *st
 		"username": user.Username, "tenant_id": tenant.ID, "tenant_name": tenant.Name, "tenant_slug": tenant.Slug,
 		"roles": roles, "status": user.Status,
 		"needs_vault_onboard": user.OnboardedAt == nil, "totp_enabled": user.TotpEnabled,
-		"needs_totp_setup": a.bundle().Policy.TOTPRequired && !user.TotpEnabled,
-		"recovery_mode":    tenant.RecoveryMode,
-		"preferences":      userPreferences(user),
-		"remembered_login": sess.Remembered,
+		"needs_totp_setup":   a.bundle().Policy.TOTPRequired && !user.TotpEnabled,
+		"recovery_mode":      tenant.RecoveryMode,
+		"preferences":        userPreferences(user),
+		"remembered_login":   sess.Remembered,
 		"session_expires_at": sess.ExpiresAt,
 	})
 }

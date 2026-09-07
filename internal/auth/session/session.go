@@ -21,7 +21,7 @@ type Session struct {
 	Scopes     []string // API-key scopes; empty = unrestricted (cookie sessions)
 	ExpiresAt  time.Time
 	LastSeenAt time.Time
-	Remembered  bool
+	Remembered bool
 }
 
 const MaxRememberedTTL = 90 * 24 * time.Hour

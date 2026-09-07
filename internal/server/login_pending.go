@@ -14,7 +14,7 @@ const pendingLoginTTL = 5 * time.Minute
 type pendingLogin struct {
 	UserID     store.UserID
 	TenantID   store.TenantID
-	Remember    bool
+	Remember   bool
 	Expires    time.Time
 	Candidates []pendingCandidate
 }
