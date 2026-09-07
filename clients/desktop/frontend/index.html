@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:" />
 <title>TeamVault</title>
 <link rel="stylesheet" href="./style.css" />
 </head>
@@ -98,9 +99,11 @@
           <button id="vLogout" class="btn-ghost btn-sm">Abmelden</button>
         </div>
       </aside>
+      <div id="splitMain" class="splitter" role="separator" aria-orientation="vertical" title="Breite anpassen"></div>
       <main class="main">
         <div id="vList" class="list"></div>
       </main>
+      <div id="splitDetail" class="splitter" role="separator" aria-orientation="vertical" title="Breite anpassen" hidden></div>
       <aside id="vDetail" class="detail" hidden></aside>
     </div>
   </section>

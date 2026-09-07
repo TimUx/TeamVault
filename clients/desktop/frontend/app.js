@@ -26,7 +26,59 @@
     totpTimer: null,
     shareSecretId: null,
     themePref: "system",
+    sidebarW: 240,
+    detailW: 360,
   };
+
+  // --- Resizable panels -----------------------------------------------------
+  // The three vault areas (sidebar / list / detail) are freely resizable via
+  // drag splitters; the grid template is rebuilt so the hidden detail panel
+  // takes no space at all.
+
+  const SIDEBAR_MIN = 190;
+  const SIDEBAR_MAX = 480;
+  const DETAIL_MIN = 280;
+  const DETAIL_MAX = 640;
+
+  function applyFrameColumns() {
+    const frame = document.querySelector(".app-frame");
+    if (!frame) return;
+    const detailOpen = !$("vDetail").hidden;
+    $("splitDetail").hidden = !detailOpen;
+    frame.style.gridTemplateColumns = detailOpen
+      ? `${state.sidebarW}px 6px minmax(0, 1fr) 6px ${state.detailW}px`
+      : `${state.sidebarW}px 6px minmax(0, 1fr) 0 0px`;
+  }
+
+  function initSplitters() {
+    const clamp = (v, min, max) => Math.min(max, Math.max(min, v));
+    const wire = (el, apply) => {
+      el.addEventListener("mousedown", (e) => {
+        e.preventDefault();
+        el.classList.add("active");
+        const startX = e.clientX;
+        const startSidebar = state.sidebarW;
+        const startDetail = state.detailW;
+        const onMove = (ev) => apply(startSidebar, startDetail, ev.clientX - startX);
+        const onUp = () => {
+          el.classList.remove("active");
+          document.removeEventListener("mousemove", onMove);
+          document.removeEventListener("mouseup", onUp);
+        };
+        document.addEventListener("mousemove", onMove);
+        document.addEventListener("mouseup", onUp);
+      });
+    };
+    wire($("splitMain"), (sidebarW, _detailW, dx) => {
+      state.sidebarW = clamp(Math.round(sidebarW + dx), SIDEBAR_MIN, SIDEBAR_MAX);
+      applyFrameColumns();
+    });
+    wire($("splitDetail"), (_sidebarW, detailW, dx) => {
+      state.detailW = clamp(Math.round(detailW - dx), DETAIL_MIN, DETAIL_MAX);
+      applyFrameColumns();
+    });
+    applyFrameColumns();
+  }
 
   // --- Theme (light/dark/system) ----------------------------------------
 
@@ -256,6 +308,7 @@
   async function enterVault() {
     showScreen("screenVault");
     $("vDetail").hidden = true;
+    applyFrameColumns();
     state.selectedId = null;
     await reloadList();
   }
@@ -399,6 +452,7 @@
       det = await App().GetSecret(id);
     } catch (err) {
       $("vDetail").hidden = false;
+      applyFrameColumns();
       $("vDetail").innerHTML = `<p class="error">${escapeHtml(errMsg(err))}</p>`;
       return;
     }
@@ -478,6 +532,7 @@
   function renderDetail(det) {
     const box = $("vDetail");
     box.hidden = false;
+    applyFrameColumns();
     box.innerHTML = "";
     const h = document.createElement("h2");
     h.textContent = det.title;
@@ -551,6 +606,7 @@
         await App().DeleteSecret(det.id);
         stopTotpTimer();
         box.hidden = true;
+        applyFrameColumns();
         await reloadList();
       } catch (err) {
         alert(errMsg(err));
@@ -824,5 +880,19 @@
     if (state.shareSecretId) await openDetail(state.shareSecretId);
   });
 
-  window.addEventListener("DOMContentLoaded", init);
+  // Disable webview zoom (Ctrl+scroll / pinch / Ctrl+±) so the fixed app
+  // layout can never be scaled out of the window — in both WebView2
+  // (Windows) and WebKitGTK (Linux).
+  document.addEventListener("wheel", (e) => {
+    if (e.ctrlKey || e.metaKey) e.preventDefault();
+  }, { passive: false });
+  document.addEventListener("keydown", (e) => {
+    if ((e.ctrlKey || e.metaKey) && ["+", "-", "=", "0"].includes(e.key)) e.preventDefault();
+  });
+  document.addEventListener("gesturestart", (e) => e.preventDefault());
+
+  window.addEventListener("DOMContentLoaded", () => {
+    initSplitters();
+    init();
+  });
 })();
