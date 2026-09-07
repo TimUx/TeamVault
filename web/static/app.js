@@ -2197,8 +2197,8 @@ function renderApp(app) {
               </div>
               <div class="panel-tab-pane account-page" role="tabpanel" data-panel-pane="profile" hidden>
                 ${hintBox("Persönliche Angaben für Ihr Konto. Änderungen betreffen nur Ihren TeamVault-Benutzer.")}
-                <label for="profile_username">Username</label>
-                <input id="profile_username" readonly />
+                <label for="profile_username">Username (nicht änderbar)</label>
+                <input id="profile_username" readonly tabindex="-1" />
                 <label for="profile_display">Name</label>
                 <input id="profile_display" autocomplete="name" />
                 <label for="profile_email">E-Mail-Adresse</label>
