@@ -83,6 +83,7 @@
   // --- Theme (light/dark/system) ----------------------------------------
 
   const themeMediaQuery = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
+  const accentOptions = new Set(["blue", "indigo", "teal", "graphite"]);
 
   function resolveTheme(pref) {
     if (pref === "light" || pref === "dark") return pref;
@@ -94,6 +95,14 @@
     state.themePref = p;
     document.documentElement.setAttribute("data-theme", resolveTheme(p));
     const sel = $("sTheme");
+    if (sel) sel.value = p;
+  }
+
+  function applyAccent(pref) {
+    const p = accentOptions.has(pref) ? pref : "blue";
+    state.accentPref = p;
+    document.documentElement.setAttribute("data-accent", p);
+    const sel = $("sAccent");
     if (sel) sel.value = p;
   }
 
@@ -159,6 +168,7 @@
     try {
       settings = (await App().GetSettings()) || {};
     } catch (_) {}
+    applyAccent(settings.accent || "blue");
     applyTheme(settings.theme || "system");
     $("cServer").value = settings.server_url || "";
     state.tenant = settings.tenant_slug || "";
@@ -678,6 +688,7 @@
     $("sTenant").textContent = s.tenant_slug || "";
     $("sCloseTray").checked = !!s.close_to_tray;
     $("sTheme").value = s.theme || "system";
+    $("sAccent").value = s.accent || "blue";
     try {
       $("sAutostart").checked = !!(await App().IsAutostartEnabled());
     } catch (_) {
@@ -687,13 +698,14 @@
   }
 
   $("sTheme").addEventListener("change", (e) => applyTheme(e.target.value));
+  $("sAccent").addEventListener("change", (e) => applyAccent(e.target.value));
 
   $("sBack").addEventListener("click", () => showScreen("screenVault"));
   $("sSave").addEventListener("click", async () => {
     setError("sError", "");
     try {
       await App().SetAutostart($("sAutostart").checked);
-      await saveSettingsPartial({ close_to_tray: $("sCloseTray").checked, theme: $("sTheme").value });
+      await saveSettingsPartial({ close_to_tray: $("sCloseTray").checked, theme: $("sTheme").value, accent: $("sAccent").value });
       showScreen("screenVault");
     } catch (err) {
       setError("sError", errMsg(err));

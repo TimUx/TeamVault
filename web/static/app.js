@@ -314,6 +314,8 @@ function btnLabel(icoName, label) {
 }
 
 const THEME_STORAGE_KEY = "tv-theme";
+const ACCENT_STORAGE_KEY = "tv-accent";
+const ACCENT_OPTIONS = new Set(["blue", "indigo", "teal", "graphite"]);
 const themeMediaQuery = typeof window !== "undefined" && window.matchMedia
   ? window.matchMedia("(prefers-color-scheme: dark)")
   : null;
@@ -322,6 +324,12 @@ function getThemePref() {
   let t = "system";
   try { t = localStorage.getItem(THEME_STORAGE_KEY) || "system"; } catch (_) {}
   return t === "light" || t === "dark" ? t : "system";
+}
+
+function getAccentPref() {
+  let t = "blue";
+  try { t = localStorage.getItem(ACCENT_STORAGE_KEY) || "blue"; } catch (_) {}
+  return ACCENT_OPTIONS.has(t) ? t : "blue";
 }
 
 function resolveTheme(pref) {
@@ -340,6 +348,9 @@ function syncThemeToggles(theme) {
   document.querySelectorAll("[data-theme-select]").forEach((sel) => {
     sel.value = getThemePref();
   });
+  document.querySelectorAll("[data-accent-select]").forEach((sel) => {
+    sel.value = getAccentPref();
+  });
 }
 
 function applyTheme(pref) {
@@ -350,7 +361,17 @@ function applyTheme(pref) {
   syncThemeToggles(effective);
 }
 
+function applyAccent(pref) {
+  const p = ACCENT_OPTIONS.has(pref) ? pref : "blue";
+  try { localStorage.setItem(ACCENT_STORAGE_KEY, p); } catch (_) {}
+  document.documentElement.setAttribute("data-accent", p);
+  document.querySelectorAll("[data-accent-select]").forEach((sel) => {
+    sel.value = p;
+  });
+}
+
 function initTheme() {
+  applyAccent(getAccentPref());
   applyTheme(getThemePref());
   if (themeMediaQuery) {
     const onSystemChange = () => {
@@ -2233,6 +2254,13 @@ function renderApp(app) {
                   <option value="light">Hell</option>
                   <option value="dark">Dunkel</option>
                 </select>
+                <label for="accent_pref">Farbdesign</label>
+                <select id="accent_pref" data-accent-select>
+                  <option value="blue">Blau (Standard)</option>
+                  <option value="indigo">Indigo</option>
+                  <option value="teal">Teal</option>
+                  <option value="graphite">Graphit</option>
+                </select>
               </div>
 
               <div class="error" id="acc_err" hidden></div>
@@ -2791,6 +2819,8 @@ function renderApp(app) {
         n.querySelector("#profile_email").value = vault.me?.email || "";
         const themeSel = n.querySelector("#theme_pref");
         if (themeSel) themeSel.value = getThemePref();
+        const accentSel = n.querySelector("#accent_pref");
+        if (accentSel) accentSel.value = getAccentPref();
       }
     }
   }
@@ -2923,6 +2953,7 @@ function renderApp(app) {
   };
   syncThemeToggles(document.documentElement.getAttribute("data-theme") || "light");
   n.querySelector("#theme_pref").onchange = (ev) => applyTheme(ev.target.value);
+  n.querySelector("#accent_pref").onchange = (ev) => applyAccent(ev.target.value);
 
   n.querySelector("#offline_optin").onchange = () => {
     if (!TVOfflineStore?.isAvailable()) return;

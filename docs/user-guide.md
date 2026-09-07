@@ -66,7 +66,7 @@ Nach dem Login erscheint **Vault entsperren**. Master-Passwort eingeben → **En
 - Bei Inaktivität (Default ca. 15 Minuten) sperrt die App den Vault erneut (opakes Overlay).
 - Logout beendet die Server-Session; der Schlüssel im Speicher wird gelöscht.
 
-Oben rechts: Theme-Umschalter als **Sonne/Mond-Icon** (schneller manueller Wechsel), Sicherheitsstatus und **Sperren**. Unter **Konto & Sicherheit → Einstellungen → Darstellung** lässt sich das Theme dauerhaft auf **Systemeinstellung** (folgt automatisch der Betriebssystem-Präferenz und reagiert live auf deren Änderung), **Hell** oder **Dunkel** setzen; die Wahl wird lokal gespeichert. Die Sidebar nutzt flache Inline-Icons; die Hauptbereiche **Vault**, **Konto & Sicherheit** und **Administration** sind einklappbar (Zustand wird im Browser gemerkt). Unter **Konto & Sicherheit** sind **Passwörter & 2FA**, **Offline-Vault**, **Clients** und **Einstellungen** getrennte Menüpunkte. Administration ist zusätzlich in **Tenant-Administration** und **Plattform-Administration** getrennt. Auf schmalen Viewports: Menü-Taste öffnet die Sidebar (Schließen mit Backdrop oder **Escape**).
+Oben rechts: Theme-Umschalter als **Sonne/Mond-Icon** (schneller manueller Wechsel), Sicherheitsstatus und **Sperren**. Unter **Konto & Sicherheit → Einstellungen → Darstellung** lässt sich das Theme dauerhaft auf **Systemeinstellung** (folgt automatisch der Betriebssystem-Präferenz und reagiert live auf deren Änderung), **Hell** oder **Dunkel** setzen; die Wahl wird lokal gespeichert. Zusätzlich wählen Sie dort das **Farbdesign**: **Blau** (Standard), **Indigo**, **Teal** oder **Graphit**. Web-UI, Browser-Extension und Desktop-App verwenden dieselben Vorgaben. Die Web-App nutzt eine flache App-Shell mit farblich abgesetzter Sidebar und Header sowie kompaktem Footer; die Sidebar nutzt flache Inline-Icons. Die Hauptbereiche **Vault**, **Konto & Sicherheit** und **Administration** sind einklappbar (Zustand wird im Browser gemerkt). Unter **Konto & Sicherheit** sind **Passwörter & 2FA**, **Offline-Vault**, **Clients** und **Einstellungen** getrennte Menüpunkte. Administration ist zusätzlich in **Tenant-Administration** und **Plattform-Administration** getrennt. Auf schmalen Viewports: Menü-Taste öffnet die Sidebar (Schließen mit Backdrop oder **Escape**).
 
 ![Dark Theme](images/theme-dark.png)
 
@@ -216,11 +216,13 @@ Die persönlichen Angaben ändern Sie unter **Einstellungen**. Dort können Name
 
 ### Einstellungen
 
-Unter **Einstellungen** bearbeiten Sie ausschließlich Ihre persönlichen Kontodaten:
+Unter **Einstellungen** bearbeiten Sie Ihre persönlichen Kontodaten und die Darstellung:
 
 - Anzeigename
 - E-Mail-Adresse
 - unveränderlicher Username (nur Anzeige)
+- Theme: Systemeinstellung, Hell oder Dunkel
+- Farbdesign: Blau (Standard), Indigo, Teal oder Graphit
 
 ![Einstellungen](images/account-settings.png)
 
@@ -269,7 +271,7 @@ Kurzanleitung in der App: Sidebar **Hilfe** bzw. Login **Hilfe** → **Browser-E
 
 ![Konto → Clients](images/account-clients.png)
 
-Kurz: Einmal **Einrichtung** (PowerShell-Einzeiler), dann **Extension installieren** wie aus dem Store — Server-URL → Login/Unlock → auf passender Website **Fill** / **Copy** (nur bei exakter Origin-Match: Schema, Host und Port).
+Kurz: Einmal **Einrichtung** (PowerShell-Einzeiler), dann **Extension installieren** wie aus dem Store — Server-URL und optional Farbdesign wählen → Login/Unlock → auf passender Website **Fill** / **Copy** (nur bei exakter Origin-Match: Schema, Host und Port).
 
 In der App: **Konto → Clients** — Einrichtungs-Einzeiler und **Extension installieren** (`.crx`), sofern der Plattform-Administrator die Extension-Integration aktiviert hat (Standard: ausgeblendet; Downloads unter `/downloads/` bleiben für IT verfügbar).
 
@@ -295,7 +297,7 @@ Nur `read` → keine Admin- oder Schreibaktionen. Cookie-Login ohne API-Key ist 
 
 ## 9. Desktop-App
 
-Native, eigenständige App für Linux und Windows — reine Vault-Funktionen (kein Konto-/Backup-/Admin-Bereich), inklusive Offline-Modus, Tray-Icon und Autostart, ohne Adminrechte installier-/ausführbar. Kurzanleitung: **Hilfe → Desktop-App** bzw. `/help/desktop`. Markdown: [`docs/desktop-guide.md`](desktop-guide.md).
+Native, eigenständige App für Linux und Windows — reine Vault-Funktionen (kein Konto-/Backup-/Admin-Bereich), inklusive Offline-Modus, Tray-Icon, Autostart und demselben Theme-/Farbdesign-System wie die Web-UI, ohne Adminrechte installier-/ausführbar. Kurzanleitung: **Hilfe → Desktop-App** bzw. `/help/desktop`. Markdown: [`docs/desktop-guide.md`](desktop-guide.md).
 
 ![Konto → Clients](images/account-clients.png)
 

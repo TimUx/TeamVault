@@ -1,7 +1,7 @@
 # TeamVault – UI Brand Tokens
 
-**Status:** Aktuell (Grid-Shell: Sidebar + Main mit Topbar/Content/Footer, 2026-09-02)  
-**Design-Richtung:** Flache App-Shell mit linker Navigation; kühle Slate-Blau-Palette (kein Regenbogen-Hero). Footer nur in der Main-Spalte.
+**Status:** Aktuell (Grid-Shell: farblich abgesetzte Sidebar + Main mit Topbar/Content/kompaktem Footer, 2026-09-07)  
+**Design-Richtung:** Flache App-Shell mit linker Navigation; moderne, ruhige Farbflächen; Blau bleibt Standard, weitere feste Farbdesigns sind auswählbar. Footer nur in der Main-Spalte und maximal so hoch wie der Abmelden-Button.
 
 ---
 
@@ -9,11 +9,27 @@
 
 | Token | Light | Dark | Verwendung |
 |-------|-------|------|------------|
-| `--color-accent` | `#2F5D8C` | `#6B9BD2` | Primäre CTAs, aktive Nav, Fokus |
+| `--color-accent` | `#1F66D1` | `#6B9BD2` | Primäre CTAs, aktive Nav, Fokus |
+| `--color-accent-dark` | `#174EA6` | `#4B7FC0` | Verlauf/kräftigere Akzentflächen |
 | `--color-secondary` | `#5B6572` | `#9AA4B2` | Sekundärtext / dezente Akzente |
 | `--color-primary` | `#A70240` | `#C43B66` | Destruktiv (Löschen, Revoke) |
+| `--color-sidebar-bg` | `#123D8E` | `#0F2A5F` | Sidebar-Fläche |
+| `--color-sidebar-bg-strong` | `#0B2D6B` | `#0A1F49` | Sidebar-Verlauf unten |
+| `--color-sidebar-text` | `#F7FAFF` | `#F7FAFF` | Sidebar-Text |
+| `--color-sidebar-muted` | `#BFD2F2` | `#B7C8E8` | Sidebar-Gruppen/Icons |
 
-Unterkante der Topbar: dezenter Accent-Streifen (2px), kein Multi-Color-Gradient.
+Topbar/Header nutzen eine ruhige Akzentfläche statt rein weißem Chrome. Die Sidebar hebt sich farblich deutlich vom Inhaltsbereich ab.
+
+### Farbdesigns
+
+| Preset | Verwendung |
+|--------|------------|
+| **Blau** | Standard; Business-/Enterprise-Look |
+| **Indigo** | Alternative mit violettem Einschlag |
+| **Teal** | Alternative mit grün-blauem Einschlag |
+| **Graphit** | Zurückhaltende, neutrale Alternative |
+
+Die Presets gelten konsistent in Web-UI, Browser-Extension und Desktop-App.
 
 ---
 
@@ -57,7 +73,7 @@ Unterkante der Topbar: dezenter Accent-Streifen (2px), kein Multi-Color-Gradient
 | Primary button | `--color-accent` |
 | Danger | `--color-primary` |
 | Success | `--color-ok` |
-| Aktive Sidebar | `--color-sidebar-active-bg` + Accent-Text |
+| Aktive Sidebar | `--color-sidebar-active-bg` + weißer Text |
 | Focus / Links | `--color-accent` |
 
 ---
@@ -65,11 +81,12 @@ Unterkante der Topbar: dezenter Accent-Streifen (2px), kein Multi-Color-Gradient
 ## 5. Layout
 
 - Linke Sidebar (~240px), Sektionen Vault (Meine Secrets / Geteilte Secrets / Neu / Import / Sicherung) / Konto & Sicherheit / Administration mit Tenant- und Plattform-Administration
-- Sticky Topbar mit Seitentitel, Theme-Toggle als Icon (Sonne/Mond)  
+- Sticky Topbar mit Seitentitel, Theme-Toggle als Icon (Sonne/Mond) und akzentuierter Header-Fläche
 - Flache Inline-SVG-Icons in Sidebar und Primäraktionen (kein Icon-CDN, Air-Gap)  
 - Secrets-Ansicht: Liste / Tabelle / Kacheln (`tv-secrets-view` in localStorage); Mehrfachauswahl für Export  
 - Sidebar Vault: Meine Secrets / Geteilte Secrets / Neu / Import / Sicherung  
 - Mobile: Drawer + Backdrop  
+- Kompakter Footer (`--app-footer-height: 2.5rem`)  
 - Radius `--radius: 6px`; Font `"IBM Plex Sans", "Segoe UI", system-ui` (kein CDN, Air-Gap)  
 - Setup/Login bleiben zentrierte Panels ohne Sidebar  
 
