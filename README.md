@@ -9,10 +9,10 @@ Secrets und Titel werden nur im Browser entschlüsselt — Server und Storage se
 
 | Bereich | Funktionen |
 |---------|------------|
-| **Vault** | Secrets anlegen/öffnen (Titel, User, Passwort, Extra-Felder, TOTP), Suche/Ordner, Import aus anderen Tools, Export einzeln/mehrere/alle, verschlüsselte Sicherung |
+| **Vault** | Secrets anlegen/öffnen (Titel, User, Passwort, Extra-Felder, TOTP), Suche/Tags, Import aus anderen Tools, Export einzeln/mehrere/alle, verschlüsselte Sicherung |
 | **Sharing** | Pro berechtigtem User eigener Datenschlüssel (asymmetrisch); Entzug mit Pflicht-Rotation |
 | **Auth** | Lokales Login immer; optional LDAP/AD nur für Bind; TOTP (Web: zweistufig); Passkeys (nur Login); Self-Service Passwort-Wechsel |
-| **Vault-UX** | Favoriten (lokal), Sortierung A–Z/Z–A/Recent, Suche/Tags, Import/Export |
+| **Vault-UX** | Favoriten (lokal), Sortierung A–Z/Z–A/Recent, Suche/Tags, flache App-Shell mit abgesetzter Sidebar/Header und wählbarem Farbdesign |
 | **Onboarding** | Erzwungenes Master-Passwort + Schlüsselpaar; Recovery-Kit oder Admin-Escrow (Shamir) |
 | **Admin** | User/Gruppen, Firmen-CA, LDAP, SMTP, Krypto/Policy, Audit, API-Keys (`read`/`vault`/`admin`), Tenants, Storage-Migration, Instanz-Backup/Restore |
 | **Clients** | Web-UI, CLI (`tvcli`), Browser-Extension (Chrome/Edge/Firefox; Fill/Copy mit Origin-Match; Sichtbarkeit per Policy), Desktop-App (Linux/Windows, reine Vault-Funktionen, Offline-Cache, Tray, Autostart) |
@@ -49,7 +49,7 @@ Details: [`.cursor/rules/security-principles.mdc`](.cursor/rules/security-princi
 
 **Entwickler:** Timo Braun  
 
-Die laufende Version liefert `GET /api/version` bzw. `teamvault -version` (Build-Infos per `-ldflags`). In der Web-UI erscheinen Version (SemVer) und Mandantenname im Footer; Entwickler in Sidebar/Hilfe.
+Die laufende Version liefert `GET /api/version` bzw. `teamvault -version` (Build-Infos per `-ldflags`). In der Web-UI erscheinen Version (SemVer) und Mandantenname im kompakten Footer; Entwickler in Sidebar/Hilfe.
 
 ## Stack
 

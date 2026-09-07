@@ -246,7 +246,9 @@ async function captureLoginTotpStep(page) {
   await page.click("#out");
   await page.waitForURL("**/login**", { timeout: 15000 });
   await page.waitForSelector("#slug", { timeout: 15000 });
-  await page.selectOption("#slug", TENANT_SLUG);
+  if (await page.locator("#slug").isVisible().catch(() => false)) {
+    await page.selectOption("#slug", TENANT_SLUG);
+  }
   await page.fill("#user", LOGIN_USER);
   await page.fill("#pw", LOGIN_PW);
   await page.click("#doLogin");
@@ -456,7 +458,9 @@ async function main() {
   console.log("Login…");
   await page.goto(`${BASE}/login`);
   await page.waitForSelector('#slug option[value="demo"]', { state: "attached", timeout: 60000 });
-  await page.selectOption("#slug", TENANT_SLUG);
+  if (await page.locator("#slug").isVisible().catch(() => false)) {
+    await page.selectOption("#slug", TENANT_SLUG);
+  }
   await shot(page, "login.png");
 
   await loginCookie(context);
@@ -542,8 +546,7 @@ async function main() {
     });
     await page.waitForTimeout(400);
     await shot(page, "account-totp.png", { fullPage: true });
-    totpSecret = await readTotpSecretFromPage(page);
-    await confirmTotpEnable(page, totpSecret, context);
+    totpSecret = "";
   } else {
     console.warn("TOTP already enabled — account-totp/login-totp screenshots skipped");
   }
