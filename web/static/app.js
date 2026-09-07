@@ -1288,20 +1288,38 @@ function isUserFavorite(secretId) {
   return vault.userFavoriteIds.has(secretId);
 }
 
+function favoriteStateForItem(it) {
+  if (!it) return false;
+  if (typeof it.favorite === "boolean") return !!it.favorite;
+  if (typeof it._favorite === "boolean") return !!it._favorite;
+  return isUserFavorite(it.id);
+}
+
 function setUserFavorite(secretId, on) {
   if (!secretId) return;
   if (on) vault.userFavoriteIds.add(secretId);
   else vault.userFavoriteIds.delete(secretId);
+  const it = vault.secretsCache.find((s) => s.id === secretId);
+  if (it) {
+    it.favorite = !!on;
+    it._favorite = !!on;
+  }
   persistUserFavorites();
 }
 
 function toggleUserFavorite(secretId) {
-  setUserFavorite(secretId, !isUserFavorite(secretId));
+  const current = favoriteStateForItem(vault.secretsCache.find((s) => s.id === secretId));
+  setUserFavorite(secretId, !current);
 }
 
 function removeUserFavorite(secretId) {
   if (!secretId || !vault.userFavoriteIds.has(secretId)) return;
   vault.userFavoriteIds.delete(secretId);
+  const it = vault.secretsCache.find((s) => s.id === secretId);
+  if (it) {
+    it.favorite = false;
+    it._favorite = false;
+  }
   persistUserFavorites();
 }
 
@@ -4426,7 +4444,7 @@ function renderApp(app) {
 
   function matchesOwnership(it) {
     if (!it.has_access) return false;
-    if (vault.listScope === "favorites") return isUserFavorite(it.id);
+    if (vault.listScope === "favorites") return favoriteStateForItem(it);
     const vis = (it.visibility || "private") === "shared" ? "shared" : "private";
     return vault.listScope === "shared" ? vis === "shared" : vis === "private";
   }
@@ -4449,7 +4467,7 @@ function renderApp(app) {
     const fav = [];
     const rest = [];
     for (const it of filtered) {
-      if (isUserFavorite(it.id)) fav.push(it);
+      if (favoriteStateForItem(it)) fav.push(it);
       else rest.push(it);
     }
     const favSorted = sortSecretItems(fav);
@@ -4467,7 +4485,7 @@ function renderApp(app) {
 
   function favoriteToggleButton(it) {
     if (!it.has_access || vault.offlineMode) return "";
-    const on = isUserFavorite(it.id);
+    const on = favoriteStateForItem(it);
     return `<button type="button" class="btn-icon fav-toggle${on ? " is-fav" : ""}" data-fav-toggle="${escHtml(it.id)}" title="${on ? "Aus Favoriten entfernen" : "Als Favorit markieren"}" aria-pressed="${on ? "true" : "false"}">${icon("star", "fav-ico")}</button>`;
   }
 
