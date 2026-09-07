@@ -60,7 +60,7 @@ go run ./cmd/tvcli whoami
 
 ## Desktop-App (`clients/desktop`)
 
-Native Vault-App (Wails v2/Go) für Linux/Windows — eigenständige, schlanke Oberfläche (kein Reuse der Web-UI), reine Vault-Funktionen (kein Konto-/Backup-/Admin-Bereich), Offline-Ciphertext-Cache, Tray-Icon, Autostart ohne Adminrechte. Details: [Desktop Guide](../docs/desktop-guide.md).
+Native Vault-App (Wails v2/Go) für Linux/Windows — eigenständige, schlanke Oberfläche (kein Reuse der Web-UI), reine Vault-Funktionen (kein Konto-/Backup-/Admin-Bereich), Offline-Ciphertext-Cache, Tray-Icon, Autostart ohne Adminrechte und konsistente Icon+Text-Detailaktionen. Details: [Desktop Guide](../docs/desktop-guide.md).
 
 Eigenes, nested Go-Modul (`clients/desktop/go.mod`, `replace … => ../..`), referenziert `internal/cryptocore` des Hauptmoduls direkt — kein separater Krypto-Code, gesamte Netzwerk-/Krypto-Logik läuft im Go-Backend (nicht im WebView-JS).
 
@@ -81,8 +81,8 @@ CI (Tag `v*`): `.github/workflows/release.yml`, Jobs `desktop-linux` / `desktop-
 
 1. Extensions → Entwicklermodus → „Entpackt laden“
 2. Ordner `clients/extension` wählen
-3. Server-URL setzen, Login, Master-Passwort → Secrets listen / Passwort kopieren / **Fill**
-4. Filter **Alle / Privat / Geteilt**; Badge zeigt Sichtbarkeit. **Fill** und **Copy**: ohne URL immer; mit URL nur bei **exakter Origin-Match** (Schema+Host+Port — Phishing-Schutz)
+3. Server-URL setzen, Login, Master-Passwort → Secrets listen / Passwort kopieren / **Ausfüllen**
+4. Filter **Alle / Privat / Geteilt**; Badge zeigt Sichtbarkeit. **Ausfüllen** und **Kopieren** laufen über Icon+Text-Buttons: ohne URL immer; mit URL nur bei **exakter Origin-Match** (Schema+Host+Port — Phishing-Schutz)
 
 `host_permissions` decken localhost ab. Für HTTPS-Server: optional_host_permissions (`https://*/*`) über die Extension-Details freigeben (oder beim ersten Zugriff erlauben).
 
@@ -125,7 +125,7 @@ Browser: Admin-UI „Escrow-Keypair + Shares“ (vendored `secrets.js-grempe`).
 
 Nach Unlock listet das Popup Secrets; Einträge mit passender URL-Host zur aktiven Tab-Domain stehen oben.
 
-- **Fill** — Username/Passwort (und TOTP-Feld, falls erkannt) im aktiven Tab via Content-Script; Keys bleiben nur im Popup.
-- **Copy** — Passwort in die Zwischenablage; ebenfalls nur bei Origin-Match (wie Fill).
+- **Ausfüllen** — Username/Passwort (und TOTP-Feld, falls erkannt) im aktiven Tab via Content-Script; Keys bleiben nur im Popup.
+- **Kopieren** — Passwort in die Zwischenablage; ebenfalls nur bei Origin-Match (wie Ausfüllen).
 - Origin-Match: `scheme://host:port` der Secret-URL vs. Tab-Origin (kein Subdomain-Fallback über Port/Schema hinweg).
 - Form-Heuristik in `content.js`: username/email, password, otp/totp/mfa; React-freundliches Value-Setzen.

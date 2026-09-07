@@ -85,7 +85,8 @@ CI (`.github/workflows/extension.yml`) runs this on every change to
 
 ## Icon
 
-`clients/extension/icons/icon-128.png` (AMO uses up to 128×128).
+`clients/extension/icons/icon-128.png` (AMO uses up to 128×128), generated
+from the same TeamVault app icon used by Web UI and Desktop.
 
 ## Screenshots
 

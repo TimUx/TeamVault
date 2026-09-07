@@ -103,9 +103,9 @@ Productivity
 | Permission | Why it is requested |
 |---|---|
 | `storage` | Store the configured TeamVault server URL and last-used tenant/username locally, so the user doesn't have to retype them every time. |
-| `clipboardWrite` | Copy a decrypted password to the clipboard when the user clicks "Copy". |
-| `activeTab` | Grants temporary access to the currently active tab only when the user interacts with the extension (opens the popup / clicks Fill), used to read the tab's URL for origin matching and to inject the fill logic. |
-| `scripting` | Programmatically inject `content.js` into the active tab only when the user explicitly clicks "Fill" — the extension does not run a content script on every page by default. |
+| `clipboardWrite` | Copy a decrypted password to the clipboard when the user clicks the Kopieren/Copy icon+label button. |
+| `activeTab` | Grants temporary access to the currently active tab only when the user interacts with the extension (opens the popup / clicks Ausfüllen/Fill), used to read the tab's URL for origin matching and to inject the fill logic. |
+| `scripting` | Programmatically inject `content.js` into the active tab only when the user explicitly clicks Ausfüllen/Fill — the extension does not run a content script on every page by default. |
 | Host permission: `http://127.0.0.1/*`, `http://localhost/*` | Built-in local development / first-run default so the extension works out of the box against a TeamVault server on the same machine, without any permission prompt. |
 | Optional host permission: `https://*/*`, `http://*/*` | Self-hosted TeamVault servers run under arbitrary customer-controlled domains, internal DNS names, private IPs, and ports. The extension requests access to exactly one such origin — the server URL the user enters — via `chrome.permissions.request()` at the moment it is configured. No blanket "all sites" permission is held permanently. |
 
@@ -128,7 +128,8 @@ plus the TeamVault color palette (`#A70240` primary, `#0098DB` accent).
 ## Icon
 
 `clients/extension/icons/icon-128.png` (128×128 PNG, no transparency
-issues, matches `manifest.json` → `icons.128`).
+issues, matches `manifest.json` → `icons.128`) is generated from the same
+TeamVault app icon used by Web UI and Desktop.
 
 ## Support / homepage
 

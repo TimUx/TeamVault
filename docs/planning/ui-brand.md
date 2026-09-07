@@ -28,6 +28,9 @@ Topbar/Header nutzen eine ruhige Akzentfläche statt rein weißem Chrome. Die Si
 | **Indigo** | Alternative mit violettem Einschlag |
 | **Teal** | Alternative mit grün-blauem Einschlag |
 | **Graphit** | Zurückhaltende, neutrale Alternative |
+| **Rose** | Wärmere Akzentvariante |
+| **Amber** | Warmer Warn-/Goldton als Akzent |
+| **Emerald** | Grüne Akzentvariante |
 
 Die Presets gelten konsistent in Web-UI, Browser-Extension und Desktop-App.
 
@@ -82,7 +85,7 @@ Die Presets gelten konsistent in Web-UI, Browser-Extension und Desktop-App.
 
 - Linke Sidebar (~240px), Sektionen Vault (Meine Secrets / Geteilte Secrets / Neu / Import / Sicherung) / Konto & Sicherheit / Administration mit Tenant- und Plattform-Administration
 - Sticky Topbar mit Seitentitel, Theme-Toggle als Icon (Sonne/Mond) und akzentuierter Header-Fläche
-- Flache Inline-SVG-Icons in Sidebar und Primäraktionen (kein Icon-CDN, Air-Gap)  
+- Flache Inline-SVG-Icons in Sidebar und Primäraktionen über alle Clients (kein Icon-CDN, Air-Gap)  
 - Secrets-Ansicht: Liste / Tabelle / Kacheln (`tv-secrets-view` in localStorage); Mehrfachauswahl für Export  
 - Sidebar Vault: Meine Secrets / Geteilte Secrets / Neu / Import / Sicherung  
 - Mobile: Drawer + Backdrop  
@@ -97,6 +100,6 @@ Implementierung: [`web/static/styles.css`](../../web/static/styles.css), [`web/s
 - Stroke-SVGs inline in `app.js` (`ICO` / `icon()`), `currentColor`, ~1–1.2 rem  
 - Theme: Sonne (Hellmodus) / Mond (Dunkelmodus) als `btn-icon`  
 - Sidebar: Key, Plus, Upload, User, Users/Group, Network, Mail, Shield, Lock, Building, Clipboard  
-- Aktionen: Copy, Share, Trash, Download, Unlock, Logout, Open, Eye, Save  
+- Aktionen: Copy, Share, Trash, Download, Unlock, Logout, Open, Eye, Edit, Save; Web-UI, Desktop und Extension verwenden lokale Inline-SVGs mit Text-/ARIA-Labels für Secret-Aktionen.
 
 Keine Kategorien neben Ordnern/Tags — Ordner = Struktur, Tags = Labels (bewusst schlank).

@@ -16,7 +16,7 @@ Download: In der Web-App unter **Konto & Sicherheit → Clients** oder Hilfe **`
 |---------|----------|
 | Vault | Secrets ansehen/anlegen/bearbeiten/löschen, Suche, Tag-Filter, Favoriten, TOTP-Code-Anzeige |
 | Sharing | Eigene und mit mir geteilte Secrets werden unterschieden (Filter „Eigene“/„Geteilt“); Freigaben an Nutzer/Gruppen verwalten (hinzufügen, Capability wählen, entziehen), fehlende Gruppen-Schlüssel nachschlüsseln |
-| Darstellung | Theme in den Einstellungen wählbar: **Systemeinstellung** (folgt automatisch der Betriebssystem-Präferenz, live), **Hell** oder **Dunkel**; Farbdesign: **Blau** (Standard), **Indigo**, **Teal**, **Graphit** — Palette/Radius/Schrift analog zur Web-UI |
+| Darstellung | Theme in den Einstellungen wählbar: **Systemeinstellung** (folgt automatisch der Betriebssystem-Präferenz, live), **Hell** oder **Dunkel**; Farbdesign: **Blau** (Standard), **Indigo**, **Teal**, **Graphit**, **Rose**, **Amber**, **Emerald** — Palette/Radius/Schrift analog zur Web-UI |
 | Offline | Ciphertext-Snapshot lokal zwischengespeichert (max. 30 Tage) — Lesen ohne Netzwerk möglich; Anlegen/Ändern/Löschen/Freigabe-Verwaltung nur online |
 | Tray | Icon in der Systemleiste: Öffnen / Sperren / Beenden; Fenster schließen minimiert optional in den Tray statt zu beenden |
 | Autostart | Ein/Aus in den Einstellungen — ganz ohne Admin-/Root-Rechte |
@@ -47,7 +47,7 @@ WebKitGTK (`libwebkit2gtk-4.1`) muss auf dem System vorhanden sein (auf den meis
 3. Bei mehreren Tenant-Zuordnungen den Tenant im Dropdown auswählen; bei genau einem Tenant wird er automatisch verwendet.
 4. Falls aktiviert, den TOTP-Code in einem eigenen zweiten Schritt eingeben.
 5. **Master-Passwort** zum Entsperren des Vaults (verlässt nie das Gerät).
-6. Vault-Liste: Suche, Tag-Filter, Favoriten, Filter „Eigene“/„Geteilt“, Secret öffnen zum Ansehen/Kopieren/TOTP/Freigabe-Verwaltung.
+6. Vault-Liste: Suche, Tag-Filter, Favoriten, Filter „Eigene“/„Geteilt“, Secret öffnen zum Ansehen/Kopieren/TOTP/Freigabe-Verwaltung; Detailaktionen nutzen dieselben flachen Inline-Icons wie Web-UI und Extension.
 7. Optional unter **Einstellungen** Theme und Farbdesign anpassen; die App übernimmt die Änderung sofort und speichert sie lokal.
 
 ![Desktop-App – Vault-Ansicht](images/help-desktop.png)
@@ -65,15 +65,16 @@ Nach jedem erfolgreichen Online-Entsperren wird automatisch ein Ciphertext-Snaps
 
 - **Tags** ersetzen die frühere Ordner-Ablage: In der Seitenleiste listet die App alle im Vault verwendeten Tags auf; ein Klick aktiviert/deaktiviert den jeweiligen Filter (UND-Verknüpfung bei mehreren aktiven Tags), „Filter leeren“ setzt die Auswahl zurück. Tags werden beim Anlegen/Bearbeiten eines Secrets kommagetrennt eingegeben.
 - **Eigene vs. geteilte Secrets**: Die Filterleiste unterscheidet „Eigene“ und „Geteilt“; geteilte Einträge zeigen zusätzlich den Ersteller in der Liste an.
-- **Freigabe verwalten**: In der Secret-Detailansicht öffnet der Button „Freigabe verwalten“ eine eigene Ansicht mit den aktuellen Nutzer-/Gruppen-Freigaben (inkl. Rechtestufe: Lesen/Bearbeiten/Freigeben/Admin), einem Formular zum Hinzufügen weiterer Freigaben sowie der Möglichkeit, bestehende Freigaben zu entziehen. Neu beigetretene Gruppenmitglieder ohne eigenen Schlüssel werden unter „Fehlende Gruppen-Schlüssel“ angezeigt und können dort direkt nachgeschlüsselt werden.
+- **Freigabe verwalten**: In der Secret-Detailansicht öffnet der Icon+Text-Button „Freigabe verwalten“ eine eigene Ansicht mit den aktuellen Nutzer-/Gruppen-Freigaben (inkl. Rechtestufe: Lesen/Bearbeiten/Freigeben/Admin), einem Formular zum Hinzufügen weiterer Freigaben sowie der Möglichkeit, bestehende Freigaben zu entziehen. Neu beigetretene Gruppenmitglieder ohne eigenen Schlüssel werden unter „Fehlende Gruppen-Schlüssel“ angezeigt und können dort direkt nachgeschlüsselt werden.
 - Diese Funktionen benötigen eine Online-Verbindung (Server-API-Aufrufe wie in der Web-App) und sind im Offline-Modus deaktiviert.
 
 ## Autostart & Tray
 
 - **Einstellungen → Autostart**: registriert einen reinen Pro-Benutzer-Eintrag (Windows: `HKCU\...\Run`; Linux: `~/.config/autostart/*.desktop`) — kein root/Admin nötig, wirkt nur für den aktuellen Benutzer.
 - **Tray-Icon**: Rechtsklick/Klick → Öffnen, Sperren, Beenden. „Schließen minimiert in den Tray“ ist in den Einstellungen umschaltbar.
+- **Windows**: Das Tray wird in die Wails/WebView2-Hauptschleife registriert; „Beenden“ über das Tray beendet Icon und Prozess gemeinsam.
 - **Linux**: Das Tray-Icon nutzt dieselbe GTK-Hauptschleife wie das App-Fenster (AppIndicator). Auf Desktops ohne AppIndicator-Unterstützung kann es mit `TEAMVAULT_NO_TRAY=1` deaktiviert werden — die App startet dann ohne Tray-Symbol.
-- **Design**: In den Einstellungen zwischen **Systemeinstellung**, **Hell** und **Dunkel** wählen; die Auswahl wird sofort angewendet und dauerhaft gespeichert. Bei „Systemeinstellung“ reagiert die App live auf Änderungen der Betriebssystem-Theme-Einstellung. Zusätzlich ist das Farbdesign **Blau** (Standard), **Indigo**, **Teal** oder **Graphit** wählbar — dieselben Vorgaben wie in Web-UI und Browser-Extension.
+- **Design**: In den Einstellungen zwischen **Systemeinstellung**, **Hell** und **Dunkel** wählen; die Auswahl wird sofort angewendet und dauerhaft gespeichert. Bei „Systemeinstellung“ reagiert die App live auf Änderungen der Betriebssystem-Theme-Einstellung. Zusätzlich ist das Farbdesign **Blau** (Standard), **Indigo**, **Teal**, **Graphit**, **Rose**, **Amber** oder **Emerald** wählbar — dieselben Vorgaben wie in Web-UI und Browser-Extension.
 
 ## Selbst bauen
 

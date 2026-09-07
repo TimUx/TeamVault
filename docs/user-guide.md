@@ -66,7 +66,7 @@ Nach dem Login erscheint **Vault entsperren**. Master-Passwort eingeben → **En
 - Bei Inaktivität (Default ca. 15 Minuten) sperrt die App den Vault erneut (opakes Overlay).
 - Logout beendet die Server-Session; der Schlüssel im Speicher wird gelöscht.
 
-Oben rechts: Theme-Umschalter als **Sonne/Mond-Icon** (schneller manueller Wechsel), Sicherheitsstatus und **Sperren**. Unter **Konto & Sicherheit → Einstellungen → Darstellung** lässt sich das Theme dauerhaft auf **Systemeinstellung** (folgt automatisch der Betriebssystem-Präferenz und reagiert live auf deren Änderung), **Hell** oder **Dunkel** setzen; die Wahl wird lokal gespeichert. Zusätzlich wählen Sie dort das **Farbdesign**: **Blau** (Standard), **Indigo**, **Teal** oder **Graphit**. Web-UI, Browser-Extension und Desktop-App verwenden dieselben Vorgaben. Die Web-App nutzt eine flache App-Shell mit farblich abgesetzter Sidebar und Header sowie kompaktem Footer; die Sidebar nutzt flache Inline-Icons. Die Hauptbereiche **Vault**, **Konto & Sicherheit** und **Administration** sind einklappbar (Zustand wird im Browser gemerkt). Unter **Konto & Sicherheit** sind **Passwörter & 2FA**, **Offline-Vault**, **Clients** und **Einstellungen** getrennte Menüpunkte. Administration ist zusätzlich in **Tenant-Administration** und **Plattform-Administration** getrennt. Auf schmalen Viewports: Menü-Taste öffnet die Sidebar (Schließen mit Backdrop oder **Escape**).
+Oben rechts: Theme-Umschalter als **Sonne/Mond-Icon** (schneller manueller Wechsel), Sicherheitsstatus und **Sperren**. Unter **Konto & Sicherheit → Einstellungen → Darstellung** lässt sich das Theme dauerhaft auf **Systemeinstellung** (folgt automatisch der Betriebssystem-Präferenz und reagiert live auf deren Änderung), **Hell** oder **Dunkel** setzen; die Wahl wird lokal gespeichert. Zusätzlich wählen Sie dort das **Farbdesign**: **Blau** (Standard), **Indigo**, **Teal**, **Graphit**, **Rose**, **Amber** oder **Emerald**. Web-UI, Browser-Extension und Desktop-App verwenden dieselben Vorgaben. Die Web-App nutzt eine flache App-Shell mit farblich abgesetzter Sidebar und Header sowie kompaktem Footer; Sidebar und Primäraktionen nutzen flache Inline-Icons. Die Hauptbereiche **Vault**, **Konto & Sicherheit** und **Administration** sind einklappbar (Zustand wird im Browser gemerkt). Unter **Konto & Sicherheit** sind **Passwörter & 2FA**, **Offline-Vault**, **Clients** und **Einstellungen** getrennte Menüpunkte. Administration ist zusätzlich in **Tenant-Administration** und **Plattform-Administration** getrennt. Auf schmalen Viewports: Menü-Taste öffnet die Sidebar (Schließen mit Backdrop oder **Escape**).
 
 ![Dark Theme](images/theme-dark.png)
 
@@ -222,7 +222,7 @@ Unter **Einstellungen** bearbeiten Sie Ihre persönlichen Kontodaten und die Dar
 - E-Mail-Adresse
 - unveränderlicher Username (nur Anzeige)
 - Theme: Systemeinstellung, Hell oder Dunkel
-- Farbdesign: Blau (Standard), Indigo, Teal oder Graphit
+- Farbdesign: Blau (Standard), Indigo, Teal, Graphit, Rose, Amber oder Emerald
 
 ![Einstellungen](images/account-settings.png)
 
@@ -271,7 +271,7 @@ Kurzanleitung in der App: Sidebar **Hilfe** bzw. Login **Hilfe** → **Browser-E
 
 ![Konto → Clients](images/account-clients.png)
 
-Kurz: Einmal **Einrichtung** (PowerShell-Einzeiler), dann **Extension installieren** wie aus dem Store — Server-URL und optional Farbdesign wählen → Login/Unlock → auf passender Website **Fill** / **Copy** (nur bei exakter Origin-Match: Schema, Host und Port).
+Kurz: Einmal **Einrichtung** (PowerShell-Einzeiler), dann **Extension installieren** wie aus dem Store — Server-URL und optional Farbdesign wählen → Login/Unlock → auf passender Website **Ausfüllen** / **Kopieren** per Icon+Text-Button (nur bei exakter Origin-Match: Schema, Host und Port).
 
 In der App: **Konto → Clients** — Einrichtungs-Einzeiler und **Extension installieren** (`.crx`), sofern der Plattform-Administrator die Extension-Integration aktiviert hat (Standard: ausgeblendet; Downloads unter `/downloads/` bleiben für IT verfügbar).
 
@@ -297,7 +297,7 @@ Nur `read` → keine Admin- oder Schreibaktionen. Cookie-Login ohne API-Key ist 
 
 ## 9. Desktop-App
 
-Native, eigenständige App für Linux und Windows — reine Vault-Funktionen (kein Konto-/Backup-/Admin-Bereich), inklusive Offline-Modus, Tray-Icon, Autostart und demselben Theme-/Farbdesign-System wie die Web-UI, ohne Adminrechte installier-/ausführbar. Kurzanleitung: **Hilfe → Desktop-App** bzw. `/help/desktop`. Markdown: [`docs/desktop-guide.md`](desktop-guide.md).
+Native, eigenständige App für Linux und Windows — reine Vault-Funktionen (kein Konto-/Backup-/Admin-Bereich), inklusive Offline-Modus, Tray-Icon, Autostart, Icon+Text-Detailaktionen und demselben Theme-/Farbdesign-System wie die Web-UI, ohne Adminrechte installier-/ausführbar. Kurzanleitung: **Hilfe → Desktop-App** bzw. `/help/desktop`. Markdown: [`docs/desktop-guide.md`](desktop-guide.md).
 
 ![Konto → Clients](images/account-clients.png)
 
@@ -309,7 +309,7 @@ In der App: **Konto → Clients** — empfohlener Download für die erkannte Pla
 - Login-Passwort ≠ Master-Passwort  
 - Nach Teilen nur notwendige Personen; bei Austritt Admin um Entzug/Rotation bitten  
 - Öffentliche/geteilte Rechner: nach Nutzung **Logout** und Browser schließen  
-- Phishing: nur die bekannte Firmen-URL verwenden; Extension Fill/Copy nur bei exakter Origin-Match (Schema+Host+Port)  
+- Phishing: nur die bekannte Firmen-URL verwenden; Extension Ausfüllen/Kopieren nur bei exakter Origin-Match (Schema+Host+Port)  
 - Klartext-Export (JSON/CSV) sicher ablegen und zeitnah löschen  
 - `.tvbak` und Backup-Passwort getrennt vom Unlock-Key und Master-Passwort aufbewahren  
 
@@ -335,7 +335,7 @@ In der App: **Konto → Clients** — empfohlener Download für die erkannte Pla
 | Recovery nötig | Kit + Anleitung des Admins (Escrow vs. User-Kit) |
 | Passkey fehlt | Neu registrieren; Gerät/OS-Support prüfen |
 | Secret „kein Zugriff“ | Noch nicht geteilt oder Rechte entzogen |
-| Fill/Copy blockiert | Secret-URL passt nicht zur Tab-Origin (Schema/Host/Port) |
+| Ausfüllen/Kopieren blockiert | Secret-URL passt nicht zur Tab-Origin (Schema/Host/Port) |
 | Import leer / Format? | Vorschau prüfen; KeePass nur XML (kein `.kdbx`); `.tvbak` braucht Backup-Passwort |
 | CLI/Extension in App fehlt | Plattform-Admin → Krypto & Policy → Integration anzeigen; Downloads weiter unter `/downloads/` |
 | CLI/Extension-Install | **Konto → Clients** (wenn aktiv) oder `/help/cli` / `/help/extension` |
