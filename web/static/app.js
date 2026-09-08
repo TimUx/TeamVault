@@ -34,6 +34,7 @@ function formatAuthBackend(backend) {
 }
 
 const PASSWORD_POLICY = "mindestens 16 Zeichen, Groß- und Kleinbuchstaben, Ziffer, Sonderzeichen, keine Umlaute";
+const MASTER_PASSWORD_POLICY = "mindestens 16 Zeichen, Groß- und Kleinbuchstaben, Ziffer, Sonderzeichen; Umlaute und Leerzeichen sind erlaubt";
 
 function passwordPolicyError(pw, kind) {
   const label = kind || "Passwort";
@@ -50,7 +51,15 @@ function passwordPolicyError(pw, kind) {
 }
 
 function masterPasswordError(pw) {
-  return passwordPolicyError(pw, "Master-Passwort");
+  const label = "Master-Passwort";
+  if (typeof pw !== "string" || [...pw].length < 16) {
+    return label + ": " + MASTER_PASSWORD_POLICY + ".";
+  }
+  if (!/\p{Lu}/u.test(pw) || !/\p{Ll}/u.test(pw) || !/\p{N}/u.test(pw) ||
+      !/[^\p{L}\p{N}]/u.test(pw)) {
+    return label + ": " + MASTER_PASSWORD_POLICY + ".";
+  }
+  return "";
 }
 
 function localLoginPasswordError(pw) {
@@ -1141,8 +1150,8 @@ function renderOnboard(app) {
     setStepper(1, false);
     panel.innerHTML = `
       <h1>Vault-Onboarding</h1>
-      ${hintBox("Legen Sie Ihr persönliches Master-Passwort fest. Es wird nur im Browser verwendet (Zero-Knowledge) — der Server sieht es nie. Anforderungen: " + PASSWORD_POLICY + ".")}
-      <label>Master-Passwort (${PASSWORD_POLICY})</label>
+      ${hintBox("Legen Sie Ihr persönliches Master-Passwort fest. Es wird nur im Browser verwendet (Zero-Knowledge) — der Server sieht es nie. Anforderungen: " + MASTER_PASSWORD_POLICY + ".")}
+      <label>Master-Passwort (${MASTER_PASSWORD_POLICY})</label>
       <input id="mpw" type="password" autocomplete="new-password" minlength="16" />
       <label>Wiederholen</label>
       <input id="mpw2" type="password" autocomplete="new-password" minlength="16" />
@@ -2304,7 +2313,7 @@ function renderApp(app) {
               <div class="panel-tab-pane account-page" role="tabpanel" data-panel-pane="master">
                 ${hintBox("Clientseitig: Private Key wird neu versiegelt; Server speichert nur Ciphertexte. Recovery-Kit / Escrow wird mit erneuert. Neues Passwort: " + PASSWORD_POLICY + ".")}
                 <label>Aktuelles Master-Passwort</label><input id="mpw_cur" type="password" autocomplete="current-password" />
-                <label>Neues Master-Passwort (${PASSWORD_POLICY})</label><input id="mpw_new" type="password" autocomplete="new-password" minlength="16" />
+                <label>Neues Master-Passwort (${MASTER_PASSWORD_POLICY})</label><input id="mpw_new" type="password" autocomplete="new-password" minlength="16" />
                 <label>Recovery-Kit speichern (bei user_kit)</label><input id="mpw_kit" type="text" readonly placeholder="wird erzeugt…" />
                 <div class="row"><button class="btn-accent" type="button" id="mpw_save">Master-Passwort speichern</button></div>
               </div>

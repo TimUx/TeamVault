@@ -49,7 +49,7 @@ Nach dem Login (oder nach Onboarding) erscheint **Vault entsperren**:
 
 Beim ersten Vault-Zugriff führt ein **zweistufiger Assistent** durch die Einrichtung:
 
-1. **Schritt 1 — Master-Passwort:** mindestens 16 Zeichen, mit Groß- und Kleinbuchstaben, Ziffer und Sonderzeichen, **keine Umlaute** → **Schlüssel erzeugen** (läuft lokal im Browser)
+1. **Schritt 1 — Master-Passwort:** mindestens 16 Zeichen, mit Groß- und Kleinbuchstaben, Ziffer und Sonderzeichen; **Umlaute und Leerzeichen sind erlaubt** → **Schlüssel erzeugen** (läuft lokal im Browser)
 2. **Schritt 2 — Recovery-Kit** (bei Modus *User Recovery-Kit*): Kit **kopieren** oder **herunterladen**, Checkliste abarbeiten, Häkchen **Ich habe das Recovery-Kit gesichert** setzen → **Weiter zur App**
 3. Bei **Admin-Escrow** entfällt das Kit — nach der Schlüsselerzeugung direkt **Weiter zur App**
 
@@ -249,7 +249,7 @@ Nur bei **lokalem** Auth-Backend: aktuelles + neues Login-Passwort (mindestens 1
 
 ### Master-Passwort ändern
 
-Aktuelles und neues Master-Passwort eingeben → **Master-Passwort speichern**. Das neue Passwort unterliegt derselben Regel wie beim Onboarding (mindestens 16 Zeichen, Groß-/Kleinbuchstaben, Ziffer, Sonderzeichen, keine Umlaute). Der Private Key wird **nur im Browser** neu versiegelt; der Server speichert neue Ciphertexte. Bei Recovery-Modus `user_kit` erscheint ein neues Recovery-Kit (einmalig sichern).
+Aktuelles und neues Master-Passwort eingeben → **Master-Passwort speichern**. Das neue Passwort unterliegt derselben Regel wie beim Onboarding (mindestens 16 Zeichen, Groß-/Kleinbuchstaben, Ziffer, Sonderzeichen; Umlaute und Leerzeichen sind erlaubt). Der Private Key wird **nur im Browser** neu versiegelt; der Server speichert neue Ciphertexte. Bei Recovery-Modus `user_kit` erscheint ein neues Recovery-Kit (einmalig sichern).
 
 ### Offline-Vault (optional)
 
@@ -305,7 +305,7 @@ In der App: **Konto → Clients** — empfohlener Download für die erkannte Pla
 
 ## 10. Gute Praxis
 
-- Master-Passwort einzigartig (mindestens 16 Zeichen, Groß-/Klein, Ziffer, Sonderzeichen, keine Umlaute); Recovery-Kit offline sichern  
+- Master-Passwort einzigartig (mindestens 16 Zeichen, Groß-/Klein, Ziffer, Sonderzeichen; Umlaute und Leerzeichen sind erlaubt); Recovery-Kit offline sichern  
 - Login-Passwort ≠ Master-Passwort  
 - Nach Teilen nur notwendige Personen; bei Austritt Admin um Entzug/Rotation bitten  
 - Öffentliche/geteilte Rechner: nach Nutzung **Logout** und Browser schließen  
