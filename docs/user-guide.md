@@ -78,7 +78,7 @@ Nach dem Entsperren: linke **Sidebar** mit Icons. Unter Vault getrennt:
 |------|--------|
 | **Meine Secrets** | Private Secrets (nur Sie) — `visibility=private` |
 | **Geteilte Secrets** | Team-Secrets mit User-/Gruppen-Freigabe — `visibility=shared` (auch wenn Sie der Anleger sind) |
-| **Favoriten** | Von Ihnen markierte Einträge (Stern in der Liste; nur lokal im Browser gespeichert) |
+| **Favoriten** | Von Ihnen markierte Einträge (Stern in der Liste; im verschlüsselten Secret-Payload gespeichert) |
 | **Neu anlegen** | Formular für einen neuen Eintrag |
 | **Import** | Dateien aus anderen Passwortmanagern übernehmen |
 | **Sicherung** | Verschlüsselte `.tvbak`-Backup / Wiederherstellen |
