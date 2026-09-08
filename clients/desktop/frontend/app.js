@@ -532,8 +532,10 @@
       "</svg>",
   };
 
-  function iconLabel(icon, label) {
-    return icon + `<span>${escapeHtml(label)}</span>`;
+  function iconOnly(btn, icon, label) {
+    btn.innerHTML = icon;
+    btn.title = label;
+    btn.setAttribute("aria-label", label);
   }
 
   function copyBtn(value) {
@@ -664,22 +666,22 @@
     actions.className = "detail-actions";
     const editBtn = document.createElement("button");
     editBtn.type = "button";
-    editBtn.className = "btn-secondary detail-action-btn";
-    editBtn.innerHTML = iconLabel(icons.edit, "Bearbeiten");
+    editBtn.className = "btn-icon detail-action-btn";
+    iconOnly(editBtn, icons.edit, "Bearbeiten");
     editBtn.disabled = state.offline;
     editBtn.addEventListener("click", () => openForm(det));
     actions.appendChild(editBtn);
     const shareBtn = document.createElement("button");
     shareBtn.type = "button";
-    shareBtn.className = "btn-secondary detail-action-btn";
-    shareBtn.innerHTML = iconLabel(icons.share, "Freigabe verwalten");
+    shareBtn.className = "btn-icon detail-action-btn";
+    iconOnly(shareBtn, icons.share, "Freigabe verwalten");
     shareBtn.disabled = state.offline;
     shareBtn.addEventListener("click", () => openShareScreen(det.id, det.title));
     actions.appendChild(shareBtn);
     const delBtn = document.createElement("button");
     delBtn.type = "button";
-    delBtn.className = "btn-secondary detail-action-btn detail-action-danger";
-    delBtn.innerHTML = iconLabel(icons.trash, "Löschen");
+    delBtn.className = "btn-icon detail-action-btn detail-action-danger";
+    iconOnly(delBtn, icons.trash, "Löschen");
     delBtn.disabled = state.offline;
     delBtn.addEventListener("click", async () => {
       if (!confirm("Secret wirklich löschen?")) return;

@@ -401,8 +401,8 @@ function paintList() {
     actions.className = "actions";
     const fill = document.createElement("button");
     fill.type = "button";
-    fill.className = "btn-with-ico";
-    fill.innerHTML = btnLabel("fill", "Ausfüllen");
+    fill.className = "btn-ico-only";
+    fill.innerHTML = icons.fill;
     fill.title = "Ausfüllen";
     fill.setAttribute("aria-label", "Ausfüllen");
     fill.onclick = async () => {
@@ -426,8 +426,8 @@ function paintList() {
     };
     const copy = document.createElement("button");
     copy.type = "button";
-    copy.className = "ghost btn-with-ico";
-    copy.innerHTML = btnLabel("copy", "Kopieren");
+    copy.className = "ghost btn-ico-only";
+    copy.innerHTML = icons.copy;
     copy.title = "Kopieren";
     copy.setAttribute("aria-label", "Kopieren");
     copy.onclick = async () => {
