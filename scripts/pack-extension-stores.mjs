@@ -12,7 +12,7 @@
  * separately in the dashboard, files inside the package are ignored (and
  * flagged as unused by AMO). The store-assets ZIP carries those files.
  *
- * Usage: node scripts/pack-extension-stores.mjs [--screenshots <dir>]
+ * Usage: node scripts/pack-extension-stores.mjs [--screenshots <dir>] [--version <version>]
  */
 import fs from "fs";
 import os from "os";
@@ -29,6 +29,15 @@ const STORE_DOCS = path.join(ROOT, "docs", "extension-store");
 function arg(name) {
   const i = process.argv.indexOf(name);
   return i >= 0 ? process.argv[i + 1] : "";
+}
+
+function packageVersion(manifest) {
+  const override = arg("--version");
+  if (!override) return manifest.version;
+  if (!/^\d+(?:\.\d+){0,3}$/.test(override)) {
+    throw new Error(`invalid extension version: ${override}`);
+  }
+  return override;
 }
 
 function copyTree(src, dest) {
@@ -146,8 +155,9 @@ function buildStoreAssets(version, screenshotsDir) {
 }
 
 function main() {
-  const manifest = JSON.parse(fs.readFileSync(path.join(EXT, "manifest.json"), "utf8"));
-  const version = manifest.version;
+  const sourceManifest = JSON.parse(fs.readFileSync(path.join(EXT, "manifest.json"), "utf8"));
+  const version = packageVersion(sourceManifest);
+  const manifest = { ...sourceManifest, version };
   fs.mkdirSync(OUT, { recursive: true });
 
   buildPackage("chrome", chromeManifest(manifest), version);

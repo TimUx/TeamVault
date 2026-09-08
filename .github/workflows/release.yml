@@ -203,12 +203,23 @@ jobs:
         run: node scripts/capture-extension-screenshots.mjs
 
       - name: Build Chrome + Firefox store packages
-        run: node scripts/pack-extension-stores.mjs --screenshots dist/extension-store-screenshots
+        run: |
+          set -euo pipefail
+          ver="$(node -p 'require("./clients/extension/manifest.json").version')"
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            ver="${GITHUB_REF_NAME#v}"
+          fi
+          node scripts/pack-extension-stores.mjs \
+            --version "${ver}" \
+            --screenshots dist/extension-store-screenshots
 
       - name: Verify Firefox package with web-ext lint
         run: |
           set -euo pipefail
-          ver="$(node -p 'require("./clients/extension/manifest.json").version')"
+          ver="${GITHUB_REF_NAME#v}"
+          if [[ "${GITHUB_REF}" != refs/tags/* ]]; then
+            ver="$(node -p 'require("./clients/extension/manifest.json").version')"
+          fi
           npx --yes web-ext@8 lint --source-dir "dist/teamvault-extension-firefox-${ver}.zip" --no-config-discovery
 
       - name: Upload artifact
