@@ -83,6 +83,12 @@ func TestQRCodeJSServed(t *testing.T) {
 	if !strings.Contains(rr.Body.String(), "TVQR") {
 		t.Fatal("expected TVQR in qrcode.js")
 	}
+	if got := rr.Header().Get("Cache-Control"); got != "no-store, no-cache, must-revalidate, proxy-revalidate" {
+		t.Fatalf("cache-control %q", got)
+	}
+	if got := rr.Header().Get("Pragma"); got != "no-cache" {
+		t.Fatalf("pragma %q", got)
+	}
 }
 
 func TestManifestScope(t *testing.T) {

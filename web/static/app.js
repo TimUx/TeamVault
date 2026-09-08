@@ -34,6 +34,7 @@ function formatAuthBackend(backend) {
 }
 
 const PASSWORD_POLICY = "mindestens 16 Zeichen, Groß- und Kleinbuchstaben, Ziffer, Sonderzeichen, keine Umlaute";
+const MASTER_PASSWORD_POLICY = "mindestens 16 Zeichen, Groß- und Kleinbuchstaben, Ziffer, Sonderzeichen; Umlaute und Leerzeichen sind erlaubt";
 
 function passwordPolicyError(pw, kind) {
   const label = kind || "Passwort";
@@ -50,7 +51,15 @@ function passwordPolicyError(pw, kind) {
 }
 
 function masterPasswordError(pw) {
-  return passwordPolicyError(pw, "Master-Passwort");
+  const label = "Master-Passwort";
+  if (typeof pw !== "string" || [...pw].length < 16) {
+    return label + ": " + MASTER_PASSWORD_POLICY + ".";
+  }
+  if (!/\p{Lu}/u.test(pw) || !/\p{Ll}/u.test(pw) || !/\p{N}/u.test(pw) ||
+      !/[^\p{L}\p{N}]/u.test(pw)) {
+    return label + ": " + MASTER_PASSWORD_POLICY + ".";
+  }
+  return "";
 }
 
 function localLoginPasswordError(pw) {
@@ -195,6 +204,10 @@ const ICO = {
 function icon(name, cls) {
   const body = ICO[name] || ICO.key;
   return `<svg class="ico${cls ? " " + cls : ""}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${body}</svg>`;
+}
+
+function brandMark(cls) {
+  return `<svg class="brand-mark${cls ? " " + cls : ""}" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round"/><rect x="8.25" y="10.5" width="7.5" height="6.25" rx="1.25" fill="currentColor"/><path d="M9.75 10.5V8.75a2.25 2.25 0 0 1 4.5 0v1.75" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="12" cy="13.5" r="1" fill="var(--color-sidebar-bg)"/><path d="M12 13.5v1.5" stroke="var(--color-sidebar-bg)" stroke-width="1" stroke-linecap="round"/></svg>`;
 }
 
 /** Info callout with icon — for explanatory hints (not status lines or inline labels). */
@@ -1141,8 +1154,8 @@ function renderOnboard(app) {
     setStepper(1, false);
     panel.innerHTML = `
       <h1>Vault-Onboarding</h1>
-      ${hintBox("Legen Sie Ihr persönliches Master-Passwort fest. Es wird nur im Browser verwendet (Zero-Knowledge) — der Server sieht es nie. Anforderungen: " + PASSWORD_POLICY + ".")}
-      <label>Master-Passwort (${PASSWORD_POLICY})</label>
+      ${hintBox("Legen Sie Ihr persönliches Master-Passwort fest. Es wird nur im Browser verwendet (Zero-Knowledge) — der Server sieht es nie. Anforderungen: " + MASTER_PASSWORD_POLICY + ".")}
+      <label>Master-Passwort (${MASTER_PASSWORD_POLICY})</label>
       <input id="mpw" type="password" autocomplete="new-password" minlength="16" />
       <label>Wiederholen</label>
       <input id="mpw2" type="password" autocomplete="new-password" minlength="16" />
@@ -1875,7 +1888,7 @@ function renderApp(app) {
   document.body.classList.add("app-wide");
   const n = el(`<div class="app-frame">
     <aside class="app-sidebar" id="appSidebar">
-      <div class="app-sidebar-brand">${icon("shield", "brand-ico")} <span>TeamVault</span></div>
+      <div class="app-sidebar-brand">${brandMark("brand-ico")} <span>TeamVault</span></div>
       <nav class="app-sidebar-nav" id="appSidebarNav">
         ${navSection("vault", "Vault", `
           ${navLink("vault:mine", "key", "Meine Secrets", "active")}
@@ -2304,7 +2317,7 @@ function renderApp(app) {
               <div class="panel-tab-pane account-page" role="tabpanel" data-panel-pane="master">
                 ${hintBox("Clientseitig: Private Key wird neu versiegelt; Server speichert nur Ciphertexte. Recovery-Kit / Escrow wird mit erneuert. Neues Passwort: " + PASSWORD_POLICY + ".")}
                 <label>Aktuelles Master-Passwort</label><input id="mpw_cur" type="password" autocomplete="current-password" />
-                <label>Neues Master-Passwort (${PASSWORD_POLICY})</label><input id="mpw_new" type="password" autocomplete="new-password" minlength="16" />
+                <label>Neues Master-Passwort (${MASTER_PASSWORD_POLICY})</label><input id="mpw_new" type="password" autocomplete="new-password" minlength="16" />
                 <label>Recovery-Kit speichern (bei user_kit)</label><input id="mpw_kit" type="text" readonly placeholder="wird erzeugt…" />
                 <div class="row"><button class="btn-accent" type="button" id="mpw_save">Master-Passwort speichern</button></div>
               </div>
@@ -2321,6 +2334,7 @@ function renderApp(app) {
 
               <div class="panel-tab-pane account-page" role="tabpanel" data-panel-pane="clients" hidden>
                 ${hintBox("CLI, Browser-Extension und Desktop-App von dieser Instanz — Zero-Knowledge bleibt erhalten (Entschlüsselung nur lokal).")}
+                <div id="cliConnectionInfo" class="client-cli-connection"></div>
                 <div id="clientDownloadsApp" class="client-dl-grid"></div>
                 <div class="hint-box" id="accClientsHelp" hidden></div>
               </div>
@@ -3136,6 +3150,37 @@ function renderApp(app) {
     if (n < 1024 * 1024) return (n / 1024).toFixed(1) + " KB";
     return (n / (1024 * 1024)).toFixed(1) + " MB";
   }
+  function refreshCLIConnectionInfo() {
+    const root = n.querySelector("#cliConnectionInfo");
+    if (!root || !vault.me) return;
+    const base = window.location.origin + (tvBase() || "");
+    const tenant = vault.me.tenant_slug || "";
+    const username = vault.me.username || "";
+    const loginCmd = `tvcli -base ${base} login -tenant ${tenant} -user ${username}`;
+    const apiCmd = `tvcli -base ${base} whoami`;
+    root.innerHTML = `
+      <h4>CLI-Verbindung für diesen Benutzer</h4>
+      <p class="hint">Diese Werte gehören zu Ihrem aktuellen Konto und können direkt für <code>tvcli</code> verwendet werden.</p>
+      <dl class="client-cli-values">
+        <dt>Server-URL</dt><dd><code>${escHtml(base)}</code></dd>
+        <dt>Tenant-Slug</dt><dd><code>${escHtml(tenant || "—")}</code></dd>
+        <dt>Username</dt><dd><code>${escHtml(username || "—")}</code></dd>
+      </dl>
+      <p class="hint">Login mit Ihrem normalen Login-Passwort:</p>
+      <code class="client-cli-command" id="cliLoginCommand">${escHtml(loginCmd)}</code>
+      <button type="button" class="btn-ghost btn-sm" id="cliLoginCopy">Login-Befehl kopieren</button>
+      <p class="hint">Alternativ benötigt <code>TEAMVAULT_API_KEY</code> einen separat erzeugten API-Key. Der Schlüssel wird nur bei der Erstellung einmal angezeigt und kann nicht aus dieser Ansicht ausgelesen werden.</p>
+      <code class="client-cli-command" id="cliApiCommand">${escHtml(`$env:TEAMVAULT_API_KEY='tvk_…'`)}
+${escHtml(apiCmd)}</code>
+      <button type="button" class="btn-ghost btn-sm" id="cliApiCopy">API-Key-Beispiel kopieren</button>
+      <p class="hint">API-Keys erstellt ein Plattform-Administrator unter <strong>Administration → API-Keys</strong>; für CLI-Vault-Zugriff ist der Scope <code>vault</code> erforderlich.</p>`;
+    const bindCopy = (button, command) => {
+      const el = root.querySelector(button);
+      if (el) el.onclick = () => copyClientText(command, el);
+    };
+    bindCopy("#cliLoginCopy", loginCmd);
+    bindCopy("#cliApiCopy", `$env:TEAMVAULT_API_KEY='tvk_…'\n${apiCmd}`);
+  }
   function detectClientPlatform() {
     const ua = navigator.userAgent || "";
     const plat = (navigator.userAgentData && navigator.userAgentData.platform) || "";
@@ -3164,6 +3209,7 @@ function renderApp(app) {
   async function refreshClientDownloadsUI() {
     const root = n.querySelector("#clientDownloadsApp");
     if (!root) return;
+    refreshCLIConnectionInfo();
     if (!anyClientIntegrationEnabled()) {
       root.innerHTML = hintBox("CLI, Browser-Extension und Desktop-App sind auf dieser Instanz deaktiviert (Plattform-Policy).");
       return;

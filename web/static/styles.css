@@ -544,6 +544,10 @@ body.app-wide main#app {
   height: 1.35rem;
   color: var(--color-sidebar-text);
 }
+.brand-mark {
+  display: inline-block;
+  flex: 0 0 auto;
+}
 .app-sidebar-nav {
   flex: 1;
   min-height: 0;
@@ -1674,6 +1678,12 @@ body.admin-modal-open { overflow: hidden; }
 .client-dl-card { border: 1px solid var(--color-border); border-radius: 6px; padding: 1rem 1.1rem; background: var(--color-surface); }
 .client-dl-card h4 { margin: 0 0 0.5rem; font-size: 1rem; }
 .client-dl-card .row { margin-top: 0.65rem; flex-wrap: wrap; gap: 0.5rem; }
+.client-cli-connection { margin: 0 0 1rem; padding: 1rem 1.1rem; border: 1px solid var(--color-border); border-radius: 6px; background: var(--color-surface); }
+.client-cli-connection h4 { margin: 0 0 0.5rem; }
+.client-cli-values { display: grid; grid-template-columns: max-content 1fr; gap: 0.25rem 1rem; margin: 0.75rem 0; }
+.client-cli-values dt { font-weight: 600; }
+.client-cli-values dd { margin: 0; overflow-wrap: anywhere; }
+.client-cli-command { display: block; margin: 0.35rem 0; padding: 0.55rem 0.65rem; overflow-x: auto; white-space: pre-wrap; overflow-wrap: anywhere; background: var(--color-muted); border-radius: 4px; }
 .client-dl-links { margin: 0.5rem 0 0; padding-left: 1.1rem; font-size: 0.9rem; }
 
 .totp-setup-grid {

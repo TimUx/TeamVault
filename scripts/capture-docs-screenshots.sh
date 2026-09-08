@@ -25,17 +25,26 @@ done
 
 docker rm -f "$CONTAINER" 2>/dev/null || true
 
+DOCKER_CA_ARGS=()
+if [[ -n "${NODE_EXTRA_CA_CERTS:-}" && -f "$NODE_EXTRA_CA_CERTS" ]]; then
+  DOCKER_CA_ARGS=(
+    -v "$NODE_EXTRA_CA_CERTS:/tmp/copilot-root-ca.pem:ro"
+    -e TV_CAPTURE_CA_CERT=/tmp/copilot-root-ca.pem
+  )
+fi
+
 docker run -d --name "$CONTAINER" \
   -v "$ROOT:/src" \
   -v "$ROOT/dist:/bundled:ro" \
   -v "$DATA:/data" \
   -v "$SECRETS/unlock:/run/secrets/teamvault_unlock:ro" \
+  "${DOCKER_CA_ARGS[@]}" \
   -p "${PORT}:8099" \
   -e TEAMVAULT_ADDR=:8099 \
   -e TEAMVAULT_DATA_DIR=/data \
   -e TEAMVAULT_MASTER_UNLOCK_KEY_FILE=/run/secrets/teamvault_unlock \
   -e TEAMVAULT_BUNDLED_DOWNLOADS=/bundled \
-  golang:1.25.13 sh -c 'cd /src && go run ./cmd/teamvault'
+  golang:1.25.13 sh -c 'if [ -n "${TV_CAPTURE_CA_CERT:-}" ] && [ -f "$TV_CAPTURE_CA_CERT" ]; then cat "$TV_CAPTURE_CA_CERT" >> /etc/ssl/certs/ca-certificates.crt; fi; cd /src && go run ./cmd/teamvault'
 
 cleanup() { docker rm -f "$CONTAINER" 2>/dev/null || true; }
 trap cleanup EXIT
@@ -52,9 +61,13 @@ if ! curl -sf "http://127.0.0.1:${PORT}/api/health" >/dev/null; then
   docker logs "$CONTAINER" 2>&1 | tail -30
   exit 1
 fi
+# The container runs as root while the host-side Playwright process uses the
+# runner user; allow the setup token and generated SQLite files to be read.
+docker exec "$CONTAINER" chmod -R a+rwX /data
 
 export TV_URL="http://127.0.0.1:${PORT}"
-export TV_CAPTURE_DATA="/data"
+export TV_CAPTURE_DATA="$DATA"
+export TV_CAPTURE_DSN="/data/vault-screenshots.db"
 SCRIPTS_NM="$ROOT/scripts/node_modules"
 if [[ ! -d "$SCRIPTS_NM/playwright" ]]; then
   echo "Installing Playwright (scripts/package.json)…"

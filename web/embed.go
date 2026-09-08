@@ -30,6 +30,7 @@ func HandlerFor(baseFn func(*http.Request) string) http.Handler {
 	sri := buildScriptSRI(sub)
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		setNoCacheHeaders(w)
 		base := NormalizeBasePath(baseFn(r))
 		path := r.URL.Path
 		switch path {
@@ -60,6 +61,12 @@ func HandlerFor(baseFn func(*http.Request) string) http.Handler {
 		}
 		fileServer.ServeHTTP(w, r)
 	})
+}
+
+func setNoCacheHeaders(w http.ResponseWriter) {
+	w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate")
+	w.Header().Set("Pragma", "no-cache")
+	w.Header().Set("Expires", "0")
 }
 
 func serveIndex(w http.ResponseWriter, indexHTML []byte, base string, sri map[string]string) {
@@ -190,7 +197,7 @@ type bytesRecorder struct {
 
 func (b *bytesRecorder) Header() http.Header         { return http.Header{} }
 func (b *bytesRecorder) Write(p []byte) (int, error) { return b.b.Write(p) }
-func (b *bytesRecorder) WriteHeader(int)               {}
+func (b *bytesRecorder) WriteHeader(int)             {}
 
 // HelpBaseRewrite adjusts root-absolute help links when UI is under a subpath.
 func HelpBaseRewrite(html []byte, base string) []byte {
