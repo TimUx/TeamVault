@@ -544,6 +544,10 @@ body.app-wide main#app {
   height: 1.35rem;
   color: var(--color-sidebar-text);
 }
+.brand-mark {
+  display: inline-block;
+  flex: 0 0 auto;
+}
 .app-sidebar-nav {
   flex: 1;
   min-height: 0;

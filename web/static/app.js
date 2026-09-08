@@ -206,6 +206,10 @@ function icon(name, cls) {
   return `<svg class="ico${cls ? " " + cls : ""}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${body}</svg>`;
 }
 
+function brandMark(cls) {
+  return `<svg class="brand-mark${cls ? " " + cls : ""}" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round"/><rect x="8.25" y="10.5" width="7.5" height="6.25" rx="1.25" fill="currentColor"/><path d="M9.75 10.5V8.75a2.25 2.25 0 0 1 4.5 0v1.75" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="12" cy="13.5" r="1" fill="var(--color-sidebar-bg)"/><path d="M12 13.5v1.5" stroke="var(--color-sidebar-bg)" stroke-width="1" stroke-linecap="round"/></svg>`;
+}
+
 /** Info callout with icon — for explanatory hints (not status lines or inline labels). */
 function hintBox(bodyHtml, opts = {}) {
   const { id, hidden, className } = opts;
@@ -1884,7 +1888,7 @@ function renderApp(app) {
   document.body.classList.add("app-wide");
   const n = el(`<div class="app-frame">
     <aside class="app-sidebar" id="appSidebar">
-      <div class="app-sidebar-brand">${icon("shield", "brand-ico")} <span>TeamVault</span></div>
+      <div class="app-sidebar-brand">${brandMark("brand-ico")} <span>TeamVault</span></div>
       <nav class="app-sidebar-nav" id="appSidebarNav">
         ${navSection("vault", "Vault", `
           ${navLink("vault:mine", "key", "Meine Secrets", "active")}

@@ -252,7 +252,8 @@ button {
   padding: 14px;
   gap: 10px;
 }
-.brand { font-weight: 700; margin-bottom: 4px; }
+.brand { display: flex; align-items: center; gap: 0.45rem; font-weight: 700; margin-bottom: 4px; }
+.brand img { width: 1.35rem; height: 1.35rem; }
 .search { margin: 0; }
 .filters { display: flex; flex-wrap: wrap; gap: 6px; }
 .filter-btn { background: rgba(255, 255, 255, 0.08); color: var(--sidebar-muted); border: 1px solid rgba(255, 255, 255, 0.16); flex: 1 1 calc(50% - 3px); min-width: 0; }

@@ -12,7 +12,8 @@
     html[data-accent="amber"] { --a: #b45309; --a-dark: #92400e; }
     html[data-accent="emerald"] { --a: #059669; --a-dark: #047857; }
     body { width: 360px; margin: 0; font: 13px/1.4 "Segoe UI", system-ui, sans-serif; background: var(--bg); color: var(--t); }
-    header { padding: 0.75rem 1rem; background: linear-gradient(135deg, var(--a-dark), var(--a)); color: #fff; font-weight: 700; font-size: 1.1rem; }
+    header { display: flex; align-items: center; gap: 0.45rem; padding: 0.75rem 1rem; background: linear-gradient(135deg, var(--a-dark), var(--a)); color: #fff; font-weight: 700; font-size: 1.1rem; }
+    header img { width: 1.35rem; height: 1.35rem; }
     main { padding: 0.85rem 1rem 1.1rem; }
     label { display: block; font-weight: 600; margin: 0.55rem 0 0.25rem; }
     input[type="text"], input[type="password"], input[type="search"], input:not([type]), select {
@@ -43,7 +44,7 @@
   </style>
 </head>
 <body>
-  <header>TeamVault</header>
+  <header><img src="icons/teamvault-mark.svg" alt="" /><span>TeamVault</span></header>
   <main>
     <section id="cfg">
       <label>Server-URL</label>
