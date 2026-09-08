@@ -48,7 +48,7 @@ async function setupInstance() {
   const dataDir = process.env.TV_CAPTURE_DATA
     ?? (process.platform === "win32" ? path.join(os.tmpdir(), "tv-screenshot-data") : "/data");
   fs.mkdirSync(dataDir, { recursive: true });
-  const dsn = path.join(dataDir, "vault-screenshots.db");
+  const dsn = process.env.TV_CAPTURE_DSN ?? path.join(dataDir, "vault-screenshots.db");
   const tokenPath = path.join(dataDir, "setup.token");
   let token = "";
   for (let i = 0; i < 60; i++) {
