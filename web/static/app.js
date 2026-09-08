@@ -175,6 +175,7 @@ const ICO = {
   search: '<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>',
   rotate: '<path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/>',
   eye: '<path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/>',
+  eyeOff: '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>',
   edit: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
   spark: '<path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M18.4 5.6l-2.8 2.8M8.4 15.6l-2.8 2.8"/>',
   save: '<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/>',
@@ -1620,7 +1621,7 @@ function fieldRow(label, value, opts = {}) {
   const dlAttr = download && display !== "—" ? `data-download="${encodeURIComponent(String(value))}" data-dlname="${encodeURIComponent(opts.filename || label || "download.txt")}"` : "";
   const actions = [];
   if (copy && display !== "—") actions.push(`<button type="button" class="copy-btn copy-btn-icon" ${copyAttr} title="Kopieren" aria-label="Kopieren">${icon("copy")}</button>`);
-  if (download && display !== "—") actions.push(`<button type="button" class="copy-btn" ${dlAttr} title="Download" aria-label="Download">${btnLabel("download", "Download")}</button>`);
+  if (download && display !== "—") actions.push(`<button type="button" class="copy-btn copy-btn-icon" ${dlAttr} title="Download" aria-label="Download">${icon("download")}</button>`);
   return `<div class="secret-field${multiline ? " secret-field-block" : ""}">
     <div class="sf-label">${escapeHtml(label)}</div>
     <div class="sf-value${mask ? " masked" : ""}${multiline ? " mono prewrap" : ""}">${mask && display !== "—" ? "••••••••" : safe}</div>
@@ -2036,7 +2037,7 @@ function renderApp(app) {
                   <div class="secret-modal-head">
                     <h1 id="dtitle">Secret</h1>
                     <div class="row row-compact">
-                      <button class="btn-accent btn-sm btn-with-ico" type="button" id="dedit">${btnLabel("edit", "Bearbeiten")}</button>
+                      <button class="btn-accent btn-sm btn-icon" type="button" id="dedit" title="Bearbeiten" aria-label="Bearbeiten">${icon("edit", "btn-ico")}</button>
                       <button class="btn-ghost btn-sm" type="button" id="sdetailClose">Schließen</button>
                     </div>
                   </div>
@@ -2067,8 +2068,8 @@ function renderApp(app) {
                       </div>
                     </div>
                     <div class="row row-compact">
-                      <button class="btn-danger btn-sm btn-with-ico" type="button" id="sdel">${btnLabel("trash", "Löschen")}</button>
-                      <button class="btn-ghost btn-sm btn-with-ico" type="button" id="sExportOne">${btnLabel("download", "Export")}</button>
+                      <button class="btn-danger btn-sm btn-icon" type="button" id="sdel" title="Löschen" aria-label="Löschen">${icon("trash", "btn-ico")}</button>
+                      <button class="btn-ghost btn-sm btn-icon" type="button" id="sExportOne" title="Export" aria-label="Export">${icon("download", "btn-ico")}</button>
                     </div>
                   </div>
                   <div id="deditForm" hidden>
@@ -5187,13 +5188,17 @@ function renderApp(app) {
         const actions = pwField.querySelector(".sf-actions") || pwField;
         const reveal = document.createElement("button");
         reveal.type = "button";
-        reveal.className = "copy-btn";
-        reveal.innerHTML = btnLabel("eye", "Anzeigen");
+        reveal.className = "copy-btn copy-btn-icon";
+        reveal.innerHTML = icon("eye");
+        reveal.title = "Anzeigen";
+        reveal.setAttribute("aria-label", "Anzeigen");
         let shown = false;
         reveal.onclick = () => {
           shown = !shown;
           val.textContent = shown ? payload.password : "••••••••";
-          reveal.innerHTML = btnLabel("eye", shown ? "Verbergen" : "Anzeigen");
+          reveal.innerHTML = icon(shown ? "eyeOff" : "eye");
+          reveal.title = shown ? "Verbergen" : "Anzeigen";
+          reveal.setAttribute("aria-label", shown ? "Verbergen" : "Anzeigen");
         };
         actions.appendChild(reveal);
       }
@@ -5208,13 +5213,17 @@ function renderApp(app) {
         if (!raw) return;
         const reveal = document.createElement("button");
         reveal.type = "button";
-        reveal.className = "copy-btn";
-        reveal.innerHTML = btnLabel("eye", "Anzeigen");
+        reveal.className = "copy-btn copy-btn-icon";
+        reveal.innerHTML = icon("eye");
+        reveal.title = "Anzeigen";
+        reveal.setAttribute("aria-label", "Anzeigen");
         let shown = false;
         reveal.onclick = () => {
           shown = !shown;
           valEl.textContent = shown ? raw : "••••••••";
-          reveal.innerHTML = btnLabel("eye", shown ? "Verbergen" : "Anzeigen");
+          reveal.innerHTML = icon(shown ? "eyeOff" : "eye");
+          reveal.title = shown ? "Verbergen" : "Anzeigen";
+          reveal.setAttribute("aria-label", shown ? "Verbergen" : "Anzeigen");
         };
         (sf.querySelector(".sf-actions") || sf).appendChild(reveal);
       });

@@ -199,15 +199,9 @@ button {
 .btn-icon .ico { width: 16px; height: 16px; }
 .copy-icon-btn.copied { border-color: var(--ok); color: var(--ok); }
 .detail-action-btn {
-  align-items: center;
-  display: inline-flex;
-  flex: 1;
-  gap: 8px;
-  justify-content: center;
-  min-width: 0;
+  flex: 0 0 auto;
 }
 .detail-action-btn .ico { width: 17px; height: 17px; flex-shrink: 0; }
-.detail-action-btn span { overflow-wrap: anywhere; }
 .detail-action-danger { color: var(--danger); }
 .detail-action-danger:hover { border-color: var(--danger); }
 
