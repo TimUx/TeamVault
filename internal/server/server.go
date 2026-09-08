@@ -714,8 +714,8 @@ func (a *API) handleLoginTOTPStep(w http.ResponseWriter, r *http.Request, loginT
 func (a *API) writeLoginSuccess(w http.ResponseWriter, r *http.Request, user *store.UserRecord, tenant *store.Tenant, remember bool) {
 	var roles []string
 	_ = json.Unmarshal([]byte(user.RolesJSON), &roles)
-	// Single active cookie session per user: revoke prior logins (stolen-session / shared-device hygiene).
-	a.Sessions.DeleteByUser(user.ID)
+	// Concurrent sessions allowed: a login no longer revokes existing sessions on other
+	// clients/devices. Explicit revocation still happens on password/role change or disable.
 	sess := a.Sessions.CreateWithTTL(user.ID, tenant.ID, user.Username, roles, rememberLoginTTL(remember), remember)
 	a.setSessionCookie(w, r, sess)
 	writeJSON(w, http.StatusOK, map[string]any{

@@ -260,7 +260,7 @@ func (a *API) handleWALoginFinish(w http.ResponseWriter, r *http.Request) {
 	}
 	var roles []string
 	_ = json.Unmarshal([]byte(u.RolesJSON), &roles)
-	a.Sessions.DeleteByUser(u.ID)
+	// Concurrent sessions allowed: passkey login keeps existing sessions on other devices.
 	sess := a.Sessions.CreateWithTTL(u.ID, tenant.ID, u.Username, roles, rememberLoginTTL(body.RememberLogin), body.RememberLogin)
 	a.setSessionCookie(w, r, sess)
 	_ = a.App.Vault.AppendAudit(r.Context(), store.AuditEvent{
