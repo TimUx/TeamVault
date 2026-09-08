@@ -256,10 +256,25 @@ jobs:
           COSIGN_EXPERIMENTAL: "1"
         run: |
           set -euo pipefail
+          sign_blob() {
+            local file="$1"
+            local attempt
+            for attempt in 1 2 3; do
+              if cosign sign-blob --yes \
+                --output-signature "${file}.sig" \
+                --output-certificate "${file}.pem" "$file"; then
+                return 0
+              fi
+              rm -f "${file}.sig" "${file}.pem"
+              if [ "$attempt" -lt 3 ]; then
+                sleep $((attempt * 10))
+              fi
+            done
+            return 1
+          }
+
           for file in teamvault-* tvcli-* SHA256SUMS; do
-            cosign sign-blob --yes \
-              --output-signature "${file}.sig" \
-              --output-certificate "${file}.pem" "$file"
+            sign_blob "$file"
           done
 
       - name: Generate SBOM
