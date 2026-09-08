@@ -2334,6 +2334,7 @@ function renderApp(app) {
 
               <div class="panel-tab-pane account-page" role="tabpanel" data-panel-pane="clients" hidden>
                 ${hintBox("CLI, Browser-Extension und Desktop-App von dieser Instanz — Zero-Knowledge bleibt erhalten (Entschlüsselung nur lokal).")}
+                <div id="cliConnectionInfo" class="client-cli-connection"></div>
                 <div id="clientDownloadsApp" class="client-dl-grid"></div>
                 <div class="hint-box" id="accClientsHelp" hidden></div>
               </div>
@@ -3149,6 +3150,37 @@ function renderApp(app) {
     if (n < 1024 * 1024) return (n / 1024).toFixed(1) + " KB";
     return (n / (1024 * 1024)).toFixed(1) + " MB";
   }
+  function refreshCLIConnectionInfo() {
+    const root = n.querySelector("#cliConnectionInfo");
+    if (!root || !vault.me) return;
+    const base = window.location.origin + (tvBase() || "");
+    const tenant = vault.me.tenant_slug || "";
+    const username = vault.me.username || "";
+    const loginCmd = `tvcli -base ${base} login -tenant ${tenant} -user ${username}`;
+    const apiCmd = `tvcli -base ${base} whoami`;
+    root.innerHTML = `
+      <h4>CLI-Verbindung für diesen Benutzer</h4>
+      <p class="hint">Diese Werte gehören zu Ihrem aktuellen Konto und können direkt für <code>tvcli</code> verwendet werden.</p>
+      <dl class="client-cli-values">
+        <dt>Server-URL</dt><dd><code>${escHtml(base)}</code></dd>
+        <dt>Tenant-Slug</dt><dd><code>${escHtml(tenant || "—")}</code></dd>
+        <dt>Username</dt><dd><code>${escHtml(username || "—")}</code></dd>
+      </dl>
+      <p class="hint">Login mit Ihrem normalen Login-Passwort:</p>
+      <code class="client-cli-command" id="cliLoginCommand">${escHtml(loginCmd)}</code>
+      <button type="button" class="btn-ghost btn-sm" id="cliLoginCopy">Login-Befehl kopieren</button>
+      <p class="hint">Alternativ benötigt <code>TEAMVAULT_API_KEY</code> einen separat erzeugten API-Key. Der Schlüssel wird nur bei der Erstellung einmal angezeigt und kann nicht aus dieser Ansicht ausgelesen werden.</p>
+      <code class="client-cli-command" id="cliApiCommand">${escHtml(`$env:TEAMVAULT_API_KEY='tvk_…'`)}
+${escHtml(apiCmd)}</code>
+      <button type="button" class="btn-ghost btn-sm" id="cliApiCopy">API-Key-Beispiel kopieren</button>
+      <p class="hint">API-Keys erstellt ein Plattform-Administrator unter <strong>Administration → API-Keys</strong>; für CLI-Vault-Zugriff ist der Scope <code>vault</code> erforderlich.</p>`;
+    const bindCopy = (button, command) => {
+      const el = root.querySelector(button);
+      if (el) el.onclick = () => copyClientText(command, el);
+    };
+    bindCopy("#cliLoginCopy", loginCmd);
+    bindCopy("#cliApiCopy", `$env:TEAMVAULT_API_KEY='tvk_…'\n${apiCmd}`);
+  }
   function detectClientPlatform() {
     const ua = navigator.userAgent || "";
     const plat = (navigator.userAgentData && navigator.userAgentData.platform) || "";
@@ -3177,6 +3209,7 @@ function renderApp(app) {
   async function refreshClientDownloadsUI() {
     const root = n.querySelector("#clientDownloadsApp");
     if (!root) return;
+    refreshCLIConnectionInfo();
     if (!anyClientIntegrationEnabled()) {
       root.innerHTML = hintBox("CLI, Browser-Extension und Desktop-App sind auf dieser Instanz deaktiviert (Plattform-Policy).");
       return;

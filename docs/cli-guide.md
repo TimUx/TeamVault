@@ -35,13 +35,29 @@ CI (Tag `v*`): `.github/workflows/tvcli.yml` baut die vier Standalone-Binaries u
 
 ## Einrichten
 
+### Woher kommen URL, Tenant, Username und API-Key?
+
+Nach der Anmeldung finden Sie unter **Konto & Sicherheit → Clients** eine persönliche CLI-Übersicht. Dort werden die Server-URL, der Tenant-Slug und Ihr Username angezeigt. Ein fertiger Login-Befehl kann direkt kopiert werden.
+
+- **URL:** die URL Ihrer geöffneten TeamVault-Instanz
+- **Tenant-Slug:** wird in der Clients-Übersicht für Ihre aktuelle Organisation angezeigt
+- **Username:** Ihr TeamVault-Username, ebenfalls in der Clients-Übersicht
+- **API-Key:** optional; ein Plattform-Administrator erstellt ihn unter **Administration → API-Keys**. Der Token wird nur bei der Erstellung angezeigt und muss sofort sicher gespeichert werden. Für Vault-Zugriff den Scope `vault` verwenden.
+
 ```powershell
-tvcli -base https://IHRE-VAULT-URL login -tenant demo -user admin
+tvcli -base https://IHRE-VAULT-URL login -tenant IHR-TENANT -user IHR-USER
 ```
 
 Bei aktivem TOTP wird der Code interaktiv abgefragt (optional leer lassen, wenn kein TOTP eingerichtet). Alternativ kann der Code im selben Login-Request mitgegeben werden — die Web-App nutzt dagegen einen **zweiten Schritt** nach Passwort/Passkey.
 
 Oder API-Key (Admin → API-Keys, Scope `read` / `vault`):
+
+```powershell
+$env:TEAMVAULT_API_KEY = "tvk_…"
+tvcli -base https://IHRE-VAULT-URL whoami
+```
+
+Mit API-Key:
 
 ```powershell
 $env:TEAMVAULT_API_KEY = "tvk_…"
