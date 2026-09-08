@@ -12,7 +12,7 @@ Secrets und Titel werden nur im Browser entschlüsselt — Server und Storage se
 | **Vault** | Secrets anlegen/öffnen (Titel, User, Passwort, Extra-Felder, TOTP), Suche/Tags, Import aus anderen Tools, Export einzeln/mehrere/alle, verschlüsselte Sicherung |
 | **Sharing** | Pro berechtigtem User eigener Datenschlüssel (asymmetrisch); Entzug mit Pflicht-Rotation |
 | **Auth** | Lokales Login immer; optional LDAP/AD nur für Bind; TOTP (Web: zweistufig); Passkeys (nur Login); Self-Service Passwort-Wechsel |
-| **Vault-UX** | Favoriten (lokal), Sortierung A–Z/Z–A/Recent, Suche/Tags, flache App-Shell mit abgesetzter Sidebar/Header und wählbarem Farbdesign |
+| **Vault-UX** | Favoriten (im verschlüsselten Secret-Payload), Sortierung A–Z/Z–A/Recent, Suche/Tags, flache App-Shell mit abgesetzter Sidebar/Header und wählbarem Farbdesign |
 | **Onboarding** | Erzwungenes Master-Passwort + Schlüsselpaar; Recovery-Kit oder Admin-Escrow (Shamir) |
 | **Admin** | User/Gruppen, Firmen-CA, LDAP, SMTP, Krypto/Policy, Audit, API-Keys (`read`/`vault`/`admin`), Tenants, Storage-Migration, Instanz-Backup/Restore |
 | **Clients** | Web-UI, CLI (`tvcli`), Browser-Extension (Chrome/Edge/Firefox; Ausfüllen/Kopieren mit Origin-Match; Sichtbarkeit per Policy), Desktop-App (Linux/Windows, reine Vault-Funktionen, Offline-Cache, Tray, Autostart) |
@@ -115,7 +115,7 @@ cp .env.example .env
 mkdir -p secrets
 openssl rand -out secrets/teamvault_unlock 48
 docker compose pull && docker compose up -d
-# Image: ghcr.io/timux/teamvault:latest  (Prod: :1.3.26 in .env pinnen)
+# Image: ghcr.io/timux/teamvault:latest  (Prod: :1.5.18 in .env pinnen)
 # → http://127.0.0.1:8080/setup
 
 # Nur bei Bedarf lokal bauen:
@@ -193,11 +193,11 @@ Workflow [`.github/workflows/docker.yml`](.github/workflows/docker.yml): Unit-Te
 | Trigger | Tags (Auszug) |
 |---------|----------------|
 | `main` | `latest`, `main`, `sha-…` |
-| `v1.3.26` | `1.3.26`, `1.3` |
+| `v1.5.18` | `1.5.18`, `1.5` |
 
 ```bash
 docker pull ghcr.io/timux/teamvault:latest
-docker pull ghcr.io/timux/teamvault:1.3.26
+docker pull ghcr.io/timux/teamvault:1.5.18
 ```
 
 Compose nutzt diese Images standardmäßig (`TEAMVAULT_IMAGE` in `.env`).
