@@ -4,6 +4,8 @@ name: Release
 on:
   push:
     tags: ["v*"]
+  release:
+    types: [published]
   workflow_dispatch:
 
 permissions:
@@ -219,7 +221,7 @@ jobs:
 
   publish:
     name: Publish release assets
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    if: (github.event_name == 'push' || github.event_name == 'release') && startsWith(github.ref, 'refs/tags/')
     needs: [server, tvcli, desktop-linux, desktop-windows, extension-stores]
     runs-on: ubuntu-latest
     steps:
@@ -270,7 +272,7 @@ jobs:
 
   docker:
     name: Build & publish release Docker image
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    if: (github.event_name == 'push' || github.event_name == 'release') && startsWith(github.ref, 'refs/tags/')
     needs: [server, tvcli, desktop-linux, desktop-windows]
     runs-on: ubuntu-latest
     steps:
