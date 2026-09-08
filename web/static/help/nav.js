@@ -44,7 +44,7 @@
     if (!sidebar) return;
 
     const html = `
-      <div class="help-sidebar-brand"><a href="${pathOf("/help")}">TeamVault Hilfe</a></div>
+      <div class="help-sidebar-brand"><a href="${pathOf("/help")}"><img src="${pathOf("/icons/teamvault-mark.svg")}" alt="" /> <span>TeamVault Hilfe</span></a></div>
       <nav class="help-sidebar-nav" aria-label="Hilfe-Navigation">
         <div class="help-sec">
           <div class="help-sec-title">Einstieg</div>

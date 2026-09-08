@@ -16,7 +16,7 @@ Bestehende Näherungen reichen nicht:
 |-------------|--------------------------|
 | In-Memory-`secretsCache` (`app.js`) | Verschwindet bei Tab-Close / Reload |
 | `.tvbak` | Manuell; enthält nach Entpacken **Klartext**; Restore legt **neue** Secrets an |
-| Browser-HTTP-Cache | Kein strukturiertes Vault-Snapshot; Session-Cookies helfen offline nicht |
+| Browser-HTTP-Cache | Statische App-Shell wird per `no-store` ausgeliefert; Service Worker umgeht den HTTP-Cache für Netzwerk-Assets und verwendet nur den versionierten Offline-Shell-Cache |
 | CLI | Kein lokaler Stand; jeder Aufruf braucht API |
 
 PWA allein löst das **nicht**: ein Service Worker kann die App-Shell (HTML/JS/Crypto-Libs) offline liefern, aber ohne lokal vorgehaltene Ciphertexts bleibt der Vault leer.
@@ -73,7 +73,7 @@ Kein zweites Backup-Passwort (im Gegensatz zu `.tvbak`). Unlock-Pfad bleibt der 
 | Ansatz | Urteil |
 |--------|--------|
 | Nur Service Worker cached `/api/secrets` | Ungeeignet: Session-gebunden, schwer zu TTL/Wipe, Klartext-Risiko falls je Metadaten klar wären; SW soll **keine** Vault-API cachen |
-| Nur IndexedDB ohne PWA | Daten da, aber nach Browser-Neustart ohne Netz oft **kein** `app.js`/`cryptocore.js` (HTTP-Cache unzuverlässig) |
+| Nur IndexedDB ohne PWA | Daten da, aber ohne installierte PWA-Shell fehlen nach Browser-Neustart weiterhin die benötigten App-Assets |
 | Native App / Extension als einziger Offline-Weg | Extension hat eigenen Origin (kein shared IndexedDB); native Apps sind Roadmap-deferred |
 | `.tvbak` automatisch nach Disk schreiben | UX schlecht; Klartext-in-Hülle; Restore-Semantik falsch |
 | Write-Queue (offline anlegen/ändern) | Konflikte, Audit, Rotation/Entzug — **nicht v1** |

@@ -281,9 +281,9 @@ Kurzanleitung: **Hilfe → CLI** bzw. `/help/cli`. Markdown: [`docs/cli-guide.md
 
 ![Konto → Clients](images/account-clients.png)
 
-In der App: **Konto → Clients** — plattformgerechter Download und PowerShell/Bash-Einzeiler, sofern die CLI-Integration aktiviert ist (Standard: ausgeblendet).
+In der App: **Konto → Clients** — plattformgerechter Download, PowerShell/Bash-Einzeiler und persönliche Verbindungsdaten (Server-URL, Tenant-Slug, Username) mit kopierbarem Login-Befehl, sofern die CLI-Integration aktiviert ist (Standard: ausgeblendet).
 
-Einzeiler und Alltagsbefehle stehen dort. API-Keys brauchen mindestens einen Scope:
+Einzeiler und Alltagsbefehle stehen dort. API-Keys werden nicht angezeigt; ein Plattform-Administrator erstellt sie unter **Administration → API-Keys** und muss den Token bei der Erstellung sicher übergeben. API-Keys brauchen mindestens einen Scope:
 
 | Scope | Erlaubt |
 |-------|---------|

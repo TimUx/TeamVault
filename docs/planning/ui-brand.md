@@ -97,6 +97,7 @@ Implementierung: [`web/static/styles.css`](../../web/static/styles.css), [`web/s
 
 ## 6. Icons
 
+- Kanonisches Markenlogo: Schild mit Schlüsselöffnung, als `web/static/icons/teamvault-mark.svg`; Web-Favicon `icons/icon.svg`, Desktop und Extension verwenden dasselbe Motiv.
 - Stroke-SVGs inline in `app.js` (`ICO` / `icon()`), `currentColor`, ~1–1.2 rem  
 - Theme: Sonne (Hellmodus) / Mond (Dunkelmodus) als `btn-icon`  
 - Sidebar: Key, Plus, Upload, User, Users/Group, Network, Mail, Shield, Lock, Building, Clipboard  

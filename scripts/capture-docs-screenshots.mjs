@@ -561,27 +561,7 @@ async function main() {
   try {
     await enableDemoPolicies(page);
     await showAccountTab(page, "clients");
-    await page.evaluate(async (base) => {
-      const res = await fetch(`${base}/api/client-downloads`, { credentials: "include" });
-      if (!res.ok) return;
-      const data = await res.json();
-      const root = document.querySelector("#clientDownloadsApp");
-      if (!root) return;
-      const cli = data.cli?.[0];
-      const crx = data.extension?.crx;
-      const desktop = data.desktop?.[0];
-      root.innerHTML = [
-        `<div class="client-dl-card"><h4>CLI (tvcli)</h4>`,
-        cli ? `<a class="btn-accent" href="${base}${cli.url}">tvcli herunterladen</a>` : `<p class="hint">CLI-Binaries noch nicht bereitgestellt.</p>`,
-        `</div>`,
-        `<div class="client-dl-card"><h4>Browser-Extension</h4>`,
-        crx ? `<a class="btn-accent" href="${base}${crx.url}">Extension installieren</a>` : `<p class="hint">Extension noch nicht bereitgestellt.</p>`,
-        `</div>`,
-        `<div class="client-dl-card"><h4>Desktop-App</h4>`,
-        desktop ? `<a class="btn-accent" href="${base}${desktop.url}">Desktop-App herunterladen</a>` : `<p class="hint">Desktop-Binaries noch nicht bereitgestellt.</p>`,
-        `</div>`,
-      ].join("");
-    }, BASE);
+    await page.waitForSelector("#cliConnectionInfo .client-cli-command", { timeout: 20000 });
     await page.waitForSelector("#clientDownloadsApp .client-dl-card", { timeout: 20000 });
     await page.locator("#clientDownloadsApp").scrollIntoViewIfNeeded();
     await page.waitForTimeout(600);

@@ -29,6 +29,8 @@
   font-weight: 700;
   letter-spacing: -0.02em;
 }
+.help-sidebar-brand a { display: flex; align-items: center; gap: .45rem; }
+.help-sidebar-brand img { width: 1.35rem; height: 1.35rem; }
 .help-sidebar-brand a {
   color: inherit;
   text-decoration: none;
