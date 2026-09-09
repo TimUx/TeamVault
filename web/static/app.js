@@ -68,7 +68,7 @@ function localLoginPasswordError(pw) {
 
 function tvBaseFromPath() {
   const p = location.pathname;
-  const routes = ["/app", "/login", "/setup", "/onboard"];
+  const routes = ["/app", "/login", "/setup", "/onboard", "/onboard-2fa"];
   for (const s of routes) {
     if (p === s) return "";
     if (p.endsWith(s) && p.length > s.length) return p.slice(0, p.length - s.length);
@@ -908,7 +908,9 @@ function renderLogin(app) {
     try {
       const me = await api("/api/me");
       if (me && me.username) {
-        tvGo(me.needs_vault_onboard ? "/onboard" : "/app");
+        if (me.needs_vault_onboard) tvGo("/onboard");
+        else if (me.needs_totp_setup) tvGo("/onboard-2fa");
+        else tvGo("/app");
       }
     } catch (_) {}
   })();
@@ -953,7 +955,9 @@ function renderLogin(app) {
     if (tenantSlug) {
       try { localStorage.setItem("tv-tenant-slug", tenantSlug); } catch (_) {}
     }
-    tvGo(res.needs_vault_onboard ? "/onboard" : "/app");
+    if (res.needs_vault_onboard) tvGo("/onboard");
+    else if (res.needs_totp_setup) tvGo("/onboard-2fa");
+    else tvGo("/app");
   }
   (async () => {
     try {
@@ -1283,10 +1287,111 @@ function renderOnboard(app) {
         if (saved.checked) setStepper(3, false);
       };
     }
-    panel.querySelector("#goApp").onclick = () => tvGo("/app");
+    panel.querySelector("#goApp").onclick = async () => {
+      try {
+        const me = await api("/api/me");
+        if (me.needs_totp_setup) {
+          tvGo("/onboard-2fa");
+          return;
+        }
+      } catch (_) {}
+      tvGo("/app");
+    };
   }
 
   renderPasswordStep();
+  app.appendChild(wrap);
+}
+
+function renderTotpOnboard(app) {
+  const wrap = el(`<div class="onboard-wrap">
+    <div class="panel">
+      <h1>2FA erforderlich</h1>
+      ${hintBox("Für diesen Tenant ist 2FA verpflichtend. Bitte Authenticator-App einrichten und den aktuellen 6-stelligen Code bestätigen.")}
+      <div class="row">
+        <button class="btn-accent" type="button" id="totpSetup">TOTP einrichten</button>
+      </div>
+      ${hintBox("Nach dem Scannen den <strong>aktuellen</strong> 6-stelligen Code eingeben.", { id: "totpSetupHint", hidden: true })}
+      <div id="totpbox" hidden>
+        <div class="totp-setup-grid">
+          <div class="totp-qr-wrap" id="otpQr" aria-live="polite"></div>
+          <div>
+            <p class="hint">otpauth-URL:</p>
+            <pre class="mono" id="otpurl"></pre>
+          </div>
+        </div>
+        <label>Code bestätigen</label><input id="code" inputmode="numeric" autocomplete="one-time-code" />
+        <div class="row">
+          <button class="btn-accent" type="button" id="en">Aktivieren</button>
+          <button class="btn-ghost" type="button" id="out">Abmelden</button>
+        </div>
+      </div>
+      <div class="error" id="terr" hidden></div>
+    </div>
+  </div>`);
+
+  const setupBtn = wrap.querySelector("#totpSetup");
+  setupBtn.onclick = async () => {
+    const box = wrap.querySelector("#totpbox");
+    const terr = wrap.querySelector("#terr");
+    box.hidden = false;
+    terr.hidden = true;
+    try {
+      const res = await api("/api/totp/setup", { method: "POST", body: "{}" });
+      const otpUrl = res.otpauth_url || "";
+      wrap.querySelector("#otpurl").textContent = otpUrl;
+      const qr = wrap.querySelector("#otpQr");
+      if (res.qr_data_url && qr) {
+        const img = document.createElement("img");
+        img.src = res.qr_data_url;
+        img.width = 200;
+        img.height = 200;
+        img.alt = "TOTP QR-Code";
+        qr.replaceChildren(img);
+      } else if (otpUrl && globalThis.TVQR) {
+        TVQR.mount(qr, otpUrl, { size: 200 });
+      }
+      const hint = wrap.querySelector("#totpSetupHint");
+      if (hint) hint.hidden = false;
+      setupBtn.disabled = true;
+      wrap.querySelector("#code")?.focus();
+    } catch (e) {
+      terr.hidden = false;
+      terr.textContent = e.message;
+    }
+  };
+
+  wrap.querySelector("#en").onclick = async () => {
+    const terr = wrap.querySelector("#terr");
+    terr.hidden = true;
+    try {
+      await api("/api/totp/enable", {
+        method: "POST",
+        body: JSON.stringify({ code: wrap.querySelector("#code").value.trim() }),
+      });
+      tvGo("/app");
+    } catch (e) {
+      terr.hidden = false;
+      terr.textContent = e.message;
+    }
+  };
+
+  wrap.querySelector("#out").onclick = async () => {
+    try { await api("/api/auth/logout", { method: "POST", body: "{}" }); } catch (_) {}
+    tvGo("/login");
+  };
+
+  (async () => {
+    try {
+      const me = await api("/api/me");
+      if (!me.needs_totp_setup || me.totp_enabled) {
+        tvGo(me.needs_vault_onboard ? "/onboard" : "/app");
+      }
+    } catch (_) {
+      tvGo("/login");
+    }
+  })();
+
   app.appendChild(wrap);
 }
 
@@ -2573,6 +2678,10 @@ function renderApp(app) {
                     <button type="button" class="panel-tab" role="tab" data-panel-tab="escrow" aria-selected="false">Escrow / Shamir</button>
                   </div>
                   <div class="panel-tab-pane active" role="tabpanel" data-panel-pane="mode">
+                    ${hintBox("2FA-Pflicht für diesen Tenant. Ist sie auf Plattform-Ebene aktiviert, ist diese Option hier gesperrt.", { id: "tenant_totp_hint" })}
+                    <label class="inline"><input id="tenant_totp_req" type="checkbox" /> 2FA für diesen Tenant verpflichtend</label>
+                    <div class="row"><button class="btn-accent" type="button" id="tenant_policy_save">Tenant-Policy speichern</button></div>
+                    <hr />
                     ${hintBox("Wechsel erzwingt Re-Onboarding aller User. Bestätigung: <code>REONBOARD</code>")}
                     <label>Modus</label>
                     <select id="rec_mode">
@@ -3003,6 +3112,7 @@ function renderApp(app) {
     try {
       const me = await api("/api/me");
       if (me.needs_vault_onboard) { tvGo("/onboard"); return; }
+      if (me.needs_totp_setup) { tvGo("/onboard-2fa"); return; }
       vault.me = me;
       loadUserFavoritesFromStorage();
       paintSessionBar(n, { me });
@@ -6441,6 +6551,21 @@ ${escHtml(apiCmd)}</code>
       await paintAdminSystem(null);
     }
 
+    try {
+      const tenantSettings = await api("/api/admin/tenant/settings");
+      const tenantTotp = n.querySelector("#tenant_totp_req");
+      const tenantHint = n.querySelector("#tenant_totp_hint");
+      if (tenantTotp) {
+        tenantTotp.checked = !!tenantSettings.totp_required;
+        tenantTotp.disabled = !!tenantSettings.totp_locked_by_platform;
+      }
+      if (tenantHint) {
+        tenantHint.innerHTML = tenantSettings.totp_locked_by_platform
+          ? "2FA ist auf Plattform-Ebene verpflichtend und für alle Tenants aktiv."
+          : "2FA kann für diesen Tenant individuell aktiviert oder deaktiviert werden.";
+      }
+    } catch (_) {}
+
     const ldap = await api("/api/admin/ldap");
     n.querySelector("#ldap_en").checked = !!ldap.enabled;
     const ldapImport = n.querySelector("#ldapUserImport");
@@ -6759,6 +6884,19 @@ ${escHtml(apiCmd)}</code>
       syncAccountClientsUI();
     } catch (e) { err.hidden = false; err.textContent = e.message; }
   };
+  n.querySelector("#tenant_policy_save").onclick = async () => {
+    const err = n.querySelector("#aerr"); err.hidden = true;
+    try {
+      await api("/api/admin/tenant/settings", {
+        method: "PUT",
+        body: JSON.stringify({
+          totp_required: n.querySelector("#tenant_totp_req").checked,
+        }),
+      });
+      vault.policy = await api("/api/policy/client");
+      await refreshAdmin();
+    } catch (e) { err.hidden = false; err.textContent = e.message; }
+  };
   n.querySelector("#rec_save").onclick = async () => {
     const err = n.querySelector("#aerr"); err.hidden = true;
     try {
@@ -6984,6 +7122,7 @@ async function boot() {
     return;
   }
   if (path === "/onboard") { renderOnboard(app); paintAbout(); return; }
+  if (path === "/onboard-2fa") { renderTotpOnboard(app); paintAbout(); return; }
   if (path === "/app") { renderApp(app); paintAbout(); return; }
   renderLogin(app);
   paintAbout();
