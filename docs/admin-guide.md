@@ -20,7 +20,7 @@ Betrieb und Verwaltung der Instanz. Für den Alltag der Endanwender: [User Guide
 | Rolle (technisch) | Anzeige in der UI | Rechte (Auszug) |
 |-------------------|-------------------|-----------------|
 | `member` | Mitglied | Vault nur für eigene/geteilte Secrets |
-| `tenant_admin` | Organisations-Administrator | User, Gruppen, LDAP (eigenen Tenant), Recovery, Audit (Tenant) |
+| `tenant_admin` | Organisations-Administrator | User, Gruppen, LDAP (eigenen Tenant), Recovery, Audit (Tenant), Tenant-2FA-Pflicht |
 | `platform_admin` | Plattform-Administrator | Instanz: Firmen-CA, Proxy, SMTP, Krypto/Policy, API-Keys, System, Tenants, Migration |
 | `auditor` | Auditor (nur Lesen) | Audit-Log einsehen, keine Schreibaktionen |
 
@@ -142,7 +142,7 @@ In der **Sidebar** unter **Administration** (sichtbar für `tenant_admin` / `pla
 |-------------|------------|
 | **Benutzer & Gruppen** | Benutzer, Gruppen |
 | **Verbindungen** | LDAP (Tenant-Admin); Firmen-CA, Zugriff & Proxy, SMTP (nur Plattform-Admin) |
-| **Sicherheit** | Recovery & Escrow (Tenant-Admin); Krypto & Policy, API-Keys (nur Plattform-Admin) |
+| **Sicherheit** | Recovery & Escrow + Tenant-2FA-Pflicht (Tenant-Admin); Krypto & Policy, API-Keys (nur Plattform-Admin) |
 | **Plattform** | Audit (Tenant-Admin); Tenants & Migration, **System** (nur Plattform-Admin) |
 
 Topbar-Theme nutzt flache Inline-SVG-Icons (kein externes Icon-CDN). Jeder Unterpunkt öffnet den jeweiligen Abschnitt. Storage-Übersicht und Versionsinfo stehen unter **Plattform → System** (nicht mehr oben in jedem Admin-Panel).
@@ -249,7 +249,9 @@ Sidebar **Administration → Krypto & Policy**:
 ![Krypto & Policy](images/admin-crypto.png)
 
 - Argon2-Defaults / Presets für neue Onboardings
-- TOTP-Pflicht (Hinweis/Policy nach Login)
+- TOTP-Pflicht auf **Plattform-Ebene** (erzwingt 2FA für alle Tenants)
+- Wenn Plattform-TOTP aus ist: Tenant-Admins können die 2FA-Pflicht je Tenant unter **Recovery & Escrow** individuell aktivieren/deaktivieren.
+- Wird 2FA-Pflicht (Plattform oder Tenant) aktiviert, müssen User ohne 2FA die Einrichtung beim nächsten Login in einem Mini-Onboarding abschließen.
 - **Offline-Vault-Cache erlauben:** Mandantenweit Opt-in für clientseitige Ciphertext-Kopie (IndexedDB, 30 Tage TTL). Aus = Nutzer können keine Offline-Kopie anlegen; bestehende Kopien auf Geräten werden beim nächsten Online-Besuch nicht mehr aktualisiert.
 - Idle-Lock der Vault-Session (Default 15 min) — nur Client-Unlock
 - **Admins: Secret-Liste nur mit Envelope** (`admin_secrets_envelope_only`): Wenn aktiv, sehen Tenant-Admins in der Secret-Liste nur Einträge, für die sie selbst ein Envelope haben (Inventar-Metadaten anderer Secrets ausgeblendet). Default: aus — Admins sehen alle Secret-Metadaten (IDs, Title-Ciphertext), Klartext bleibt Zero-Knowledge-geschützt.

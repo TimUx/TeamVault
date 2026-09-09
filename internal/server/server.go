@@ -199,6 +199,7 @@ func (a *API) Handler() http.Handler {
 	mux.Handle("GET /setup", webUI)
 	mux.Handle("GET /login", webUI)
 	mux.Handle("GET /onboard", webUI)
+	mux.Handle("GET /onboard-2fa", webUI)
 	mux.Handle("GET /app", webUI)
 	mux.Handle("GET /help", webUI)
 	mux.Handle("GET /help/cli", webUI)
@@ -234,7 +235,31 @@ func (a *API) requireAuth(next http.HandlerFunc) http.HandlerFunc {
 			writeErr(w, http.StatusForbidden, "api key scope denied")
 			return
 		}
+		if !isAPIKeySession(sess) {
+			u, err := a.App.Vault.GetUser(r.Context(), sess.TenantID, sess.UserID)
+			if err != nil {
+				writeErr(w, http.StatusUnauthorized, "user missing")
+				return
+			}
+			if userNeedsTOTPSetup(sess, u) && !allowWhenTOTPSetupPending(r.URL.Path) {
+				writeErr(w, http.StatusForbidden, "totp setup required")
+				return
+			}
+		}
 		next(w, r)
+	}
+}
+
+func userNeedsTOTPSetup(sess session.Session, u *store.UserRecord) bool {
+	return sess.NeedsTOTPSetup && u != nil && !u.TotpEnabled
+}
+
+func allowWhenTOTPSetupPending(path string) bool {
+	switch path {
+	case "/api/me", "/api/policy/client", "/api/totp/setup", "/api/totp/enable":
+		return true
+	default:
+		return false
 	}
 }
 
@@ -714,15 +739,16 @@ func (a *API) handleLoginTOTPStep(w http.ResponseWriter, r *http.Request, loginT
 func (a *API) writeLoginSuccess(w http.ResponseWriter, r *http.Request, user *store.UserRecord, tenant *store.Tenant, remember bool) {
 	var roles []string
 	_ = json.Unmarshal([]byte(user.RolesJSON), &roles)
+	needsTOTPSetup := a.effectiveTOTPRequired(r.Context(), tenant) && !user.TotpEnabled
 	// Concurrent sessions allowed: a login no longer revokes existing sessions on other
 	// clients/devices. Explicit revocation still happens on password/role change or disable.
-	sess := a.Sessions.CreateWithTTL(user.ID, tenant.ID, user.Username, roles, rememberLoginTTL(remember), remember)
+	sess := a.Sessions.CreateWithTTLState(user.ID, tenant.ID, user.Username, roles, rememberLoginTTL(remember), remember, needsTOTPSetup)
 	a.setSessionCookie(w, r, sess)
 	writeJSON(w, http.StatusOK, map[string]any{
 		"username": user.Username, "tenant_id": tenant.ID, "tenant_name": tenant.Name, "tenant_slug": tenant.Slug,
 		"roles": roles, "status": user.Status,
 		"needs_vault_onboard": user.OnboardedAt == nil, "totp_enabled": user.TotpEnabled,
-		"needs_totp_setup":   a.bundle().Policy.TOTPRequired && !user.TotpEnabled,
+		"needs_totp_setup":   needsTOTPSetup,
 		"recovery_mode":      tenant.RecoveryMode,
 		"preferences":        userPreferences(user),
 		"remembered_login":   sess.Remembered,
@@ -735,6 +761,16 @@ func rememberLoginTTL(remember bool) time.Duration {
 		return session.MaxRememberedTTL
 	}
 	return 0
+}
+
+func (a *API) effectiveTOTPRequired(ctx context.Context, tenant *store.Tenant) bool {
+	if a.bundle().Policy.TOTPRequired {
+		return true
+	}
+	if tenant == nil {
+		return false
+	}
+	return tenant.TOTPRequired
 }
 
 func (a *API) handleLogout(w http.ResponseWriter, r *http.Request) {
@@ -765,8 +801,9 @@ func (a *API) handleMe(w http.ResponseWriter, r *http.Request) {
 		"user_id": sess.UserID, "tenant_id": sess.TenantID, "tenant_name": tenantName, "tenant_slug": tenantSlug,
 		"username": sess.Username, "display_name": u.DisplayName, "email": u.Email, "roles": sess.Roles,
 		"needs_vault_onboard": u.OnboardedAt == nil, "totp_enabled": u.TotpEnabled,
-		"auth_backend": u.AuthBackend,
-		"preferences":  userPreferences(u),
+		"needs_totp_setup": userNeedsTOTPSetup(sess, u),
+		"auth_backend":     u.AuthBackend,
+		"preferences":      userPreferences(u),
 		"passkey_count": func() int {
 			creds, _ := a.App.Vault.ListWebAuthnCredentials(r.Context(), sess.TenantID, sess.UserID)
 			return len(creds)

@@ -260,8 +260,9 @@ func (a *API) handleWALoginFinish(w http.ResponseWriter, r *http.Request) {
 	}
 	var roles []string
 	_ = json.Unmarshal([]byte(u.RolesJSON), &roles)
+	needsTOTPSetup := a.effectiveTOTPRequired(r.Context(), tenant) && !u.TotpEnabled
 	// Concurrent sessions allowed: passkey login keeps existing sessions on other devices.
-	sess := a.Sessions.CreateWithTTL(u.ID, tenant.ID, u.Username, roles, rememberLoginTTL(body.RememberLogin), body.RememberLogin)
+	sess := a.Sessions.CreateWithTTLState(u.ID, tenant.ID, u.Username, roles, rememberLoginTTL(body.RememberLogin), body.RememberLogin, needsTOTPSetup)
 	a.setSessionCookie(w, r, sess)
 	_ = a.App.Vault.AppendAudit(r.Context(), store.AuditEvent{
 		ID: newID("aud"), TenantID: tenant.ID, ActorID: string(u.ID),
@@ -271,7 +272,7 @@ func (a *API) handleWALoginFinish(w http.ResponseWriter, r *http.Request) {
 		"username": u.Username, "tenant_id": tenant.ID, "tenant_name": tenant.Name, "tenant_slug": tenant.Slug,
 		"roles":               roles,
 		"needs_vault_onboard": u.OnboardedAt == nil, "totp_enabled": u.TotpEnabled,
-		"needs_totp_setup":   a.bundle().Policy.TOTPRequired && !u.TotpEnabled,
+		"needs_totp_setup":   needsTOTPSetup,
 		"recovery_mode":      tenant.RecoveryMode,
 		"auth":               "passkey",
 		"note":               "vault unlock still requires master password",

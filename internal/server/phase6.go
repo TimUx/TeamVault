@@ -48,6 +48,7 @@ func (a *API) registerPhase6(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/admin/backup", a.requireAuth(a.requirePlatformAdmin(a.handleBackupExport)))
 	mux.HandleFunc("POST /api/admin/backup/restore", a.requireAuth(a.requirePlatformAdmin(a.handleBackupRestore)))
 	mux.HandleFunc("GET /api/admin/tenant/settings", a.requireAuth(a.requireAdmin(a.handleGetTenantSettings)))
+	mux.HandleFunc("PUT /api/admin/tenant/settings", a.requireAuth(a.requireAdmin(a.handlePutTenantSettings)))
 	mux.HandleFunc("GET /api/vault/escrow-pubkey", a.requireAuth(a.handleEscrowPubKeyGet))
 }
 
@@ -498,10 +499,57 @@ func (a *API) handleGetTenantSettings(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusNotFound, "tenant not found")
 		return
 	}
+	platformTOTP := a.bundle().Policy.TOTPRequired
+	effectiveTOTP := platformTOTP || t.TOTPRequired
 	writeJSON(w, http.StatusOK, map[string]any{
 		"id": t.ID, "name": t.Name, "slug": t.Slug, "status": t.Status,
 		"recovery_mode": t.RecoveryMode, "escrow_allowed": t.EscrowAllowed,
-		"has_escrow_pubkey": len(t.EscrowPublicKey) > 0,
+		"has_escrow_pubkey":       len(t.EscrowPublicKey) > 0,
+		"platform_totp_required":  platformTOTP,
+		"tenant_totp_required":    t.TOTPRequired,
+		"totp_required":           effectiveTOTP,
+		"totp_locked_by_platform": platformTOTP,
+	})
+}
+
+func (a *API) handlePutTenantSettings(w http.ResponseWriter, r *http.Request) {
+	sess, _ := a.sessionFrom(r)
+	var body struct {
+		TOTPRequired bool `json:"totp_required"`
+	}
+	if err := readJSON(r, &body); err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	t, err := a.App.Vault.GetTenant(r.Context(), sess.TenantID)
+	if err != nil {
+		writeErr(w, http.StatusNotFound, "tenant not found")
+		return
+	}
+	platformTOTP := a.bundle().Policy.TOTPRequired
+	if platformTOTP && !body.TOTPRequired {
+		writeErr(w, http.StatusConflict, "platform policy requires totp")
+		return
+	}
+	t.TOTPRequired = body.TOTPRequired
+	if platformTOTP {
+		t.TOTPRequired = true
+	}
+	if err := a.App.Vault.PutTenant(r.Context(), *t); err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if !a.appendAuditStrict(w, r, store.AuditEvent{
+		TenantID: sess.TenantID, ActorID: string(sess.UserID),
+		Action: "tenant.policy.totp_required", ResourceType: "tenant", ResourceID: string(t.ID),
+	}) {
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"platform_totp_required":  platformTOTP,
+		"tenant_totp_required":    t.TOTPRequired,
+		"totp_required":           platformTOTP || t.TOTPRequired,
+		"totp_locked_by_platform": platformTOTP,
 	})
 }
 

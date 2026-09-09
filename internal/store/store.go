@@ -23,6 +23,7 @@ type Tenant struct {
 	Slug            string
 	RecoveryMode    string // user_kit | admin_escrow
 	EscrowAllowed   bool
+	TOTPRequired    bool
 	EscrowPublicKey []byte // X25519 pub for admin escrow envelopes
 	Status          string
 	CreatedAt       time.Time

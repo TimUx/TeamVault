@@ -62,6 +62,7 @@ CREATE TABLE IF NOT EXISTS tenants (
   slug TEXT NOT NULL UNIQUE,
   recovery_mode TEXT NOT NULL,
   escrow_allowed INTEGER NOT NULL DEFAULT 1,
+  totp_required INTEGER NOT NULL DEFAULT 0,
   escrow_public_key BLOB,
   status TEXT NOT NULL,
   created_at TEXT NOT NULL,
@@ -185,6 +186,7 @@ CREATE TABLE IF NOT EXISTS secret_group_shares (
 	// Best-effort upgrades from v1…v5.
 	for _, q := range []string{
 		`ALTER TABLE tenants ADD COLUMN escrow_public_key BLOB`,
+		`ALTER TABLE tenants ADD COLUMN totp_required INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE users ADD COLUMN escrow_envelope BLOB`,
 		`ALTER TABLE users ADD COLUMN totp_secret_enc BLOB`,
 		`ALTER TABLE users ADD COLUMN totp_enabled INTEGER NOT NULL DEFAULT 0`,
@@ -268,13 +270,13 @@ func (s *Store) PutTenant(ctx context.Context, t store.Tenant) error {
 	}
 	t.UpdatedAt = now
 	_, err := s.db.ExecContext(ctx, `
-INSERT INTO tenants(id, name, slug, recovery_mode, escrow_allowed, escrow_public_key, status, created_at, updated_at)
-VALUES(?,?,?,?,?,?,?,?,?)
+INSERT INTO tenants(id, name, slug, recovery_mode, escrow_allowed, totp_required, escrow_public_key, status, created_at, updated_at)
+VALUES(?,?,?,?,?,?,?,?,?,?)
 ON CONFLICT(id) DO UPDATE SET
   name=excluded.name, slug=excluded.slug, recovery_mode=excluded.recovery_mode,
-  escrow_allowed=excluded.escrow_allowed, escrow_public_key=excluded.escrow_public_key,
+  escrow_allowed=excluded.escrow_allowed, totp_required=excluded.totp_required, escrow_public_key=excluded.escrow_public_key,
   status=excluded.status, updated_at=excluded.updated_at
-`, t.ID, t.Name, t.Slug, t.RecoveryMode, boolToInt(t.EscrowAllowed), t.EscrowPublicKey, t.Status,
+`, t.ID, t.Name, t.Slug, t.RecoveryMode, boolToInt(t.EscrowAllowed), boolToInt(t.TOTPRequired), t.EscrowPublicKey, t.Status,
 		t.CreatedAt.Format(time.RFC3339Nano), t.UpdatedAt.Format(time.RFC3339Nano))
 	return err
 }
@@ -284,19 +286,19 @@ func (s *Store) GetTenant(ctx context.Context, id store.TenantID) (*store.Tenant
 		return nil, err
 	}
 	return s.scanTenant(s.db.QueryRowContext(ctx, `
-SELECT id, name, slug, recovery_mode, escrow_allowed, escrow_public_key, status, created_at, updated_at
+SELECT id, name, slug, recovery_mode, escrow_allowed, totp_required, escrow_public_key, status, created_at, updated_at
 FROM tenants WHERE id = ?`, id))
 }
 
 func (s *Store) GetTenantBySlug(ctx context.Context, slug string) (*store.Tenant, error) {
 	return s.scanTenant(s.db.QueryRowContext(ctx, `
-SELECT id, name, slug, recovery_mode, escrow_allowed, escrow_public_key, status, created_at, updated_at
+SELECT id, name, slug, recovery_mode, escrow_allowed, totp_required, escrow_public_key, status, created_at, updated_at
 FROM tenants WHERE slug = ?`, slug))
 }
 
 func (s *Store) ListTenants(ctx context.Context) ([]store.Tenant, error) {
 	rows, err := s.db.QueryContext(ctx, `
-SELECT id, name, slug, recovery_mode, escrow_allowed, escrow_public_key, status, created_at, updated_at
+SELECT id, name, slug, recovery_mode, escrow_allowed, totp_required, escrow_public_key, status, created_at, updated_at
 FROM tenants ORDER BY name`)
 	if err != nil {
 		return nil, err
@@ -315,15 +317,16 @@ FROM tenants ORDER BY name`)
 
 func (s *Store) scanTenant(row scanner) (*store.Tenant, error) {
 	var t store.Tenant
-	var escrow int
+	var escrow, totpRequired int
 	var cAt, uAt string
-	if err := row.Scan(&t.ID, &t.Name, &t.Slug, &t.RecoveryMode, &escrow, &t.EscrowPublicKey, &t.Status, &cAt, &uAt); err != nil {
+	if err := row.Scan(&t.ID, &t.Name, &t.Slug, &t.RecoveryMode, &escrow, &totpRequired, &t.EscrowPublicKey, &t.Status, &cAt, &uAt); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, store.ErrNotFound
 		}
 		return nil, err
 	}
 	t.EscrowAllowed = escrow == 1
+	t.TOTPRequired = totpRequired == 1
 	t.CreatedAt, _ = time.Parse(time.RFC3339Nano, cAt)
 	t.UpdatedAt, _ = time.Parse(time.RFC3339Nano, uAt)
 	return &t, nil

@@ -21,6 +21,7 @@ func TestPhase6AdminConfigAuditAPIKeysMigrate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	t.Cleanup(func() { _ = app.Vault.Close() })
 	api := server.New(app)
 	ts := httptest.NewServer(api.Handler())
@@ -148,6 +149,98 @@ func TestPhase6AdminConfigAuditAPIKeysMigrate(t *testing.T) {
 	defer res.Body.Close()
 	if res.StatusCode < 400 {
 		t.Fatalf("expected reject, got %d", res.StatusCode)
+	}
+}
+
+func TestTenantTOTPPolicyAndNextLoginMiniOnboarding(t *testing.T) {
+	dir := t.TempDir()
+	key := bytes.Repeat([]byte("s"), 32)
+	app, err := bootstrap.Run(bootstrap.Options{DataDir: dir, UnlockKey: key})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = app.Vault.Close() })
+	api := server.New(app)
+	ts := httptest.NewServer(api.Handler())
+	t.Cleanup(ts.Close)
+
+	argon := cryptocore.Argon2Params{Time: 1, Memory: 8192, Threads: 1, KeyLen: 32}
+	postJSON(t, ts.URL+"/api/setup/commit", map[string]any{
+		"storage": map[string]string{"backend": "sqlite", "dsn": filepath.Join(dir, "v.db")},
+		"tenant":  map[string]any{"name": "T", "slug": "t1", "recovery_mode": "user_kit"},
+		"admin":   map[string]string{"username": "admin", "password": "Password1234!!!!"},
+		"argon2":  argon,
+	}, nil)
+
+	platJar := &cookieJar{m: map[string]string{}}
+	postJSON(t, ts.URL+"/api/auth/login", map[string]string{
+		"tenant_slug": "t1", "username": "admin", "password": "Password1234!!!!",
+	}, platJar)
+	onboardUser(t, ts.URL, platJar, []byte("admin-master-pw!"), argon)
+
+	u := postJSONCookie(t, ts.URL+"/api/admin/users", map[string]any{
+		"username": "tenantadmin",
+		"password": "Password1234!!!!",
+	}, platJar)
+	uid, _ := u["id"].(string)
+	if uid == "" {
+		t.Fatalf("missing user id: %v", u)
+	}
+	postJSONCookie(t, ts.URL+"/api/admin/users/"+uid+"/roles", map[string]any{
+		"roles": []string{"tenant_admin"},
+	}, platJar)
+
+	tenantJar := &cookieJar{m: map[string]string{}}
+	login := postJSON(t, ts.URL+"/api/auth/login", map[string]string{
+		"tenant_slug": "t1", "username": "tenantadmin", "password": "Password1234!!!!",
+	}, tenantJar)
+	if login["needs_totp_setup"] == true {
+		t.Fatalf("unexpected totp requirement before policy: %v", login)
+	}
+
+	settings := getJSONCookie(t, ts.URL+"/api/admin/tenant/settings", tenantJar)
+	if settings["totp_required"] != false || settings["totp_locked_by_platform"] != false {
+		t.Fatalf("unexpected initial tenant settings: %v", settings)
+	}
+
+	putJSONCookie(t, ts.URL+"/api/admin/tenant/settings", map[string]any{
+		"totp_required": true,
+	}, tenantJar)
+	pol := getJSONCookie(t, ts.URL+"/api/policy/client", tenantJar)
+	if pol["totp_required"] != true {
+		t.Fatalf("expected effective tenant totp policy: %v", pol)
+	}
+	if code, _ := getJSONCookieStatus(t, ts.URL+"/api/admin/users", tenantJar); code != http.StatusOK {
+		t.Fatalf("current session should stay active until next login, got %d", code)
+	}
+
+	postJSONCookie(t, ts.URL+"/api/auth/logout", map[string]any{}, tenantJar)
+	login = postJSON(t, ts.URL+"/api/auth/login", map[string]string{
+		"tenant_slug": "t1", "username": "tenantadmin", "password": "Password1234!!!!",
+	}, tenantJar)
+	if login["needs_totp_setup"] != true {
+		t.Fatalf("expected mini onboarding requirement after re-login: %v", login)
+	}
+	me := getJSONCookie(t, ts.URL+"/api/me", tenantJar)
+	if me["needs_totp_setup"] != true {
+		t.Fatalf("me should reflect pending totp setup: %v", me)
+	}
+	if code, body := getJSONCookieStatus(t, ts.URL+"/api/admin/users", tenantJar); code != http.StatusForbidden {
+		t.Fatalf("expected admin blocked until totp setup, got %d %v", code, body)
+	}
+	setup := postJSONCookie(t, ts.URL+"/api/totp/setup", map[string]any{}, tenantJar)
+	if setup["secret"] == "" {
+		t.Fatalf("expected totp setup still allowed: %v", setup)
+	}
+
+	putJSONCookie(t, ts.URL+"/api/admin/policy", map[string]any{
+		"totp_required": true, "session_hours": 8,
+	}, platJar)
+	code, body := putJSONCookieStatus(t, ts.URL+"/api/admin/tenant/settings", map[string]any{
+		"totp_required": false,
+	}, platJar)
+	if code != http.StatusConflict {
+		t.Fatalf("expected platform lock conflict, got %d %v", code, body)
 	}
 }
 
