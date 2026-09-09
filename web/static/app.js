@@ -200,6 +200,7 @@ const ICO = {
   cert: '<rect x="6" y="3" width="12" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h3"/>',
   info: '<circle cx="12" cy="12" r="9"/><path d="M12 10v6M12 7h.01"/>',
   more: '<circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/>',
+  close: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
 };
 
 function icon(name, cls) {
@@ -331,6 +332,10 @@ function btnLabel(icoName, label) {
 
 function openSecretButtonHtml(sizeClass = "btn-icon-sm") {
   return `<button type="button" class="btn-icon ${sizeClass} secret-open-btn" title="Details öffnen" aria-label="Details öffnen">${icon("open")}</button>`;
+}
+
+function closeButtonHtml(id, title = "Schließen") {
+  return `<button class="btn-ghost btn-sm btn-icon" type="button" id="${id}" title="${title}" aria-label="${title}">${icon("close", "btn-ico")}</button>`;
 }
 
 const THEME_STORAGE_KEY = "tv-theme";
@@ -2169,7 +2174,7 @@ function renderApp(app) {
                     <h1 id="dtitle">Secret</h1>
                     <div class="row row-compact">
                       <button class="btn-accent btn-sm btn-icon" type="button" id="dedit" title="Bearbeiten" aria-label="Bearbeiten">${icon("edit", "btn-ico")}</button>
-                      <button class="btn-ghost btn-sm" type="button" id="sdetailClose">Schließen</button>
+                      ${closeButtonHtml("sdetailClose")}
                     </div>
                   </div>
                   <div id="dview">
@@ -2240,7 +2245,7 @@ function renderApp(app) {
                 <div class="secret-modal-panel panel share-access-panel">
                   <div class="secret-modal-head">
                     <h1 id="shareAccessTitle">Zugriff</h1>
-                    <button class="btn-ghost btn-sm" type="button" id="shareAccessClose">Schließen</button>
+                    ${closeButtonHtml("shareAccessClose")}
                   </div>
                   <p class="hint" id="shareAccessSubtitle"></p>
                   ${hintBox("Klicken oder per Drag &amp; Drop hinzufügen. Entfernen rotiert den Datenschlüssel.")}
@@ -2543,7 +2548,7 @@ function renderApp(app) {
                   <div class="admin-modal-panel panel">
                     <div class="admin-modal-head">
                       <h2 id="userCreateTitle">Neuer User</h2>
-                      <button type="button" class="btn-ghost btn-sm" id="userCreateClose">Schließen</button>
+                      ${closeButtonHtml("userCreateClose")}
                     </div>
                     <label>Auth-Backend</label>
                     <select id="nauth">
@@ -2567,7 +2572,7 @@ function renderApp(app) {
                   <div class="admin-modal-panel panel">
                     <div class="admin-modal-head">
                       <h2 id="userEditTitle">User bearbeiten</h2>
-                      <button type="button" class="btn-ghost btn-sm" id="userEditClose">Schließen</button>
+                      ${closeButtonHtml("userEditClose")}
                     </div>
                     <p class="hint" id="userEditMeta"></p>
                     <label>Anzeigename</label><input id="ue_display" />
