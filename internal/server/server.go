@@ -801,9 +801,9 @@ func (a *API) handleMe(w http.ResponseWriter, r *http.Request) {
 		"user_id": sess.UserID, "tenant_id": sess.TenantID, "tenant_name": tenantName, "tenant_slug": tenantSlug,
 		"username": sess.Username, "display_name": u.DisplayName, "email": u.Email, "roles": sess.Roles,
 		"needs_vault_onboard": u.OnboardedAt == nil, "totp_enabled": u.TotpEnabled,
-		"needs_totp_setup":  userNeedsTOTPSetup(sess, u),
-		"auth_backend": u.AuthBackend,
-		"preferences":  userPreferences(u),
+		"needs_totp_setup": userNeedsTOTPSetup(sess, u),
+		"auth_backend":     u.AuthBackend,
+		"preferences":      userPreferences(u),
 		"passkey_count": func() int {
 			creds, _ := a.App.Vault.ListWebAuthnCredentials(r.Context(), sess.TenantID, sess.UserID)
 			return len(creds)

@@ -504,10 +504,10 @@ func (a *API) handleGetTenantSettings(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"id": t.ID, "name": t.Name, "slug": t.Slug, "status": t.Status,
 		"recovery_mode": t.RecoveryMode, "escrow_allowed": t.EscrowAllowed,
-		"has_escrow_pubkey": len(t.EscrowPublicKey) > 0,
-		"platform_totp_required": platformTOTP,
-		"tenant_totp_required":   t.TOTPRequired,
-		"totp_required":          effectiveTOTP,
+		"has_escrow_pubkey":       len(t.EscrowPublicKey) > 0,
+		"platform_totp_required":  platformTOTP,
+		"tenant_totp_required":    t.TOTPRequired,
+		"totp_required":           effectiveTOTP,
 		"totp_locked_by_platform": platformTOTP,
 	})
 }
@@ -546,9 +546,9 @@ func (a *API) handlePutTenantSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"platform_totp_required": platformTOTP,
-		"tenant_totp_required":   t.TOTPRequired,
-		"totp_required":          platformTOTP || t.TOTPRequired,
+		"platform_totp_required":  platformTOTP,
+		"tenant_totp_required":    t.TOTPRequired,
+		"totp_required":           platformTOTP || t.TOTPRequired,
 		"totp_locked_by_platform": platformTOTP,
 	})
 }

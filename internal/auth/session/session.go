@@ -13,16 +13,16 @@ import (
 )
 
 type Session struct {
-	ID         string
-	UserID     store.UserID
-	TenantID   store.TenantID
-	Username   string
-	Roles      []string
-	Scopes     []string // API-key scopes; empty = unrestricted (cookie sessions)
+	ID             string
+	UserID         store.UserID
+	TenantID       store.TenantID
+	Username       string
+	Roles          []string
+	Scopes         []string // API-key scopes; empty = unrestricted (cookie sessions)
 	NeedsTOTPSetup bool
-	ExpiresAt  time.Time
-	LastSeenAt time.Time
-	Remembered bool
+	ExpiresAt      time.Time
+	LastSeenAt     time.Time
+	Remembered     bool
 }
 
 const MaxRememberedTTL = 90 * 24 * time.Hour
@@ -78,7 +78,7 @@ func (s *Store) CreateWithTTLState(userID store.UserID, tenantID store.TenantID,
 	sess := Session{
 		ID: id, UserID: userID, TenantID: tenantID, Username: username, Roles: roles,
 		NeedsTOTPSetup: needsTOTPSetup,
-		ExpiresAt: now.Add(ttl), LastSeenAt: now, Remembered: remembered,
+		ExpiresAt:      now.Add(ttl), LastSeenAt: now, Remembered: remembered,
 	}
 	s.mu.Lock()
 	s.sessions[id] = sess
