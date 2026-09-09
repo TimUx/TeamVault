@@ -10,13 +10,14 @@ import (
 // last used server/tenant and UX toggles. Never contains credentials,
 // master password or plaintext secret data.
 type Settings struct {
-	ServerURL      string `json:"server_url"`
-	TenantSlug     string `json:"tenant_slug"`
-	Username       string `json:"username"`
-	AutostartOn    bool   `json:"autostart_enabled"`
-	CloseToTray    bool   `json:"close_to_tray"`
-	OfflineOptIn   bool   `json:"offline_opt_in"`
-	StartMinimized bool   `json:"start_minimized"`
+	ServerURL            string `json:"server_url"`
+	TenantSlug           string `json:"tenant_slug"`
+	Username             string `json:"username"`
+	AutostartOn          bool   `json:"autostart_enabled"`
+	CloseToTray          bool   `json:"close_to_tray"`
+	PreventScreenCapture bool   `json:"prevent_screen_capture"`
+	OfflineOptIn         bool   `json:"offline_opt_in"`
+	StartMinimized       bool   `json:"start_minimized"`
 	// Theme is the user's appearance preference: "system" (default when
 	// empty), "light", or "dark". Applied client-side in app.js.
 	Theme string `json:"theme"`

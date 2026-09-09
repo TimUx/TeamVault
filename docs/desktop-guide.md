@@ -17,6 +17,7 @@ Download: In der Web-App unter **Konto & Sicherheit → Clients** oder Hilfe **`
 | Vault | Secrets ansehen/anlegen/bearbeiten/löschen, Suche, Tag-Filter, Favoriten, TOTP-Code-Anzeige |
 | Sharing | Eigene und mit mir geteilte Secrets werden unterschieden (Filter „Eigene“/„Geteilt“); Freigaben an Nutzer/Gruppen verwalten (hinzufügen, Capability wählen, entziehen), fehlende Gruppen-Schlüssel nachschlüsseln |
 | Darstellung | Theme in den Einstellungen wählbar: **Systemeinstellung** (folgt automatisch der Betriebssystem-Präferenz, live), **Hell** oder **Dunkel**; Farbdesign: **Blau** (Standard), **Indigo**, **Teal**, **Graphit**, **Rose**, **Amber**, **Emerald** — Palette/Radius/Schrift analog zur Web-UI |
+| Datenschutz | Optionaler Windows-Schalter, der das Hauptfenster von Bildschirmaufnahmen/Screensharing ausschließt; das Tray-Icon bleibt davon unberührt |
 | Offline | Ciphertext-Snapshot lokal zwischengespeichert (max. 30 Tage) — Lesen ohne Netzwerk möglich; Anlegen/Ändern/Löschen/Freigabe-Verwaltung nur online |
 | Tray | Icon in der Systemleiste: Öffnen / Sperren / Beenden; Fenster schließen minimiert optional in den Tray statt zu beenden |
 | Autostart | Ein/Aus in den Einstellungen — ganz ohne Admin-/Root-Rechte |
@@ -73,6 +74,7 @@ Nach jedem erfolgreichen Online-Entsperren wird automatisch ein Ciphertext-Snaps
 - **Einstellungen → Autostart**: registriert einen reinen Pro-Benutzer-Eintrag (Windows: `HKCU\...\Run`; Linux: `~/.config/autostart/*.desktop`) — kein root/Admin nötig, wirkt nur für den aktuellen Benutzer.
 - **Tray-Icon**: Rechtsklick/Klick → Öffnen, Sperren, Beenden. „Schließen minimiert in den Tray“ ist in den Einstellungen umschaltbar.
 - **Windows**: Das Tray wird in die Wails/WebView2-Hauptschleife registriert; „Beenden“ über das Tray beendet Icon und Prozess gemeinsam.
+- **Bildschirmaufnahme-Schutz (Windows)**: In den Einstellungen kann das Hauptfenster permanent von Screen-Capture/Screensharing ausgeschlossen werden. Das gilt nur für das App-Fenster, nicht für das Tray-Icon oder Linux-Desktops.
 - **Linux**: Das Tray-Icon nutzt dieselbe GTK-Hauptschleife wie das App-Fenster (AppIndicator). Auf Desktops ohne AppIndicator-Unterstützung kann es mit `TEAMVAULT_NO_TRAY=1` deaktiviert werden — die App startet dann ohne Tray-Symbol.
 - **Design**: In den Einstellungen zwischen **Systemeinstellung**, **Hell** und **Dunkel** wählen; die Auswahl wird sofort angewendet und dauerhaft gespeichert. Bei „Systemeinstellung“ reagiert die App live auf Änderungen der Betriebssystem-Theme-Einstellung. Zusätzlich ist das Farbdesign **Blau** (Standard), **Indigo**, **Teal**, **Graphit**, **Rose**, **Amber** oder **Emerald** wählbar — dieselben Vorgaben wie in Web-UI und Browser-Extension.
 
