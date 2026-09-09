@@ -83,9 +83,9 @@ Nach dem Entsperren: linke **Sidebar** mit Icons. Unter Vault getrennt:
 | **Import** | Dateien aus anderen Passwortmanagern übernehmen |
 | **Sicherung** | Verschlüsselte `.tvbak`-Backup / Wiederherstellen |
 
-Kein vermischter „Alle“-Eintrag. Clientseitige **Suche** (Titel, Tags, Benutzer, Gruppen) und **Tag**-Filter (Mehrfach, UND) gelten jeweils für die aktive Ansicht. In der Liste können Sie Einträge per Checkbox für den Export auswählen.
+Kein vermischter „Alle“-Eintrag. In der rechten Steuerleiste sind **Ansicht** (Liste/Tabelle/Kacheln) und **Suche** dauerhaft sichtbar. **Tags** öffnen als Dropdown mit begrenzter Höhe (Mehrfach, UND). In der Liste können Sie Einträge per Checkbox für den Export auswählen.
 
-**Ansicht:** Standard ist **Tabelle**; Umschalter Liste / Tabelle / Kacheln (Preference lokal im Browser) in der rechten Steuerleiste. **Sortierung** ebenfalls dort: A–Z, Z–A oder zuletzt bearbeitet. Tabelle und Kacheln laden zusätzlich Benutzer, Tags, **freigegebene Gruppen** und Favorit; Liste zeigt Titel, Benutzer, Tags und Gruppen kompakt. Favoriten erscheinen in allen Listen oben in einer Gruppe **Favoriten** (Stern-Toggle pro Zeile).
+**Ansicht:** Standard ist **Tabelle**; Umschalter Liste / Tabelle / Kacheln (Preference lokal im Browser) oben in der rechten Steuerleiste. **Sortierung** ebenfalls dort: A–Z, Z–A oder zuletzt bearbeitet. Tabelle und Kacheln laden zusätzlich Benutzer, Tags, **freigegebene Gruppen** und Favorit; Liste zeigt Titel, Benutzer, Tags und Gruppen kompakt. Favoriten erscheinen in allen Listen oben in einer Gruppe **Favoriten** (Stern-Toggle pro Zeile).
 
 ![Meine Secrets – Tabelle (Standard)](images/vault-secrets-table.png)
 
@@ -147,7 +147,7 @@ Wird ein User **neu in eine Gruppe** aufgenommen, erscheinen fehlende Umschläge
 
 ### Tags & Suche
 
-Beim Anlegen **Tags** setzen (Komma-getrennt). Der Tag-Filter in der rechten Steuerleiste filtert nach **einem oder mehreren Tags mit UND-Logik** (z.&nbsp;B. Storage **und** Block **und** Prod); die Suche trifft **Titel, Tags, Benutzername, Ersteller und Gruppen** (clientseitig bzw. aus der API).
+Beim Anlegen **Tags** setzen (Komma-getrennt). Der Tag-Filter in der rechten Steuerleiste öffnet als Dropdown und filtert nach **einem oder mehreren Tags mit UND-Logik** (z.&nbsp;B. Storage **und** Block **und** Prod); die Suche trifft **Titel, Tags, Benutzername, Ersteller und Gruppen** (clientseitig bzw. aus der API).
 
 ![Tag-Filter](images/vault-tag-filter.png)
 
@@ -177,7 +177,7 @@ Nach dem Parsen erscheint eine **Vorschau** — einzelne, mehrere oder alle Eint
 
 ### Export
 
-Über **Aktionen** (⋮) in der Secrets-Liste: Auswahl per Checkbox (einzeln, **Alle sichtbaren** oder **Alle geladenen**). Ohne Auswahl gelten die **sichtbaren** Einträge (aktueller Tag-Filter UND/Suche). Exportformate im gleichen Menü:
+Über **Aktionen** (Dropdown in der rechten Steuerleiste): Auswahl per Checkbox (einzeln, **Alle sichtbaren** oder **Alle geladenen**). Ohne Auswahl gelten die **sichtbaren** Einträge (aktueller Tag-Filter UND/Suche). Exportformate im gleichen Menü:
 
 - **Export TeamVault** — vollständiges JSON inkl. Extra-Felder
 - **Export Bitwarden** — Login-Subset, unverschlüsselt
