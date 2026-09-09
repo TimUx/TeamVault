@@ -767,9 +767,16 @@
   async function openSettings() {
     setError("sError", "");
     const s = (await App().GetSettings()) || {};
+    const platform = await App().Platform();
+    const canProtectFromCapture = platform === "windows";
     $("sServer").textContent = s.server_url || "";
     $("sTenant").textContent = s.tenant_slug || "";
     $("sCloseTray").checked = !!s.close_to_tray;
+    $("sScreenPrivacy").checked = !!s.prevent_screen_capture;
+    $("sScreenPrivacy").disabled = !canProtectFromCapture;
+    $("sScreenPrivacyHint").textContent = canProtectFromCapture
+      ? "Nur unter Windows wirksam; das Tray-Icon bleibt sichtbar."
+      : "Auf dieser Plattform nicht verfügbar; nur das Windows-App-Fenster kann ausgeschlossen werden.";
     applyTheme(state.themePref || s.theme || "system");
     applyAccent(state.accentPref || s.accent || "blue");
     try {
@@ -792,7 +799,12 @@
     setError("sError", "");
     try {
       await App().SetAutostart($("sAutostart").checked);
-      await saveSettingsPartial({ close_to_tray: $("sCloseTray").checked, theme: state.themePref, accent: state.accentPref });
+      await saveSettingsPartial({
+        close_to_tray: $("sCloseTray").checked,
+        prevent_screen_capture: $("sScreenPrivacy").checked,
+        theme: state.themePref,
+        accent: state.accentPref,
+      });
       if (!state.offline) await App().SaveAppearancePreferences(state.themePref, state.accentPref);
       showScreen("screenVault");
     } catch (err) {

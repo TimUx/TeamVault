@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	goruntime "runtime"
 
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
@@ -30,6 +31,9 @@ func NewApp() *App {
 
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+	if s, err := backend.LoadSettings(); err == nil {
+		_ = backend.ApplyWindowCaptureProtection(s.PreventScreenCapture)
+	}
 }
 
 // beforeClose intercepts the window close button: minimize to tray
@@ -51,7 +55,14 @@ func (a *App) GetSettings() backend.Settings {
 }
 
 func (a *App) SaveSettings(s backend.Settings) error {
-	return backend.SaveSettings(s)
+	if err := backend.SaveSettings(s); err != nil {
+		return err
+	}
+	return backend.ApplyWindowCaptureProtection(s.PreventScreenCapture)
+}
+
+func (a *App) Platform() string {
+	return goruntime.GOOS
 }
 
 func (a *App) GetAppearancePreferences() (map[string]any, error) {

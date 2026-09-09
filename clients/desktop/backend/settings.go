@@ -15,6 +15,7 @@ type Settings struct {
 	Username       string `json:"username"`
 	AutostartOn    bool   `json:"autostart_enabled"`
 	CloseToTray    bool   `json:"close_to_tray"`
+	PreventScreenCapture bool `json:"prevent_screen_capture"`
 	OfflineOptIn   bool   `json:"offline_opt_in"`
 	StartMinimized bool   `json:"start_minimized"`
 	// Theme is the user's appearance preference: "system" (default when
