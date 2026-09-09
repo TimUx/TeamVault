@@ -36,9 +36,13 @@ func EnableAutostart(execPath string) error {
 	content := fmt.Sprintf(`[Desktop Entry]
 Type=Application
 Name=TeamVault Desktop
-Comment=TeamVault Vault (Autostart, minimiert im Systemtray)
+GenericName=Password Manager
+Comment=Native TeamVault vault client (Autostart, minimiert im Systemtray)
 Exec=%s --hidden
 Icon=teamvault-desktop
+StartupNotify=false
+StartupWMClass=TeamVault
+Keywords=password;secrets;vault;totp;teamvault;
 Terminal=false
 X-GNOME-Autostart-enabled=true
 `, execPath)

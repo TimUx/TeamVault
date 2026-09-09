@@ -23,9 +23,18 @@ try {
   $Version = (git -C $Root describe --tags --always --dirty 2>$null)
   if (-not $Version) { $Version = "dev" }
 } catch { }
+$ProductVersion = "0.0.0"
+if ($Version -match 'v?(\d+)\.(\d+)\.(\d+)') {
+  $ProductVersion = "$($Matches[1]).$($Matches[2]).$($Matches[3])"
+}
 
 $OutDir = Join-Path $Root "dist"
 New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
+New-Item -ItemType Directory -Force -Path (Join-Path $Root ".tmp") | Out-Null
+
+$WailsConfig = Join-Path $Root "clients\desktop\wails.json"
+$WailsConfigBackup = Join-Path $Root ".tmp\wails.json.bak"
+Copy-Item $WailsConfig $WailsConfigBackup -Force
 
 $wails = Get-Command wails -ErrorAction SilentlyContinue
 if (-not $wails) {
@@ -37,21 +46,33 @@ if (-not $wails) {
   $wailsExe = $wails.Source
 }
 
-Write-Host "Building teamvault-desktop (windows/amd64, version=$Version)..."
-& $wailsExe build -clean -platform windows/amd64 -ldflags "-X main.version=$Version"
+try {
+  $configRaw = Get-Content $WailsConfig -Raw
+  $updatedConfig = [regex]::Replace($configRaw, '"productVersion":\s*"[^"]+"', ('"productVersion": "' + $ProductVersion + '"'))
+  Set-Content $WailsConfig -Value $updatedConfig -Encoding UTF8NoBOM
 
-$Bin = "build\bin\teamvault-desktop.exe"
-if (-not (Test-Path $Bin)) {
-  throw "Build output not found at $Bin"
+  Write-Host "Building teamvault-desktop (windows/amd64, version=$Version)..."
+  & $wailsExe build -clean -platform windows/amd64 -ldflags "-X main.version=$Version"
+
+  $Bin = "build\bin\teamvault-desktop.exe"
+  if (-not (Test-Path $Bin)) {
+    throw "Build output not found at $Bin"
+  }
+  Copy-Item $Bin (Join-Path $OutDir "teamvault-desktop-windows-amd64.exe") -Force
+
+  if ($Installer) {
+    Write-Host "Building per-user NSIS installer (no admin rights required)..."
+    & $wailsExe build -clean -platform windows/amd64 -nsis -installscope user -ldflags "-X main.version=$Version"
+    $SetupBin = Get-ChildItem "build\bin\*-amd64-installer.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($SetupBin) {
+      Copy-Item $SetupBin.FullName (Join-Path $OutDir "teamvault-desktop-windows-amd64-setup.exe") -Force
+    }
+  }
 }
-Copy-Item $Bin (Join-Path $OutDir "teamvault-desktop-windows-amd64.exe") -Force
-
-if ($Installer) {
-  Write-Host "Building per-user NSIS installer (no admin rights required)..."
-  & $wailsExe build -clean -platform windows/amd64 -nsis -installscope user -ldflags "-X main.version=$Version"
-  $SetupBin = Get-ChildItem "build\bin\*-amd64-installer.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
-  if ($SetupBin) {
-    Copy-Item $SetupBin.FullName (Join-Path $OutDir "teamvault-desktop-windows-amd64-setup.exe") -Force
+finally {
+  if (Test-Path $WailsConfigBackup) {
+    Copy-Item $WailsConfigBackup $WailsConfig -Force
+    Remove-Item $WailsConfigBackup -Force
   }
 }
 
