@@ -876,8 +876,7 @@ h1 .heading-ico,
   min-width: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 1rem 1.25rem 1.5rem;
-  max-width: min(96vw, 1400px);
+  padding: 1rem 1.15rem 1.5rem;
   width: 100%;
   box-sizing: border-box;
 }
@@ -927,6 +926,9 @@ h1 .heading-ico,
   align-items: start;
   min-height: 0;
 }
+.secrets-workspace > .panel + .panel {
+  margin-top: 0;
+}
 .vault-chrome {
   position: sticky;
   top: 0;
@@ -946,6 +948,34 @@ h1 .heading-ico,
   margin-top: 1rem;
   padding-top: 1rem;
   border-top: 1px solid var(--color-border);
+}
+.secrets-sidebar-group {
+  margin: 0;
+}
+.secrets-sidebar-summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.secrets-sidebar-summary::-webkit-details-marker {
+  display: none;
+}
+.secrets-sidebar-summary::after {
+  content: "▸";
+  color: var(--color-hint);
+  font-size: 0.8rem;
+}
+.secrets-sidebar-group[open] .secrets-sidebar-summary::after {
+  content: "▾";
+}
+.secrets-sidebar-summary .secrets-actions-heading {
+  margin: 0;
+}
+.secrets-sidebar-body {
+  margin-top: 0.35rem;
 }
 .vault-chrome label {
   font-size: 0.72rem;

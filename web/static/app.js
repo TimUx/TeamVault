@@ -2103,67 +2103,76 @@ function renderApp(app) {
                   <div id="slist" class="list secrets-list"></div>
                 </div>
                 <aside class="panel vault-chrome vault-chrome-side">
-                  <div class="secrets-sidebar-section">
-                    <p class="secrets-actions-heading">Suche</p>
-                    <label><span class="label-with-ico">${icon("search", "label-ico")} Secrets</span></label>
-                    <input id="ssearch" type="search" placeholder="Titel, Tags, Benutzer, Gruppen…" />
-                  </div>
-                  <div class="secrets-sidebar-section tag-filter-wrap">
-                    <p class="secrets-actions-heading">Filter</p>
-                    <label>Tags <span class="hint">(UND)</span></label>
-                    <div class="tag-filter" id="stagFilter">
-                      <div class="tag-filter-selected tags" id="stagSelected"></div>
-                      <div class="tag-filter-menu tag-filter-menu-static panel-inset" id="stagMenu">
-                        <p class="hint tag-filter-hint">Mehrere Tags = alle müssen passen</p>
-                        <div id="stagOptions" class="tag-filter-options"></div>
-                        <button type="button" class="btn-ghost btn-sm" id="stagClear">Filter leeren</button>
+                  <details class="secrets-sidebar-section secrets-sidebar-group" open>
+                    <summary class="secrets-sidebar-summary"><span class="secrets-actions-heading">Suche</span></summary>
+                    <div class="secrets-sidebar-body">
+                      <label><span class="label-with-ico">${icon("search", "label-ico")} Secrets</span></label>
+                      <input id="ssearch" type="search" placeholder="Titel, Tags, Benutzer, Gruppen…" />
+                    </div>
+                  </details>
+                  <details class="secrets-sidebar-section secrets-sidebar-group tag-filter-wrap">
+                    <summary class="secrets-sidebar-summary"><span class="secrets-actions-heading">Filter</span></summary>
+                    <div class="secrets-sidebar-body">
+                      <label>Tags <span class="hint">(UND)</span></label>
+                      <div class="tag-filter" id="stagFilter">
+                        <button type="button" class="btn-ghost btn-sm tag-filter-toggle" id="stagToggle" aria-expanded="false">Tags auswählen</button>
+                        <div class="tag-filter-selected tags" id="stagSelected"></div>
+                        <div class="tag-filter-menu panel-inset" id="stagMenu" hidden>
+                          <p class="hint tag-filter-hint">Mehrere Tags = alle müssen passen</p>
+                          <div id="stagOptions" class="tag-filter-options"></div>
+                          <button type="button" class="btn-ghost btn-sm" id="stagClear">Filter leeren</button>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  <div class="secrets-sidebar-section">
-                    <p class="secrets-actions-heading">Darstellung</p>
-                    <div class="secrets-sort-wrap">
-                      <label for="ssort">Sortierung</label>
-                      <select id="ssort" class="secrets-sort-select">
-                        <option value="title-asc">Titel A–Z</option>
-                        <option value="title-desc">Titel Z–A</option>
-                        <option value="recent">Zuletzt geändert</option>
-                      </select>
-                    </div>
-                    <div class="secrets-view-wrap">
-                      <label>Ansicht</label>
-                      <div class="secrets-view-toggle" role="group" aria-label="Ansicht">
-                        <button type="button" class="btn-icon" data-view="list" title="Liste" aria-label="Liste">${icon("layoutList")}</button>
-                        <button type="button" class="btn-icon" data-view="table" title="Tabelle" aria-label="Tabelle">${icon("layoutTable")}</button>
-                        <button type="button" class="btn-icon" data-view="tiles" title="Kacheln" aria-label="Kacheln">${icon("layoutGrid")}</button>
+                  </details>
+                  <details class="secrets-sidebar-section secrets-sidebar-group">
+                    <summary class="secrets-sidebar-summary"><span class="secrets-actions-heading">Darstellung</span></summary>
+                    <div class="secrets-sidebar-body">
+                      <div class="secrets-sort-wrap">
+                        <label for="ssort">Sortierung</label>
+                        <select id="ssort" class="secrets-sort-select">
+                          <option value="title-asc">Titel A–Z</option>
+                          <option value="title-desc">Titel Z–A</option>
+                          <option value="recent">Zuletzt geändert</option>
+                        </select>
+                      </div>
+                      <div class="secrets-view-wrap">
+                        <label>Ansicht</label>
+                        <div class="secrets-view-toggle" role="group" aria-label="Ansicht">
+                          <button type="button" class="btn-icon" data-view="list" title="Liste" aria-label="Liste">${icon("layoutList")}</button>
+                          <button type="button" class="btn-icon" data-view="table" title="Tabelle" aria-label="Tabelle">${icon("layoutTable")}</button>
+                          <button type="button" class="btn-icon" data-view="tiles" title="Kacheln" aria-label="Kacheln">${icon("layoutGrid")}</button>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  <div class="secrets-sidebar-section">
-                    <p class="secrets-actions-heading">Aktionen</p>
-                    <div class="secrets-sidebar-status">
-                      <span class="hint" id="sCount"></span>
-                      <p class="hint secrets-actions-meta" id="selCount">Keine Auswahl</p>
-                    </div>
-                    <div class="secrets-actions-menu secrets-actions-menu-static panel-inset" id="sActionsMenu" role="group" aria-label="Aktionen für Auswahl">
-                      <label class="secrets-actions-item inline"><input type="checkbox" id="selAllVisible" /> Alle sichtbaren</label>
-                      <button type="button" class="secrets-actions-item btn-ghost btn-sm" id="selAllLoaded">Alle geladenen auswählen</button>
-                      <button type="button" class="secrets-actions-item btn-ghost btn-sm" id="selClear">Auswahl aufheben</button>
-                      <div class="secrets-actions-export" id="sExportGroup">
-                        <hr class="secrets-actions-divider" />
-                        <p class="secrets-actions-heading">Export</p>
-                        ${hintBox("Gilt für die aktuelle Auswahl (Häkchen in der Liste).", { className: "hint-box-compact" })}
-                        <button type="button" class="secrets-actions-item btn-ghost btn-sm btn-with-ico" id="sExportTv">${btnLabel("download", "TeamVault JSON")}</button>
-                        <button type="button" class="secrets-actions-item btn-ghost btn-sm btn-with-ico" id="sExportJson">${btnLabel("download", "Bitwarden JSON")}</button>
-                        <button type="button" class="secrets-actions-item btn-ghost btn-sm btn-with-ico" id="sExportCsv">${btnLabel("download", "CSV")}</button>
-                        <button type="button" class="secrets-actions-item btn-ghost btn-sm btn-with-ico" id="sExportBak">${btnLabel("lock", "Verschlüsselt (.tvbak)")}</button>
+                  </details>
+                  <details class="secrets-sidebar-section secrets-sidebar-group" id="sActionsWrap">
+                    <summary class="secrets-sidebar-summary"><span class="secrets-actions-heading">Aktionen</span></summary>
+                    <div class="secrets-sidebar-body">
+                      <div class="secrets-sidebar-status">
+                        <span class="hint" id="sCount"></span>
+                        <p class="hint secrets-actions-meta" id="selCount">Keine Auswahl</p>
+                      </div>
+                      <div class="secrets-actions-menu secrets-actions-menu-static panel-inset" id="sActionsMenu" role="group" aria-label="Aktionen für Auswahl">
+                        <label class="secrets-actions-item inline"><input type="checkbox" id="selAllVisible" /> Alle sichtbaren</label>
+                        <button type="button" class="secrets-actions-item btn-ghost btn-sm" id="selAllLoaded">Alle geladenen auswählen</button>
+                        <button type="button" class="secrets-actions-item btn-ghost btn-sm" id="selClear">Auswahl aufheben</button>
+                        <div class="secrets-actions-export" id="sExportGroup">
+                          <hr class="secrets-actions-divider" />
+                          <p class="secrets-actions-heading">Export</p>
+                          ${hintBox("Gilt für die aktuelle Auswahl (Häkchen in der Liste).", { className: "hint-box-compact" })}
+                          <button type="button" class="secrets-actions-item btn-ghost btn-sm btn-with-ico" id="sExportTv">${btnLabel("download", "TeamVault JSON")}</button>
+                          <button type="button" class="secrets-actions-item btn-ghost btn-sm btn-with-ico" id="sExportJson">${btnLabel("download", "Bitwarden JSON")}</button>
+                          <button type="button" class="secrets-actions-item btn-ghost btn-sm btn-with-ico" id="sExportCsv">${btnLabel("download", "CSV")}</button>
+                          <button type="button" class="secrets-actions-item btn-ghost btn-sm btn-with-ico" id="sExportBak">${btnLabel("lock", "Verschlüsselt (.tvbak)")}</button>
+                        </div>
+                      </div>
+                      <div class="secrets-load-more" id="sLoadMoreWrap" hidden>
+                        <p class="hint" id="sLoadMoreHint"></p>
+                        <button type="button" class="btn-ghost btn-sm" id="sMore">Weitere laden</button>
                       </div>
                     </div>
-                    <div class="secrets-load-more" id="sLoadMoreWrap" hidden>
-                      <p class="hint" id="sLoadMoreHint"></p>
-                      <button type="button" class="btn-ghost btn-sm" id="sMore">Weitere laden</button>
-                    </div>
-                  </div>
+                  </details>
                 </aside>
               </div>
               <div class="secret-modal" id="sdetail" hidden role="dialog" aria-modal="true" aria-labelledby="dtitle">
@@ -4329,12 +4338,15 @@ ${escHtml(apiCmd)}</code>
 
   function paintTagFilterUI() {
     const selected = n.querySelector("#stagSelected");
+    const toggle = n.querySelector("#stagToggle");
     if (!selected) return;
     const cur = vault.tagFilters || [];
     if (!cur.length) {
       selected.innerHTML = "";
+      if (toggle) toggle.textContent = "Tags auswählen";
       return;
     }
+    if (toggle) toggle.textContent = `${cur.length} Tag${cur.length === 1 ? "" : "s"} ausgewählt`;
     selected.innerHTML = cur.map((t) =>
       `<button type="button" class="tag tag-filter-chip" data-remove-tag="${escHtml(t)}" title="Entfernen">${escHtml(t)} ×</button>`
     ).join("");
