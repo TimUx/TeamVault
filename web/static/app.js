@@ -189,7 +189,8 @@ const ICO = {
   spark: '<path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M18.4 5.6l-2.8 2.8M8.4 15.6l-2.8 2.8"/>',
   save: '<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/>',
   menu: '<path d="M4 6h16M4 12h16M4 18h16"/>',
-  open: '<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"/>',
+  website: '<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"/>',
+  open: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/><path d="m13 9 4 3-4 3"/><path d="M17 12h-6"/>',
   star: '<path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>',
   chevron: '<path d="M9 18l6-6-6-6"/>',
   layoutList: '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
@@ -326,6 +327,10 @@ function navSubsectionIdForRoute(nav) {
 
 function btnLabel(icoName, label) {
   return `${icon(icoName, "btn-ico")}<span>${label}</span>`;
+}
+
+function openSecretButtonHtml(sizeClass = "btn-icon-sm") {
+  return `<button type="button" class="btn-icon ${sizeClass} secret-open-btn" title="Details öffnen" aria-label="Details öffnen">${icon("open")}</button>`;
 }
 
 const THEME_STORAGE_KEY = "tv-theme";
@@ -4838,7 +4843,7 @@ ${escHtml(apiCmd)}</code>
       case "totp":
         return "rotate";
       case "url":
-        return "open";
+        return "website";
       case "notes":
       case "text":
         return "clipboard";
@@ -4863,7 +4868,7 @@ ${escHtml(apiCmd)}</code>
         out.push({
           id: `url:${i}`,
           label: payload.urls.length > 1 ? `Website ${i + 1}` : "Website",
-          icon: "open",
+          icon: "website",
         });
       }
     });
@@ -5087,7 +5092,7 @@ ${escHtml(apiCmd)}</code>
             <td class="st-share">${shareBadgeButton(it)}</td>
             <td class="st-copy">${copyShortcutButtonsHtml(it)}</td>
             <td class="st-fav">${favoriteToggleButton(it)}</td>
-            <td class="st-act"><button type="button" class="btn-ghost btn-with-ico btn-sm">${btnLabel("open", "Öffnen")}</button></td>
+            <td class="st-act">${openSecretButtonHtml()}</td>
           </tr>`);
         } else {
           tr = el(`<tr>
@@ -5098,7 +5103,7 @@ ${escHtml(apiCmd)}</code>
             <td class="st-share">${shareBadgeButton(it)}</td>
             <td class="st-copy">${copyShortcutButtonsHtml(it)}</td>
             <td class="st-fav">${favoriteToggleButton(it)}</td>
-            <td class="st-act"><button type="button" class="btn-ghost btn-with-ico btn-sm">${btnLabel("open", "Öffnen")}</button></td>
+            <td class="st-act">${openSecretButtonHtml()}</td>
           </tr>`);
         }
         bindSecretCheckbox(tr.querySelector(".sec-check"), it.id);
@@ -5137,7 +5142,7 @@ ${escHtml(apiCmd)}</code>
           <p class="secret-tile-meta hint"></p>
           <div class="secret-tile-tags"></div>
           ${copyShortcutButtonsHtml(it)}
-          <button type="button" class="btn-ghost btn-with-ico btn-sm">${btnLabel("open", "Öffnen")}</button>
+          ${openSecretButtonHtml()}
         </article>`);
         bindSecretCheckbox(tile.querySelector(".sec-check"), it.id);
         tile.querySelector(".secret-tile-title").textContent = secretTitleLabel(it);
@@ -5171,7 +5176,7 @@ ${escHtml(apiCmd)}</code>
           <span class="list-row-main"></span>
           ${shareBadgeButton(it)}
           ${copyShortcutButtonsHtml(it)}
-          <button class="btn-ghost btn-with-ico" type="button">${btnLabel("open", "Öffnen")}</button>
+          ${openSecretButtonHtml()}
         </div>`);
         bindSecretCheckbox(row.querySelector(".sec-check"), it.id);
         const span = row.querySelector(".list-row-main");
@@ -5183,10 +5188,7 @@ ${escHtml(apiCmd)}</code>
           (it.shared_groups && it.shared_groups.length ? ` · ${it.shared_groups.join(", ")}` : "") +
           (it._tags && it._tags.length ? ` · #${it._tags.join(", #")}` : "")
         ));
-        row.querySelectorAll("button.btn-ghost.btn-with-ico").forEach((btn) => {
-          if (btn.dataset.shareEdit) return;
-          btn.onclick = () => openSecret(it.id);
-        });
+        row.querySelector(".secret-open-btn").onclick = () => openSecret(it.id);
         list.appendChild(row);
         }
       }

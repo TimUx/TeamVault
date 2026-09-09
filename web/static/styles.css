@@ -1469,7 +1469,7 @@ body.admin-modal-open { overflow: hidden; }
 }
 .secret-tile-tags { min-height: 1.25rem; }
 .secret-tile .sec-copy-actions { flex-wrap: wrap; }
-.secret-tile .btn-with-ico { align-self: flex-start; margin-top: auto; }
+.secret-tile .secret-open-btn { align-self: flex-start; margin-top: auto; }
 
 .sec-copy-actions {
   display: inline-flex;
