@@ -9,5 +9,12 @@
   "author": {
     "name": "Timo Braun",
     "email": ""
+  },
+  "info": {
+    "companyName": "TeamVault",
+    "productName": "TeamVault Desktop",
+    "productVersion": "0.0.0",
+    "copyright": "Copyright © Timo Braun",
+    "comments": "Native TeamVault vault client for Linux and Windows"
   }
 }
