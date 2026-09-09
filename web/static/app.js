@@ -1446,6 +1446,14 @@ const vault = {
     } catch (_) {}
     return "table";
   })(),
+  secretsSidebarOpen: (function () {
+    try {
+      const v = localStorage.getItem("tv-secrets-sidebar-open");
+      if (v === "0") return false;
+      if (v === "1") return true;
+    } catch (_) {}
+    return true;
+  })(),
   adminUsers: [],
   adminOverview: null,
   groups: [],
@@ -2100,9 +2108,12 @@ function renderApp(app) {
             <div class="vault-section active" data-vault="secrets">
               <div class="secrets-workspace">
                 <div class="panel secrets-stage">
+                  <div class="secrets-stage-head">
+                    <button type="button" class="btn-ghost btn-sm btn-with-ico secrets-sidebar-toggle" id="sSidebarToggle" aria-expanded="true" aria-controls="sSecretsSidebar">${btnLabel("open", "Sidebar ausblenden")}</button>
+                  </div>
                   <div id="slist" class="list secrets-list"></div>
                 </div>
-                <aside class="vault-chrome vault-chrome-side">
+                <aside class="vault-chrome vault-chrome-side" id="sSecretsSidebar">
                   <div class="secrets-sidebar-section secrets-sidebar-static">
                     <p class="secrets-actions-heading">Ansicht</p>
                     <div class="secrets-view-wrap">
@@ -4307,6 +4318,26 @@ ${escHtml(apiCmd)}</code>
     btn.onclick = () => setViewMode(btn.dataset.view);
   });
   syncViewToggle();
+
+  const secretsWorkspace = n.querySelector(".secrets-workspace");
+  const secretsSidebar = n.querySelector("#sSecretsSidebar");
+  const secretsSidebarToggle = n.querySelector("#sSidebarToggle");
+  function syncSecretsSidebarState() {
+    if (!secretsWorkspace || !secretsSidebar || !secretsSidebarToggle) return;
+    const open = !!vault.secretsSidebarOpen;
+    secretsWorkspace.classList.toggle("sidebar-collapsed", !open);
+    secretsSidebar.setAttribute("aria-hidden", open ? "false" : "true");
+    secretsSidebarToggle.setAttribute("aria-expanded", open ? "true" : "false");
+    secretsSidebarToggle.innerHTML = btnLabel("open", open ? "Sidebar ausblenden" : "Sidebar einblenden");
+  }
+  if (secretsSidebarToggle) {
+    secretsSidebarToggle.onclick = () => {
+      vault.secretsSidebarOpen = !vault.secretsSidebarOpen;
+      try { localStorage.setItem("tv-secrets-sidebar-open", vault.secretsSidebarOpen ? "1" : "0"); } catch (_) {}
+      syncSecretsSidebarState();
+    };
+  }
+  syncSecretsSidebarState();
 
   const sortSel = n.querySelector("#ssort");
   if (sortSel) {
