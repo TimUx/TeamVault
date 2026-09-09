@@ -2102,7 +2102,17 @@ function renderApp(app) {
                 <div class="panel secrets-stage">
                   <div id="slist" class="list secrets-list"></div>
                 </div>
-                <aside class="panel vault-chrome vault-chrome-side">
+                <aside class="vault-chrome vault-chrome-side">
+                  <div class="secrets-sidebar-section secrets-sidebar-static">
+                    <p class="secrets-actions-heading">Ansicht</p>
+                    <div class="secrets-view-wrap">
+                      <div class="secrets-view-toggle" role="group" aria-label="Ansicht">
+                        <button type="button" class="btn-icon" data-view="list" title="Liste" aria-label="Liste">${icon("layoutList")}</button>
+                        <button type="button" class="btn-icon" data-view="table" title="Tabelle" aria-label="Tabelle">${icon("layoutTable")}</button>
+                        <button type="button" class="btn-icon" data-view="tiles" title="Kacheln" aria-label="Kacheln">${icon("layoutGrid")}</button>
+                      </div>
+                    </div>
+                  </div>
                   <details class="secrets-sidebar-section secrets-sidebar-group" open>
                     <summary class="secrets-sidebar-summary"><span class="secrets-actions-heading">Suche</span></summary>
                     <div class="secrets-sidebar-body">
@@ -2135,14 +2145,6 @@ function renderApp(app) {
                           <option value="title-desc">Titel Z–A</option>
                           <option value="recent">Zuletzt geändert</option>
                         </select>
-                      </div>
-                      <div class="secrets-view-wrap">
-                        <label>Ansicht</label>
-                        <div class="secrets-view-toggle" role="group" aria-label="Ansicht">
-                          <button type="button" class="btn-icon" data-view="list" title="Liste" aria-label="Liste">${icon("layoutList")}</button>
-                          <button type="button" class="btn-icon" data-view="table" title="Tabelle" aria-label="Tabelle">${icon("layoutTable")}</button>
-                          <button type="button" class="btn-icon" data-view="tiles" title="Kacheln" aria-label="Kacheln">${icon("layoutGrid")}</button>
-                        </div>
                       </div>
                     </div>
                   </details>
@@ -5137,7 +5139,8 @@ ${escHtml(apiCmd)}</code>
         if (it._tags && it._tags.length) {
           tagsEl.innerHTML = `<span class="tags">${it._tags.map((t) => `<span class="tag">${escHtml(t)}</span>`).join("")}</span>`;
         }
-        tile.querySelector("button.btn-ghost").onclick = () => openSecret(it.id);
+        const openBtn = tile.querySelector(".secret-open-btn");
+        if (openBtn) openBtn.onclick = () => openSecret(it.id);
         grid.appendChild(tile);
         }
         wrap.appendChild(grid);

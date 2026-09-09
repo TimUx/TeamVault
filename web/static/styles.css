@@ -926,8 +926,10 @@ h1 .heading-ico,
   align-items: start;
   min-height: 0;
 }
-.secrets-workspace > .panel + .panel {
-  margin-top: 0;
+.secrets-workspace > .secrets-stage { min-width: 0; }
+.secrets-workspace > .vault-chrome-side {
+  width: clamp(17rem, 24vw, 21rem);
+  justify-self: end;
 }
 .vault-chrome {
   position: sticky;
@@ -948,6 +950,9 @@ h1 .heading-ico,
   margin-top: 1rem;
   padding-top: 1rem;
   border-top: 1px solid var(--color-border);
+}
+.secrets-sidebar-static .secrets-actions-heading {
+  margin: 0 0 0.4rem;
 }
 .secrets-sidebar-group {
   margin: 0;
@@ -1809,6 +1814,8 @@ body.admin-modal-open { overflow: hidden; }
     position: static;
     max-height: none;
     overflow: visible;
+    width: 100%;
+    justify-self: stretch;
   }
   .app-footer-inner {
     grid-template-columns: 1fr;
