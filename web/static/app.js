@@ -2113,68 +2113,61 @@ function renderApp(app) {
                       </div>
                     </div>
                   </div>
-                  <details class="secrets-sidebar-section secrets-sidebar-group" open>
-                    <summary class="secrets-sidebar-summary"><span class="secrets-actions-heading">Suche</span></summary>
-                    <div class="secrets-sidebar-body">
-                      <label><span class="label-with-ico">${icon("search", "label-ico")} Secrets</span></label>
-                      <input id="ssearch" type="search" placeholder="Titel, Tags, Benutzer, Gruppen…" />
-                    </div>
-                  </details>
-                  <details class="secrets-sidebar-section secrets-sidebar-group tag-filter-wrap">
-                    <summary class="secrets-sidebar-summary"><span class="secrets-actions-heading">Filter</span></summary>
-                    <div class="secrets-sidebar-body">
-                      <label>Tags <span class="hint">(UND)</span></label>
-                      <div class="tag-filter" id="stagFilter">
-                        <button type="button" class="btn-ghost btn-sm tag-filter-toggle" id="stagToggle" aria-expanded="false">Tags auswählen</button>
-                        <div class="tag-filter-selected tags" id="stagSelected"></div>
-                        <div class="tag-filter-menu panel-inset" id="stagMenu" hidden>
-                          <p class="hint tag-filter-hint">Mehrere Tags = alle müssen passen</p>
-                          <div id="stagOptions" class="tag-filter-options"></div>
-                          <button type="button" class="btn-ghost btn-sm" id="stagClear">Filter leeren</button>
-                        </div>
+                  <div class="secrets-sidebar-section secrets-sidebar-static">
+                    <p class="secrets-actions-heading">Suche</p>
+                    <label><span class="label-with-ico">${icon("search", "label-ico")} Secrets</span></label>
+                    <input id="ssearch" type="search" placeholder="Titel, Tags, Benutzer, Gruppen…" />
+                  </div>
+                  <div class="secrets-sidebar-section secrets-sidebar-static tag-filter-wrap">
+                    <p class="secrets-actions-heading">Filter</p>
+                    <label>Tags <span class="hint">(UND)</span></label>
+                    <div class="tag-filter" id="stagFilter">
+                      <button type="button" class="btn-ghost btn-sm tag-filter-toggle" id="stagToggle" aria-expanded="false">Tags auswählen</button>
+                      <div class="tag-filter-selected tags" id="stagSelected"></div>
+                      <div class="tag-filter-menu panel-inset" id="stagMenu" hidden>
+                        <p class="hint tag-filter-hint">Mehrere Tags = alle müssen passen</p>
+                        <div id="stagOptions" class="tag-filter-options"></div>
+                        <button type="button" class="btn-ghost btn-sm" id="stagClear">Filter leeren</button>
                       </div>
                     </div>
-                  </details>
-                  <details class="secrets-sidebar-section secrets-sidebar-group">
-                    <summary class="secrets-sidebar-summary"><span class="secrets-actions-heading">Darstellung</span></summary>
-                    <div class="secrets-sidebar-body">
-                      <div class="secrets-sort-wrap">
-                        <label for="ssort">Sortierung</label>
-                        <select id="ssort" class="secrets-sort-select">
-                          <option value="title-asc">Titel A–Z</option>
-                          <option value="title-desc">Titel Z–A</option>
-                          <option value="recent">Zuletzt geändert</option>
-                        </select>
-                      </div>
+                  </div>
+                  <div class="secrets-sidebar-section secrets-sidebar-static">
+                    <p class="secrets-actions-heading">Darstellung</p>
+                    <div class="secrets-sort-wrap">
+                      <label for="ssort">Sortierung</label>
+                      <select id="ssort" class="secrets-sort-select">
+                        <option value="title-asc">Titel A–Z</option>
+                        <option value="title-desc">Titel Z–A</option>
+                        <option value="recent">Zuletzt geändert</option>
+                      </select>
                     </div>
-                  </details>
-                  <details class="secrets-sidebar-section secrets-sidebar-group" id="sActionsWrap">
-                    <summary class="secrets-sidebar-summary"><span class="secrets-actions-heading">Aktionen</span></summary>
-                    <div class="secrets-sidebar-body">
-                      <div class="secrets-sidebar-status">
-                        <span class="hint" id="sCount"></span>
-                        <p class="hint secrets-actions-meta" id="selCount">Keine Auswahl</p>
-                      </div>
-                      <div class="secrets-actions-menu secrets-actions-menu-static panel-inset" id="sActionsMenu" role="group" aria-label="Aktionen für Auswahl">
-                        <label class="secrets-actions-item inline"><input type="checkbox" id="selAllVisible" /> Alle sichtbaren</label>
-                        <button type="button" class="secrets-actions-item btn-ghost btn-sm" id="selAllLoaded">Alle geladenen auswählen</button>
-                        <button type="button" class="secrets-actions-item btn-ghost btn-sm" id="selClear">Auswahl aufheben</button>
-                        <div class="secrets-actions-export" id="sExportGroup">
-                          <hr class="secrets-actions-divider" />
-                          <p class="secrets-actions-heading">Export</p>
-                          ${hintBox("Gilt für die aktuelle Auswahl (Häkchen in der Liste).", { className: "hint-box-compact" })}
-                          <button type="button" class="secrets-actions-item btn-ghost btn-sm btn-with-ico" id="sExportTv">${btnLabel("download", "TeamVault JSON")}</button>
-                          <button type="button" class="secrets-actions-item btn-ghost btn-sm btn-with-ico" id="sExportJson">${btnLabel("download", "Bitwarden JSON")}</button>
-                          <button type="button" class="secrets-actions-item btn-ghost btn-sm btn-with-ico" id="sExportCsv">${btnLabel("download", "CSV")}</button>
-                          <button type="button" class="secrets-actions-item btn-ghost btn-sm btn-with-ico" id="sExportBak">${btnLabel("lock", "Verschlüsselt (.tvbak)")}</button>
-                        </div>
+                  </div>
+                  <div class="secrets-sidebar-section secrets-sidebar-static secrets-sidebar-dropdown" id="sActionsWrap">
+                    <p class="secrets-actions-heading">Aktionen</p>
+                    <div class="secrets-sidebar-status">
+                      <span class="hint" id="sCount"></span>
+                      <p class="hint secrets-actions-meta" id="selCount">Keine Auswahl</p>
+                    </div>
+                    <button type="button" class="btn-ghost btn-sm secrets-dropdown-toggle" id="sActionsToggle" aria-expanded="false">Aktionen anzeigen</button>
+                    <div class="secrets-actions-menu panel-inset secrets-actions-menu-dropdown" id="sActionsMenu" role="group" aria-label="Aktionen für Auswahl" hidden>
+                      <label class="secrets-actions-item inline"><input type="checkbox" id="selAllVisible" /> Alle sichtbaren</label>
+                      <button type="button" class="secrets-actions-item btn-ghost btn-sm" id="selAllLoaded">Alle geladenen auswählen</button>
+                      <button type="button" class="secrets-actions-item btn-ghost btn-sm" id="selClear">Auswahl aufheben</button>
+                      <div class="secrets-actions-export" id="sExportGroup">
+                        <hr class="secrets-actions-divider" />
+                        <p class="secrets-actions-heading">Export</p>
+                        ${hintBox("Gilt für die aktuelle Auswahl (Häkchen in der Liste).", { className: "hint-box-compact" })}
+                        <button type="button" class="secrets-actions-item btn-ghost btn-sm btn-with-ico" id="sExportTv">${btnLabel("download", "TeamVault JSON")}</button>
+                        <button type="button" class="secrets-actions-item btn-ghost btn-sm btn-with-ico" id="sExportJson">${btnLabel("download", "Bitwarden JSON")}</button>
+                        <button type="button" class="secrets-actions-item btn-ghost btn-sm btn-with-ico" id="sExportCsv">${btnLabel("download", "CSV")}</button>
+                        <button type="button" class="secrets-actions-item btn-ghost btn-sm btn-with-ico" id="sExportBak">${btnLabel("lock", "Verschlüsselt (.tvbak)")}</button>
                       </div>
                       <div class="secrets-load-more" id="sLoadMoreWrap" hidden>
                         <p class="hint" id="sLoadMoreHint"></p>
                         <button type="button" class="btn-ghost btn-sm" id="sMore">Weitere laden</button>
                       </div>
                     </div>
-                  </details>
+                  </div>
                 </aside>
               </div>
               <div class="secret-modal" id="sdetail" hidden role="dialog" aria-modal="true" aria-labelledby="dtitle">
@@ -4399,6 +4392,26 @@ ${escHtml(apiCmd)}</code>
       if (!wrap.contains(ev.target)) {
         stagMenu.hidden = true;
         stagToggle.setAttribute("aria-expanded", "false");
+      }
+    });
+  }
+  const sActionsToggle = n.querySelector("#sActionsToggle");
+  const sActionsMenu = n.querySelector("#sActionsMenu");
+  const sActionsWrap = n.querySelector("#sActionsWrap");
+  if (sActionsToggle && sActionsMenu && sActionsWrap) {
+    sActionsToggle.onclick = (ev) => {
+      ev.stopPropagation();
+      const open = sActionsMenu.hidden;
+      sActionsMenu.hidden = !open;
+      sActionsToggle.setAttribute("aria-expanded", open ? "true" : "false");
+      sActionsToggle.textContent = open ? "Aktionen ausblenden" : "Aktionen anzeigen";
+    };
+    document.addEventListener("click", (ev) => {
+      if (sActionsMenu.hidden) return;
+      if (!sActionsWrap.contains(ev.target)) {
+        sActionsMenu.hidden = true;
+        sActionsToggle.setAttribute("aria-expanded", "false");
+        sActionsToggle.textContent = "Aktionen anzeigen";
       }
     });
   }

@@ -954,33 +954,23 @@ h1 .heading-ico,
 .secrets-sidebar-static .secrets-actions-heading {
   margin: 0 0 0.4rem;
 }
-.secrets-sidebar-group {
-  margin: 0;
+.secrets-sidebar-dropdown {
+  position: relative;
 }
-.secrets-sidebar-summary {
-  list-style: none;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
+.secrets-dropdown-toggle {
+  width: 100%;
+  justify-content: flex-start;
+  margin-top: 0.2rem;
 }
-.secrets-sidebar-summary::-webkit-details-marker {
-  display: none;
-}
-.secrets-sidebar-summary::after {
-  content: "▸";
-  color: var(--color-hint);
-  font-size: 0.8rem;
-}
-.secrets-sidebar-group[open] .secrets-sidebar-summary::after {
-  content: "▾";
-}
-.secrets-sidebar-summary .secrets-actions-heading {
-  margin: 0;
-}
-.secrets-sidebar-body {
-  margin-top: 0.35rem;
+.secrets-actions-menu-dropdown {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 0.25rem);
+  left: 0;
+  right: 0;
+  max-height: min(60vh, 20rem);
+  overflow: auto;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
 }
 .vault-chrome label {
   font-size: 0.72rem;
