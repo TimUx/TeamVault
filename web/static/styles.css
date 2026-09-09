@@ -876,8 +876,7 @@ h1 .heading-ico,
   min-width: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 1rem 1.25rem 1.5rem;
-  max-width: min(96vw, 1400px);
+  padding: 1rem 1.15rem 1.5rem;
   width: 100%;
   box-sizing: border-box;
 }
@@ -927,6 +926,11 @@ h1 .heading-ico,
   align-items: start;
   min-height: 0;
 }
+.secrets-workspace > .secrets-stage { min-width: 0; }
+.secrets-workspace > .vault-chrome-side {
+  width: clamp(17rem, 24vw, 21rem);
+  justify-self: end;
+}
 .vault-chrome {
   position: sticky;
   top: 0;
@@ -946,6 +950,27 @@ h1 .heading-ico,
   margin-top: 1rem;
   padding-top: 1rem;
   border-top: 1px solid var(--color-border);
+}
+.secrets-sidebar-static .secrets-actions-heading {
+  margin: 0 0 0.4rem;
+}
+.secrets-sidebar-dropdown {
+  position: relative;
+}
+.secrets-dropdown-toggle {
+  width: 100%;
+  justify-content: flex-start;
+  margin-top: 0.2rem;
+}
+.secrets-actions-menu-dropdown {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 0.25rem);
+  left: 0;
+  right: 0;
+  max-height: min(60vh, 20rem);
+  overflow: auto;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
 }
 .vault-chrome label {
   font-size: 0.72rem;
@@ -1779,6 +1804,8 @@ body.admin-modal-open { overflow: hidden; }
     position: static;
     max-height: none;
     overflow: visible;
+    width: 100%;
+    justify-self: stretch;
   }
   .app-footer-inner {
     grid-template-columns: 1fr;

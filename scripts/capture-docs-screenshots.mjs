@@ -516,7 +516,9 @@ async function main() {
   await page.click('[data-nav="vault:import"]');
   await shot(page, "vault-import.png", { fullPage: true });
   await page.click('[data-nav="vault:mine"]');
-  await page.waitForSelector("#sActionsMenu", { timeout: 10000 });
+  await page.waitForSelector("#sActionsToggle", { timeout: 10000 });
+  await page.click("#sActionsToggle").catch(() => {});
+  await page.waitForSelector("#sActionsMenu:not([hidden])", { timeout: 5000 }).catch(() => {});
   await page.waitForTimeout(400);
   await shot(page, "vault-export.png", { fullPage: true });
 
