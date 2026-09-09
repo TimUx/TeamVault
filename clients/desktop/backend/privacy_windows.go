@@ -18,11 +18,11 @@ const (
 )
 
 var (
-	user32                         = syscall.NewLazyDLL("user32.dll")
-	procEnumWindows                = user32.NewProc("EnumWindows")
-	procGetWindowTextW             = user32.NewProc("GetWindowTextW")
-	procGetWindowThreadProcessID   = user32.NewProc("GetWindowThreadProcessId")
-	procSetWindowDisplayAffinity   = user32.NewProc("SetWindowDisplayAffinity")
+	user32                       = syscall.NewLazyDLL("user32.dll")
+	procEnumWindows              = user32.NewProc("EnumWindows")
+	procGetWindowTextW           = user32.NewProc("GetWindowTextW")
+	procGetWindowThreadProcessID = user32.NewProc("GetWindowThreadProcessId")
+	procSetWindowDisplayAffinity = user32.NewProc("SetWindowDisplayAffinity")
 )
 
 func ApplyWindowCaptureProtection(enabled bool) error {
