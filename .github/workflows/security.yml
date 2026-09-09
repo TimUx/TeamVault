@@ -51,6 +51,32 @@ jobs:
       - name: Package unit tests (auth, crypto, unlock, session)
         run: go test ./internal/auth/... ./internal/cryptocore/... ./internal/unlock/... ./internal/configstore/... -count=1 -timeout 5m
 
+  desktop-go-tests-linux:
+    name: Desktop module tests (linux)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: clients/desktop/go.mod
+          cache-dependency-path: clients/desktop/go.sum
+
+      - name: Install native desktop test deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev
+
+      - name: Run desktop module tests
+        env:
+          CGO_ENABLED: "1"
+        run: |
+          cd clients/desktop
+          go test ./... -count=1 -timeout 10m
+
   govulncheck:
     name: govulncheck
     runs-on: ubuntu-latest

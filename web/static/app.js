@@ -904,6 +904,14 @@ function renderLogin(app) {
   const step1 = n.querySelector("#loginStep1");
   const step2 = n.querySelector("#loginStep2");
   let pendingLoginToken = "";
+  (async () => {
+    try {
+      const me = await api("/api/me");
+      if (me && me.username) {
+        tvGo(me.needs_vault_onboard ? "/onboard" : "/app");
+      }
+    } catch (_) {}
+  })();
   const totpCtrl = bindTotpDigitInputs(n.querySelector("#loginTotp0").closest(".totp-digit-row"), {
     onComplete: () => n.querySelector("#doTotpLogin")?.click(),
     onEnter: () => n.querySelector("#doTotpLogin")?.click(),
