@@ -516,12 +516,9 @@ async function main() {
   await page.click('[data-nav="vault:import"]');
   await shot(page, "vault-import.png", { fullPage: true });
   await page.click('[data-nav="vault:mine"]');
-  await page.waitForSelector("#sActionsToggle", { timeout: 10000 });
-  await page.click("#sActionsToggle");
-  await page.waitForSelector("#sActionsMenu:not([hidden])", { timeout: 5000 });
+  await page.waitForSelector("#sActionsMenu", { timeout: 10000 });
   await page.waitForTimeout(400);
   await shot(page, "vault-export.png", { fullPage: true });
-  await page.click("#sActionsToggle").catch(() => {});
 
   await unlockVault(page);
   await showAccountTab(page, "totp");
@@ -672,12 +669,12 @@ async function main() {
   await page.uncheck("#pa_trust");
 
   await page.click('[data-nav="vault:mine"]');
-  await page.waitForSelector("button:has-text('Öffnen')", { timeout: 20000 });
+  await page.waitForSelector(".secret-open-btn", { timeout: 20000 });
   const storageRow = page.locator(".secrets-table tbody tr").filter({ hasText: "Pure Storage" }).first();
   if (await storageRow.count()) {
-    await storageRow.locator("button:has-text('Öffnen')").click();
+    await storageRow.locator(".secret-open-btn").first().click();
   } else {
-    await page.locator("button:has-text('Öffnen')").first().click();
+    await page.locator(".secret-open-btn").first().click();
   }
   await page.waitForSelector("#sdetail:not([hidden])", { timeout: 15000 });
   await page.waitForSelector("#accessPanel, #accessCurrent", { timeout: 15000 }).catch(() => {});
