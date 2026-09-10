@@ -35,7 +35,7 @@
       const el = document.getElementById(btn.getAttribute("data-copy"));
       if (!el) return;
       const idleLabel = btn.getAttribute("aria-label") || "Kopieren";
-      const feedback = btn.parentElement?.querySelector(".help-copy-feedback");
+      const feedback = btn.nextElementSibling?.classList?.contains("help-copy-feedback") ? btn.nextElementSibling : null;
       try {
         await navigator.clipboard.writeText(el.textContent);
         if (btn._copyResetTimer) clearTimeout(btn._copyResetTimer);

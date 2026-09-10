@@ -53,11 +53,17 @@
   }
 
   function copyBtn(targetId, label, className = "btn-icon") {
-    return `<button type="button" class="${escAttr(className)}" data-copy-target="${escAttr(targetId)}" aria-label="${escAttr(label)}" title="${escAttr(label)}">${copyIcon()}</button><span class="hint help-copy-feedback" id="${escAttr(targetId)}CopyFeedback" aria-live="polite"></span>`;
+    return `<button type="button" class="${escAttr(className)}" data-copy-target="${escAttr(targetId)}" data-copy-feedback="${escAttr(targetId)}CopyFeedback" aria-describedby="${escAttr(targetId)}CopyFeedback" aria-label="${escAttr(label)}" title="${escAttr(label)}">${copyIcon()}</button><span class="hint help-copy-feedback" id="${escAttr(targetId)}CopyFeedback" aria-live="polite"></span>`;
   }
 
-  function flashCopyState(btn, idleLabel, copiedLabel, feedbackText = copiedLabel) {
-    const feedback = btn.parentElement?.querySelector(".help-copy-feedback");
+  function copyFeedback(btn, root = document) {
+    const feedbackId = btn.getAttribute("data-copy-feedback");
+    return (feedbackId && (root.querySelector("#" + feedbackId) || document.getElementById(feedbackId)))
+      || (btn.nextElementSibling?.classList?.contains("help-copy-feedback") ? btn.nextElementSibling : null);
+  }
+
+  function flashCopyState(btn, idleLabel, copiedLabel, feedbackText = copiedLabel, root = document) {
+    const feedback = copyFeedback(btn, root);
     if (btn._copyResetTimer) clearTimeout(btn._copyResetTimer);
     btn.classList.add("copied");
     btn.setAttribute("aria-label", copiedLabel);
@@ -162,7 +168,7 @@
         <p class="help-note warn"><strong>Wichtig:</strong> Chrome/Edge installieren <code>.crx</code> nur, wenn eine Browser-Richtlinie gesetzt ist (Schritt&nbsp;1). Ohne Richtlinie wird die Datei nur heruntergeladen — das ist erwartetes Browser-Verhalten, kein Fehler der Datei.</p>
         <p><strong>Schritt 1</strong> — Einmalig Einrichtung (Browser-Richtlinie):</p>
         <div class="help-actions">
-          <button type="button" class="btn-icon" id="extUserInstallBtn" aria-label="Extension-Einzeiler kopieren" title="Extension-Einzeiler kopieren">${copyIcon()}</button><span class="hint help-copy-feedback" aria-live="polite"></span>
+          <button type="button" class="btn-icon" id="extUserInstallBtn" data-copy-feedback="extUserInstallFeedback" aria-describedby="extUserInstallFeedback" aria-label="Extension-Einzeiler kopieren" title="Extension-Einzeiler kopieren">${copyIcon()}</button><span class="hint help-copy-feedback" id="extUserInstallFeedback" aria-live="polite"></span>
         </div>
         <code class="onedliner" id="extInstallSnippet"></code>
         <p class="hint">PowerShell öffnen, einfügen, Enter. Bei <em>Registrierungszugriff verweigert</em>: IT muss Schritt&nbsp;1 zentral ausrollen (siehe unten) oder <a href="#fallback">Entwicklermodus</a>.</p>
@@ -207,9 +213,9 @@
       btn.onclick = async () => {
         try {
           await navigator.clipboard.writeText(installSnippet);
-          flashCopyState(btn, "Extension-Einzeiler kopieren", "Einzeiler kopiert");
+          flashCopyState(btn, "Extension-Einzeiler kopieren", "Einzeiler kopiert", "Einzeiler kopiert", root);
         } catch {
-          const feedback = btn.parentElement?.querySelector(".help-copy-feedback");
+          const feedback = copyFeedback(btn, root);
           if (feedback) feedback.textContent = "Bitte manuell kopieren";
           btn.setAttribute("aria-label", "Bitte Einzeiler manuell kopieren");
           btn.setAttribute("title", "Bitte Einzeiler manuell kopieren");
@@ -246,10 +252,15 @@
         try {
           await navigator.clipboard.writeText(el.textContent);
           const idleLabel = btn.getAttribute("aria-label") || "Kopieren";
-          flashCopyState(btn, idleLabel, "Kopiert");
+          flashCopyState(btn, idleLabel, "Kopiert", "Kopiert", root);
         } catch (_) {
-          const feedback = btn.parentElement?.querySelector(".help-copy-feedback");
+          const feedback = copyFeedback(btn, root);
           if (feedback) feedback.textContent = "Bitte manuell kopieren";
+          if (btn._copyResetTimer) clearTimeout(btn._copyResetTimer);
+          btn._copyResetTimer = setTimeout(() => {
+            if (feedback) feedback.textContent = "";
+            btn._copyResetTimer = null;
+          }, 1600);
         }
       });
     });
