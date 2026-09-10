@@ -4425,7 +4425,14 @@ ${escHtml(apiCmd)}</code>
     const mixed = selectedVisible > 0 && !allVisibleSelected;
     selAllVisibleBtn.classList.toggle("active", allVisibleSelected);
     selAllVisibleBtn.classList.toggle("mixed", mixed);
-    selAllVisibleBtn.setAttribute("aria-pressed", allVisibleSelected ? "true" : mixed ? "mixed" : "false");
+    selAllVisibleBtn.setAttribute("aria-pressed", allVisibleSelected ? "true" : "false");
+    const label = allVisibleSelected
+      ? "Alle sichtbaren sind ausgewählt"
+      : mixed
+        ? "Ein Teil der sichtbaren Secrets ist ausgewählt"
+        : "Keine sichtbaren Secrets sind ausgewählt";
+    selAllVisibleBtn.setAttribute("aria-label", label);
+    selAllVisibleBtn.title = label;
   }
   if (selAllVisibleBtn) {
     selAllVisibleBtn.onclick = () => {
