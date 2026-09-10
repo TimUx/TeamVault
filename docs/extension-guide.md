@@ -31,7 +31,7 @@ Richtlinien-Vorlagen: `/downloads/extension/chrome-policy.json`, `chrome-install
 
 `irm … | iex` wird in vielen Umgebungen von Antimalware oder App-Control blockiert — das ist normal.
 
-**Endanwender (Schritt 2):** In `/help/extension` oder **Konto & Sicherheit → Clients** auf **Extension installieren** klicken — dafür ist kein PowerShell nötig, sobald die Browser-Richtlinie gesetzt ist.
+**Endanwender (Schritt 2):** In `/help/extension` oder **Konto & Sicherheit → Clients** im oberen Download-Bereich auf **Extension installieren** klicken — dafür ist kein PowerShell nötig, sobald die Browser-Richtlinie gesetzt ist.
 
 **Schritt 1 ohne Pipe:**
 
@@ -92,7 +92,7 @@ Die Extension verwendet wie die Web-App einen eigenen TOTP-Schritt. Der Tenant w
 ## Nutzen
 
 1. Seite öffnen, die zur Secret-URL passt.
-2. Popup → Eintrag filtern (Alle / Privat / Geteilt) → per Icon+Text-Button **Ausfüllen** oder **Kopieren**.
+2. Popup → Eintrag filtern (Alle / Privat / Geteilt) → per Icon-Button **Ausfüllen** oder **Kopieren**.
 3. Ohne URL im Secret: Ausfüllen/Kopieren erlaubt. Mit URL: Aktion nur bei **exakter Origin-Match** (Schema, Host und Port — Phishing-Schutz).
 
 Admin: `scripts/pack-clients.ps1` erzeugt CLI + Extension-Artefakte (`dist/`) → im Docker-Image unter `/opt/teamvault/bundled-downloads`.

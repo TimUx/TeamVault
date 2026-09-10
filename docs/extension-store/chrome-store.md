@@ -103,7 +103,7 @@ Productivity
 | Permission | Why it is requested |
 |---|---|
 | `storage` | Store the configured TeamVault server URL and last-used tenant/username locally, so the user doesn't have to retype them every time. |
-| `clipboardWrite` | Copy a decrypted password to the clipboard when the user clicks the Kopieren/Copy icon+label button. |
+| `clipboardWrite` | Copy a decrypted password to the clipboard when the user clicks the Kopieren/Copy icon button. |
 | `activeTab` | Grants temporary access to the currently active tab only when the user interacts with the extension (opens the popup / clicks Ausfüllen/Fill), used to read the tab's URL for origin matching and to inject the fill logic. |
 | `scripting` | Programmatically inject `content.js` into the active tab only when the user explicitly clicks Ausfüllen/Fill — the extension does not run a content script on every page by default. |
 | Host permission: `http://127.0.0.1/*`, `http://localhost/*` | Built-in local development / first-run default so the extension works out of the box against a TeamVault server on the same machine, without any permission prompt. |

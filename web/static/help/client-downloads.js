@@ -40,6 +40,25 @@
     return base + (path.startsWith("/") ? path : "/" + path);
   }
 
+  function copyIcon() {
+    return `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"><path d="M9 9V5a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><rect x="4" y="9" width="11" height="12" rx="2" ry="2" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>`;
+  }
+
+  function copyBtn(targetId, label, className = "btn-icon") {
+    return `<button type="button" class="${className}" data-copy-target="${targetId}" aria-label="${label}" title="${label}">${copyIcon()}</button>`;
+  }
+
+  function flashCopyState(btn, idleLabel, copiedLabel) {
+    btn.classList.add("copied");
+    btn.setAttribute("aria-label", copiedLabel);
+    btn.setAttribute("title", copiedLabel);
+    setTimeout(() => {
+      btn.classList.remove("copied");
+      btn.setAttribute("aria-label", idleLabel);
+      btn.setAttribute("title", idleLabel);
+    }, 1200);
+  }
+
   function dlBtn(artifact, label) {
     if (!artifact) return "";
     return `<a class="btn-accent" href="${absUrl(artifact.url)}" download>${label || artifact.name}</a>`;
@@ -68,7 +87,7 @@
       <p class="hint">Oder Installations-Einzeiler (lädt &amp; installiert automatisch):</p>
       <code class="onedliner" id="cliInstallSnippet"></code>
       <div class="help-actions">
-        <button type="button" class="btn-ghost" data-copy-target="cliInstallSnippet">Einzeiler kopieren</button>
+        ${copyBtn("cliInstallSnippet", "CLI-Einzeiler kopieren")}
       </div>`;
     const snip = root.querySelector("#cliInstallSnippet");
     if (snip) {
@@ -130,7 +149,7 @@
         <p class="help-note warn"><strong>Wichtig:</strong> Chrome/Edge installieren <code>.crx</code> nur, wenn eine Browser-Richtlinie gesetzt ist (Schritt&nbsp;1). Ohne Richtlinie wird die Datei nur heruntergeladen — das ist erwartetes Browser-Verhalten, kein Fehler der Datei.</p>
         <p><strong>Schritt 1</strong> — Einmalig Einrichtung (Browser-Richtlinie):</p>
         <div class="help-actions">
-          <button type="button" class="btn-accent" id="extUserInstallBtn">Einzeiler kopieren</button>
+          <button type="button" class="btn-icon" id="extUserInstallBtn" aria-label="Extension-Einzeiler kopieren" title="Extension-Einzeiler kopieren">${copyIcon()}</button>
         </div>
         <code class="onedliner" id="extInstallSnippet"></code>
         <p class="hint">PowerShell öffnen, einfügen, Enter. Bei <em>Registrierungszugriff verweigert</em>: IT muss Schritt&nbsp;1 zentral ausrollen (siehe unten) oder <a href="#fallback">Entwicklermodus</a>.</p>
@@ -144,7 +163,7 @@
           <p class="hint">Wenn Endanwender <code>HKCU\\Software\\Policies</code> nicht schreiben dürfen — einmalig als Administrator:</p>
           <code class="onedliner" id="extPolicySnippet"></code>
           <div class="help-actions">
-            <button type="button" class="btn-ghost" data-copy-target="extPolicySnippet">IT-Einzeiler kopieren</button>
+            ${copyBtn("extPolicySnippet", "IT-Einzeiler kopieren")}
           </div>
           <p class="hint">Alternativ GPO/Intune mit JSON-Vorlagen:</p>
           <ul class="help-dl-list">
@@ -175,9 +194,10 @@
       btn.onclick = async () => {
         try {
           await navigator.clipboard.writeText(installSnippet);
-          btn.textContent = "Einzeiler kopiert — in PowerShell einfügen";
+          flashCopyState(btn, "Extension-Einzeiler kopieren", "Einzeiler kopiert");
         } catch {
-          btn.textContent = "Bitte Einzeiler manuell kopieren";
+          btn.setAttribute("aria-label", "Bitte Einzeiler manuell kopieren");
+          btn.setAttribute("title", "Bitte Einzeiler manuell kopieren");
         }
       };
     }
@@ -203,10 +223,8 @@
         if (!el) return;
         try {
           await navigator.clipboard.writeText(el.textContent);
-          btn.textContent = "Kopiert";
-          setTimeout(() => {
-            btn.textContent = "Einzeiler kopieren";
-          }, 1200);
+          const idleLabel = btn.getAttribute("aria-label") || "Kopieren";
+          flashCopyState(btn, idleLabel, "Kopiert");
         } catch (_) {}
       });
     });

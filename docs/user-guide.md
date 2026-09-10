@@ -83,9 +83,9 @@ Nach dem Entsperren: linke **Sidebar** mit Icons. Unter Vault getrennt:
 | **Import** | Dateien aus anderen Passwortmanagern übernehmen |
 | **Sicherung** | Verschlüsselte `.tvbak`-Backup / Wiederherstellen |
 
-Kein vermischter „Alle“-Eintrag. In der rechten Steuerleiste sind **Ansicht** (Liste/Tabelle/Kacheln) und **Suche** dauerhaft sichtbar. **Tags** öffnen als Dropdown mit begrenzter Höhe (Mehrfach, UND). In der Liste können Sie Einträge per Checkbox für den Export auswählen.
+Kein vermischter „Alle“-Eintrag. In der rechten Steuerleiste sind **Ansicht** (Liste/Tabelle/Kacheln), **Sortierung** und **Suche** dauerhaft sichtbar. **Tags** erscheinen als immer sichtbare, abgerundete Filter-Chips (Mehrfachauswahl, UND). Auswahl- und Export-Aktionen sitzen darunter als kompakte Icon-Leiste mit aufklappbaren Export-Optionen.
 
-**Ansicht:** Standard ist **Tabelle**; Umschalter Liste / Tabelle / Kacheln (Preference lokal im Browser) oben in der rechten Steuerleiste. **Sortierung** ebenfalls dort: A–Z, Z–A oder zuletzt bearbeitet. Tabelle und Kacheln laden zusätzlich Benutzer, Tags, **freigegebene Gruppen** und Favorit; Liste zeigt Titel, Benutzer, Tags und Gruppen kompakt. Favoriten erscheinen in allen Listen oben in einer Gruppe **Favoriten** (Stern-Toggle pro Zeile).
+**Ansicht:** Standard ist **Tabelle**; Umschalter Liste / Tabelle / Kacheln (Preference lokal im Browser) oben in der rechten Steuerleiste. **Sortierung** direkt daneben als eigene Icon-Gruppe: A–Z, Z–A oder zuletzt bearbeitet. Tabelle und Kacheln laden zusätzlich Benutzer, Tags, **freigegebene Gruppen** und Favorit; Liste zeigt Titel, Benutzer, Tags und Gruppen kompakt. Favoriten erscheinen in allen Listen oben in einer Gruppe **Favoriten** (Stern-Toggle pro Zeile).
 
 ![Meine Secrets – Tabelle (Standard)](images/vault-secrets-table.png)
 
@@ -147,7 +147,7 @@ Wird ein User **neu in eine Gruppe** aufgenommen, erscheinen fehlende Umschläge
 
 ### Tags & Suche
 
-Beim Anlegen **Tags** setzen (Komma-getrennt). Der Tag-Filter in der rechten Steuerleiste öffnet als Dropdown und filtert nach **einem oder mehreren Tags mit UND-Logik** (z.&nbsp;B. Storage **und** Block **und** Prod); die Suche trifft **Titel, Tags, Benutzername, Ersteller und Gruppen** (clientseitig bzw. aus der API).
+Beim Anlegen **Tags** setzen (Komma-getrennt). Der Tag-Filter in der rechten Steuerleiste zeigt alle geladenen Tags als klickbare Chips und filtert nach **einem oder mehreren Tags mit UND-Logik** (z.&nbsp;B. Storage **und** Block **und** Prod); die Suche trifft **Titel, Tags, Benutzername, Ersteller und Gruppen** (clientseitig bzw. aus der API).
 
 ![Tag-Filter](images/vault-tag-filter.png)
 
@@ -177,7 +177,7 @@ Nach dem Parsen erscheint eine **Vorschau** — einzelne, mehrere oder alle Eint
 
 ### Export
 
-Über **Aktionen** (Dropdown in der rechten Steuerleiste): Auswahl per Checkbox (einzeln, **Alle sichtbaren** oder **Alle geladenen**). Ohne Auswahl gelten die **sichtbaren** Einträge (aktueller Tag-Filter UND/Suche). Exportformate im gleichen Menü:
+Über **Aktionen** in der rechten Steuerleiste: Auswahl per Checkbox in der Liste plus Icon-Aktionen für **Alle sichtbaren**, **Alle geladenen**, **Auswahl aufheben** und **Export**. Ohne Auswahl gelten die **sichtbaren** Einträge (aktueller Tag-Filter UND/Suche). Die Exportformate liegen in einer aufklappbaren Inline-Sektion darunter:
 
 - **Export TeamVault** — vollständiges JSON inkl. Extra-Felder
 - **Export Bitwarden** — Login-Subset, unverschlüsselt
@@ -271,7 +271,7 @@ Kurzanleitung in der App: Sidebar **Hilfe** bzw. Login **Hilfe** → **Browser-E
 
 ![Konto → Clients](images/account-clients.png)
 
-Kurz: Einmal **Einrichtung** (PowerShell-Einzeiler), dann **Extension installieren** wie aus dem Store — Server-URL und optional Farbdesign wählen → Login/Unlock → auf passender Website **Ausfüllen** / **Kopieren** per Icon+Text-Button (nur bei exakter Origin-Match: Schema, Host und Port).
+Kurz: Einmal **Einrichtung** (PowerShell-Einzeiler), dann **Extension installieren** wie aus dem Store — Server-URL und optional Farbdesign wählen → Login/Unlock → auf passender Website **Ausfüllen** / **Kopieren** per kompaktem Icon-Button (nur bei exakter Origin-Match: Schema, Host und Port).
 
 In der App: **Konto → Clients** — Einrichtungs-Einzeiler und **Extension installieren** (`.crx`), sofern der Plattform-Administrator die Extension-Integration aktiviert hat (Standard: ausgeblendet; Downloads unter `/downloads/` bleiben für IT verfügbar).
 
@@ -297,7 +297,7 @@ Nur `read` → keine Admin- oder Schreibaktionen. Cookie-Login ohne API-Key ist 
 
 ## 9. Desktop-App
 
-Native, eigenständige App für Linux und Windows — reine Vault-Funktionen (kein Konto-/Backup-/Admin-Bereich), inklusive Offline-Modus, Tray-Icon, Autostart, Icon+Text-Detailaktionen und demselben Theme-/Farbdesign-System wie die Web-UI, ohne Adminrechte installier-/ausführbar. Kurzanleitung: **Hilfe → Desktop-App** bzw. `/help/desktop`. Markdown: [`docs/desktop-guide.md`](desktop-guide.md).
+Native, eigenständige App für Linux und Windows — reine Vault-Funktionen (kein Konto-/Backup-/Admin-Bereich), inklusive Offline-Modus, Tray-Icon, Autostart, kompakten Icon-Aktionen und demselben Theme-/Farbdesign-System wie die Web-UI, ohne Adminrechte installier-/ausführbar. Kurzanleitung: **Hilfe → Desktop-App** bzw. `/help/desktop`. Markdown: [`docs/desktop-guide.md`](desktop-guide.md).
 
 ![Konto → Clients](images/account-clients.png)
 
