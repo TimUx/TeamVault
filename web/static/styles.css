@@ -1008,15 +1008,16 @@ h1 .heading-ico,
 }
 .secrets-sidebar-status {
   display: flex;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.35rem;
   margin-top: 0.4rem;
   margin-bottom: 0;
   font-size: 0.74rem;
-  white-space: nowrap;
 }
 .secrets-sidebar-status .hint:first-child { display: inline; margin-top: 0; }
+.secrets-sidebar-status #sCount,
+.secrets-sidebar-status #selCount { white-space: nowrap; }
 .secrets-status-sep { flex: 0 0 auto; }
 .secrets-actions-menu {
   min-width: 0;
@@ -1684,6 +1685,10 @@ body.admin-modal-open { overflow: hidden; }
   border-color: var(--color-accent);
   color: var(--color-accent);
   background: var(--color-sidebar-active-bg);
+}
+.tag-filter-option:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
 }
 
 .lock-overlay {

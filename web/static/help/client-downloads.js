@@ -44,8 +44,16 @@
     return `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"><path d="M9 9V5a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><rect x="4" y="9" width="11" height="12" rx="2" ry="2" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>`;
   }
 
+  function escAttr(value) {
+    return String(value)
+      .replaceAll("&", "&amp;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;");
+  }
+
   function copyBtn(targetId, label, className = "btn-icon") {
-    return `<button type="button" class="${className}" data-copy-target="${targetId}" aria-label="${label}" title="${label}">${copyIcon()}</button><span class="hint help-copy-feedback" id="${targetId}CopyFeedback" aria-live="polite"></span>`;
+    return `<button type="button" class="${escAttr(className)}" data-copy-target="${escAttr(targetId)}" aria-label="${escAttr(label)}" title="${escAttr(label)}">${copyIcon()}</button><span class="hint help-copy-feedback" id="${escAttr(targetId)}CopyFeedback" aria-live="polite"></span>`;
   }
 
   function flashCopyState(btn, idleLabel, copiedLabel, feedbackText = copiedLabel) {
