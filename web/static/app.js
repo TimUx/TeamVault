@@ -4431,7 +4431,8 @@ ${escHtml(apiCmd)}</code>
       : mixed
         ? "Ein Teil der sichtbaren Secrets ist ausgewählt"
         : "Keine sichtbaren Secrets sind ausgewählt";
-    selAllVisibleBtn.setAttribute("aria-label", label);
+    selAllVisibleBtn.setAttribute("aria-label", "Alle sichtbaren auswählen oder abwählen");
+    selAllVisibleBtn.setAttribute("aria-description", label);
     selAllVisibleBtn.title = label;
   }
   if (selAllVisibleBtn) {
