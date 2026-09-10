@@ -2155,7 +2155,7 @@ function renderApp(app) {
                       <span class="hint secrets-status-sep">–</span>
                       <span class="hint secrets-actions-meta" id="selCount">Keine Auswahl</span>
                     </div>
-                    <p class="hint secrets-export-note">Gilt für die aktuelle Auswahl (Häkchen in der Liste).</p>
+                    ${hintBox("Gilt für die aktuelle Auswahl (Häkchen in Liste).", { className: "hint-box-compact secrets-export-note", id: "sExportSummary" })}
                     <div class="secrets-load-more" id="sLoadMoreWrap" hidden>
                       <p class="hint" id="sLoadMoreHint"></p>
                       <button type="button" class="btn-ghost btn-sm" id="sMore">Weitere laden</button>
@@ -2171,9 +2171,9 @@ function renderApp(app) {
                     <label>Tags <span class="hint">(UND)</span></label>
                     <div class="tag-filter panel-inset" id="stagFilter">
                       <div class="tag-filter-head">
-                        <p class="hint tag-filter-hint" id="stagSummary">Alle Tags</p>
                         <button type="button" class="btn-ghost btn-sm btn-with-ico tag-filter-clear" id="stagClear" title="Tag-Filter leeren" aria-label="Tag-Filter leeren">${btnLabel("close", "Leeren")}</button>
                       </div>
+                      ${hintBox("Alle Tags - Mehrere Tags = alle müssen passen", { className: "hint-box-compact tag-filter-hint-box", id: "stagSummary" })}
                       <div id="stagOptions" class="tag-filter-options tags"></div>
                     </div>
                   </div>
@@ -4372,9 +4372,7 @@ ${escHtml(apiCmd)}</code>
     const clear = n.querySelector("#stagClear");
     const cur = vault.tagFilters || [];
     if (summary) {
-      summary.textContent = cur.length
-        ? `${cur.length} Tag${cur.length === 1 ? "" : "s"} aktiv · Mehrere Tags = alle müssen passen`
-        : "Alle Tags · Mehrere Tags = alle müssen passen";
+      setHintBox(summary, "Alle Tags - Mehrere Tags = alle müssen passen");
     }
     if (clear) clear.disabled = !cur.length;
   }
