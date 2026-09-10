@@ -322,7 +322,7 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
   color: var(--color-accent);
 }
 .accent-dot {
-  border-radius: 999px;
+  border-radius: var(--radius);
   display: inline-block;
   height: 1rem;
   width: 1rem;
