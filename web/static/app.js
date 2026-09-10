@@ -4402,12 +4402,28 @@ ${escHtml(apiCmd)}</code>
   const sActionsWrap = n.querySelector("#sActionsWrap");
   const sExportToggle = n.querySelector("#sExportToggle");
   if (sExportToggle && sActionsMenu && sActionsWrap) {
+    const closeExportMenu = () => {
+      sActionsMenu.hidden = true;
+      sExportToggle.setAttribute("aria-expanded", "false");
+      sExportToggle.classList.remove("active");
+    };
     sExportToggle.onclick = () => {
       const open = sActionsMenu.hidden;
-      sActionsMenu.hidden = !open;
-      sExportToggle.setAttribute("aria-expanded", open ? "true" : "false");
-      sExportToggle.classList.toggle("active", open);
+      if (open) {
+        sActionsMenu.hidden = false;
+        sExportToggle.setAttribute("aria-expanded", "true");
+        sExportToggle.classList.add("active");
+      } else {
+        closeExportMenu();
+      }
     };
+    document.addEventListener("click", (ev) => {
+      if (sActionsMenu.hidden) return;
+      if (!sActionsWrap.contains(ev.target)) closeExportMenu();
+    });
+    document.addEventListener("keydown", (ev) => {
+      if (ev.key === "Escape" && !sActionsMenu.hidden) closeExportMenu();
+    });
     sExportToggle.setAttribute("aria-expanded", sActionsMenu.hidden ? "false" : "true");
     sExportToggle.classList.toggle("active", !sActionsMenu.hidden);
   }
