@@ -2143,7 +2143,7 @@ function renderApp(app) {
                     <div class="secrets-actions-tools" role="group" aria-label="Export für Auswahl">
                       <button type="button" class="btn-icon" id="selAllLoaded" title="Alle geladenen auswählen" aria-label="Alle geladenen auswählen">${icon("layersCheck")}</button>
                       <button type="button" class="btn-icon" id="sExportTv" title="TeamVault JSON exportieren" aria-label="TeamVault JSON exportieren">${icon("download")}</button>
-                      <button type="button" class="btn-icon" id="sExportJson" title="Bitwarden JSON exportieren" aria-label="Bitwarden JSON exportieren">${icon("download")}</button>
+                      <button type="button" class="btn-icon" id="sExportJson" title="Bitwarden JSON exportieren" aria-label="Bitwarden JSON exportieren">${icon("clipboard")}</button>
                       <button type="button" class="btn-icon" id="sExportCsv" title="CSV exportieren" aria-label="CSV exportieren">${icon("layoutTable")}</button>
                       <button type="button" class="btn-icon" id="sExportBak" title="Verschlüsselt (.tvbak) exportieren" aria-label="Verschlüsselt (.tvbak) exportieren">${icon("lock")}</button>
                     </div>
