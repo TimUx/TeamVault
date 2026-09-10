@@ -255,10 +255,15 @@
           flashCopyState(btn, idleLabel, "Kopiert", "Kopiert", root);
         } catch (_) {
           const feedback = copyFeedback(btn, root);
+          const idleLabel = btn.getAttribute("aria-label") || "Kopieren";
           if (feedback) feedback.textContent = "Bitte manuell kopieren";
+          btn.setAttribute("aria-label", "Bitte manuell kopieren");
+          btn.setAttribute("title", "Bitte manuell kopieren");
           if (btn._copyResetTimer) clearTimeout(btn._copyResetTimer);
           btn._copyResetTimer = setTimeout(() => {
             if (feedback) feedback.textContent = "";
+            btn.setAttribute("aria-label", idleLabel);
+            btn.setAttribute("title", idleLabel);
             btn._copyResetTimer = null;
           }, 1600);
         }

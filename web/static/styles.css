@@ -1674,6 +1674,7 @@ body.admin-modal-open { overflow: hidden; }
   border: 1px solid var(--color-border);
   border-radius: 4px;
   padding: 0.16rem 0.45rem;
+  min-height: 1.85rem;
   font-size: 0.76rem;
   font-weight: 500;
   line-height: 1.2;
