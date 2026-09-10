@@ -2172,9 +2172,11 @@ function renderApp(app) {
                     <p class="secrets-actions-heading">Filter</p>
                     <label>Tags <span class="hint">(UND)</span></label>
                     <div class="tag-filter panel-inset" id="stagFilter">
-                      <p class="hint tag-filter-hint" id="stagSummary">Alle Tags</p>
+                      <div class="tag-filter-head">
+                        <p class="hint tag-filter-hint" id="stagSummary">Alle Tags</p>
+                        <button type="button" class="btn-ghost btn-sm btn-with-ico tag-filter-clear" id="stagClear" title="Tag-Filter leeren" aria-label="Tag-Filter leeren">${btnLabel("close", "Leeren")}</button>
+                      </div>
                       <div id="stagOptions" class="tag-filter-options tags"></div>
-                      <button type="button" class="btn-ghost btn-icon btn-icon-sm" id="stagClear" title="Tag-Filter leeren" aria-label="Tag-Filter leeren">${icon("close")}</button>
                     </div>
                   </div>
                 </aside>
@@ -4488,12 +4490,6 @@ ${escHtml(apiCmd)}</code>
       paintSecretList();
     };
     selAllVisibleBtn.onclick = toggleVisibleSelection;
-    selAllVisibleBtn.onkeydown = (ev) => {
-      if (ev.key === " " || ev.key === "Enter") {
-        ev.preventDefault();
-        toggleVisibleSelection();
-      }
-    };
   }
   n.querySelector("#spwGen").onclick = () => {
     const len = Math.min(64, Math.max(12, parseInt(n.querySelector("#spwLen").value, 10) || 20));
