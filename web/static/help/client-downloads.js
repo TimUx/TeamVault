@@ -58,7 +58,7 @@
 
   function copyFeedback(btn, root = document) {
     const feedbackId = btn.getAttribute("data-copy-feedback");
-    return (feedbackId && (root.querySelector("#" + feedbackId) || document.getElementById(feedbackId)))
+    return (feedbackId && document.getElementById(feedbackId))
       || (btn.nextElementSibling?.classList?.contains("help-copy-feedback") ? btn.nextElementSibling : null);
   }
 
