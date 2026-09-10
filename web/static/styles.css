@@ -1670,9 +1670,10 @@ body.admin-modal-open { overflow: hidden; }
   color: var(--color-text);
   font: inherit;
   border: 1px solid var(--color-border);
-  border-radius: 999px;
-  padding: 0.22rem 0.55rem;
-  font-size: 0.8rem;
+  border-radius: 4px;
+  padding: 0.16rem 0.45rem;
+  font-size: 0.76rem;
+  font-weight: 500;
   line-height: 1.2;
   background: var(--color-surface);
   transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
