@@ -1038,6 +1038,19 @@ h1 .heading-ico,
   flex-wrap: wrap;
   gap: 0.35rem;
 }
+.secrets-export-legend {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.35rem;
+  margin-top: 0.2rem;
+  margin-bottom: 0.3rem;
+  font-size: 0.66rem;
+  color: var(--color-hint);
+}
+.secrets-export-legend span {
+  text-align: center;
+  white-space: nowrap;
+}
 .secrets-actions-tools + .secrets-sidebar-status .hint { margin: 0; }
 .secrets-actions-tools .btn-icon.active {
   border-color: var(--color-accent);

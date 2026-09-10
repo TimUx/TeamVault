@@ -177,7 +177,7 @@ Nach dem Parsen erscheint eine **Vorschau** — einzelne, mehrere oder alle Eint
 
 ### Export
 
-Über **Export** in der rechten Steuerleiste: Auswahl per Checkbox in der Liste plus Icon-Aktionen für **Alle sichtbaren** (oben links im Inhaltsbereich), **Alle geladenen** und die direkten Exportformate. Ohne Auswahl gelten die **sichtbaren** Einträge (aktueller Tag-Filter UND/Suche). Die Exportformate sind direkt als Icon-Buttons sichtbar:
+Über **Export** in der rechten Steuerleiste: Auswahl per Checkbox in der Liste plus **Alle sichtbaren** (oben links im Inhaltsbereich). Ohne Auswahl gelten die **sichtbaren** Einträge (aktueller Tag-Filter UND/Suche). Die Exportformate sind direkt als Icon-Buttons sichtbar:
 
 - **Export TeamVault** — vollständiges JSON inkl. Extra-Felder
 - **Export Bitwarden** — Login-Subset, unverschlüsselt

@@ -2141,11 +2141,16 @@ function renderApp(app) {
                   <div class="secrets-sidebar-section secrets-sidebar-static" id="sActionsWrap">
                     <p class="secrets-actions-heading">Export</p>
                     <div class="secrets-actions-tools" role="group" aria-label="Export für Auswahl">
-                      <button type="button" class="btn-icon" id="selAllLoaded" title="Alle geladenen auswählen" aria-label="Alle geladenen auswählen">${icon("layersCheck")}</button>
                       <button type="button" class="btn-icon" id="sExportTv" title="TeamVault JSON exportieren" aria-label="TeamVault JSON exportieren">${icon("download")}</button>
                       <button type="button" class="btn-icon" id="sExportJson" title="Bitwarden JSON exportieren" aria-label="Bitwarden JSON exportieren">${icon("clipboard")}</button>
                       <button type="button" class="btn-icon" id="sExportCsv" title="CSV exportieren" aria-label="CSV exportieren">${icon("layoutTable")}</button>
                       <button type="button" class="btn-icon" id="sExportBak" title="Verschlüsselt (.tvbak) exportieren" aria-label="Verschlüsselt (.tvbak) exportieren">${icon("lock")}</button>
+                    </div>
+                    <div class="secrets-export-legend" aria-hidden="true">
+                      <span>TV JSON</span>
+                      <span>BW JSON</span>
+                      <span>CSV</span>
+                      <span>.tvbak</span>
                     </div>
                     <div class="secrets-sidebar-status">
                       <span class="hint" id="sCount"></span>
@@ -3802,16 +3807,6 @@ ${escHtml(apiCmd)}</code>
       updateSelectionBar();
     };
   }
-
-  n.querySelector("#selAllLoaded").onclick = async () => {
-    try {
-      await ensureAllSecretsLoaded();
-      for (const it of vault.secretsCache) {
-        if (it.has_access) vault.selectedIds.add(it.id);
-      }
-      paintSecretList();
-    } catch (e) { alert(e.message); }
-  };
 
   async function fetchSecretDetailWithRetry(id, retries = 2) {
     let lastErr;
