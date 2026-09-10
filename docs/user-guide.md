@@ -83,7 +83,7 @@ Nach dem Entsperren: linke **Sidebar** mit Icons. Unter Vault getrennt:
 | **Import** | Dateien aus anderen Passwortmanagern übernehmen |
 | **Sicherung** | Verschlüsselte `.tvbak`-Backup / Wiederherstellen |
 
-Kein vermischter „Alle“-Eintrag. In der rechten Steuerleiste sind **Ansicht** (Liste/Tabelle/Kacheln), **Sortierung** und **Suche** dauerhaft sichtbar. **Tags** erscheinen als immer sichtbare, abgerundete Filter-Chips (Mehrfachauswahl, UND). Auswahl- und Export-Aktionen sitzen darunter als kompakte Icon-Leiste mit aufklappbaren Export-Optionen.
+Kein vermischter „Alle“-Eintrag. In der rechten Steuerleiste sind **Ansicht** (Liste/Tabelle/Kacheln), **Sortierung** und **Suche** dauerhaft sichtbar. **Tags** erscheinen als immer sichtbare, abgerundete Filter-Chips (Mehrfachauswahl, UND). Darunter sitzt der Bereich **Export** als kompakte Icon-Leiste (direkte Exportformate ohne Untermenü).
 
 **Ansicht:** Standard ist **Tabelle**; Umschalter Liste / Tabelle / Kacheln (Preference lokal im Browser) oben in der rechten Steuerleiste. **Sortierung** direkt daneben als eigene Icon-Gruppe: A–Z, Z–A oder zuletzt bearbeitet. Tabelle und Kacheln laden zusätzlich Benutzer, Tags, **freigegebene Gruppen** und Favorit; Liste zeigt Titel, Benutzer, Tags und Gruppen kompakt. Favoriten erscheinen in allen Listen oben in einer Gruppe **Favoriten** (Stern-Toggle pro Zeile).
 
@@ -177,7 +177,7 @@ Nach dem Parsen erscheint eine **Vorschau** — einzelne, mehrere oder alle Eint
 
 ### Export
 
-Über **Aktionen** in der rechten Steuerleiste: Auswahl per Checkbox in der Liste plus Icon-Aktionen für **Alle sichtbaren**, **Alle geladenen**, **Auswahl aufheben** und **Export**. Ohne Auswahl gelten die **sichtbaren** Einträge (aktueller Tag-Filter UND/Suche). Die Exportformate liegen in einer aufklappbaren Inline-Sektion darunter:
+Über **Export** in der rechten Steuerleiste: Auswahl per Checkbox in der Liste plus **Alle sichtbaren** (oben links im Inhaltsbereich). Ohne Auswahl gelten die **sichtbaren** Einträge (aktueller Tag-Filter UND/Suche). Die Exportformate sind direkt als Icon-Buttons sichtbar:
 
 - **Export TeamVault** — vollständiges JSON inkl. Extra-Felder
 - **Export Bitwarden** — Login-Subset, unverschlüsselt

@@ -196,6 +196,10 @@ const ICO = {
   layoutList: '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
   layoutTable: '<path d="M3 3h18v18H3zM3 9h18M3 15h18M9 3v18"/>',
   layoutGrid: '<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>',
+  appTeamvault: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><rect x="8" y="10.5" width="8" height="6.5" rx="1.5"/><path d="M10 10.5V9a2 2 0 0 1 4 0v1.5"/>',
+  appBitwarden: '<path d="M12 22s7-3.4 7-9.2V5.5L12 2 5 5.5v7.3C5 18.6 12 22 12 22z"/><rect x="9" y="8.2" width="6" height="6.8" rx="1.2"/><path d="M10.3 10h3.4M10.3 12h3.4M10.3 14h3.4"/>',
+  appCsv: '<path d="M6 2h9l5 5v15H6z"/><path d="M15 2v5h5"/><path d="M9 11h8M9 14h8M9 17h8"/><path d="M12 11v9M16 11v9"/>',
+  appBackup: '<path d="M4 7h16v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><path d="M4 7l2-3h12l2 3"/><rect x="9" y="12" width="6" height="5" rx="1"/><path d="M10.5 12v-1a1.5 1.5 0 0 1 3 0v1"/>',
   book: '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>',
   cert: '<rect x="6" y="3" width="12" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h3"/>',
   info: '<circle cx="12" cy="12" r="9"/><path d="M12 10v6M12 7h.01"/>',
@@ -2139,25 +2143,19 @@ function renderApp(app) {
                     </div>
                   </div>
                   <div class="secrets-sidebar-section secrets-sidebar-static" id="sActionsWrap">
-                    <p class="secrets-actions-heading">Aktionen</p>
-                    <div class="secrets-actions-tools" role="group" aria-label="Aktionen für Auswahl">
-                      <button type="button" class="btn-icon" id="selAllLoaded" title="Alle geladenen auswählen" aria-label="Alle geladenen auswählen">${icon("layersCheck")}</button>
-                      <button type="button" class="btn-icon" id="selClear" title="Auswahl aufheben" aria-label="Auswahl aufheben">${icon("close")}</button>
-                      <button type="button" class="btn-icon" id="sExportToggle" title="Exportoptionen ein- oder ausblenden" aria-label="Exportoptionen ein- oder ausblenden" aria-expanded="false" aria-controls="sActionsMenu">${icon("download")}</button>
+                    <p class="secrets-actions-heading">Export</p>
+                    <div class="secrets-actions-tools" role="group" aria-label="Export für Auswahl oder sichtbare Einträge">
+                      <button type="button" class="btn-icon" id="sExportTv" title="TeamVault JSON exportieren" aria-label="TeamVault JSON exportieren">${icon("appTeamvault")}</button>
+                      <button type="button" class="btn-icon" id="sExportJson" title="Bitwarden JSON exportieren" aria-label="Bitwarden JSON exportieren">${icon("appBitwarden")}</button>
+                      <button type="button" class="btn-icon" id="sExportCsv" title="CSV exportieren" aria-label="CSV exportieren">${icon("appCsv")}</button>
+                      <button type="button" class="btn-icon" id="sExportBak" title="Verschlüsselt (.tvbak) exportieren" aria-label="Verschlüsselt (.tvbak) exportieren">${icon("appBackup")}</button>
                     </div>
                     <div class="secrets-sidebar-status">
                       <span class="hint" id="sCount"></span>
                       <span class="hint secrets-status-sep">–</span>
                       <span class="hint secrets-actions-meta" id="selCount">Keine Auswahl</span>
                     </div>
-                    <div class="secrets-actions-menu panel-inset" id="sActionsMenu" role="region" aria-label="Exportoptionen" hidden>
-                      <p class="secrets-actions-heading">Export</p>
-                      ${hintBox("Gilt für die aktuelle Auswahl (Häkchen in der Liste).", { className: "hint-box-compact" })}
-                      <button type="button" class="secrets-actions-item btn-ghost btn-sm btn-with-ico" id="sExportTv">${btnLabel("download", "TeamVault JSON")}</button>
-                      <button type="button" class="secrets-actions-item btn-ghost btn-sm btn-with-ico" id="sExportJson">${btnLabel("download", "Bitwarden JSON")}</button>
-                      <button type="button" class="secrets-actions-item btn-ghost btn-sm btn-with-ico" id="sExportCsv">${btnLabel("download", "CSV")}</button>
-                      <button type="button" class="secrets-actions-item btn-ghost btn-sm btn-with-ico" id="sExportBak">${btnLabel("lock", "Verschlüsselt (.tvbak)")}</button>
-                    </div>
+                    ${hintBox("Gilt für die aktuelle Auswahl (Häkchen in Liste). Ohne Auswahl: sichtbare Einträge.", { className: "hint-box-compact secrets-export-note", id: "sExportSummary" })}
                     <div class="secrets-load-more" id="sLoadMoreWrap" hidden>
                       <p class="hint" id="sLoadMoreHint"></p>
                       <button type="button" class="btn-ghost btn-sm" id="sMore">Weitere laden</button>
@@ -2173,9 +2171,9 @@ function renderApp(app) {
                     <label>Tags <span class="hint">(UND)</span></label>
                     <div class="tag-filter panel-inset" id="stagFilter">
                       <div class="tag-filter-head">
-                        <p class="hint tag-filter-hint" id="stagSummary">Alle Tags</p>
                         <button type="button" class="btn-ghost btn-sm btn-with-ico tag-filter-clear" id="stagClear" title="Tag-Filter leeren" aria-label="Tag-Filter leeren">${btnLabel("close", "Leeren")}</button>
                       </div>
+                      ${hintBox("Alle Tags - Mehrere Tags = alle müssen passen", { className: "hint-box-compact tag-filter-hint-box", id: "stagSummary" })}
                       <div id="stagOptions" class="tag-filter-options tags"></div>
                     </div>
                   </div>
@@ -3808,20 +3806,6 @@ ${escHtml(apiCmd)}</code>
     };
   }
 
-  n.querySelector("#selClear").onclick = () => {
-    vault.selectedIds.clear();
-    paintSecretList();
-  };
-  n.querySelector("#selAllLoaded").onclick = async () => {
-    try {
-      await ensureAllSecretsLoaded();
-      for (const it of vault.secretsCache) {
-        if (it.has_access) vault.selectedIds.add(it.id);
-      }
-      paintSecretList();
-    } catch (e) { alert(e.message); }
-  };
-
   async function fetchSecretDetailWithRetry(id, retries = 2) {
     let lastErr;
     for (let attempt = 0; attempt <= retries; attempt++) {
@@ -4388,9 +4372,9 @@ ${escHtml(apiCmd)}</code>
     const clear = n.querySelector("#stagClear");
     const cur = vault.tagFilters || [];
     if (summary) {
-      summary.textContent = cur.length
-        ? `${cur.length} Tag${cur.length === 1 ? "" : "s"} aktiv · Mehrere Tags = alle müssen passen`
-        : "Alle Tags · Mehrere Tags = alle müssen passen";
+      const base = "Alle Tags - Mehrere Tags = alle müssen passen";
+      const active = cur.length ? ` · ${cur.length} aktiv` : "";
+      setHintBox(summary, base + active);
     }
     if (clear) clear.disabled = !cur.length;
   }
@@ -4423,35 +4407,6 @@ ${escHtml(apiCmd)}</code>
     if (pruned) paintSecretList();
   }
 
-  const sActionsMenu = n.querySelector("#sActionsMenu");
-  const sActionsWrap = n.querySelector("#sActionsWrap");
-  const sExportToggle = n.querySelector("#sExportToggle");
-  if (sExportToggle && sActionsMenu && sActionsWrap) {
-    const closeExportMenu = () => {
-      sActionsMenu.hidden = true;
-      sExportToggle.setAttribute("aria-expanded", "false");
-      sExportToggle.classList.remove("active");
-    };
-    sExportToggle.onclick = () => {
-      const open = sActionsMenu.hidden;
-      if (open) {
-        sActionsMenu.hidden = false;
-        sExportToggle.setAttribute("aria-expanded", "true");
-        sExportToggle.classList.add("active");
-      } else {
-        closeExportMenu();
-      }
-    };
-    document.addEventListener("click", (ev) => {
-      if (sActionsMenu.hidden) return;
-      if (!sActionsWrap.contains(ev.target)) closeExportMenu();
-    });
-    document.addEventListener("keydown", (ev) => {
-      if (ev.key === "Escape" && !sActionsMenu.hidden) closeExportMenu();
-    });
-    sExportToggle.setAttribute("aria-expanded", sActionsMenu.hidden ? "false" : "true");
-    sExportToggle.classList.toggle("active", !sActionsMenu.hidden);
-  }
   const stagClear = n.querySelector("#stagClear");
   if (stagClear) {
     stagClear.onclick = () => {
