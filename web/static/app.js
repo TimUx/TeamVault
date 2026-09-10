@@ -2155,7 +2155,7 @@ function renderApp(app) {
                       <p class="hint secrets-actions-meta" id="selCount">Keine Auswahl</p>
                     </div>
                     <div class="secrets-actions-tools" role="group" aria-label="Aktionen für Auswahl">
-                      <button type="button" class="btn-icon" id="selAllVisible" title="Alle sichtbaren auswählen oder abwählen" aria-label="Alle sichtbaren auswählen oder abwählen" aria-describedby="selAllVisibleState" aria-pressed="false">${icon("checkSquare")}</button>
+                      <button type="button" class="btn-icon" id="selAllVisible" role="checkbox" title="Alle sichtbaren auswählen oder abwählen" aria-label="Alle sichtbaren auswählen oder abwählen" aria-describedby="selAllVisibleState" aria-checked="false">${icon("checkSquare")}</button>
                       <span id="selAllVisibleState" class="visually-hidden">Keine sichtbaren Secrets sind ausgewählt</span>
                       <button type="button" class="btn-icon" id="selAllLoaded" title="Alle geladenen auswählen" aria-label="Alle geladenen auswählen">${icon("layersCheck")}</button>
                       <button type="button" class="btn-icon" id="selClear" title="Auswahl aufheben" aria-label="Auswahl aufheben">${icon("close")}</button>
@@ -4457,7 +4457,7 @@ ${escHtml(apiCmd)}</code>
     const mixed = selectedVisible > 0 && !allVisibleSelected;
     selAllVisibleBtn.classList.toggle("active", allVisibleSelected);
     selAllVisibleBtn.classList.toggle("mixed", mixed);
-    selAllVisibleBtn.setAttribute("aria-pressed", allVisibleSelected ? "true" : "false");
+    selAllVisibleBtn.setAttribute("aria-checked", mixed ? "mixed" : allVisibleSelected ? "true" : "false");
     const label = allVisibleSelected
       ? "Alle sichtbaren sind ausgewählt"
       : mixed
@@ -4468,7 +4468,7 @@ ${escHtml(apiCmd)}</code>
     selAllVisibleBtn.title = label;
   }
   if (selAllVisibleBtn) {
-    selAllVisibleBtn.onclick = () => {
+    const toggleVisibleSelection = () => {
       const visible = filterVisibleSecrets();
       const selectedVisible = visible.filter((it) => vault.selectedIds.has(it.id)).length;
       const turnOn = !(visible.length > 0 && selectedVisible === visible.length);
@@ -4477,6 +4477,13 @@ ${escHtml(apiCmd)}</code>
         else vault.selectedIds.delete(it.id);
       }
       paintSecretList();
+    };
+    selAllVisibleBtn.onclick = toggleVisibleSelection;
+    selAllVisibleBtn.onkeydown = (ev) => {
+      if (ev.key === " " || ev.key === "Enter") {
+        ev.preventDefault();
+        toggleVisibleSelection();
+      }
     };
   }
   n.querySelector("#spwGen").onclick = () => {

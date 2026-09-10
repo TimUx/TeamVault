@@ -45,17 +45,20 @@
   }
 
   function copyBtn(targetId, label, className = "btn-icon") {
-    return `<button type="button" class="${className}" data-copy-target="${targetId}" aria-label="${label}" title="${label}">${copyIcon()}</button>`;
+    return `<button type="button" class="${className}" data-copy-target="${targetId}" aria-label="${label}" title="${label}">${copyIcon()}</button><span class="hint help-copy-feedback" id="${targetId}CopyFeedback" aria-live="polite"></span>`;
   }
 
-  function flashCopyState(btn, idleLabel, copiedLabel) {
+  function flashCopyState(btn, idleLabel, copiedLabel, feedbackText = copiedLabel) {
+    const feedback = btn.parentElement?.querySelector(".help-copy-feedback");
     btn.classList.add("copied");
     btn.setAttribute("aria-label", copiedLabel);
     btn.setAttribute("title", copiedLabel);
+    if (feedback) feedback.textContent = feedbackText;
     setTimeout(() => {
       btn.classList.remove("copied");
       btn.setAttribute("aria-label", idleLabel);
       btn.setAttribute("title", idleLabel);
+      if (feedback) feedback.textContent = "";
     }, 1200);
   }
 
@@ -149,7 +152,7 @@
         <p class="help-note warn"><strong>Wichtig:</strong> Chrome/Edge installieren <code>.crx</code> nur, wenn eine Browser-Richtlinie gesetzt ist (Schritt&nbsp;1). Ohne Richtlinie wird die Datei nur heruntergeladen — das ist erwartetes Browser-Verhalten, kein Fehler der Datei.</p>
         <p><strong>Schritt 1</strong> — Einmalig Einrichtung (Browser-Richtlinie):</p>
         <div class="help-actions">
-          <button type="button" class="btn-icon" id="extUserInstallBtn" aria-label="Extension-Einzeiler kopieren" title="Extension-Einzeiler kopieren">${copyIcon()}</button>
+          <button type="button" class="btn-icon" id="extUserInstallBtn" aria-label="Extension-Einzeiler kopieren" title="Extension-Einzeiler kopieren">${copyIcon()}</button><span class="hint help-copy-feedback" aria-live="polite"></span>
         </div>
         <code class="onedliner" id="extInstallSnippet"></code>
         <p class="hint">PowerShell öffnen, einfügen, Enter. Bei <em>Registrierungszugriff verweigert</em>: IT muss Schritt&nbsp;1 zentral ausrollen (siehe unten) oder <a href="#fallback">Entwicklermodus</a>.</p>
@@ -196,6 +199,8 @@
           await navigator.clipboard.writeText(installSnippet);
           flashCopyState(btn, "Extension-Einzeiler kopieren", "Einzeiler kopiert");
         } catch {
+          const feedback = btn.parentElement?.querySelector(".help-copy-feedback");
+          if (feedback) feedback.textContent = "Bitte manuell kopieren";
           btn.setAttribute("aria-label", "Bitte Einzeiler manuell kopieren");
           btn.setAttribute("title", "Bitte Einzeiler manuell kopieren");
         }
@@ -225,7 +230,10 @@
           await navigator.clipboard.writeText(el.textContent);
           const idleLabel = btn.getAttribute("aria-label") || "Kopieren";
           flashCopyState(btn, idleLabel, "Kopiert");
-        } catch (_) {}
+        } catch (_) {
+          const feedback = btn.parentElement?.querySelector(".help-copy-feedback");
+          if (feedback) feedback.textContent = "Bitte manuell kopieren";
+        }
       });
     });
   }
