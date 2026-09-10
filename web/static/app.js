@@ -4407,6 +4407,7 @@ ${escHtml(apiCmd)}</code>
       sExportToggle.setAttribute("aria-expanded", open ? "true" : "false");
       sExportToggle.classList.toggle("active", open);
     };
+    sExportToggle.setAttribute("aria-expanded", sActionsMenu.hidden ? "false" : "true");
     sExportToggle.classList.toggle("active", !sActionsMenu.hidden);
   }
   const stagClear = n.querySelector("#stagClear");
