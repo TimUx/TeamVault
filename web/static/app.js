@@ -2155,7 +2155,7 @@ function renderApp(app) {
                       <p class="hint secrets-actions-meta" id="selCount">Keine Auswahl</p>
                     </div>
                     <div class="secrets-actions-tools" role="group" aria-label="Aktionen für Auswahl">
-                      <button type="button" class="btn-icon" id="selAllVisible" title="Alle sichtbaren auswählen oder abwählen" aria-label="Alle sichtbaren auswählen oder abwählen" aria-pressed="false">${icon("checkSquare")}</button>
+                      <button type="button" class="btn-icon" id="selAllVisible" title="Alle sichtbaren auswählen oder abwählen" aria-label="Alle sichtbaren auswählen oder abwählen" role="checkbox" aria-checked="false">${icon("checkSquare")}</button>
                       <button type="button" class="btn-icon" id="selAllLoaded" title="Alle geladenen auswählen" aria-label="Alle geladenen auswählen">${icon("layersCheck")}</button>
                       <button type="button" class="btn-icon" id="selClear" title="Auswahl aufheben" aria-label="Auswahl aufheben">${icon("close")}</button>
                       <button type="button" class="btn-icon" id="sExportToggle" title="Exportoptionen ein- oder ausblenden" aria-label="Exportoptionen ein- oder ausblenden" aria-expanded="true" aria-controls="sActionsMenu">${icon("download")}</button>
@@ -4421,8 +4421,10 @@ ${escHtml(apiCmd)}</code>
     const visible = filterVisibleSecrets();
     const selectedVisible = visible.filter((it) => vault.selectedIds.has(it.id)).length;
     const allVisibleSelected = visible.length > 0 && selectedVisible === visible.length;
+    const mixed = selectedVisible > 0 && !allVisibleSelected;
     selAllVisibleBtn.classList.toggle("active", allVisibleSelected);
-    selAllVisibleBtn.setAttribute("aria-pressed", allVisibleSelected ? "true" : "false");
+    selAllVisibleBtn.classList.toggle("mixed", mixed);
+    selAllVisibleBtn.setAttribute("aria-checked", allVisibleSelected ? "true" : mixed ? "mixed" : "false");
   }
   if (selAllVisibleBtn) {
     selAllVisibleBtn.onclick = () => {

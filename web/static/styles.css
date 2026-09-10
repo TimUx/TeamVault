@@ -1035,6 +1035,11 @@ h1 .heading-ico,
   color: var(--color-accent);
   background: var(--color-sidebar-active-bg);
 }
+.secrets-actions-tools .btn-icon.mixed {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+  background: var(--color-hover);
+}
 .secrets-load-more {
   flex-shrink: 0;
   margin-top: 0.85rem;
