@@ -2158,9 +2158,9 @@ function renderApp(app) {
                       <button type="button" class="btn-icon" id="selAllVisible" title="Alle sichtbaren auswählen oder abwählen" aria-label="Alle sichtbaren auswählen oder abwählen" role="checkbox" aria-checked="false">${icon("checkSquare")}</button>
                       <button type="button" class="btn-icon" id="selAllLoaded" title="Alle geladenen auswählen" aria-label="Alle geladenen auswählen">${icon("layersCheck")}</button>
                       <button type="button" class="btn-icon" id="selClear" title="Auswahl aufheben" aria-label="Auswahl aufheben">${icon("close")}</button>
-                      <button type="button" class="btn-icon" id="sExportToggle" title="Exportoptionen ein- oder ausblenden" aria-label="Exportoptionen ein- oder ausblenden" aria-expanded="true" aria-controls="sActionsMenu">${icon("download")}</button>
+                      <button type="button" class="btn-icon" id="sExportToggle" title="Exportoptionen ein- oder ausblenden" aria-label="Exportoptionen ein- oder ausblenden" aria-expanded="false" aria-controls="sActionsMenu">${icon("download")}</button>
                     </div>
-                    <div class="secrets-actions-menu panel-inset" id="sActionsMenu">
+                    <div class="secrets-actions-menu panel-inset" id="sActionsMenu" hidden>
                       <p class="secrets-actions-heading">Export</p>
                       ${hintBox("Gilt für die aktuelle Auswahl (Häkchen in der Liste).", { className: "hint-box-compact" })}
                       <button type="button" class="secrets-actions-item btn-ghost btn-sm btn-with-ico" id="sExportTv">${btnLabel("download", "TeamVault JSON")}</button>
