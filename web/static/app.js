@@ -201,6 +201,11 @@ const ICO = {
   info: '<circle cx="12" cy="12" r="9"/><path d="M12 10v6M12 7h.01"/>',
   more: '<circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/>',
   close: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+  sortAsc: '<path d="M6 17V7"/><path d="m3 10 3-3 3 3"/><path d="M11 7h10M11 12h7M11 17h4"/>',
+  sortDesc: '<path d="M6 7v10"/><path d="m3 14 3 3 3-3"/><path d="M11 7h4M11 12h7M11 17h10"/>',
+  recent: '<path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 3v5h5"/><path d="M12 7v5l3 3"/>',
+  checkSquare: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="m8 12 3 3 5-5"/>',
+  layersCheck: '<path d="m12 3-9 4.5 9 4.5 9-4.5L12 3Z"/><path d="m5 11 7 3.5 7-3.5"/><path d="m5 14.5 7 3.5 7-3.5"/>',
 };
 
 function icon(name, cls) {
@@ -1920,7 +1925,7 @@ function addExtraSlot(slotsEl, type, prefill) {
         <span class="hint slot-file-hint"></span></div>`;
     }
   }
-  row.innerHTML = body + `<div class="row"><button type="button" class="btn-ghost slot-remove">Entfernen</button></div>`;
+  row.innerHTML = body + `<div class="row"><button type="button" class="btn-ghost btn-icon btn-icon-sm slot-remove" title="Feld entfernen" aria-label="Feld entfernen">${icon("close")}</button></div>`;
   row.querySelector(".slot-remove").onclick = () => row.remove();
   const fileInp = row.querySelector(".slot-file");
   if (fileInp) {
@@ -2109,6 +2114,10 @@ function renderApp(app) {
               <div class="secrets-workspace">
                 <div class="panel secrets-stage">
                   <div class="secrets-stage-head">
+                    <div class="secrets-stage-tools">
+                      <button type="button" class="btn-icon" id="selAllVisible" role="checkbox" title="Alle sichtbaren auswählen oder abwählen" aria-label="Alle sichtbaren auswählen oder abwählen" aria-describedby="selAllVisibleState" aria-checked="false">${icon("checkSquare")}</button>
+                      <span id="selAllVisibleState" class="visually-hidden">Keine sichtbaren Secrets sind ausgewählt</span>
+                    </div>
                     <button type="button" class="btn-ghost btn-sm btn-with-ico secrets-sidebar-toggle" id="sSidebarToggle" aria-expanded="true" aria-controls="sSecretsSidebar">${btnLabel("open", "Sidebar ausblenden")}</button>
                   </div>
                   <div id="slist" class="list secrets-list"></div>
@@ -2116,12 +2125,42 @@ function renderApp(app) {
                 <aside class="vault-chrome vault-chrome-side" id="sSecretsSidebar">
                   <div class="secrets-sidebar-section secrets-sidebar-static">
                     <p class="secrets-actions-heading">Ansicht</p>
-                    <div class="secrets-view-wrap">
+                    <div class="secrets-toolbar-row">
                       <div class="secrets-view-toggle" role="group" aria-label="Ansicht">
                         <button type="button" class="btn-icon" data-view="list" title="Liste" aria-label="Liste">${icon("layoutList")}</button>
                         <button type="button" class="btn-icon" data-view="table" title="Tabelle" aria-label="Tabelle">${icon("layoutTable")}</button>
                         <button type="button" class="btn-icon" data-view="tiles" title="Kacheln" aria-label="Kacheln">${icon("layoutGrid")}</button>
                       </div>
+                      <div class="secrets-view-toggle secrets-sort-toggle" role="group" aria-label="Sortierung">
+                        <button type="button" class="btn-icon" data-sort="title-asc" title="Titel A–Z" aria-label="Titel A–Z">${icon("sortAsc")}</button>
+                        <button type="button" class="btn-icon" data-sort="title-desc" title="Titel Z–A" aria-label="Titel Z–A">${icon("sortDesc")}</button>
+                        <button type="button" class="btn-icon" data-sort="recent" title="Zuletzt geändert" aria-label="Zuletzt geändert">${icon("recent")}</button>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="secrets-sidebar-section secrets-sidebar-static" id="sActionsWrap">
+                    <p class="secrets-actions-heading">Aktionen</p>
+                    <div class="secrets-actions-tools" role="group" aria-label="Aktionen für Auswahl">
+                      <button type="button" class="btn-icon" id="selAllLoaded" title="Alle geladenen auswählen" aria-label="Alle geladenen auswählen">${icon("layersCheck")}</button>
+                      <button type="button" class="btn-icon" id="selClear" title="Auswahl aufheben" aria-label="Auswahl aufheben">${icon("close")}</button>
+                      <button type="button" class="btn-icon" id="sExportToggle" title="Exportoptionen ein- oder ausblenden" aria-label="Exportoptionen ein- oder ausblenden" aria-expanded="false" aria-controls="sActionsMenu">${icon("download")}</button>
+                    </div>
+                    <div class="secrets-sidebar-status">
+                      <span class="hint" id="sCount"></span>
+                      <span class="hint secrets-status-sep">–</span>
+                      <span class="hint secrets-actions-meta" id="selCount">Keine Auswahl</span>
+                    </div>
+                    <div class="secrets-actions-menu panel-inset" id="sActionsMenu" role="region" aria-label="Exportoptionen" hidden>
+                      <p class="secrets-actions-heading">Export</p>
+                      ${hintBox("Gilt für die aktuelle Auswahl (Häkchen in der Liste).", { className: "hint-box-compact" })}
+                      <button type="button" class="secrets-actions-item btn-ghost btn-sm btn-with-ico" id="sExportTv">${btnLabel("download", "TeamVault JSON")}</button>
+                      <button type="button" class="secrets-actions-item btn-ghost btn-sm btn-with-ico" id="sExportJson">${btnLabel("download", "Bitwarden JSON")}</button>
+                      <button type="button" class="secrets-actions-item btn-ghost btn-sm btn-with-ico" id="sExportCsv">${btnLabel("download", "CSV")}</button>
+                      <button type="button" class="secrets-actions-item btn-ghost btn-sm btn-with-ico" id="sExportBak">${btnLabel("lock", "Verschlüsselt (.tvbak)")}</button>
+                    </div>
+                    <div class="secrets-load-more" id="sLoadMoreWrap" hidden>
+                      <p class="hint" id="sLoadMoreHint"></p>
+                      <button type="button" class="btn-ghost btn-sm" id="sMore">Weitere laden</button>
                     </div>
                   </div>
                   <div class="secrets-sidebar-section secrets-sidebar-static">
@@ -2132,51 +2171,12 @@ function renderApp(app) {
                   <div class="secrets-sidebar-section secrets-sidebar-static tag-filter-wrap">
                     <p class="secrets-actions-heading">Filter</p>
                     <label>Tags <span class="hint">(UND)</span></label>
-                    <div class="tag-filter" id="stagFilter">
-                      <button type="button" class="btn-ghost btn-sm tag-filter-toggle" id="stagToggle" aria-expanded="false">Tags auswählen</button>
-                      <div class="tag-filter-selected tags" id="stagSelected"></div>
-                      <div class="tag-filter-menu panel-inset" id="stagMenu" hidden>
-                        <p class="hint tag-filter-hint">Mehrere Tags = alle müssen passen</p>
-                        <div id="stagOptions" class="tag-filter-options"></div>
-                        <button type="button" class="btn-ghost btn-sm" id="stagClear">Filter leeren</button>
+                    <div class="tag-filter panel-inset" id="stagFilter">
+                      <div class="tag-filter-head">
+                        <p class="hint tag-filter-hint" id="stagSummary">Alle Tags</p>
+                        <button type="button" class="btn-ghost btn-sm btn-with-ico tag-filter-clear" id="stagClear" title="Tag-Filter leeren" aria-label="Tag-Filter leeren">${btnLabel("close", "Leeren")}</button>
                       </div>
-                    </div>
-                  </div>
-                  <div class="secrets-sidebar-section secrets-sidebar-static">
-                    <p class="secrets-actions-heading">Darstellung</p>
-                    <div class="secrets-sort-wrap">
-                      <label for="ssort">Sortierung</label>
-                      <select id="ssort" class="secrets-sort-select">
-                        <option value="title-asc">Titel A–Z</option>
-                        <option value="title-desc">Titel Z–A</option>
-                        <option value="recent">Zuletzt geändert</option>
-                      </select>
-                    </div>
-                  </div>
-                  <div class="secrets-sidebar-section secrets-sidebar-static secrets-sidebar-dropdown" id="sActionsWrap">
-                    <p class="secrets-actions-heading">Aktionen</p>
-                    <div class="secrets-sidebar-status">
-                      <span class="hint" id="sCount"></span>
-                      <p class="hint secrets-actions-meta" id="selCount">Keine Auswahl</p>
-                    </div>
-                    <button type="button" class="btn-ghost btn-sm secrets-dropdown-toggle" id="sActionsToggle" aria-expanded="false">Aktionen anzeigen</button>
-                    <div class="secrets-actions-menu panel-inset secrets-actions-menu-dropdown" id="sActionsMenu" role="group" aria-label="Aktionen für Auswahl" hidden>
-                      <label class="secrets-actions-item inline"><input type="checkbox" id="selAllVisible" /> Alle sichtbaren</label>
-                      <button type="button" class="secrets-actions-item btn-ghost btn-sm" id="selAllLoaded">Alle geladenen auswählen</button>
-                      <button type="button" class="secrets-actions-item btn-ghost btn-sm" id="selClear">Auswahl aufheben</button>
-                      <div class="secrets-actions-export" id="sExportGroup">
-                        <hr class="secrets-actions-divider" />
-                        <p class="secrets-actions-heading">Export</p>
-                        ${hintBox("Gilt für die aktuelle Auswahl (Häkchen in der Liste).", { className: "hint-box-compact" })}
-                        <button type="button" class="secrets-actions-item btn-ghost btn-sm btn-with-ico" id="sExportTv">${btnLabel("download", "TeamVault JSON")}</button>
-                        <button type="button" class="secrets-actions-item btn-ghost btn-sm btn-with-ico" id="sExportJson">${btnLabel("download", "Bitwarden JSON")}</button>
-                        <button type="button" class="secrets-actions-item btn-ghost btn-sm btn-with-ico" id="sExportCsv">${btnLabel("download", "CSV")}</button>
-                        <button type="button" class="secrets-actions-item btn-ghost btn-sm btn-with-ico" id="sExportBak">${btnLabel("lock", "Verschlüsselt (.tvbak)")}</button>
-                      </div>
-                      <div class="secrets-load-more" id="sLoadMoreWrap" hidden>
-                        <p class="hint" id="sLoadMoreHint"></p>
-                        <button type="button" class="btn-ghost btn-sm" id="sMore">Weitere laden</button>
-                      </div>
+                      <div id="stagOptions" class="tag-filter-options tags"></div>
                     </div>
                   </div>
                 </aside>
@@ -2424,8 +2424,8 @@ function renderApp(app) {
                       <p class="hint">otpauth-URL:</p>
                       <pre class="mono" id="otpurl"></pre>
                       <div class="row">
-                        <button class="btn-ghost" type="button" id="otpCopy">otpauth kopieren</button>
-                        <button class="btn-ghost" type="button" id="otpReveal">Secret kurz anzeigen</button>
+                        <button class="btn-ghost btn-icon" type="button" id="otpCopy" title="otpauth kopieren" aria-label="otpauth kopieren">${icon("copy")}</button>
+                        <button class="btn-ghost btn-icon" type="button" id="otpReveal" title="Secret kurz anzeigen" aria-label="Secret kurz anzeigen">${icon("eye")}</button>
                       </div>
                       <p class="hint secret-reveal" id="otpSecret" hidden></p>
                     </div>
@@ -2471,8 +2471,8 @@ function renderApp(app) {
 
               <div class="panel-tab-pane account-page" role="tabpanel" data-panel-pane="clients" hidden>
                 ${hintBox("CLI, Browser-Extension und Desktop-App von dieser Instanz — Zero-Knowledge bleibt erhalten (Entschlüsselung nur lokal).")}
-                <div id="cliConnectionInfo" class="client-cli-connection"></div>
                 <div id="clientDownloadsApp" class="client-dl-grid"></div>
+                <div id="cliConnectionInfo" class="client-cli-connection"></div>
                 <div class="hint-box" id="accClientsHelp" hidden></div>
               </div>
               <div class="panel-tab-pane account-page" role="tabpanel" data-panel-pane="profile" hidden>
@@ -3310,11 +3310,11 @@ function renderApp(app) {
       </dl>
       <p class="hint">Login mit Ihrem normalen Login-Passwort:</p>
       <code class="client-cli-command" id="cliLoginCommand">${escHtml(loginCmd)}</code>
-      <button type="button" class="btn-ghost btn-sm" id="cliLoginCopy">Login-Befehl kopieren</button>
+      <div class="client-cli-copy-row"><button type="button" class="btn-icon btn-icon-sm" id="cliLoginCopy" title="Login-Befehl kopieren" aria-label="Login-Befehl kopieren">${icon("copy")}</button></div>
       <p class="hint">Alternativ benötigt <code>TEAMVAULT_API_KEY</code> einen separat erzeugten API-Key. Der Schlüssel wird nur bei der Erstellung einmal angezeigt und kann nicht aus dieser Ansicht ausgelesen werden.</p>
       <code class="client-cli-command" id="cliApiCommand">${escHtml(`$env:TEAMVAULT_API_KEY='tvk_…'`)}
 ${escHtml(apiCmd)}</code>
-      <button type="button" class="btn-ghost btn-sm" id="cliApiCopy">API-Key-Beispiel kopieren</button>
+      <div class="client-cli-copy-row"><button type="button" class="btn-icon btn-icon-sm" id="cliApiCopy" title="API-Key-Beispiel kopieren" aria-label="API-Key-Beispiel kopieren">${icon("copy")}</button></div>
       <p class="hint">API-Keys erstellt ein Plattform-Administrator unter <strong>Administration → API-Keys</strong>; für CLI-Vault-Zugriff ist der Scope <code>vault</code> erforderlich.</p>`;
     const bindCopy = (button, command) => {
       const el = root.querySelector(button);
@@ -3346,7 +3346,10 @@ ${escHtml(apiCmd)}</code>
   }
   async function copyClientText(text, btn) {
     await copyText(text);
-    if (btn) flashCopy(btn);
+    if (btn) {
+      if (btn.classList.contains("btn-icon")) flashCopyIcon(btn);
+      else flashCopy(btn);
+    }
   }
   async function refreshClientDownloadsUI() {
     const root = n.querySelector("#clientDownloadsApp");
@@ -3389,7 +3392,7 @@ ${escHtml(apiCmd)}</code>
           ? `${hintBox(`Empfohlen: ${rec.platform}/${rec.arch}`)}
              <div class="row">
                <a class="btn-accent" href="${tvPath(rec.url)}" download>tvcli herunterladen</a>
-               <button type="button" class="btn-ghost btn-sm" id="cliInstallCopy">Einzeiler kopieren</button>
+               <button type="button" class="btn-icon btn-icon-sm" id="cliInstallCopy" title="CLI-Einzeiler kopieren" aria-label="CLI-Einzeiler kopieren">${icon("copy")}</button>
              </div>
              <ul class="client-dl-links">${cliLinks}</ul>`
           : hintBox("CLI-Binaries noch nicht bereitgestellt.")}
@@ -3401,7 +3404,7 @@ ${escHtml(apiCmd)}</code>
         ${crx
           ? `${hintBox("Schritt 1: Browser-Richtlinie per PowerShell (siehe Hilfe). Ohne Richtlinie wird nur die .crx heruntergeladen.")}
              <div class="row">
-               <button type="button" class="btn-ghost btn-sm" id="extInstallCopy">Einrichtung (Einzeiler)</button>
+               <button type="button" class="btn-icon btn-icon-sm" id="extInstallCopy" title="Extension-Einzeiler kopieren" aria-label="Extension-Einzeiler kopieren">${icon("copy")}</button>
                <a class="btn-accent" href="${tvPath(crx.url)}" id="extCrxBtn">Extension installieren</a>
              </div>
              ${hintBox(`Extension-ID: <code>${ext.id || "—"}</code> · <a href="${tvPath("/help/extension")}" target="_blank" rel="noopener">Anleitung</a> · <a href="${tvPath("/help/extension")}#fallback">Entwicklermodus</a>`)}`
@@ -3463,9 +3466,14 @@ ${escHtml(apiCmd)}</code>
         qr.hidden = false;
       }
       const sec = n.querySelector("#otpSecret");
+      const revealBtn = n.querySelector("#otpReveal");
       sec.hidden = true;
       sec.textContent = "";
-      n.querySelector("#otpReveal").textContent = "Secret kurz anzeigen";
+      if (revealBtn) {
+        revealBtn.innerHTML = icon("eye");
+        revealBtn.title = "Secret kurz anzeigen";
+        revealBtn.setAttribute("aria-label", "Secret kurz anzeigen");
+      }
       const hint = n.querySelector("#totpSetupHint");
       if (hint) hint.hidden = false;
       if (setupBtn) {
@@ -3481,30 +3489,42 @@ ${escHtml(apiCmd)}</code>
   };
   n.querySelector("#otpCopy").onclick = async (ev) => {
     await copyText(n.querySelector("#otpurl").textContent);
-    flashCopy(ev.currentTarget);
+    flashCopyIcon(ev.currentTarget);
   };
+  let otpRevealTimer = null;
   n.querySelector("#otpReveal").onclick = (ev) => {
     const sec = n.querySelector("#otpSecret");
+    if (otpRevealTimer) {
+      clearTimeout(otpRevealTimer);
+      otpRevealTimer = null;
+    }
     if (sec.hidden) {
       sec.hidden = false;
       sec.textContent = "Secret: " + totpSecretPlain;
-      ev.currentTarget.textContent = "Secret verbergen";
-      setTimeout(() => {
+      ev.currentTarget.innerHTML = icon("eyeOff");
+      ev.currentTarget.title = "Secret verbergen";
+      ev.currentTarget.setAttribute("aria-label", "Secret verbergen");
+      otpRevealTimer = setTimeout(() => {
         sec.hidden = true;
         sec.textContent = "";
-        ev.currentTarget.textContent = "Secret kurz anzeigen";
+        ev.currentTarget.innerHTML = icon("eye");
+        ev.currentTarget.title = "Secret kurz anzeigen";
+        ev.currentTarget.setAttribute("aria-label", "Secret kurz anzeigen");
+        otpRevealTimer = null;
       }, 15000);
     } else {
       sec.hidden = true;
       sec.textContent = "";
-      ev.currentTarget.textContent = "Secret kurz anzeigen";
+      ev.currentTarget.innerHTML = icon("eye");
+      ev.currentTarget.title = "Secret kurz anzeigen";
+      ev.currentTarget.setAttribute("aria-label", "Secret kurz anzeigen");
     }
   };
   async function refreshPasskeys() {
     const list = n.querySelector("#pklist");
     const creds = await api("/api/webauthn/credentials");
     list.innerHTML = creds.map((c) =>
-      `<div class="list-row"><span>${escapeHtml(c.name)}</span><button class="btn-ghost" data-pkdel="${escapeHtml(c.id)}" type="button">Löschen</button></div>`
+      `<div class="list-row"><span>${escapeHtml(c.name)}</span><button class="btn-ghost btn-icon btn-icon-sm" data-pkdel="${escapeHtml(c.id)}" type="button" title="Passkey löschen" aria-label="Passkey löschen">${icon("trash")}</button></div>`
     ).join("") || "<p class='hint'>Keine Passkeys</p>";
     list.querySelectorAll("[data-pkdel]").forEach((btn) => {
       btn.onclick = async () => {
@@ -3758,8 +3778,7 @@ ${escHtml(apiCmd)}</code>
       const extra = loaded < total ? ` · ${loaded}/${total} geladen` : "";
       sCount.textContent = `${visible.length} ${scopeLabel}${extra}`;
     }
-    const all = n.querySelector("#selAllVisible");
-    if (all) all.checked = visible.length > 0 && nSel === visible.length;
+    syncSelectVisibleButton();
     const moreWrap = n.querySelector("#sLoadMoreWrap");
     const moreBtn = n.querySelector("#sMore");
     const moreHint = n.querySelector("#sLoadMoreHint");
@@ -3789,14 +3808,6 @@ ${escHtml(apiCmd)}</code>
     };
   }
 
-  n.querySelector("#selAllVisible").onchange = () => {
-    const on = n.querySelector("#selAllVisible").checked;
-    for (const it of filterVisibleSecrets()) {
-      if (on) vault.selectedIds.add(it.id);
-      else vault.selectedIds.delete(it.id);
-    }
-    paintSecretList();
-  };
   n.querySelector("#selClear").onclick = () => {
     vault.selectedIds.clear();
     paintSecretList();
@@ -4339,16 +4350,26 @@ ${escHtml(apiCmd)}</code>
   }
   syncSecretsSidebarState();
 
-  const sortSel = n.querySelector("#ssort");
-  if (sortSel) {
-    sortSel.value = vault.sortMode;
-    sortSel.onchange = () => {
-      const v = sortSel.value;
-      if (v !== "title-asc" && v !== "title-desc" && v !== "recent") return;
-      vault.sortMode = v;
-      try { localStorage.setItem("tv-secrets-sort", v); } catch (_) {}
-      paintSecretList();
-    };
+  const sortButtons = [...n.querySelectorAll("[data-sort]")];
+  function syncSortButtons() {
+    sortButtons.forEach((btn) => {
+      const on = btn.dataset.sort === vault.sortMode;
+      btn.classList.toggle("active", on);
+      btn.setAttribute("aria-pressed", on ? "true" : "false");
+    });
+  }
+  if (sortButtons.length) {
+    syncSortButtons();
+    sortButtons.forEach((btn) => {
+      btn.onclick = () => {
+        const v = btn.dataset.sort;
+        if (v !== "title-asc" && v !== "title-desc" && v !== "recent") return;
+        vault.sortMode = v;
+        try { localStorage.setItem("tv-secrets-sort", v); } catch (_) {}
+        syncSortButtons();
+        paintSecretList();
+      };
+    });
   }
 
   n.querySelector("#ssearch").oninput = () => {
@@ -4363,25 +4384,15 @@ ${escHtml(apiCmd)}</code>
   }
 
   function paintTagFilterUI() {
-    const selected = n.querySelector("#stagSelected");
-    const toggle = n.querySelector("#stagToggle");
-    if (!selected) return;
+    const summary = n.querySelector("#stagSummary");
+    const clear = n.querySelector("#stagClear");
     const cur = vault.tagFilters || [];
-    if (!cur.length) {
-      selected.innerHTML = "";
-      if (toggle) toggle.textContent = "Tags auswählen";
-      return;
+    if (summary) {
+      summary.textContent = cur.length
+        ? `${cur.length} Tag${cur.length === 1 ? "" : "s"} aktiv · Mehrere Tags = alle müssen passen`
+        : "Alle Tags · Mehrere Tags = alle müssen passen";
     }
-    if (toggle) toggle.textContent = `${cur.length} Tag${cur.length === 1 ? "" : "s"} ausgewählt`;
-    selected.innerHTML = cur.map((t) =>
-      `<button type="button" class="tag tag-filter-chip" data-remove-tag="${escHtml(t)}" title="Entfernen">${escHtml(t)} ×</button>`
-    ).join("");
-    selected.querySelectorAll("[data-remove-tag]").forEach((btn) => {
-      btn.onclick = (ev) => {
-        ev.stopPropagation();
-        setTagFilters(vault.tagFilters.filter((x) => x !== btn.dataset.removeTag));
-      };
-    });
+    if (clear) clear.disabled = !cur.length;
   }
 
   function updateTagOptions() {
@@ -4393,64 +4404,92 @@ ${escHtml(apiCmd)}</code>
     const pruned = kept.length !== (vault.tagFilters || []).length;
     vault.tagFilters = kept;
     box.innerHTML = tags.length
-      ? tags.map((t) => {
-          const id = "stag_" + encodeURIComponent(t).replace(/%/g, "_");
-          return `<label class="tag-filter-opt inline"><input type="checkbox" id="${id}" value="${escHtml(t)}" ${cur.has(t) && tags.includes(t) ? "checked" : ""}/> ${escHtml(t)}</label>`;
-        }).join("")
+      ? `<button type="button" class="tag tag-filter-option${kept.length ? "" : " active"}" data-tag-clear="1" aria-pressed="${kept.length ? "false" : "true"}">Alle</button>${
+        tags.map((t) => `<button type="button" class="tag tag-filter-option${cur.has(t) && tags.includes(t) ? " active" : ""}" data-tag-filter="${escHtml(t)}" aria-pressed="${cur.has(t) && tags.includes(t) ? "true" : "false"}">${escHtml(t)}</button>`).join("")
+      }`
       : `<p class="hint">Keine Tags in geladenen Secrets</p>`;
-    box.querySelectorAll('input[type="checkbox"]').forEach((inp) => {
-      inp.onchange = () => {
-        const next = [...box.querySelectorAll('input[type="checkbox"]:checked')].map((el) => el.value);
-        setTagFilters(next);
+    box.querySelectorAll("[data-tag-filter]").forEach((btn) => {
+      btn.onclick = () => {
+        const tag = btn.dataset.tagFilter;
+        const next = new Set(vault.tagFilters || []);
+        if (next.has(tag)) next.delete(tag);
+        else next.add(tag);
+        setTagFilters([...next]);
       };
     });
+    const clearBtn = box.querySelector("[data-tag-clear]");
+    if (clearBtn) clearBtn.onclick = () => setTagFilters([]);
     paintTagFilterUI();
     if (pruned) paintSecretList();
   }
 
-  const stagToggle = n.querySelector("#stagToggle");
-  const stagMenu = n.querySelector("#stagMenu");
-  if (stagToggle && stagMenu) {
-    stagToggle.onclick = (ev) => {
-      ev.stopPropagation();
-      const open = stagMenu.hidden;
-      stagMenu.hidden = !open;
-      stagToggle.setAttribute("aria-expanded", open ? "true" : "false");
-    };
-    document.addEventListener("click", (ev) => {
-      const wrap = n.querySelector("#stagFilter");
-      if (!wrap || !stagMenu || stagMenu.hidden) return;
-      if (!wrap.contains(ev.target)) {
-        stagMenu.hidden = true;
-        stagToggle.setAttribute("aria-expanded", "false");
-      }
-    });
-  }
-  const sActionsToggle = n.querySelector("#sActionsToggle");
   const sActionsMenu = n.querySelector("#sActionsMenu");
   const sActionsWrap = n.querySelector("#sActionsWrap");
-  if (sActionsToggle && sActionsMenu && sActionsWrap) {
-    sActionsToggle.onclick = (ev) => {
-      ev.stopPropagation();
+  const sExportToggle = n.querySelector("#sExportToggle");
+  if (sExportToggle && sActionsMenu && sActionsWrap) {
+    const closeExportMenu = () => {
+      sActionsMenu.hidden = true;
+      sExportToggle.setAttribute("aria-expanded", "false");
+      sExportToggle.classList.remove("active");
+    };
+    sExportToggle.onclick = () => {
       const open = sActionsMenu.hidden;
-      sActionsMenu.hidden = !open;
-      sActionsToggle.setAttribute("aria-expanded", open ? "true" : "false");
-      sActionsToggle.textContent = open ? "Aktionen ausblenden" : "Aktionen anzeigen";
+      if (open) {
+        sActionsMenu.hidden = false;
+        sExportToggle.setAttribute("aria-expanded", "true");
+        sExportToggle.classList.add("active");
+      } else {
+        closeExportMenu();
+      }
     };
     document.addEventListener("click", (ev) => {
       if (sActionsMenu.hidden) return;
-      if (!sActionsWrap.contains(ev.target)) {
-        sActionsMenu.hidden = true;
-        sActionsToggle.setAttribute("aria-expanded", "false");
-        sActionsToggle.textContent = "Aktionen anzeigen";
-      }
+      if (!sActionsWrap.contains(ev.target)) closeExportMenu();
     });
+    document.addEventListener("keydown", (ev) => {
+      if (ev.key === "Escape" && !sActionsMenu.hidden) closeExportMenu();
+    });
+    sExportToggle.setAttribute("aria-expanded", sActionsMenu.hidden ? "false" : "true");
+    sExportToggle.classList.toggle("active", !sActionsMenu.hidden);
   }
   const stagClear = n.querySelector("#stagClear");
   if (stagClear) {
     stagClear.onclick = () => {
       setTagFilters([]);
     };
+  }
+  const selAllVisibleBtn = n.querySelector("#selAllVisible");
+  const selAllVisibleState = n.querySelector("#selAllVisibleState");
+  function syncSelectVisibleButton() {
+    if (!selAllVisibleBtn) return;
+    const visible = filterVisibleSecrets();
+    const selectedVisible = visible.filter((it) => vault.selectedIds.has(it.id)).length;
+    const allVisibleSelected = visible.length > 0 && selectedVisible === visible.length;
+    const mixed = selectedVisible > 0 && !allVisibleSelected;
+    selAllVisibleBtn.classList.toggle("active", allVisibleSelected);
+    selAllVisibleBtn.classList.toggle("mixed", mixed);
+    selAllVisibleBtn.setAttribute("aria-checked", mixed ? "mixed" : allVisibleSelected ? "true" : "false");
+    const label = allVisibleSelected
+      ? "Alle sichtbaren sind ausgewählt"
+      : mixed
+        ? "Ein Teil der sichtbaren Secrets ist ausgewählt"
+        : "Keine sichtbaren Secrets sind ausgewählt";
+    selAllVisibleBtn.setAttribute("aria-label", "Alle sichtbaren auswählen oder abwählen");
+    if (selAllVisibleState) selAllVisibleState.textContent = label;
+    selAllVisibleBtn.title = label;
+  }
+  if (selAllVisibleBtn) {
+    const toggleVisibleSelection = () => {
+      const visible = filterVisibleSecrets();
+      const selectedVisible = visible.filter((it) => vault.selectedIds.has(it.id)).length;
+      const turnOn = !(visible.length > 0 && selectedVisible === visible.length);
+      for (const it of visible) {
+        if (turnOn) vault.selectedIds.add(it.id);
+        else vault.selectedIds.delete(it.id);
+      }
+      paintSecretList();
+    };
+    selAllVisibleBtn.onclick = toggleVisibleSelection;
   }
   n.querySelector("#spwGen").onclick = () => {
     const len = Math.min(64, Math.max(12, parseInt(n.querySelector("#spwLen").value, 10) || 20));
@@ -5611,11 +5650,11 @@ ${escHtml(apiCmd)}</code>
       curParts.push(`<div class="access-chip owner"><span>${escHtml(owner.username || owner.id || "Eigentümer")} <span class="chip-meta">Eigentümer</span></span></div>`);
       (access.shared_users || []).forEach((u) => {
         const cap = normalizeShareCap(u.capability || "write");
-        curParts.push(`<div class="access-chip" data-kind="user" data-id="${escHtml(u.id)}"><span>${escHtml(u.username)} <span class="chip-meta">User</span></span>${capSelectHtml(cap, `data-set-user-cap="${escHtml(u.id)}"`)}<button type="button" class="btn-ghost btn-sm" data-drop-user="${escHtml(u.id)}">Entfernen</button></div>`);
+        curParts.push(`<div class="access-chip" data-kind="user" data-id="${escHtml(u.id)}"><span>${escHtml(u.username)} <span class="chip-meta">User</span></span>${capSelectHtml(cap, `data-set-user-cap="${escHtml(u.id)}"`)}<button type="button" class="btn-ghost btn-icon btn-icon-sm" data-drop-user="${escHtml(u.id)}" title="Freigabe entfernen" aria-label="Freigabe entfernen">${icon("close")}</button></div>`);
       });
       (access.shared_groups || []).forEach((g) => {
         const cap = normalizeShareCap(g.capability || "write");
-        curParts.push(`<div class="access-chip" data-kind="group" data-id="${escHtml(g.id)}"><span>${escHtml(g.name)} <span class="chip-meta">Gruppe</span></span>${capSelectHtml(cap, `data-set-group-cap="${escHtml(g.id)}"`)}<button type="button" class="btn-ghost btn-sm" data-drop-group="${escHtml(g.id)}">Entfernen</button></div>`);
+        curParts.push(`<div class="access-chip" data-kind="group" data-id="${escHtml(g.id)}"><span>${escHtml(g.name)} <span class="chip-meta">Gruppe</span></span>${capSelectHtml(cap, `data-set-group-cap="${escHtml(g.id)}"`)}<button type="button" class="btn-ghost btn-icon btn-icon-sm" data-drop-group="${escHtml(g.id)}" title="Freigabe entfernen" aria-label="Freigabe entfernen">${icon("close")}</button></div>`);
       });
       curEl.innerHTML = curParts.join("");
 
@@ -6196,7 +6235,7 @@ ${escHtml(apiCmd)}</code>
       return `<div class="group-card" data-gid="${escHtml(g.id)}">
         <div class="group-card-head">
           <input class="group-name" value="${escHtml(g.name)}" data-gid="${escHtml(g.id)}" aria-label="Gruppenname" />
-          <button type="button" class="btn-ghost btn-sm group-del" data-gid="${escHtml(g.id)}">Löschen</button>
+          <button type="button" class="btn-ghost btn-icon btn-icon-sm group-del" data-gid="${escHtml(g.id)}" title="Gruppe löschen" aria-label="Gruppe löschen">${icon("trash")}</button>
         </div>
         <input class="group-desc" placeholder="Beschreibung (optional)" value="${escHtml(g.description || "")}" data-gid="${escHtml(g.id)}" aria-label="Beschreibung" />
         <div class="group-drop" data-gid="${escHtml(g.id)}">
@@ -6255,8 +6294,8 @@ ${escHtml(apiCmd)}</code>
 
   function userActionButtons(u) {
     return `<div class="row user-row-actions">
-      <button class="btn-ghost btn-sm" data-edit-user="${escHtml(u.id)}" type="button">Bearbeiten</button>
-      ${u.status !== "disabled" ? `<button class="btn-ghost btn-sm" data-dis="${escHtml(u.id)}" type="button">Deaktivieren</button>` : ""}
+      <button class="btn-ghost btn-icon btn-icon-sm" data-edit-user="${escHtml(u.id)}" type="button" title="Benutzer bearbeiten" aria-label="Benutzer bearbeiten">${icon("edit")}</button>
+      ${u.status !== "disabled" ? `<button class="btn-ghost btn-icon btn-icon-sm" data-dis="${escHtml(u.id)}" type="button" title="Benutzer deaktivieren" aria-label="Benutzer deaktivieren">${icon("lock")}</button>` : ""}
     </div>`;
   }
 
@@ -6556,7 +6595,7 @@ ${escHtml(apiCmd)}</code>
       n.querySelector("#klist").innerHTML = keys.map((k) => {
         const scopeLabel = k.legacy_no_scopes ? "legacy (nur read)" : (k.scopes || []).join(", ") || "?";
         return `<div class="list-row"><span>${escapeHtml(k.name)} [${escapeHtml(scopeLabel)}] ${k.revoked ? "(revoked)" : ""}</span>` +
-        (!k.revoked ? `<button class="btn-ghost" data-kr="${escapeHtml(k.id)}" type="button">Revoke</button>` : "") + `</div>`;
+        (!k.revoked ? `<button class="btn-ghost btn-icon btn-icon-sm" data-kr="${escapeHtml(k.id)}" type="button" title="API-Key widerrufen" aria-label="API-Key widerrufen">${icon("lock")}</button>` : "") + `</div>`;
       }).join("") || "<p class='hint'>Keine Keys</p>";
       n.querySelector("#klist").querySelectorAll("[data-kr]").forEach((btn) => {
         btn.onclick = async () => {
@@ -6570,7 +6609,7 @@ ${escHtml(apiCmd)}</code>
       const tenants = await api("/api/admin/tenants");
       n.querySelector("#tlist").innerHTML = tenants.map((t) =>
         `<div class="list-row"><span>${escapeHtml(t.name)} (${escapeHtml(t.slug)}) · ${escapeHtml(t.status)}</span>` +
-        (t.status !== "disabled" ? `<button class="btn-ghost" data-td="${escapeHtml(t.id)}" type="button">Disable</button>` : "") + `</div>`
+        (t.status !== "disabled" ? `<button class="btn-ghost btn-icon btn-icon-sm" data-td="${escapeHtml(t.id)}" type="button" title="Tenant deaktivieren" aria-label="Tenant deaktivieren">${icon("lock")}</button>` : "") + `</div>`
       ).join("");
       n.querySelector("#tlist").querySelectorAll("[data-td]").forEach((btn) => {
         btn.onclick = async () => {

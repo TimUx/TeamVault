@@ -265,6 +265,7 @@ button {
 .tag-filter-btn:hover { background: var(--sidebar-hover); color: var(--sidebar-text); }
 .tag-filter-btn.active { background: rgba(255, 255, 255, 0.2); color: #fff; border-color: rgba(255, 255, 255, 0.32); }
 .sidebar-foot { display: flex; flex-direction: column; gap: 6px; }
+.sidebar-tools { display: flex; flex-wrap: wrap; gap: 6px; }
 .sidebar .btn-ghost,
 .sidebar .btn-link {
   color: var(--sidebar-muted);

@@ -23,10 +23,25 @@ const icons = {
     '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
     '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>' +
     "</svg>",
+  lock:
+    '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+    '<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>' +
+    "</svg>",
+  logout:
+    '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+    '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>' +
+    "</svg>",
 };
 
 function btnLabel(iconName, label) {
   return icons[iconName] + `<span>${label}</span>`;
+}
+
+function iconOnly(btn, iconName, label) {
+  if (!btn) return;
+  btn.innerHTML = icons[iconName];
+  btn.title = label;
+  btn.setAttribute("aria-label", label);
 }
 
 function applyAccent(pref) {
@@ -196,6 +211,9 @@ document.getElementById("accent").onchange = async (ev) => {
     }).catch(() => {});
   }
 };
+
+iconOnly(document.getElementById("logout"), "logout", "Logout");
+iconOnly(document.getElementById("lock"), "lock", "Sperren");
 
 document.getElementById("doLogin").onclick = async () => {
   showErr("");

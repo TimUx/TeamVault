@@ -54,11 +54,13 @@
           <p class="hint">ZIP entpacken und manuell laden — Einzeiler:</p>
           <code class="onedliner" id="cmdZipWin"></code>
           <div class="help-actions">
-            <button type="button" class="btn-ghost" data-copy="cmdZipWin">Windows-ZIP kopieren</button>
+            <button type="button" class="btn-icon" data-copy="cmdZipWin" data-copy-icon-only="1" aria-label="Windows-ZIP-Einzeiler kopieren" title="Windows-ZIP-Einzeiler kopieren"></button>
+            <span class="hint help-copy-feedback" aria-live="polite"></span>
           </div>
           <code class="onedliner" id="cmdZipUnix"></code>
           <div class="help-actions">
-            <button type="button" class="btn-ghost" data-copy="cmdZipUnix">Linux/macOS-ZIP kopieren</button>
+            <button type="button" class="btn-icon" data-copy="cmdZipUnix" data-copy-icon-only="1" aria-label="Linux/macOS-ZIP-Einzeiler kopieren" title="Linux/macOS-ZIP-Einzeiler kopieren"></button>
+            <span class="hint help-copy-feedback" aria-live="polite"></span>
           </div>
           <ol>
             <li>Chrome/Edge: <code>chrome://extensions</code> → Entwicklermodus → <strong>Entpackte Erweiterung laden</strong>.</li>
@@ -82,11 +84,11 @@
           <h3>Schritt 3 · Fill &amp; Copy</h3>
           <ol>
             <li>Website öffnen, die zur Secret-URL passt (falls URLs hinterlegt).</li>
-            <li>Popup → optional <strong>Alle / Privat / Geteilt</strong> filtern → Eintrag → <strong>Fill</strong> oder <strong>Copy</strong>.</li>
+            <li>Popup → optional <strong>Alle / Privat / Geteilt</strong> filtern → Eintrag → <strong>Fill</strong> oder <strong>Copy</strong> per Icon-Button.</li>
           </ol>
           <p class="help-note">Secrets ohne URL: Fill/Copy immer erlaubt. Mit URL: nur bei <strong>exakter Origin-Match</strong> (Schema, Host und Port — Phishing-Schutz). Im Popup kann außerdem dasselbe Farbdesign wie in Web-UI und Desktop-App gewählt werden: Blau (Standard), Indigo, Teal oder Graphit.</p>
         </div>
-        <p class="help-note">In der Web-App: <strong>Konto &amp; Sicherheit → Clients</strong> — gleiche Downloads und Einzeiler (wenn Extension-Integration aktiviert).</p>
+        <p class="help-note">In der Web-App: <strong>Konto &amp; Sicherheit → Clients</strong> — oben dieselben Downloads und darunter dieselben Einzeiler (wenn Extension-Integration aktiviert).</p>
         <footer class="help-foot" id="aboutFoot"></footer>
       </main>
     </div>

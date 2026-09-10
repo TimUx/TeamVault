@@ -37,7 +37,7 @@ CI (Tag `v*`): `.github/workflows/tvcli.yml` baut die vier Standalone-Binaries u
 
 ### Woher kommen URL, Tenant, Username und API-Key?
 
-Nach der Anmeldung finden Sie unter **Konto & Sicherheit → Clients** eine persönliche CLI-Übersicht. Dort werden die Server-URL, der Tenant-Slug und Ihr Username angezeigt. Ein fertiger Login-Befehl kann direkt kopiert werden.
+Nach der Anmeldung finden Sie unter **Konto & Sicherheit → Clients** eine persönliche CLI-Übersicht. Dort stehen oben die passenden Downloads und darunter die Server-URL, der Tenant-Slug und Ihr Username. Ein fertiger Login-Befehl kann direkt per Kopier-Icon übernommen werden.
 
 - **URL:** die URL Ihrer geöffneten TeamVault-Instanz
 - **Tenant-Slug:** wird in der Clients-Übersicht für Ihre aktuelle Organisation angezeigt

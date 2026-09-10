@@ -6,7 +6,7 @@ Interaktive Fassung auf der laufenden Instanz: **`/help/desktop`**.
 
 ![Konto & Sicherheit → Clients](images/account-clients.png)
 
-Download: In der Web-App unter **Konto & Sicherheit → Clients** oder Hilfe **`/help/desktop`** — empfohlenes Artefakt für die erkannte Plattform, alternative Artefakte (AppImage/Installer) sowie alle Downloads (sichtbar nur, wenn der Plattform-Administrator die Desktop-Integration unter **Administration → Client-Integrationen** aktiviert hat; `/downloads/` bleibt immer verfügbar).
+Download: In der Web-App unter **Konto & Sicherheit → Clients** oder Hilfe **`/help/desktop`** — im oberen Download-Bereich das empfohlene Artefakt für die erkannte Plattform, darunter alternative Artefakte (AppImage/Installer) sowie alle Downloads (sichtbar nur, wenn der Plattform-Administrator die Desktop-Integration unter **Administration → Client-Integrationen** aktiviert hat; `/downloads/` bleibt immer verfügbar).
 
 ![Hilfe → Desktop-App](images/help-desktop-download.png)
 
@@ -48,7 +48,7 @@ WebKitGTK (`libwebkit2gtk-4.1`) muss auf dem System vorhanden sein (auf den meis
 3. Bei mehreren Tenant-Zuordnungen den Tenant im Dropdown auswählen; bei genau einem Tenant wird er automatisch verwendet.
 4. Falls aktiviert, den TOTP-Code in einem eigenen zweiten Schritt eingeben.
 5. **Master-Passwort** zum Entsperren des Vaults (verlässt nie das Gerät).
-6. Vault-Liste: Suche, Tag-Filter, Favoriten, Filter „Eigene“/„Geteilt“, Secret öffnen zum Ansehen/Kopieren/TOTP/Freigabe-Verwaltung; Detailaktionen nutzen dieselben flachen Inline-Icons wie Web-UI und Extension.
+6. Vault-Liste: Suche, Tag-Filter als Chips, Favoriten, Filter „Eigene“/„Geteilt“, Secret öffnen zum Ansehen/Kopieren/TOTP/Freigabe-Verwaltung; Detailaktionen nutzen dieselben flachen Inline-Icons wie Web-UI und Extension.
 7. Optional unter **Einstellungen** Theme und Farbdesign anpassen; die App übernimmt die Änderung sofort und speichert sie lokal.
 
 ![Desktop-App – Vault-Ansicht](images/help-desktop.png)

@@ -499,14 +499,13 @@ async function main() {
 
   await page.click('[data-view="table"]');
   await page.waitForTimeout(400);
-  await page.click("#stagToggle").catch(() => {});
-  await page.waitForSelector("#stagMenu:not([hidden])", { timeout: 5000 }).catch(() => {});
-  const tagDev = page.locator('#stagOptions input[value="dev"]');
+  await page.waitForSelector("#stagOptions .tag-filter-option", { timeout: 10000 });
+  const tagDev = page.locator('#stagOptions [data-tag-filter="dev"]');
   if (await tagDev.count()) {
-    await tagDev.check();
+    await tagDev.click();
   } else {
-    const firstTag = page.locator("#stagOptions input[type=checkbox]").first();
-    if (await firstTag.count()) await firstTag.check();
+    const firstTag = page.locator("#stagOptions [data-tag-filter]").first();
+    if (await firstTag.count()) await firstTag.click();
   }
   await page.waitForTimeout(800);
   await shot(page, "vault-tag-filter.png", { fullPage: true });
@@ -516,8 +515,8 @@ async function main() {
   await page.click('[data-nav="vault:import"]');
   await shot(page, "vault-import.png", { fullPage: true });
   await page.click('[data-nav="vault:mine"]');
-  await page.waitForSelector("#sActionsToggle", { timeout: 10000 });
-  await page.click("#sActionsToggle").catch(() => {});
+  await page.waitForSelector("#sExportToggle", { timeout: 10000 });
+  await page.click("#sExportToggle").catch(() => {});
   await page.waitForSelector("#sActionsMenu:not([hidden])", { timeout: 5000 }).catch(() => {});
   await page.waitForTimeout(400);
   await shot(page, "vault-export.png", { fullPage: true });
@@ -562,9 +561,9 @@ async function main() {
     await showAccountTab(page, "clients");
     await page.waitForSelector("#cliConnectionInfo .client-cli-command", { timeout: 20000 });
     await page.waitForSelector("#clientDownloadsApp .client-dl-card", { timeout: 20000 });
-    await page.locator("#clientDownloadsApp").scrollIntoViewIfNeeded();
+    await page.locator('[data-panel-pane="clients"]:not([hidden])').scrollIntoViewIfNeeded();
     await page.waitForTimeout(600);
-    await shotElement(page, "#clientDownloadsApp", "account-clients.png", { waitMs: 200 });
+    await shotElement(page, '[data-panel-pane="clients"]:not([hidden])', "account-clients.png", { waitMs: 200 });
   } catch (e) {
     console.warn("account-clients screenshot skipped:", e.message);
   }

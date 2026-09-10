@@ -32,21 +32,23 @@
         <h2 id="install">Installation</h2>
         <div class="help-step" id="download">
           <h3>Aus der App / von dieser Instanz</h3>
-          <p>Die CLI-Binaries liegen auf dem Server bereit — Download oder Einzeiler-Installation:</p>
+          <p>Die CLI-Binaries liegen auf dem Server bereit — oben Direktdownload, darunter Einzeiler-Installation:</p>
           <div id="clientDlCli"></div>
         </div>
         <div class="help-step">
           <h3>Windows (PowerShell)</h3>
           <code class="onedliner" id="cmdWin"></code>
           <div class="help-actions">
-            <button type="button" class="btn-accent" data-copy="cmdWin">Kopieren</button>
+            <button type="button" class="btn-icon" data-copy="cmdWin" data-copy-icon-only="1" aria-label="Windows-Einzeiler kopieren" title="Windows-Einzeiler kopieren"></button>
+            <span class="hint help-copy-feedback" aria-live="polite"></span>
           </div>
         </div>
         <div class="help-step">
           <h3>Linux / macOS (Bash)</h3>
           <code class="onedliner" id="cmdUnix"></code>
           <div class="help-actions">
-            <button type="button" class="btn-accent" data-copy="cmdUnix">Kopieren</button>
+            <button type="button" class="btn-icon" data-copy="cmdUnix" data-copy-icon-only="1" aria-label="Linux/macOS-Einzeiler kopieren" title="Linux/macOS-Einzeiler kopieren"></button>
+            <span class="hint help-copy-feedback" aria-live="polite"></span>
           </div>
           <p class="help-note">Das Skript wählt amd64 oder arm64 und legt <code>tvcli</code> nach <code>~/.local/bin</code>.</p>
         </div>
@@ -61,7 +63,7 @@
         <h2 id="nutzen">Einrichten &amp; nutzen</h2>
         <div class="help-step">
           <h3>Woher kommen die Angaben?</h3>
-          <p>Nach der Anmeldung finden Sie unter <strong>Konto &amp; Sicherheit → Clients</strong> die Server-URL, den Tenant-Slug und Ihren Username inklusive fertigem Login-Befehl.</p>
+          <p>Nach der Anmeldung finden Sie unter <strong>Konto &amp; Sicherheit → Clients</strong> oben die Downloads und darunter die Server-URL, den Tenant-Slug und Ihren Username inklusive fertigem Login-Befehl.</p>
           <ul>
             <li><strong>URL:</strong> die URL Ihrer geöffneten TeamVault-Instanz</li>
             <li><strong>Tenant-Slug:</strong> wird für Ihre aktuelle Organisation angezeigt</li>
