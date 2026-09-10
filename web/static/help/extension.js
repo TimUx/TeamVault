@@ -37,13 +37,15 @@
       const idleLabel = btn.getAttribute("aria-label") || "Kopieren";
       try {
         await navigator.clipboard.writeText(el.textContent);
+        if (btn._copyResetTimer) clearTimeout(btn._copyResetTimer);
         btn.classList.add("copied");
         btn.setAttribute("aria-label", "Kopiert");
         btn.setAttribute("title", "Kopiert");
-        setTimeout(() => {
+        btn._copyResetTimer = setTimeout(() => {
           btn.classList.remove("copied");
           btn.setAttribute("aria-label", idleLabel);
           btn.setAttribute("title", idleLabel);
+          btn._copyResetTimer = null;
         }, 1200);
       } catch (_) {}
     });

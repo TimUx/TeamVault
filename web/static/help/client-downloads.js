@@ -50,15 +50,17 @@
 
   function flashCopyState(btn, idleLabel, copiedLabel, feedbackText = copiedLabel) {
     const feedback = btn.parentElement?.querySelector(".help-copy-feedback");
+    if (btn._copyResetTimer) clearTimeout(btn._copyResetTimer);
     btn.classList.add("copied");
     btn.setAttribute("aria-label", copiedLabel);
     btn.setAttribute("title", copiedLabel);
     if (feedback) feedback.textContent = feedbackText;
-    setTimeout(() => {
+    btn._copyResetTimer = setTimeout(() => {
       btn.classList.remove("copied");
       btn.setAttribute("aria-label", idleLabel);
       btn.setAttribute("title", idleLabel);
       if (feedback) feedback.textContent = "";
+      btn._copyResetTimer = null;
     }, 1200);
   }
 
