@@ -2144,7 +2144,7 @@ function renderApp(app) {
                   </div>
                   <div class="secrets-sidebar-section secrets-sidebar-static" id="sActionsWrap">
                     <p class="secrets-actions-heading">Export</p>
-                    <div class="secrets-actions-tools" role="group" aria-label="Export für Auswahl">
+                    <div class="secrets-actions-tools" role="group" aria-label="Export für Auswahl oder sichtbare Einträge">
                       <button type="button" class="btn-icon" id="sExportTv" title="TeamVault JSON exportieren" aria-label="TeamVault JSON exportieren">${icon("appTeamvault")}</button>
                       <button type="button" class="btn-icon" id="sExportJson" title="Bitwarden JSON exportieren" aria-label="Bitwarden JSON exportieren">${icon("appBitwarden")}</button>
                       <button type="button" class="btn-icon" id="sExportCsv" title="CSV exportieren" aria-label="CSV exportieren">${icon("appCsv")}</button>
@@ -2155,7 +2155,7 @@ function renderApp(app) {
                       <span class="hint secrets-status-sep">–</span>
                       <span class="hint secrets-actions-meta" id="selCount">Keine Auswahl</span>
                     </div>
-                    ${hintBox("Gilt für die aktuelle Auswahl (Häkchen in Liste).", { className: "hint-box-compact secrets-export-note", id: "sExportSummary" })}
+                    ${hintBox("Gilt für die aktuelle Auswahl (Häkchen in Liste). Ohne Auswahl: sichtbare Einträge.", { className: "hint-box-compact secrets-export-note", id: "sExportSummary" })}
                     <div class="secrets-load-more" id="sLoadMoreWrap" hidden>
                       <p class="hint" id="sLoadMoreHint"></p>
                       <button type="button" class="btn-ghost btn-sm" id="sMore">Weitere laden</button>
