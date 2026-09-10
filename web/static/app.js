@@ -4372,7 +4372,9 @@ ${escHtml(apiCmd)}</code>
     const clear = n.querySelector("#stagClear");
     const cur = vault.tagFilters || [];
     if (summary) {
-      setHintBox(summary, "Alle Tags - Mehrere Tags = alle müssen passen");
+      const base = "Alle Tags - Mehrere Tags = alle müssen passen";
+      const active = cur.length ? ` · ${cur.length} aktiv` : "";
+      setHintBox(summary, base + active);
     }
     if (clear) clear.disabled = !cur.length;
   }
