@@ -42,19 +42,24 @@
       const el = document.getElementById(btn.getAttribute("data-copy"));
       if (!el) return;
       const idleLabel = btn.getAttribute("aria-label") || "Kopieren";
+      const feedback = btn.parentElement?.querySelector(".help-copy-feedback");
       try {
         await navigator.clipboard.writeText(el.textContent);
         if (btn._copyResetTimer) clearTimeout(btn._copyResetTimer);
         btn.classList.add("copied");
         btn.setAttribute("aria-label", "Kopiert");
         btn.setAttribute("title", "Kopiert");
+        if (feedback) feedback.textContent = "Kopiert";
         btn._copyResetTimer = setTimeout(() => {
           btn.classList.remove("copied");
           btn.setAttribute("aria-label", idleLabel);
           btn.setAttribute("title", idleLabel);
+          if (feedback) feedback.textContent = "";
           btn._copyResetTimer = null;
         }, 1200);
-      } catch (_) {}
+      } catch (_) {
+        if (feedback) feedback.textContent = "Bitte manuell kopieren";
+      }
     });
   });
 })();
