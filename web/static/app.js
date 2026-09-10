@@ -2155,7 +2155,8 @@ function renderApp(app) {
                       <p class="hint secrets-actions-meta" id="selCount">Keine Auswahl</p>
                     </div>
                     <div class="secrets-actions-tools" role="group" aria-label="Aktionen für Auswahl">
-                      <button type="button" class="btn-icon" id="selAllVisible" title="Alle sichtbaren auswählen oder abwählen" aria-label="Alle sichtbaren auswählen oder abwählen" aria-pressed="false">${icon("checkSquare")}</button>
+                      <button type="button" class="btn-icon" id="selAllVisible" title="Alle sichtbaren auswählen oder abwählen" aria-label="Alle sichtbaren auswählen oder abwählen" aria-describedby="selAllVisibleState" aria-pressed="false">${icon("checkSquare")}</button>
+                      <span id="selAllVisibleState" class="visually-hidden">Keine sichtbaren Secrets sind ausgewählt</span>
                       <button type="button" class="btn-icon" id="selAllLoaded" title="Alle geladenen auswählen" aria-label="Alle geladenen auswählen">${icon("layersCheck")}</button>
                       <button type="button" class="btn-icon" id="selClear" title="Auswahl aufheben" aria-label="Auswahl aufheben">${icon("close")}</button>
                       <button type="button" class="btn-icon" id="sExportToggle" title="Exportoptionen ein- oder ausblenden" aria-label="Exportoptionen ein- oder ausblenden" aria-expanded="false" aria-controls="sActionsMenu">${icon("download")}</button>
@@ -4417,6 +4418,7 @@ ${escHtml(apiCmd)}</code>
     };
   }
   const selAllVisibleBtn = n.querySelector("#selAllVisible");
+  const selAllVisibleState = n.querySelector("#selAllVisibleState");
   function syncSelectVisibleButton() {
     if (!selAllVisibleBtn) return;
     const visible = filterVisibleSecrets();
@@ -4432,7 +4434,7 @@ ${escHtml(apiCmd)}</code>
         ? "Ein Teil der sichtbaren Secrets ist ausgewählt"
         : "Keine sichtbaren Secrets sind ausgewählt";
     selAllVisibleBtn.setAttribute("aria-label", "Alle sichtbaren auswählen oder abwählen");
-    selAllVisibleBtn.setAttribute("aria-description", label);
+    if (selAllVisibleState) selAllVisibleState.textContent = label;
     selAllVisibleBtn.title = label;
   }
   if (selAllVisibleBtn) {
