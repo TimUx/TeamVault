@@ -1033,6 +1033,9 @@ h1 .heading-ico,
   margin: 0.35rem 0 0;
   font-size: 0.78rem;
 }
+.secrets-export-note {
+  margin: 0.35rem 0 0;
+}
 .secrets-actions-tools {
   display: flex;
   flex-wrap: wrap;
