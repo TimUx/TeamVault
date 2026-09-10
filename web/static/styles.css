@@ -1276,7 +1276,8 @@ body.admin-modal-open { overflow: hidden; }
 .access-chip.access-chip-disabled { opacity: 0.55; cursor: not-allowed; }
 .access-chip button {
   flex-shrink: 0;
-  padding: 0;
+  padding: 0.2rem 0.45rem;
+  min-height: 1.9rem;
   font-size: 0.8rem;
 }
 .access-cap-pick {
