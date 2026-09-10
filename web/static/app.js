@@ -2465,8 +2465,8 @@ function renderApp(app) {
 
               <div class="panel-tab-pane account-page" role="tabpanel" data-panel-pane="clients" hidden>
                 ${hintBox("CLI, Browser-Extension und Desktop-App von dieser Instanz — Zero-Knowledge bleibt erhalten (Entschlüsselung nur lokal).")}
-                <div id="cliConnectionInfo" class="client-cli-connection"></div>
                 <div id="clientDownloadsApp" class="client-dl-grid"></div>
+                <div id="cliConnectionInfo" class="client-cli-connection"></div>
                 <div class="hint-box" id="accClientsHelp" hidden></div>
               </div>
               <div class="panel-tab-pane account-page" role="tabpanel" data-panel-pane="profile" hidden>

@@ -1717,7 +1717,7 @@ body.admin-modal-open { overflow: hidden; }
 }
 .panel-tab-pane { margin-top: 0.25rem; }
 .panel-tab-pane[hidden] { display: none !important; }
-.client-dl-grid { display: grid; gap: 1rem; margin-top: 0.75rem; }
+.client-dl-grid { display: grid; gap: 1rem; margin: 0.75rem 0 1rem; }
 @media (min-width: 720px) { .client-dl-grid { grid-template-columns: 1fr 1fr; } }
 @media (min-width: 1080px) { .client-dl-grid { grid-template-columns: 1fr 1fr 1fr; } }
 .client-dl-card { border: 1px solid var(--color-border); border-radius: 6px; padding: 1rem 1.1rem; background: var(--color-surface); }
