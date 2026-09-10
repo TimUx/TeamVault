@@ -1017,10 +1017,7 @@ h1 .heading-ico,
   white-space: nowrap;
 }
 .secrets-sidebar-status .hint:first-child { display: inline; margin-top: 0; }
-.secrets-sidebar-status .hint + .hint::before {
-  content: "–";
-  margin-right: 0.35rem;
-}
+.secrets-status-sep { flex: 0 0 auto; }
 .secrets-actions-menu {
   min-width: 0;
   max-width: none;
@@ -1655,6 +1652,8 @@ body.admin-modal-open { overflow: hidden; }
 .tag-filter-wrap { min-width: 0; max-width: none; }
 .tag-filter {
   padding: 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
   background: var(--color-bg);
 }
 .tag-filter-hint { margin: 0 0 0.65rem; }

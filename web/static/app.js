@@ -2147,6 +2147,7 @@ function renderApp(app) {
                     </div>
                     <div class="secrets-sidebar-status">
                       <span class="hint" id="sCount"></span>
+                      <span class="hint secrets-status-sep">–</span>
                       <span class="hint secrets-actions-meta" id="selCount">Keine Auswahl</span>
                     </div>
                     <div class="secrets-actions-menu panel-inset" id="sActionsMenu" role="region" aria-label="Exportoptionen" hidden>

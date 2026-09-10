@@ -205,6 +205,13 @@
           if (feedback) feedback.textContent = "Bitte manuell kopieren";
           btn.setAttribute("aria-label", "Bitte Einzeiler manuell kopieren");
           btn.setAttribute("title", "Bitte Einzeiler manuell kopieren");
+          if (btn._copyResetTimer) clearTimeout(btn._copyResetTimer);
+          btn._copyResetTimer = setTimeout(() => {
+            btn.setAttribute("aria-label", "Extension-Einzeiler kopieren");
+            btn.setAttribute("title", "Extension-Einzeiler kopieren");
+            if (feedback) feedback.textContent = "";
+            btn._copyResetTimer = null;
+          }, 1600);
         }
       };
     }
