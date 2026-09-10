@@ -2146,12 +2146,6 @@ function renderApp(app) {
                       <button type="button" class="btn-icon" id="sExportCsv" title="CSV exportieren" aria-label="CSV exportieren">${icon("layoutTable")}</button>
                       <button type="button" class="btn-icon" id="sExportBak" title="Verschlüsselt (.tvbak) exportieren" aria-label="Verschlüsselt (.tvbak) exportieren">${icon("lock")}</button>
                     </div>
-                    <div class="secrets-export-legend" aria-hidden="true">
-                      <span>TV JSON</span>
-                      <span>BW JSON</span>
-                      <span>CSV</span>
-                      <span>.tvbak</span>
-                    </div>
                     <div class="secrets-sidebar-status">
                       <span class="hint" id="sCount"></span>
                       <span class="hint secrets-status-sep">–</span>
