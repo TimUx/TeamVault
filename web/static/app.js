@@ -2139,25 +2139,20 @@ function renderApp(app) {
                     </div>
                   </div>
                   <div class="secrets-sidebar-section secrets-sidebar-static" id="sActionsWrap">
-                    <p class="secrets-actions-heading">Aktionen</p>
-                    <div class="secrets-actions-tools" role="group" aria-label="Aktionen für Auswahl">
+                    <p class="secrets-actions-heading">Export</p>
+                    <div class="secrets-actions-tools" role="group" aria-label="Export für Auswahl">
                       <button type="button" class="btn-icon" id="selAllLoaded" title="Alle geladenen auswählen" aria-label="Alle geladenen auswählen">${icon("layersCheck")}</button>
-                      <button type="button" class="btn-icon" id="selClear" title="Auswahl aufheben" aria-label="Auswahl aufheben">${icon("close")}</button>
-                      <button type="button" class="btn-icon" id="sExportToggle" title="Exportoptionen ein- oder ausblenden" aria-label="Exportoptionen ein- oder ausblenden" aria-expanded="false" aria-controls="sActionsMenu">${icon("download")}</button>
+                      <button type="button" class="btn-icon" id="sExportTv" title="TeamVault JSON exportieren" aria-label="TeamVault JSON exportieren">${icon("download")}</button>
+                      <button type="button" class="btn-icon" id="sExportJson" title="Bitwarden JSON exportieren" aria-label="Bitwarden JSON exportieren">${icon("download")}</button>
+                      <button type="button" class="btn-icon" id="sExportCsv" title="CSV exportieren" aria-label="CSV exportieren">${icon("layoutTable")}</button>
+                      <button type="button" class="btn-icon" id="sExportBak" title="Verschlüsselt (.tvbak) exportieren" aria-label="Verschlüsselt (.tvbak) exportieren">${icon("lock")}</button>
                     </div>
                     <div class="secrets-sidebar-status">
                       <span class="hint" id="sCount"></span>
                       <span class="hint secrets-status-sep">–</span>
                       <span class="hint secrets-actions-meta" id="selCount">Keine Auswahl</span>
                     </div>
-                    <div class="secrets-actions-menu panel-inset" id="sActionsMenu" role="region" aria-label="Exportoptionen" hidden>
-                      <p class="secrets-actions-heading">Export</p>
-                      ${hintBox("Gilt für die aktuelle Auswahl (Häkchen in der Liste).", { className: "hint-box-compact" })}
-                      <button type="button" class="secrets-actions-item btn-ghost btn-sm btn-with-ico" id="sExportTv">${btnLabel("download", "TeamVault JSON")}</button>
-                      <button type="button" class="secrets-actions-item btn-ghost btn-sm btn-with-ico" id="sExportJson">${btnLabel("download", "Bitwarden JSON")}</button>
-                      <button type="button" class="secrets-actions-item btn-ghost btn-sm btn-with-ico" id="sExportCsv">${btnLabel("download", "CSV")}</button>
-                      <button type="button" class="secrets-actions-item btn-ghost btn-sm btn-with-ico" id="sExportBak">${btnLabel("lock", "Verschlüsselt (.tvbak)")}</button>
-                    </div>
+                    ${hintBox("Gilt für die aktuelle Auswahl (Häkchen in der Liste).", { className: "hint-box-compact" })}
                     <div class="secrets-load-more" id="sLoadMoreWrap" hidden>
                       <p class="hint" id="sLoadMoreHint"></p>
                       <button type="button" class="btn-ghost btn-sm" id="sMore">Weitere laden</button>
@@ -3808,10 +3803,6 @@ ${escHtml(apiCmd)}</code>
     };
   }
 
-  n.querySelector("#selClear").onclick = () => {
-    vault.selectedIds.clear();
-    paintSecretList();
-  };
   n.querySelector("#selAllLoaded").onclick = async () => {
     try {
       await ensureAllSecretsLoaded();
@@ -4423,35 +4414,6 @@ ${escHtml(apiCmd)}</code>
     if (pruned) paintSecretList();
   }
 
-  const sActionsMenu = n.querySelector("#sActionsMenu");
-  const sActionsWrap = n.querySelector("#sActionsWrap");
-  const sExportToggle = n.querySelector("#sExportToggle");
-  if (sExportToggle && sActionsMenu && sActionsWrap) {
-    const closeExportMenu = () => {
-      sActionsMenu.hidden = true;
-      sExportToggle.setAttribute("aria-expanded", "false");
-      sExportToggle.classList.remove("active");
-    };
-    sExportToggle.onclick = () => {
-      const open = sActionsMenu.hidden;
-      if (open) {
-        sActionsMenu.hidden = false;
-        sExportToggle.setAttribute("aria-expanded", "true");
-        sExportToggle.classList.add("active");
-      } else {
-        closeExportMenu();
-      }
-    };
-    document.addEventListener("click", (ev) => {
-      if (sActionsMenu.hidden) return;
-      if (!sActionsWrap.contains(ev.target)) closeExportMenu();
-    });
-    document.addEventListener("keydown", (ev) => {
-      if (ev.key === "Escape" && !sActionsMenu.hidden) closeExportMenu();
-    });
-    sExportToggle.setAttribute("aria-expanded", sActionsMenu.hidden ? "false" : "true");
-    sExportToggle.classList.toggle("active", !sActionsMenu.hidden);
-  }
   const stagClear = n.querySelector("#stagClear");
   if (stagClear) {
     stagClear.onclick = () => {

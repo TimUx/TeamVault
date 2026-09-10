@@ -1020,13 +1020,6 @@ h1 .heading-ico,
 .secrets-sidebar-status #sCount,
 .secrets-sidebar-status #selCount { white-space: nowrap; }
 .secrets-status-sep { flex: 0 0 auto; }
-.secrets-actions-menu {
-  min-width: 0;
-  max-width: none;
-  margin-top: 0.75rem;
-  padding: 0.75rem;
-}
-.secrets-actions-menu[hidden] { display: none !important; }
 .secrets-actions-heading {
   margin: 0 0 0.35rem;
   font-size: 0.72rem;
@@ -1034,13 +1027,6 @@ h1 .heading-ico,
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--color-hint);
-}
-.secrets-actions-item {
-  display: flex;
-  width: 100%;
-  justify-content: flex-start;
-  margin: 0.35rem 0 0;
-  text-align: left;
 }
 .secrets-actions-meta,
 .secrets-actions-hint {
@@ -1654,7 +1640,7 @@ body.admin-modal-open { overflow: hidden; }
 
 .tag-filter-wrap { min-width: 0; max-width: none; }
 .tag-filter {
-  padding: 0.75rem;
+  padding: 0.6rem 0.65rem;
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
   background: var(--color-bg);
@@ -1664,7 +1650,7 @@ body.admin-modal-open { overflow: hidden; }
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
-  margin-bottom: 0.55rem;
+  margin-bottom: 0.35rem;
 }
 .tag-filter-hint { margin: 0; }
 .tag-filter-clear {
