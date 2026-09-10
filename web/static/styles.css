@@ -754,6 +754,10 @@ body.app-wide main#app {
 }
 .btn-icon:hover { background: var(--color-hover); }
 .btn-icon .ico { width: 1.2rem; height: 1.2rem; }
+.btn-icon.copied {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
 h1 .heading-ico,
 .lock-card h1 .heading-ico {
   display: inline-block;
@@ -1254,7 +1258,7 @@ body.admin-modal-open { overflow: hidden; }
 .access-chip.access-chip-disabled { opacity: 0.55; cursor: not-allowed; }
 .access-chip button {
   flex-shrink: 0;
-  padding: 0.15rem 0.45rem;
+  padding: 0;
   font-size: 0.8rem;
 }
 .access-cap-pick {
@@ -1725,6 +1729,11 @@ body.admin-modal-open { overflow: hidden; }
 .client-dl-card .row { margin-top: 0.65rem; flex-wrap: wrap; gap: 0.5rem; }
 .client-cli-connection { margin: 0 0 1rem; padding: 1rem 1.1rem; border: 1px solid var(--color-border); border-radius: 6px; background: var(--color-surface); }
 .client-cli-connection h4 { margin: 0 0 0.5rem; }
+.client-cli-copy-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.2rem;
+}
 .client-cli-values { display: grid; grid-template-columns: max-content 1fr; gap: 0.25rem 1rem; margin: 0.75rem 0; }
 .client-cli-values dt { font-weight: 600; }
 .client-cli-values dd { margin: 0; overflow-wrap: anywhere; }

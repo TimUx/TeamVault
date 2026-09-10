@@ -1925,7 +1925,7 @@ function addExtraSlot(slotsEl, type, prefill) {
         <span class="hint slot-file-hint"></span></div>`;
     }
   }
-  row.innerHTML = body + `<div class="row"><button type="button" class="btn-ghost slot-remove">Entfernen</button></div>`;
+  row.innerHTML = body + `<div class="row"><button type="button" class="btn-ghost btn-icon btn-icon-sm slot-remove" title="Feld entfernen" aria-label="Feld entfernen">${icon("close")}</button></div>`;
   row.querySelector(".slot-remove").onclick = () => row.remove();
   const fileInp = row.querySelector(".slot-file");
   if (fileInp) {
@@ -2145,7 +2145,7 @@ function renderApp(app) {
                     <div class="tag-filter panel-inset" id="stagFilter">
                       <p class="hint tag-filter-hint" id="stagSummary">Alle Tags</p>
                       <div id="stagOptions" class="tag-filter-options tags"></div>
-                      <button type="button" class="btn-ghost btn-sm" id="stagClear">Filter leeren</button>
+                      <button type="button" class="btn-ghost btn-icon btn-icon-sm" id="stagClear" title="Tag-Filter leeren" aria-label="Tag-Filter leeren">${icon("close")}</button>
                     </div>
                   </div>
                   <div class="secrets-sidebar-section secrets-sidebar-static" id="sActionsWrap">
@@ -2419,8 +2419,8 @@ function renderApp(app) {
                       <p class="hint">otpauth-URL:</p>
                       <pre class="mono" id="otpurl"></pre>
                       <div class="row">
-                        <button class="btn-ghost" type="button" id="otpCopy">otpauth kopieren</button>
-                        <button class="btn-ghost" type="button" id="otpReveal">Secret kurz anzeigen</button>
+                        <button class="btn-ghost btn-icon" type="button" id="otpCopy" title="otpauth kopieren" aria-label="otpauth kopieren">${icon("copy")}</button>
+                        <button class="btn-ghost btn-icon" type="button" id="otpReveal" title="Secret kurz anzeigen" aria-label="Secret kurz anzeigen">${icon("eye")}</button>
                       </div>
                       <p class="hint secret-reveal" id="otpSecret" hidden></p>
                     </div>
@@ -3305,11 +3305,11 @@ function renderApp(app) {
       </dl>
       <p class="hint">Login mit Ihrem normalen Login-Passwort:</p>
       <code class="client-cli-command" id="cliLoginCommand">${escHtml(loginCmd)}</code>
-      <button type="button" class="btn-ghost btn-sm" id="cliLoginCopy">Login-Befehl kopieren</button>
+      <div class="client-cli-copy-row"><button type="button" class="btn-icon btn-icon-sm" id="cliLoginCopy" title="Login-Befehl kopieren" aria-label="Login-Befehl kopieren">${icon("copy")}</button></div>
       <p class="hint">Alternativ benötigt <code>TEAMVAULT_API_KEY</code> einen separat erzeugten API-Key. Der Schlüssel wird nur bei der Erstellung einmal angezeigt und kann nicht aus dieser Ansicht ausgelesen werden.</p>
       <code class="client-cli-command" id="cliApiCommand">${escHtml(`$env:TEAMVAULT_API_KEY='tvk_…'`)}
 ${escHtml(apiCmd)}</code>
-      <button type="button" class="btn-ghost btn-sm" id="cliApiCopy">API-Key-Beispiel kopieren</button>
+      <div class="client-cli-copy-row"><button type="button" class="btn-icon btn-icon-sm" id="cliApiCopy" title="API-Key-Beispiel kopieren" aria-label="API-Key-Beispiel kopieren">${icon("copy")}</button></div>
       <p class="hint">API-Keys erstellt ein Plattform-Administrator unter <strong>Administration → API-Keys</strong>; für CLI-Vault-Zugriff ist der Scope <code>vault</code> erforderlich.</p>`;
     const bindCopy = (button, command) => {
       const el = root.querySelector(button);
@@ -3341,7 +3341,10 @@ ${escHtml(apiCmd)}</code>
   }
   async function copyClientText(text, btn) {
     await copyText(text);
-    if (btn) flashCopy(btn);
+    if (btn) {
+      if (btn.classList.contains("btn-icon")) flashCopyIcon(btn);
+      else flashCopy(btn);
+    }
   }
   async function refreshClientDownloadsUI() {
     const root = n.querySelector("#clientDownloadsApp");
@@ -3384,7 +3387,7 @@ ${escHtml(apiCmd)}</code>
           ? `${hintBox(`Empfohlen: ${rec.platform}/${rec.arch}`)}
              <div class="row">
                <a class="btn-accent" href="${tvPath(rec.url)}" download>tvcli herunterladen</a>
-               <button type="button" class="btn-ghost btn-sm" id="cliInstallCopy">Einzeiler kopieren</button>
+               <button type="button" class="btn-icon btn-icon-sm" id="cliInstallCopy" title="CLI-Einzeiler kopieren" aria-label="CLI-Einzeiler kopieren">${icon("copy")}</button>
              </div>
              <ul class="client-dl-links">${cliLinks}</ul>`
           : hintBox("CLI-Binaries noch nicht bereitgestellt.")}
@@ -3396,7 +3399,7 @@ ${escHtml(apiCmd)}</code>
         ${crx
           ? `${hintBox("Schritt 1: Browser-Richtlinie per PowerShell (siehe Hilfe). Ohne Richtlinie wird nur die .crx heruntergeladen.")}
              <div class="row">
-               <button type="button" class="btn-ghost btn-sm" id="extInstallCopy">Einrichtung (Einzeiler)</button>
+               <button type="button" class="btn-icon btn-icon-sm" id="extInstallCopy" title="Extension-Einzeiler kopieren" aria-label="Extension-Einzeiler kopieren">${icon("copy")}</button>
                <a class="btn-accent" href="${tvPath(crx.url)}" id="extCrxBtn">Extension installieren</a>
              </div>
              ${hintBox(`Extension-ID: <code>${ext.id || "—"}</code> · <a href="${tvPath("/help/extension")}" target="_blank" rel="noopener">Anleitung</a> · <a href="${tvPath("/help/extension")}#fallback">Entwicklermodus</a>`)}`
@@ -3458,9 +3461,14 @@ ${escHtml(apiCmd)}</code>
         qr.hidden = false;
       }
       const sec = n.querySelector("#otpSecret");
+      const revealBtn = n.querySelector("#otpReveal");
       sec.hidden = true;
       sec.textContent = "";
-      n.querySelector("#otpReveal").textContent = "Secret kurz anzeigen";
+      if (revealBtn) {
+        revealBtn.innerHTML = icon("eye");
+        revealBtn.title = "Secret kurz anzeigen";
+        revealBtn.setAttribute("aria-label", "Secret kurz anzeigen");
+      }
       const hint = n.querySelector("#totpSetupHint");
       if (hint) hint.hidden = false;
       if (setupBtn) {
@@ -3476,30 +3484,36 @@ ${escHtml(apiCmd)}</code>
   };
   n.querySelector("#otpCopy").onclick = async (ev) => {
     await copyText(n.querySelector("#otpurl").textContent);
-    flashCopy(ev.currentTarget);
+    flashCopyIcon(ev.currentTarget);
   };
   n.querySelector("#otpReveal").onclick = (ev) => {
     const sec = n.querySelector("#otpSecret");
     if (sec.hidden) {
       sec.hidden = false;
       sec.textContent = "Secret: " + totpSecretPlain;
-      ev.currentTarget.textContent = "Secret verbergen";
+      ev.currentTarget.innerHTML = icon("eyeOff");
+      ev.currentTarget.title = "Secret verbergen";
+      ev.currentTarget.setAttribute("aria-label", "Secret verbergen");
       setTimeout(() => {
         sec.hidden = true;
         sec.textContent = "";
-        ev.currentTarget.textContent = "Secret kurz anzeigen";
+        ev.currentTarget.innerHTML = icon("eye");
+        ev.currentTarget.title = "Secret kurz anzeigen";
+        ev.currentTarget.setAttribute("aria-label", "Secret kurz anzeigen");
       }, 15000);
     } else {
       sec.hidden = true;
       sec.textContent = "";
-      ev.currentTarget.textContent = "Secret kurz anzeigen";
+      ev.currentTarget.innerHTML = icon("eye");
+      ev.currentTarget.title = "Secret kurz anzeigen";
+      ev.currentTarget.setAttribute("aria-label", "Secret kurz anzeigen");
     }
   };
   async function refreshPasskeys() {
     const list = n.querySelector("#pklist");
     const creds = await api("/api/webauthn/credentials");
     list.innerHTML = creds.map((c) =>
-      `<div class="list-row"><span>${escapeHtml(c.name)}</span><button class="btn-ghost" data-pkdel="${escapeHtml(c.id)}" type="button">Löschen</button></div>`
+      `<div class="list-row"><span>${escapeHtml(c.name)}</span><button class="btn-ghost btn-icon btn-icon-sm" data-pkdel="${escapeHtml(c.id)}" type="button" title="Passkey löschen" aria-label="Passkey löschen">${icon("trash")}</button></div>`
     ).join("") || "<p class='hint'>Keine Passkeys</p>";
     list.querySelectorAll("[data-pkdel]").forEach((btn) => {
       btn.onclick = async () => {
@@ -5624,11 +5638,11 @@ ${escHtml(apiCmd)}</code>
       curParts.push(`<div class="access-chip owner"><span>${escHtml(owner.username || owner.id || "Eigentümer")} <span class="chip-meta">Eigentümer</span></span></div>`);
       (access.shared_users || []).forEach((u) => {
         const cap = normalizeShareCap(u.capability || "write");
-        curParts.push(`<div class="access-chip" data-kind="user" data-id="${escHtml(u.id)}"><span>${escHtml(u.username)} <span class="chip-meta">User</span></span>${capSelectHtml(cap, `data-set-user-cap="${escHtml(u.id)}"`)}<button type="button" class="btn-ghost btn-sm" data-drop-user="${escHtml(u.id)}">Entfernen</button></div>`);
+        curParts.push(`<div class="access-chip" data-kind="user" data-id="${escHtml(u.id)}"><span>${escHtml(u.username)} <span class="chip-meta">User</span></span>${capSelectHtml(cap, `data-set-user-cap="${escHtml(u.id)}"`)}<button type="button" class="btn-ghost btn-icon btn-icon-sm" data-drop-user="${escHtml(u.id)}" title="Freigabe entfernen" aria-label="Freigabe entfernen">${icon("close")}</button></div>`);
       });
       (access.shared_groups || []).forEach((g) => {
         const cap = normalizeShareCap(g.capability || "write");
-        curParts.push(`<div class="access-chip" data-kind="group" data-id="${escHtml(g.id)}"><span>${escHtml(g.name)} <span class="chip-meta">Gruppe</span></span>${capSelectHtml(cap, `data-set-group-cap="${escHtml(g.id)}"`)}<button type="button" class="btn-ghost btn-sm" data-drop-group="${escHtml(g.id)}">Entfernen</button></div>`);
+        curParts.push(`<div class="access-chip" data-kind="group" data-id="${escHtml(g.id)}"><span>${escHtml(g.name)} <span class="chip-meta">Gruppe</span></span>${capSelectHtml(cap, `data-set-group-cap="${escHtml(g.id)}"`)}<button type="button" class="btn-ghost btn-icon btn-icon-sm" data-drop-group="${escHtml(g.id)}" title="Freigabe entfernen" aria-label="Freigabe entfernen">${icon("close")}</button></div>`);
       });
       curEl.innerHTML = curParts.join("");
 
@@ -6209,7 +6223,7 @@ ${escHtml(apiCmd)}</code>
       return `<div class="group-card" data-gid="${escHtml(g.id)}">
         <div class="group-card-head">
           <input class="group-name" value="${escHtml(g.name)}" data-gid="${escHtml(g.id)}" aria-label="Gruppenname" />
-          <button type="button" class="btn-ghost btn-sm group-del" data-gid="${escHtml(g.id)}">Löschen</button>
+          <button type="button" class="btn-ghost btn-icon btn-icon-sm group-del" data-gid="${escHtml(g.id)}" title="Gruppe löschen" aria-label="Gruppe löschen">${icon("trash")}</button>
         </div>
         <input class="group-desc" placeholder="Beschreibung (optional)" value="${escHtml(g.description || "")}" data-gid="${escHtml(g.id)}" aria-label="Beschreibung" />
         <div class="group-drop" data-gid="${escHtml(g.id)}">
@@ -6268,8 +6282,8 @@ ${escHtml(apiCmd)}</code>
 
   function userActionButtons(u) {
     return `<div class="row user-row-actions">
-      <button class="btn-ghost btn-sm" data-edit-user="${escHtml(u.id)}" type="button">Bearbeiten</button>
-      ${u.status !== "disabled" ? `<button class="btn-ghost btn-sm" data-dis="${escHtml(u.id)}" type="button">Deaktivieren</button>` : ""}
+      <button class="btn-ghost btn-icon btn-icon-sm" data-edit-user="${escHtml(u.id)}" type="button" title="Benutzer bearbeiten" aria-label="Benutzer bearbeiten">${icon("edit")}</button>
+      ${u.status !== "disabled" ? `<button class="btn-ghost btn-icon btn-icon-sm" data-dis="${escHtml(u.id)}" type="button" title="Benutzer deaktivieren" aria-label="Benutzer deaktivieren">${icon("lock")}</button>` : ""}
     </div>`;
   }
 
@@ -6569,7 +6583,7 @@ ${escHtml(apiCmd)}</code>
       n.querySelector("#klist").innerHTML = keys.map((k) => {
         const scopeLabel = k.legacy_no_scopes ? "legacy (nur read)" : (k.scopes || []).join(", ") || "?";
         return `<div class="list-row"><span>${escapeHtml(k.name)} [${escapeHtml(scopeLabel)}] ${k.revoked ? "(revoked)" : ""}</span>` +
-        (!k.revoked ? `<button class="btn-ghost" data-kr="${escapeHtml(k.id)}" type="button">Revoke</button>` : "") + `</div>`;
+        (!k.revoked ? `<button class="btn-ghost btn-icon btn-icon-sm" data-kr="${escapeHtml(k.id)}" type="button" title="API-Key widerrufen" aria-label="API-Key widerrufen">${icon("lock")}</button>` : "") + `</div>`;
       }).join("") || "<p class='hint'>Keine Keys</p>";
       n.querySelector("#klist").querySelectorAll("[data-kr]").forEach((btn) => {
         btn.onclick = async () => {
@@ -6583,7 +6597,7 @@ ${escHtml(apiCmd)}</code>
       const tenants = await api("/api/admin/tenants");
       n.querySelector("#tlist").innerHTML = tenants.map((t) =>
         `<div class="list-row"><span>${escapeHtml(t.name)} (${escapeHtml(t.slug)}) · ${escapeHtml(t.status)}</span>` +
-        (t.status !== "disabled" ? `<button class="btn-ghost" data-td="${escapeHtml(t.id)}" type="button">Disable</button>` : "") + `</div>`
+        (t.status !== "disabled" ? `<button class="btn-ghost btn-icon btn-icon-sm" data-td="${escapeHtml(t.id)}" type="button" title="Tenant deaktivieren" aria-label="Tenant deaktivieren">${icon("lock")}</button>` : "") + `</div>`
       ).join("");
       n.querySelector("#tlist").querySelectorAll("[data-td]").forEach((btn) => {
         btn.onclick = async () => {

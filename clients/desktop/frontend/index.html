@@ -92,15 +92,17 @@
         </div>
         <div class="tag-filter-head">
           <span>Tags</span>
-          <button id="vTagsClear" class="btn-link btn-sm" type="button" hidden>Filter leeren</button>
+          <button id="vTagsClear" class="btn-link btn-sm btn-icon" type="button" hidden aria-label="Tag-Filter leeren" title="Tag-Filter leeren"></button>
         </div>
         <div id="vTags" class="tag-filter-list"></div>
         <div class="sidebar-foot">
           <button id="vNew" class="btn-primary btn-sm">+ Neues Secret</button>
-          <button id="vSync" class="btn-ghost btn-sm">Offline-Sync</button>
-          <button id="vSettings" class="btn-ghost btn-sm">Einstellungen</button>
-          <button id="vLock" class="btn-ghost btn-sm">Sperren</button>
-          <button id="vLogout" class="btn-ghost btn-sm">Abmelden</button>
+          <div class="sidebar-tools">
+            <button id="vSync" class="btn-ghost btn-sm btn-icon" aria-label="Offline-Sync" title="Offline-Sync"></button>
+            <button id="vSettings" class="btn-ghost btn-sm btn-icon" aria-label="Einstellungen" title="Einstellungen"></button>
+            <button id="vLock" class="btn-ghost btn-sm btn-icon" aria-label="Sperren" title="Sperren"></button>
+            <button id="vLogout" class="btn-ghost btn-sm btn-icon" aria-label="Abmelden" title="Abmelden"></button>
+          </div>
         </div>
       </aside>
       <div id="splitMain" class="splitter" role="separator" aria-orientation="vertical" title="Breite anpassen"></div>
