@@ -2114,6 +2114,10 @@ function renderApp(app) {
               <div class="secrets-workspace">
                 <div class="panel secrets-stage">
                   <div class="secrets-stage-head">
+                    <div class="secrets-stage-tools">
+                      <button type="button" class="btn-icon" id="selAllVisible" role="checkbox" title="Alle sichtbaren auswählen oder abwählen" aria-label="Alle sichtbaren auswählen oder abwählen" aria-describedby="selAllVisibleState" aria-checked="false">${icon("checkSquare")}</button>
+                      <span id="selAllVisibleState" class="visually-hidden">Keine sichtbaren Secrets sind ausgewählt</span>
+                    </div>
                     <button type="button" class="btn-ghost btn-sm btn-with-ico secrets-sidebar-toggle" id="sSidebarToggle" aria-expanded="true" aria-controls="sSecretsSidebar">${btnLabel("open", "Sidebar ausblenden")}</button>
                   </div>
                   <div id="slist" class="list secrets-list"></div>
@@ -2134,32 +2138,16 @@ function renderApp(app) {
                       </div>
                     </div>
                   </div>
-                  <div class="secrets-sidebar-section secrets-sidebar-static">
-                    <p class="secrets-actions-heading">Suche</p>
-                    <label><span class="label-with-ico">${icon("search", "label-ico")} Secrets</span></label>
-                    <input id="ssearch" type="search" placeholder="Titel, Tags, Benutzer, Gruppen…" />
-                  </div>
-                  <div class="secrets-sidebar-section secrets-sidebar-static tag-filter-wrap">
-                    <p class="secrets-actions-heading">Filter</p>
-                    <label>Tags <span class="hint">(UND)</span></label>
-                    <div class="tag-filter panel-inset" id="stagFilter">
-                      <p class="hint tag-filter-hint" id="stagSummary">Alle Tags</p>
-                      <div id="stagOptions" class="tag-filter-options tags"></div>
-                      <button type="button" class="btn-ghost btn-icon btn-icon-sm" id="stagClear" title="Tag-Filter leeren" aria-label="Tag-Filter leeren">${icon("close")}</button>
-                    </div>
-                  </div>
                   <div class="secrets-sidebar-section secrets-sidebar-static" id="sActionsWrap">
                     <p class="secrets-actions-heading">Aktionen</p>
-                    <div class="secrets-sidebar-status">
-                      <span class="hint" id="sCount"></span>
-                      <p class="hint secrets-actions-meta" id="selCount">Keine Auswahl</p>
-                    </div>
                     <div class="secrets-actions-tools" role="group" aria-label="Aktionen für Auswahl">
-                      <button type="button" class="btn-icon" id="selAllVisible" role="checkbox" title="Alle sichtbaren auswählen oder abwählen" aria-label="Alle sichtbaren auswählen oder abwählen" aria-describedby="selAllVisibleState" aria-checked="false">${icon("checkSquare")}</button>
-                      <span id="selAllVisibleState" class="visually-hidden">Keine sichtbaren Secrets sind ausgewählt</span>
                       <button type="button" class="btn-icon" id="selAllLoaded" title="Alle geladenen auswählen" aria-label="Alle geladenen auswählen">${icon("layersCheck")}</button>
                       <button type="button" class="btn-icon" id="selClear" title="Auswahl aufheben" aria-label="Auswahl aufheben">${icon("close")}</button>
                       <button type="button" class="btn-icon" id="sExportToggle" title="Exportoptionen ein- oder ausblenden" aria-label="Exportoptionen ein- oder ausblenden" aria-expanded="false" aria-controls="sActionsMenu">${icon("download")}</button>
+                    </div>
+                    <div class="secrets-sidebar-status">
+                      <span class="hint" id="sCount"></span>
+                      <span class="hint secrets-actions-meta" id="selCount">Keine Auswahl</span>
                     </div>
                     <div class="secrets-actions-menu panel-inset" id="sActionsMenu" role="region" aria-label="Exportoptionen" hidden>
                       <p class="secrets-actions-heading">Export</p>
@@ -2172,6 +2160,20 @@ function renderApp(app) {
                     <div class="secrets-load-more" id="sLoadMoreWrap" hidden>
                       <p class="hint" id="sLoadMoreHint"></p>
                       <button type="button" class="btn-ghost btn-sm" id="sMore">Weitere laden</button>
+                    </div>
+                  </div>
+                  <div class="secrets-sidebar-section secrets-sidebar-static">
+                    <p class="secrets-actions-heading">Suche</p>
+                    <label><span class="label-with-ico">${icon("search", "label-ico")} Secrets</span></label>
+                    <input id="ssearch" type="search" placeholder="Titel, Tags, Benutzer, Gruppen…" />
+                  </div>
+                  <div class="secrets-sidebar-section secrets-sidebar-static tag-filter-wrap">
+                    <p class="secrets-actions-heading">Filter</p>
+                    <label>Tags <span class="hint">(UND)</span></label>
+                    <div class="tag-filter panel-inset" id="stagFilter">
+                      <p class="hint tag-filter-hint" id="stagSummary">Alle Tags</p>
+                      <div id="stagOptions" class="tag-filter-options tags"></div>
+                      <button type="button" class="btn-ghost btn-icon btn-icon-sm" id="stagClear" title="Tag-Filter leeren" aria-label="Tag-Filter leeren">${icon("close")}</button>
                     </div>
                   </div>
                 </aside>
