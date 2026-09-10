@@ -3486,20 +3486,26 @@ ${escHtml(apiCmd)}</code>
     await copyText(n.querySelector("#otpurl").textContent);
     flashCopyIcon(ev.currentTarget);
   };
+  let otpRevealTimer = null;
   n.querySelector("#otpReveal").onclick = (ev) => {
     const sec = n.querySelector("#otpSecret");
+    if (otpRevealTimer) {
+      clearTimeout(otpRevealTimer);
+      otpRevealTimer = null;
+    }
     if (sec.hidden) {
       sec.hidden = false;
       sec.textContent = "Secret: " + totpSecretPlain;
       ev.currentTarget.innerHTML = icon("eyeOff");
       ev.currentTarget.title = "Secret verbergen";
       ev.currentTarget.setAttribute("aria-label", "Secret verbergen");
-      setTimeout(() => {
+      otpRevealTimer = setTimeout(() => {
         sec.hidden = true;
         sec.textContent = "";
         ev.currentTarget.innerHTML = icon("eye");
         ev.currentTarget.title = "Secret kurz anzeigen";
         ev.currentTarget.setAttribute("aria-label", "Secret kurz anzeigen");
+        otpRevealTimer = null;
       }, 15000);
     } else {
       sec.hidden = true;
