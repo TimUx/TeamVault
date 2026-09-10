@@ -25,6 +25,7 @@
   --shadow: rgba(0, 0, 0, 0.08);
   --btn-min-height: 2.5rem;
   --radius: 6px;
+  --radius-chip: 4px;
   --drawer-width: 240px;
   --topbar-height: 56px;
   --app-footer-height: 2.5rem;
@@ -420,7 +421,7 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
 .hint-box-body code {
   font-size: 0.82em;
   padding: 0.1em 0.35em;
-  border-radius: 4px;
+  border-radius: var(--radius-chip);
   background: color-mix(in srgb, var(--color-border) 55%, transparent);
 }
 .panel > .hint-box:first-child,

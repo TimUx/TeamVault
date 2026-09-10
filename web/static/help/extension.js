@@ -51,7 +51,16 @@
           btn._copyResetTimer = null;
         }, 1200);
       } catch (_) {
+        btn.setAttribute("aria-label", "Bitte manuell kopieren");
+        btn.setAttribute("title", "Bitte manuell kopieren");
         if (feedback) feedback.textContent = "Bitte manuell kopieren";
+        if (btn._copyResetTimer) clearTimeout(btn._copyResetTimer);
+        btn._copyResetTimer = setTimeout(() => {
+          btn.setAttribute("aria-label", idleLabel);
+          btn.setAttribute("title", idleLabel);
+          if (feedback) feedback.textContent = "";
+          btn._copyResetTimer = null;
+        }, 1600);
       }
     });
   });
