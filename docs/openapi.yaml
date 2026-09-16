@@ -183,7 +183,7 @@ paths:
       summary: Sealed private key material (ciphertext only)
       responses:
         '200':
-          description: public_key_b64, salt, nonce, sealed SK
+          description: public_key_b64, salt, nonce, sealed SK; for user_kit optionally recovery_salt_b64, recovery_nonce_b64, encrypted_private_key_recovery_b64
   /api/vault/onboard:
     post:
       tags: [vault]

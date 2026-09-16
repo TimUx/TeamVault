@@ -92,6 +92,9 @@ func TestOnboardAndTOTP(t *testing.T) {
 	if keys["public_key_b64"] == "" {
 		t.Fatal(keys)
 	}
+	if keys["encrypted_private_key_recovery_b64"] == "" || keys["recovery_nonce_b64"] == "" || keys["recovery_salt_b64"] == "" {
+		t.Fatalf("expected recovery material in keys response, got %#v", keys)
+	}
 	if keys["kdf_params_stored"] != true {
 		t.Fatalf("expected stored kdf params, got %#v", keys["kdf_params_stored"])
 	}

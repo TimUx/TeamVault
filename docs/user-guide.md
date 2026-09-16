@@ -141,7 +141,7 @@ Ein privates Secret wird durch Teilen zum **geteilten** Secret und wandert in di
 
 Die Tabelle **Geteilte Secrets** zeigt Anleger, User- und Gruppen-Freigaben. **Meine Secrets** bleibt ohne Freigabe-Spalten (nur Teilen-Aktion).
 
-Wird ein User **neu in eine Gruppe** aufgenommen, erscheinen fehlende Umschläge als Catch-up-Hinweis. Nachpflege passiert **nicht** still beim Unlock: jemand mit Zugriff bestätigt die Empfängerliste (TOFU-Fingerprint bei neuem oder geändertem Public Key). Der Server erzeugt keine Umschläge (Zero-Knowledge).
+Wird ein User **neu in eine Gruppe** aufgenommen oder später erst onboardet, pflegt TeamVault fehlende Umschläge nach dem Entsperren automatisch nach. Für neue oder geänderte Empfängerschlüssel ist weiter eine TOFU-Fingerprint-Bestätigung nötig. Der Server erzeugt keine Umschläge (Zero-Knowledge).
 
 **Import** legt Secrets immer als **privat** an.
 

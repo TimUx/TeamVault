@@ -28,6 +28,7 @@
           <a href="#totp">TOTP</a>
           <a href="#passkeys">Passkeys</a>
           <a href="#offline">Offline-Vault</a>
+          <a href="#recovery">Master-Passwort Recovery</a>
           <a href="#login">Beim Login</a>
         </nav>
 
@@ -106,6 +107,17 @@
             <img src="/help/img/account-settings.png" alt="Einstellungen mit Name, E-Mail-Adresse, Theme- und Farbdesign-Auswahl" width="1100" height="720" loading="lazy" />
             <figcaption>Persönliche Einstellungen</figcaption>
           </figure>
+        </div>
+
+        <h2 id="recovery">Master-Passwort wiederherstellen (Recovery-Kit)</h2>
+        <div class="help-step">
+          <ol>
+            <li>Login normal durchführen (Organisation, Username, Login-Passwort; ggf. TOTP).</li>
+            <li>Im Panel <strong>Vault entsperren</strong> auf <strong>Master-Passwort wiederherstellen</strong> klicken.</li>
+            <li>Ihr heruntergeladenes <strong>Recovery-Kit</strong> (Base64) einfügen und ein neues Master-Passwort setzen.</li>
+            <li><strong>Mit Recovery-Kit wiederherstellen</strong> ausführen — der private Schlüssel wird clientseitig entschlüsselt und mit dem neuen Master-Passwort neu versiegelt.</li>
+          </ol>
+          <p class="help-note">Ohne Master-Passwort und ohne Recovery-Kit ist eine Wiederherstellung im Modus <code>user_kit</code> nicht möglich. Bei <code>admin_escrow</code> erfolgt Wiederherstellung über den Admin-Prozess.</p>
         </div>
 
         <h2 id="login">Beim Login nutzen</h2>

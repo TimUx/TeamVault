@@ -1722,6 +1722,43 @@ async function unlockVault(masterPassword, opts = {}) {
   }
 }
 
+async function recoverVaultWithKit(recoveryKitB64, newMasterPassword) {
+  if (vault.offlineMode || vault.offlinePicker) throw new Error("Offline-Wiederherstellung nicht verfügbar");
+  if ((vault.me?.recovery_mode || "user_kit") !== "user_kit") {
+    throw new Error("Recovery-Kit ist in diesem Tenant nicht aktiviert");
+  }
+  const keys = await api("/api/vault/keys");
+  const params = keys.argon2 || await api("/api/vault/crypto-params");
+  if (!keys.encrypted_private_key_recovery_b64 || !keys.recovery_nonce_b64 || !keys.recovery_salt_b64) {
+    throw new Error("Kein Recovery-Kit-Material vorhanden");
+  }
+  const kit = TVCrypto.b64dec((recoveryKitB64 || "").trim());
+  const sk = await TVCrypto.unlockPrivateKey(
+    kit,
+    TVCrypto.b64dec(keys.recovery_salt_b64),
+    TVCrypto.b64dec(keys.recovery_nonce_b64),
+    TVCrypto.b64dec(keys.encrypted_private_key_recovery_b64),
+    params
+  );
+  const sealed = await TVCrypto.sealPrivateKey(sk, newMasterPassword, params);
+  const rec = await TVCrypto.sealWithRecoveryKit(sk, kit, params);
+  kit.fill(0);
+  await api("/api/vault/change-master", {
+    method: "POST",
+    body: JSON.stringify({
+      encrypted_private_key_b64: TVCrypto.b64enc(sealed.sealedPrivateKey),
+      encrypted_private_key_nonce_b64: TVCrypto.b64enc(sealed.nonce),
+      salt_b64: TVCrypto.b64enc(sealed.salt),
+      encrypted_private_key_recovery_b64: TVCrypto.b64enc(rec.sealed),
+      recovery_nonce_b64: TVCrypto.b64enc(rec.nonce),
+      recovery_salt_b64: TVCrypto.b64enc(rec.salt),
+      argon2: params,
+    }),
+  });
+  vault.sk = sk;
+  vault.params = params;
+}
+
 function offlinePolicyAllowed() {
   return vault.policy?.offline_cache_allowed !== false;
 }
@@ -2108,6 +2145,13 @@ function renderApp(app) {
           <label id="offlineSnapLabel" hidden for="offlineSnap">Gespeicherte Offline-Kopie</label>
           <select id="offlineSnap" hidden></select>
           <label>Master-Passwort</label><input id="mpw" type="password" autocomplete="current-password" />
+          <div class="row"><button class="btn-ghost btn-with-ico" type="button" id="unlockRecoveryToggle">${btnLabel("lock", "Master-Passwort wiederherstellen")}</button></div>
+          <div id="unlockRecoveryWrap" hidden>
+            <label>Recovery-Kit (Base64)</label><input id="recoverKit" type="text" autocomplete="off" />
+            <label>Neues Master-Passwort (${MASTER_PASSWORD_POLICY})</label><input id="recoverMpw" type="password" autocomplete="new-password" />
+            <label>Neues Master-Passwort wiederholen</label><input id="recoverMpw2" type="password" autocomplete="new-password" />
+            <div class="row"><button class="btn-accent" type="button" id="unlockRecover">Mit Recovery-Kit wiederherstellen</button></div>
+          </div>
           <div class="error" id="uerr" hidden role="alert" aria-live="assertive"></div>
           <div class="row"><button class="btn-accent btn-with-ico" type="button" id="ulock">${btnLabel("unlock", "Entsperren")}</button></div>
         </div>
@@ -3983,10 +4027,20 @@ ${escHtml(apiCmd)}</code>
     vault.secretsOffset = 0;
     await refreshSecrets(true);
     try {
+      const reseal = await sealGroupShareGaps();
+      if (reseal.sealed || reseal.failed || reseal.skipped) {
+        if (reseal.failed) {
+          announceA11y(`Gruppen-Freigaben nachgepflegt: ${reseal.sealed} erfolgreich, ${reseal.failed} fehlgeschlagen.`);
+        } else if (reseal.skipped) {
+          announceA11y(`Gruppen-Freigaben nachgepflegt: ${reseal.sealed} erfolgreich, ${reseal.skipped} übersprungen.`);
+        } else {
+          announceA11y(`Gruppen-Freigaben nachgepflegt: ${reseal.sealed} erfolgreich.`);
+        }
+      }
       const gaps = await api("/api/secrets/group-share-gaps");
-      const nGaps = (gaps.items || []).length;
-      if (nGaps) {
-        announceA11y(`${nGaps} Gruppen-Freigaben ohne Envelope. Nachpflege nur nach Bestätigung der Empfängerschlüssel.`);
+      const pending = (gaps.items || []).length;
+      if (pending) {
+        announceA11y(`${pending} Gruppen-Freigaben benötigen weiterhin Nachpflege.`);
       }
     } catch (_) {}
     navigateTo("vault:mine");
@@ -4255,6 +4309,33 @@ ${escHtml(apiCmd)}</code>
       err.hidden = false; err.textContent = e.message;
     }
   };
+  n.querySelector("#unlockRecoveryToggle").onclick = () => {
+    const wrap = n.querySelector("#unlockRecoveryWrap");
+    if (!wrap) return;
+    wrap.hidden = !wrap.hidden;
+    if (!wrap.hidden) n.querySelector("#recoverKit")?.focus();
+  };
+  n.querySelector("#unlockRecover").onclick = async () => {
+    const err = n.querySelector("#uerr"); err.hidden = true;
+    try {
+      const kit = n.querySelector("#recoverKit").value.trim();
+      const mpw = n.querySelector("#recoverMpw").value;
+      const mpw2 = n.querySelector("#recoverMpw2").value;
+      if (!kit) throw new Error("Recovery-Kit erforderlich");
+      if (mpw !== mpw2) throw new Error("Neues Master-Passwort stimmt nicht überein");
+      const pwErr = masterPasswordError(mpw);
+      if (pwErr) throw new Error(pwErr);
+      await recoverVaultWithKit(kit, mpw);
+      n.querySelector("#recoverKit").value = "";
+      n.querySelector("#recoverMpw").value = "";
+      n.querySelector("#recoverMpw2").value = "";
+      n.querySelector("#mpw").value = "";
+      n.querySelector("#unlockRecoveryWrap").hidden = true;
+      await afterUnlock();
+    } catch (e) {
+      err.hidden = false; err.textContent = e.message;
+    }
+  };
   n.querySelector("#lockNow").onclick = () => {
     if (!vault.sk) return;
     clearVaultKey();
@@ -4269,6 +4350,9 @@ ${escHtml(apiCmd)}</code>
   };
   n.querySelector("#mpw").addEventListener("keydown", (ev) => {
     if (ev.key === "Enter") n.querySelector("#ulock").click();
+  });
+  n.querySelector("#recoverMpw2").addEventListener("keydown", (ev) => {
+    if (ev.key === "Enter") n.querySelector("#unlockRecover").click();
   });
 
   n.querySelector("#lockUnlock").onclick = async () => {
@@ -5844,7 +5928,16 @@ ${escHtml(apiCmd)}</code>
     if (accessDnDBusy || !currentSecret || !groupId) return;
     accessDnDBusy = true;
     try {
-      const pks = await api("/api/secrets/" + currentSecret.id + "/group-member-keys?group_id=" + encodeURIComponent(groupId));
+      let pks = [];
+      try {
+        pks = await api("/api/secrets/" + currentSecret.id + "/group-member-keys?group_id=" + encodeURIComponent(groupId));
+      } catch (e) {
+        if ((e.message || "").includes("group not shared with secret")) {
+          pks = await api("/api/groups/" + encodeURIComponent(groupId) + "/member-keys");
+        } else {
+          throw e;
+        }
+      }
       if (!pks.length) throw new Error("Keine onboardeten Gruppenmitglieder");
       const allowed = [];
       for (const p of pks) {
