@@ -3288,7 +3288,7 @@ function renderApp(app) {
       loadUserFavoritesFromStorage();
       paintSessionBar(n, { me });
       syncUnlockRecoveryUI();
-      if (recoverUrlParam) {
+      if (recoverUrlParam && !vault.offlineMode && !vault.offlinePicker) {
         history.replaceState(null, "", tvPath("/app"));
         recoverUrlParam = false;
         if ((vault.me.recovery_mode || "user_kit") === "user_kit") {
@@ -4428,7 +4428,10 @@ ${escHtml(apiCmd)}</code>
     tvGo("/login?recover=1");
   };
   n.querySelector("#unlockRecoveryToggle").onclick = () => {
-    if (vault.offlineMode || !vault.me) return;
+    if (vault.offlineMode || !vault.me) {
+      showUnlockError("Recovery per Recovery-Kit ist nur nach Online-Anmeldung verfügbar");
+      return;
+    }
     const wrap = n.querySelector("#unlockRecoveryWrap");
     const btn = n.querySelector("#unlockRecoveryToggle");
     if (!wrap || !btn) return;
