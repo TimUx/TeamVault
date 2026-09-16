@@ -251,6 +251,19 @@ Nur bei **lokalem** Auth-Backend: aktuelles + neues Login-Passwort (mindestens 1
 
 Aktuelles und neues Master-Passwort eingeben → **Master-Passwort speichern**. Das neue Passwort unterliegt derselben Regel wie beim Onboarding (mindestens 16 Zeichen, Groß-/Kleinbuchstaben, Ziffer, Sonderzeichen; Umlaute und Leerzeichen sind erlaubt). Der Private Key wird **nur im Browser** neu versiegelt; der Server speichert neue Ciphertexte. Bei Recovery-Modus `user_kit` erscheint ein neues Recovery-Kit (einmalig sichern).
 
+### Master-Passwort wiederherstellen (Recovery-Kit)
+
+Wenn das aktuelle Master-Passwort nicht mehr bekannt ist (Modus `user_kit`):
+
+1. Normal anmelden (Organisation, Username, Login-Passwort; ggf. TOTP)  
+2. Im Panel **Vault entsperren** auf **Master-Passwort wiederherstellen**  
+3. Recovery-Kit (Base64) einfügen und neues Master-Passwort setzen  
+4. **Mit Recovery-Kit wiederherstellen** ausführen
+
+Der private Schlüssel wird dabei nur im Browser entschlüsselt und direkt mit dem neuen Master-Passwort neu versiegelt. Ohne Master-Passwort und ohne Recovery-Kit ist im Modus `user_kit` keine Wiederherstellung möglich.
+
+![Vault entsperren](images/vault-unlock.png)
+
 ### Offline-Vault (optional)
 
 Wenn der Administrator den Offline-Cache erlaubt, können Sie unter **Konto** eine verschlüsselte lokale Kopie (nur Ciphertext, 30 Tage) vorhalten:
