@@ -117,7 +117,12 @@ async function api(path, opts = {}) {
     headers: { "Content-Type": "application/json", ...(extraHeaders || {}) },
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || res.statusText);
+  if (!res.ok) {
+    const err = new Error(data.error || res.statusText);
+    err.status = res.status;
+    err.code = data.code || "";
+    throw err;
+  }
   return data;
 }
 
@@ -5988,7 +5993,16 @@ ${escHtml(apiCmd)}</code>
     if (accessDnDBusy || !currentSecret || !groupId) return;
     accessDnDBusy = true;
     try {
-      const pks = await api("/api/secrets/" + currentSecret.id + "/group-member-keys?group_id=" + encodeURIComponent(groupId));
+      let pks = null;
+      try {
+        pks = await api("/api/secrets/" + currentSecret.id + "/group-member-keys?group_id=" + encodeURIComponent(groupId));
+      } catch (e) {
+        if (e && e.status === 403) {
+          pks = await api("/api/groups/" + encodeURIComponent(groupId) + "/member-keys");
+        } else {
+          throw e;
+        }
+      }
       if (!pks.length) throw new Error("Keine onboardeten Gruppenmitglieder");
       const allowed = [];
       for (const p of pks) {
