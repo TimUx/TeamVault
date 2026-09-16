@@ -1707,14 +1707,41 @@ async function unlockVault(masterPassword, opts = {}) {
     return;
   }
   const keys = await api("/api/vault/keys");
-  const params = keys.argon2 || await api("/api/vault/crypto-params");
-  const sk = await TVCrypto.unlockPrivateKey(
-    masterPassword,
-    TVCrypto.b64dec(keys.salt_b64),
-    TVCrypto.b64dec(keys.encrypted_private_key_nonce_b64),
-    TVCrypto.b64dec(keys.encrypted_private_key_b64),
-    params
-  );
+  const fallback = [];
+  if (keys.argon2) fallback.push(keys.argon2);
+  if (vault.params) fallback.push(vault.params);
+  if (window.TVOfflineStore?.getSnapshot && vault.me?.tenant_id && vault.me?.user_id) {
+    try {
+      const ownSnap = await TVOfflineStore.getSnapshot(vault.me.tenant_id, vault.me.user_id);
+      if (ownSnap?.crypto_params) fallback.push(ownSnap.crypto_params);
+    } catch (_) {}
+  }
+  if (!fallback.length) fallback.push(await api("/api/vault/crypto-params"));
+  let sk = null;
+  let params = null;
+  let lastErr = null;
+  const seen = new Set();
+  for (const p of fallback) {
+    const key = JSON.stringify(p || {});
+    if (seen.has(key)) continue;
+    seen.add(key);
+    try {
+      sk = await TVCrypto.unlockPrivateKey(
+        masterPassword,
+        TVCrypto.b64dec(keys.salt_b64),
+        TVCrypto.b64dec(keys.encrypted_private_key_nonce_b64),
+        TVCrypto.b64dec(keys.encrypted_private_key_b64),
+        p
+      );
+      params = p;
+      break;
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  if (!sk || !params) {
+    throw (lastErr || new Error("wrong master password"));
+  }
   vault.sk = sk;
   vault.params = params;
   if (keys.kdf_params_stored === false) {
