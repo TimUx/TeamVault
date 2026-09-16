@@ -3223,7 +3223,7 @@ function renderApp(app) {
     const hint = n.querySelector("#unlockRecoveryHint");
     const wrap = n.querySelector("#unlockRecoveryWrap");
     const btn = n.querySelector("#unlockRecoveryToggle");
-    if (!onlineRow || !row || !wrap || !btn || !section) return;
+    if (!onlineRow || !row || !wrap || !btn || !section || !details) return;
     const recoveryAvailable = (
       !!vault.me &&
       !vault.offlineMode &&
@@ -3234,9 +3234,13 @@ function renderApp(app) {
     row.hidden = !recoveryAvailable;
     section.hidden = !(offlineRecoveryAvailable || recoveryAvailable);
     if (hint) {
-      hint.textContent = offlineRecoveryAvailable
-        ? "Für Recovery zuerst online anmelden, danach werden Sie zum Recovery-Schritt geführt."
-        : "Recovery mit Recovery-Kit starten.";
+      if (offlineRecoveryAvailable && recoveryAvailable) {
+        hint.textContent = "Recovery per Recovery-Kit starten oder zuerst online anmelden und dann durch den Recovery-Schritt gehen.";
+      } else if (offlineRecoveryAvailable) {
+        hint.textContent = "Für Recovery zuerst online anmelden, danach werden Sie zum Recovery-Schritt geführt.";
+      } else {
+        hint.textContent = "Recovery mit Recovery-Kit starten.";
+      }
     }
     if (!recoveryAvailable) {
       wrap.hidden = true;
