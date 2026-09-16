@@ -2213,6 +2213,7 @@ function renderApp(app) {
           <label>Master-Passwort</label><input id="mpw" type="password" autocomplete="current-password" />
           <div class="error" id="uerr" hidden role="alert" aria-live="assertive"></div>
           <div class="row"><button class="btn-accent btn-with-ico" type="button" id="ulock">${btnLabel("unlock", "Entsperren")}</button></div>
+          <div class="row unlock-secondary-row" id="unlockOnlineRecoveryRow" hidden><button class="btn-ghost btn-sm" type="button" id="unlockOnlineRecovery">Online anmelden für Recovery</button></div>
           <div class="row unlock-secondary-row" id="unlockRecoveryRow" hidden><button class="btn-ghost btn-sm" type="button" id="unlockRecoveryToggle" aria-controls="unlockRecoveryWrap" aria-expanded="false">Master-Passwort wiederherstellen</button></div>
           <div id="unlockRecoveryWrap" hidden>
             <label>Recovery-Kit (Base64)</label><input id="recoverKit" type="text" autocomplete="off" />
@@ -3199,15 +3200,17 @@ function renderApp(app) {
   }
 
   function syncUnlockRecoveryUI() {
+    const onlineRow = n.querySelector("#unlockOnlineRecoveryRow");
     const row = n.querySelector("#unlockRecoveryRow");
     const wrap = n.querySelector("#unlockRecoveryWrap");
     const btn = n.querySelector("#unlockRecoveryToggle");
-    if (!row || !wrap || !btn) return;
-    const recoveryAvailable = (vault.offlinePicker && !vault.offlineMode) || (
+    if (!onlineRow || !row || !wrap || !btn) return;
+    const recoveryAvailable = (
       !!vault.me &&
       !vault.offlineMode &&
       ((vault.me.recovery_mode || "user_kit") === "user_kit")
     );
+    onlineRow.hidden = !(vault.offlinePicker && !vault.offlineMode);
     row.hidden = !recoveryAvailable;
     if (!recoveryAvailable) {
       wrap.hidden = true;
@@ -3291,7 +3294,7 @@ function renderApp(app) {
         if ((vault.me.recovery_mode || "user_kit") === "user_kit") {
           openUnlockRecoveryUI();
         } else {
-          showUnlockError("Recovery-Kit ist in diesem Tenant nicht aktiviert");
+          showUnlockError("Recovery per Recovery-Kit ist in diesem Tenant nicht aktiviert");
         }
       }
       syncAdminNavVisibility();
@@ -4421,11 +4424,11 @@ ${escHtml(apiCmd)}</code>
       err.hidden = false; err.textContent = e.message;
     }
   };
+  n.querySelector("#unlockOnlineRecovery").onclick = () => {
+    tvGo("/login?recover=1");
+  };
   n.querySelector("#unlockRecoveryToggle").onclick = () => {
-    if (vault.offlinePicker || vault.offlineMode || !vault.me) {
-      tvGo("/login?recover=1");
-      return;
-    }
+    if (vault.offlineMode || !vault.me) return;
     const wrap = n.querySelector("#unlockRecoveryWrap");
     const btn = n.querySelector("#unlockRecoveryToggle");
     if (!wrap || !btn) return;

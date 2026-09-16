@@ -260,7 +260,7 @@ Wenn das aktuelle Master-Passwort nicht mehr bekannt ist (Modus `user_kit`):
 3. Recovery-Kit (Base64) einfügen und neues Master-Passwort setzen.  
 4. **Mit Recovery-Kit wiederherstellen** ausführen.
 
-Falls Sie gerade **Offline entsperren** gewählt haben, führt derselbe Button direkt zurück zur Online-Anmeldung; nach erfolgreichem Login öffnet TeamVault den Recovery-Bereich automatisch. Ist der Vault bereits offline geöffnet, zuerst **Abmelden** und dann normal online anmelden.
+Falls Sie gerade **Offline entsperren** gewählt haben, nutzen Sie darunter **Online anmelden für Recovery**; nach erfolgreichem Login öffnet TeamVault den Recovery-Bereich automatisch. Ist der Vault bereits offline geöffnet, zuerst **Abmelden** und dann normal online anmelden.
 
 Der private Schlüssel wird dabei nur im Browser entschlüsselt und direkt mit dem neuen Master-Passwort neu versiegelt. Ohne Master-Passwort und ohne Recovery-Kit ist im Modus `user_kit` keine Wiederherstellung möglich.
 
