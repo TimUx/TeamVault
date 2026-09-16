@@ -1755,8 +1755,8 @@ async function recoverVaultWithKit(recoveryKitB64, newMasterPassword) {
       argon2: params,
     }),
   });
-  vault.sk = sk;
-  vault.params = params;
+  sk.fill(0);
+  await unlockVault(newMasterPassword);
 }
 
 function offlinePolicyAllowed() {
@@ -5928,16 +5928,7 @@ ${escHtml(apiCmd)}</code>
     if (accessDnDBusy || !currentSecret || !groupId) return;
     accessDnDBusy = true;
     try {
-      let pks = [];
-      try {
-        pks = await api("/api/secrets/" + currentSecret.id + "/group-member-keys?group_id=" + encodeURIComponent(groupId));
-      } catch (e) {
-        if ((e.message || "").includes("group not shared with secret")) {
-          pks = await api("/api/groups/" + encodeURIComponent(groupId) + "/member-keys");
-        } else {
-          throw e;
-        }
-      }
+      const pks = await api("/api/secrets/" + currentSecret.id + "/group-member-keys?group_id=" + encodeURIComponent(groupId));
       if (!pks.length) throw new Error("Keine onboardeten Gruppenmitglieder");
       const allowed = [];
       for (const p of pks) {

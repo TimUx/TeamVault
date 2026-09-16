@@ -93,8 +93,8 @@ func (a *API) handleGroupMemberKeysForShare(w http.ResponseWriter, r *http.Reque
 }
 
 // handleSecretGroupMemberKeys returns onboarded group member public keys for sharing.
-// Requires an access envelope and that the group is already shared with the secret
-// (initial share uses GET /api/groups/{id}/member-keys).
+// Requires an access envelope. For already shared groups this is used for catch-up;
+// for initial share, caller must have share capability on the secret.
 func (a *API) handleSecretGroupMemberKeys(w http.ResponseWriter, r *http.Request) {
 	sess, _ := a.sessionFrom(r)
 	id := store.SecretID(r.PathValue("id"))
@@ -109,8 +109,10 @@ func (a *API) handleSecretGroupMemberKeys(w http.ResponseWriter, r *http.Request
 	}
 	groupID := store.GroupID(gid)
 	if !a.secretSharedWithGroup(r, sess.TenantID, id, groupID) {
-		writeErr(w, http.StatusForbidden, "group not shared with secret")
-		return
+		if !a.requireSecretCap(r, sess.TenantID, id, sess.UserID, store.CapShare) {
+			writeErr(w, http.StatusForbidden, "share capability required")
+			return
+		}
 	}
 	a.writeGroupMemberPublicKeys(w, r, sess.TenantID, groupID)
 }

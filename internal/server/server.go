@@ -1040,8 +1040,12 @@ func (a *API) handleVaultKeys(w http.ResponseWriter, r *http.Request) {
 		"argon2":                          params,
 		"kdf_params_stored":               stored,
 	}
-	if ten, _ := a.App.Vault.GetTenant(r.Context(), sess.TenantID); ten != nil &&
-		(ten.RecoveryMode == "" || ten.RecoveryMode == "user_kit") &&
+	ten, terr := a.App.Vault.GetTenant(r.Context(), sess.TenantID)
+	if terr != nil {
+		writeErr(w, http.StatusInternalServerError, terr.Error())
+		return
+	}
+	if ten != nil && (ten.RecoveryMode == "" || ten.RecoveryMode == "user_kit") &&
 		len(u.EncryptedPrivateKeyRecovery) >= 16+24 {
 		rs, rn, rct := u.EncryptedPrivateKeyRecovery[:16], u.EncryptedPrivateKeyRecovery[16:40], u.EncryptedPrivateKeyRecovery[40:]
 		out["recovery_salt_b64"] = base64.StdEncoding.EncodeToString(rs)

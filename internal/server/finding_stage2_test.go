@@ -167,18 +167,14 @@ func TestFindingStage2ScopesOriginShareGroup(t *testing.T) {
 		"envelopes":            []map[string]any{envAPI(adminUID, env2)},
 	}, adminJar)
 
-	// B1: secret group-member-keys requires envelope + existing group share
+	// B1: secret group-member-keys requires envelope; for unshared groups, share-capable users may prefetch keys
 	status, _ := getJSONCookieStatus(t, ts.URL+"/api/secrets/"+sid+"/group-member-keys?group_id="+gid, aliceJar)
 	if status != http.StatusForbidden {
 		t.Fatalf("group-member-keys without envelope: want 403 got %d", status)
 	}
-	status, _ = getJSONCookieStatus(t, ts.URL+"/api/secrets/"+sid+"/group-member-keys?group_id="+gid, adminJar)
-	if status != http.StatusForbidden {
-		t.Fatalf("group-member-keys before group share: want 403 got %d", status)
-	}
-	keys := getJSONListCookie(t, ts.URL+"/api/groups/"+gid+"/member-keys", adminJar)
+	keys := getJSONListCookie(t, ts.URL+"/api/secrets/"+sid+"/group-member-keys?group_id="+gid, adminJar)
 	if len(keys) != 1 || keys[0]["user_id"] != aliceID {
-		t.Fatalf("group member-keys: %v", keys)
+		t.Fatalf("group-member-keys pre-share: %v", keys)
 	}
 	envAlice, err := cryptocore.SealDataKeyForRecipient(newDK, aliceKP.Public[:], 2)
 	if err != nil {
