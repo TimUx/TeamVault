@@ -11,6 +11,7 @@ const state = {
   tabOrigin: "",
   secretsRefreshPromise: null,
   secretsLastAutoRefreshAt: 0,
+  secretsLastAutoRefreshAttemptAt: 0,
 };
 const accentOptions = new Set(["blue", "indigo", "teal", "graphite", "rose", "amber", "emerald"]);
 const icons = {
@@ -152,9 +153,15 @@ async function checkForUpdate() {
 
 async function unlockParamCandidates(keys) {
   const fallback = [];
+  let paramsErr = null;
   if (keys?.argon2) fallback.push(keys.argon2);
   if (state.params) fallback.push(state.params);
-  if (!fallback.length) fallback.push(await apiFetch("/api/vault/crypto-params"));
+  try {
+    fallback.push(await apiFetch("/api/vault/crypto-params"));
+  } catch (e) {
+    paramsErr = e;
+  }
+  if (!fallback.length && paramsErr) throw paramsErr;
   return fallback;
 }
 
@@ -604,12 +611,14 @@ async function autoRefreshSecrets(reason, opts = {}) {
   if (!state.sk || document.getElementById("vault").hidden) return;
   if (reason === "visibility" && document.visibilityState !== "visible") return;
   if (state.secretsRefreshPromise) return state.secretsRefreshPromise;
-  if (!force && Date.now() - (state.secretsLastAutoRefreshAt || 0) < SECRET_AUTO_REFRESH_COOLDOWN_MS) return;
-  state.secretsLastAutoRefreshAt = Date.now();
+  if (!force && Date.now() - (state.secretsLastAutoRefreshAttemptAt || 0) < SECRET_AUTO_REFRESH_COOLDOWN_MS) return;
+  state.secretsLastAutoRefreshAttemptAt = Date.now();
   state.secretsRefreshPromise = (async () => {
     try {
       await refresh();
+      state.secretsLastAutoRefreshAt = Date.now();
     } catch (e) {
+      state.secretsLastAutoRefreshAttemptAt = 0;
       console.warn("secret auto refresh", reason, e);
     } finally {
       state.secretsRefreshPromise = null;

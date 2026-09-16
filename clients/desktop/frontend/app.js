@@ -33,6 +33,7 @@
     detailW: 360,
     secretsRefreshPromise: null,
     secretsLastAutoRefreshAt: 0,
+    secretsLastAutoRefreshAttemptAt: 0,
     secretAutoRefreshBound: false,
   };
 
@@ -378,12 +379,14 @@
     if ($("screenVault").hidden) return;
     if (reason === "visibility" && document.visibilityState !== "visible") return;
     if (state.secretsRefreshPromise) return state.secretsRefreshPromise;
-    if (!force && Date.now()-(state.secretsLastAutoRefreshAt || 0) < SECRET_AUTO_REFRESH_COOLDOWN_MS) return;
-    state.secretsLastAutoRefreshAt = Date.now();
+    if (!force && Date.now() - (state.secretsLastAutoRefreshAttemptAt || 0) < SECRET_AUTO_REFRESH_COOLDOWN_MS) return;
+    state.secretsLastAutoRefreshAttemptAt = Date.now();
     state.secretsRefreshPromise = (async () => {
       try {
         await reloadList();
+        state.secretsLastAutoRefreshAt = Date.now();
       } catch (err) {
+        state.secretsLastAutoRefreshAttemptAt = 0;
         console.warn("secret auto refresh", reason, err);
       } finally {
         state.secretsRefreshPromise = null;
