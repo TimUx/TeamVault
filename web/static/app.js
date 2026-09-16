@@ -109,6 +109,9 @@ function tvGo(path) {
   location.href = tvPath(path);
 }
 
+const SECRET_AUTO_REFRESH_COOLDOWN_MS = 15000;
+const SECRET_AUTO_REFRESH_MAX_ITEMS = 100;
+
 async function api(path, opts = {}) {
   const { headers: extraHeaders, ...rest } = opts;
   const res = await fetch(tvPath(path), {
@@ -1477,6 +1480,9 @@ const vault = {
   totpTimer: null,
   selectedIds: new Set(),
   offlineSyncRunning: false,
+  secretsRefreshPromise: null,
+  secretsLastAutoRefreshAt: 0,
+  secretAutoRefreshBound: false,
 };
 
 function userFavoritesStorageKey() {
@@ -3324,6 +3330,7 @@ function renderApp(app) {
   }
 
   initAppSession();
+  bindSecretAutoRefresh();
 
   n.querySelector("#out").onclick = async () => {
     clearVaultKey();
@@ -4489,10 +4496,21 @@ ${escHtml(apiCmd)}</code>
         await unlockVault(mpw);
       }
       n.querySelector("#lockOverlay").hidden = true;
-      touchIdle();
       n.querySelector("#lockMpw").value = "";
       const status = n.querySelector("#securityStatus");
       if (status) status.textContent = "Vault entsperrt";
+      touchIdle();
+      try {
+        await autoRefreshSecrets("unlock", { force: true, propagateAuth: true });
+      } catch (e) {
+        if (e?.status === 401 || e?.status === 403) {
+          clearVaultKey();
+          announceA11y("Sitzung abgelaufen. Bitte erneut anmelden.");
+          tvGo("/login");
+          return;
+        }
+        throw e;
+      }
     } catch (e) {
       err.hidden = false; err.textContent = e.message;
     }
@@ -5454,7 +5472,13 @@ ${escHtml(apiCmd)}</code>
     });
   }
 
-  async function refreshSecrets(reset) {
+  async function refreshSecrets(reset, opts = {}) {
+    const preserveLoaded = reset && opts.preserveLoaded !== false;
+    const baseTargetLoaded = preserveLoaded ? Math.max(vault.secretsCache.length, vault.pageLimit) : vault.pageLimit;
+    const maxTargetLoaded = Number.isFinite(opts.maxTargetLoaded)
+      ? Math.max(vault.pageLimit, opts.maxTargetLoaded)
+      : Number.POSITIVE_INFINITY;
+    const targetLoaded = Math.min(baseTargetLoaded, maxTargetLoaded);
     if (vault.offlineMode) {
       if (reset) {
         vault.secretsCache = (vault.offlineSnapshot?.secrets || []).map((it) => ({ ...it }));
@@ -5469,16 +5493,56 @@ ${escHtml(apiCmd)}</code>
       vault.secretsCache = [];
       vault.secretsOffset = 0;
     }
-    const data = normalizeSecretsList(
-      await api(`/api/secrets?limit=${vault.pageLimit}&offset=${vault.secretsOffset}`)
-    );
-    vault.secretsTotal = data.total;
-    const page = data.items;
-    await decryptListTitles(page);
-    vault.secretsCache = vault.secretsCache.concat(page);
-    vault.secretsOffset = vault.secretsCache.length;
+    do {
+      const data = normalizeSecretsList(
+        await api(`/api/secrets?limit=${vault.pageLimit}&offset=${vault.secretsOffset}`)
+      );
+      vault.secretsTotal = data.total;
+      const page = data.items;
+      await decryptListTitles(page);
+      vault.secretsCache = vault.secretsCache.concat(page);
+      vault.secretsOffset = vault.secretsCache.length;
+      if (!reset || !preserveLoaded || vault.secretsCache.length >= vault.secretsTotal) break;
+    } while (vault.secretsCache.length < Math.min(targetLoaded, vault.secretsTotal));
     updateTagOptions();
     paintSecretList();
+  }
+
+  async function autoRefreshSecrets(reason, opts = {}) {
+    const force = !!opts.force;
+    const propagateAuth = !!opts.propagateAuth;
+    if (!vault.sk || !vault.me || vault.offlineMode || vault.offlinePicker) return;
+    if (reason === "visibility" && document.visibilityState !== "visible") return;
+    if (vault.secretsRefreshPromise) return vault.secretsRefreshPromise;
+    if (!force && Date.now() - (vault.secretsLastAutoRefreshAt || 0) < SECRET_AUTO_REFRESH_COOLDOWN_MS) return;
+    vault.secretsLastAutoRefreshAt = Date.now();
+    vault.secretsRefreshPromise = (async () => {
+      try {
+        const maxTargetLoaded = reason === "focus" || reason === "visibility"
+          ? Math.max(vault.pageLimit, SECRET_AUTO_REFRESH_MAX_ITEMS)
+          : undefined;
+        await refreshSecrets(true, { maxTargetLoaded });
+      } catch (e) {
+        if (propagateAuth && (e?.status === 401 || e?.status === 403)) throw e;
+        console.warn("secret auto refresh", reason, e);
+      } finally {
+        vault.secretsRefreshPromise = null;
+      }
+    })();
+    return vault.secretsRefreshPromise;
+  }
+
+  function bindSecretAutoRefresh() {
+    if (vault.secretAutoRefreshBound) return;
+    vault.secretAutoRefreshBound = true;
+    window.addEventListener("focus", () => {
+      autoRefreshSecrets("focus").catch(() => {});
+    });
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") {
+        autoRefreshSecrets("visibility").catch(() => {});
+      }
+    });
   }
 
   n.querySelector("#sMore").onclick = async () => {
