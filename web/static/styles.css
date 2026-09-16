@@ -259,6 +259,10 @@ input[readonly], input:disabled, select:disabled, textarea[readonly], textarea:d
   cursor: not-allowed;
 }
 .row { display: flex; gap: 0.75rem; flex-wrap: wrap; margin-top: 1.25rem; align-items: center; }
+.unlock-secondary-row {
+  margin-top: 0.65rem;
+  justify-content: flex-start;
+}
 button {
   border: none;
   border-radius: var(--radius);

@@ -100,7 +100,7 @@
             <li><strong>Offline-Kopie nach Entsperren aktualisieren</strong> aktivieren — Sync läuft im Hintergrund (Fortschritt in der Sidebar).</li>
             <li>Ohne Netz: Login-Seite <strong>Offline entsperren</strong> oder <code>/app?offline=1</code> — nur Master-Passwort, kein TOTP.</li>
           </ol>
-          <p class="help-note">Im Offline-Modus nur <strong>Lesen</strong>; Schreiben und Admin sind ausgeblendet. Logout löscht die Kopie nicht — unter Konto &amp; Sicherheit <strong>Offline-Kopie löschen</strong> oder Opt-in deaktivieren.</p>
+          <p class="help-note">Im Offline-Modus nur <strong>Lesen</strong>; Schreiben, Recovery mit Recovery-Kit und Admin sind nur nach Online-Anmeldung verfügbar. Logout löscht die Kopie nicht — unter Konto &amp; Sicherheit <strong>Offline-Kopie löschen</strong> oder Opt-in deaktivieren.</p>
           <h2 id="settings">Einstellungen</h2>
           <p>Unter <strong>Einstellungen</strong> ändern Sie Anzeigename und E-Mail-Adresse. Der Username bleibt unveränderlich. Im Abschnitt <strong>Darstellung</strong> wählen Sie das Theme: <strong>Systemeinstellung</strong> (folgt automatisch der Betriebssystem-Präferenz, auch live bei Umschaltung), <strong>Hell</strong> oder <strong>Dunkel</strong>. Zusätzlich wählen Sie das Farbdesign: <strong>Blau</strong> (Standard), <strong>Indigo</strong>, <strong>Teal</strong> oder <strong>Graphit</strong>. Das Sonne/Mond-Icon oben rechts bleibt als schneller manueller Umschalter erhalten.</p>
           <figure class="help-figure">
@@ -116,12 +116,12 @@
             <figcaption>Panel „Vault entsperren“ mit Option „Master-Passwort wiederherstellen“</figcaption>
           </figure>
           <ol>
-            <li>Login normal durchführen (Organisation, Username, Login-Passwort; ggf. TOTP).</li>
-            <li>Im Panel <strong>Vault entsperren</strong> auf <strong>Master-Passwort wiederherstellen</strong> klicken.</li>
+            <li>Login normal <strong>online</strong> durchführen (Organisation, Username, Login-Passwort; ggf. TOTP). Recovery per Recovery-Kit setzt eine aktive Online-Sitzung voraus.</li>
+            <li>Im Panel <strong>Vault entsperren</strong> unter <strong>Entsperren</strong> auf <strong>Master-Passwort wiederherstellen</strong> klicken.</li>
             <li>Ihr heruntergeladenes <strong>Recovery-Kit</strong> (Base64) einfügen und ein neues Master-Passwort setzen.</li>
             <li><strong>Mit Recovery-Kit wiederherstellen</strong> ausführen — der private Schlüssel wird clientseitig entschlüsselt und mit dem neuen Master-Passwort neu versiegelt.</li>
           </ol>
-          <p class="help-note">Ohne Master-Passwort und ohne Recovery-Kit ist eine Wiederherstellung im Modus <code>user_kit</code> nicht möglich. Bei <code>admin_escrow</code> erfolgt Wiederherstellung über den Admin-Prozess.</p>
+          <p class="help-note">Wenn Sie vorher <strong>Offline entsperren</strong> gewählt haben, nutzen Sie darunter <strong>Online anmelden für Recovery</strong>; nach erfolgreichem Login öffnet TeamVault den Recovery-Bereich automatisch. Ist der Vault bereits offline geöffnet, zuerst <strong>Abmelden</strong> und dann online anmelden. Ohne Master-Passwort und ohne Recovery-Kit ist eine Wiederherstellung im Modus <code>user_kit</code> nicht möglich. Bei <code>admin_escrow</code> erfolgt Wiederherstellung über den Admin-Prozess.</p>
         </div>
 
         <h2 id="login">Beim Login nutzen</h2>

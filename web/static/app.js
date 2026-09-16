@@ -890,6 +890,7 @@ function renderLogin(app) {
     <h1>Login</h1>
     <div id="loginStep1">
       ${hintBox("Login-Passwort oder Passkey. Zum Entschlüsseln des Vaults brauchen Sie weiterhin Ihr Master-Passwort.")}
+      ${hintBox("Für die Wiederherstellung per Recovery-Kit ist eine Online-Anmeldung erforderlich. Danach öffnet sich im Entsperrbildschirm direkt der Recovery-Bereich.", { id: "loginRecoverHint", hidden: true })}
       <div id="tenantChoice">
         <label>Organisation</label>
         <select id="slug" autocomplete="organization" disabled>
@@ -927,6 +928,8 @@ function renderLogin(app) {
   const tenantChoice = n.querySelector("#tenantChoice");
   const step1 = n.querySelector("#loginStep1");
   const step2 = n.querySelector("#loginStep2");
+  const recoveryIntent = new URLSearchParams(location.search).get("recover") === "1";
+  if (recoveryIntent) n.querySelector("#loginRecoverHint").hidden = false;
   let pendingLoginToken = "";
   (async () => {
     try {
@@ -934,7 +937,7 @@ function renderLogin(app) {
       if (me && me.username) {
         if (me.needs_vault_onboard) tvGo("/onboard");
         else if (me.needs_totp_setup) tvGo("/onboard-2fa");
-        else tvGo("/app");
+        else tvGo(recoveryIntent ? "/app?recover=1" : "/app");
       }
     } catch (_) {}
   })();
@@ -981,7 +984,7 @@ function renderLogin(app) {
     }
     if (res.needs_vault_onboard) tvGo("/onboard");
     else if (res.needs_totp_setup) tvGo("/onboard-2fa");
-    else tvGo("/app");
+    else tvGo(recoveryIntent ? "/app?recover=1" : "/app");
   }
   (async () => {
     try {
@@ -2208,15 +2211,16 @@ function renderApp(app) {
           <label id="offlineSnapLabel" hidden for="offlineSnap">Gespeicherte Offline-Kopie</label>
           <select id="offlineSnap" hidden></select>
           <label>Master-Passwort</label><input id="mpw" type="password" autocomplete="current-password" />
-          <div class="row"><button class="btn-ghost btn-with-ico" type="button" id="unlockRecoveryToggle" aria-controls="unlockRecoveryWrap" aria-expanded="false">${btnLabel("lock", "Master-Passwort wiederherstellen")}</button></div>
+          <div class="error" id="uerr" hidden role="alert" aria-live="assertive"></div>
+          <div class="row"><button class="btn-accent btn-with-ico" type="button" id="ulock">${btnLabel("unlock", "Entsperren")}</button></div>
+          <div class="row unlock-secondary-row" id="unlockOnlineRecoveryRow" hidden><button class="btn-ghost btn-sm" type="button" id="unlockOnlineRecovery">Online anmelden für Recovery</button></div>
+          <div class="row unlock-secondary-row" id="unlockRecoveryRow" hidden><button class="btn-ghost btn-sm" type="button" id="unlockRecoveryToggle" aria-controls="unlockRecoveryWrap" aria-expanded="false">Master-Passwort wiederherstellen</button></div>
           <div id="unlockRecoveryWrap" hidden>
             <label>Recovery-Kit (Base64)</label><input id="recoverKit" type="text" autocomplete="off" />
             <label>Neues Master-Passwort (${MASTER_PASSWORD_POLICY})</label><input id="recoverMpw" type="password" autocomplete="new-password" />
             <label>Neues Master-Passwort wiederholen</label><input id="recoverMpw2" type="password" autocomplete="new-password" />
             <div class="row"><button class="btn-accent" type="button" id="unlockRecover">Mit Recovery-Kit wiederherstellen</button></div>
           </div>
-          <div class="error" id="uerr" hidden role="alert" aria-live="assertive"></div>
-          <div class="row"><button class="btn-accent btn-with-ico" type="button" id="ulock">${btnLabel("unlock", "Entsperren")}</button></div>
         </div>
 
         <div id="vaultui" hidden>
@@ -3175,7 +3179,44 @@ function renderApp(app) {
     }
   }
 
-  const offlineUrlParam = new URLSearchParams(location.search).get("offline") === "1";
+  const queryParams = new URLSearchParams(location.search);
+  const offlineUrlParam = queryParams.get("offline") === "1";
+  let recoverUrlParam = queryParams.get("recover") === "1";
+
+  function openUnlockRecoveryUI() {
+    const wrap = n.querySelector("#unlockRecoveryWrap");
+    const btn = n.querySelector("#unlockRecoveryToggle");
+    if (!wrap || !btn) return;
+    wrap.hidden = false;
+    btn.setAttribute("aria-expanded", "true");
+    n.querySelector("#recoverKit")?.focus();
+  }
+
+  function showUnlockError(msg) {
+    const err = n.querySelector("#uerr");
+    if (!err) return;
+    err.hidden = !msg;
+    err.textContent = msg || "";
+  }
+
+  function syncUnlockRecoveryUI() {
+    const onlineRow = n.querySelector("#unlockOnlineRecoveryRow");
+    const row = n.querySelector("#unlockRecoveryRow");
+    const wrap = n.querySelector("#unlockRecoveryWrap");
+    const btn = n.querySelector("#unlockRecoveryToggle");
+    if (!onlineRow || !row || !wrap || !btn) return;
+    const recoveryAvailable = (
+      !!vault.me &&
+      !vault.offlineMode &&
+      ((vault.me.recovery_mode || "user_kit") === "user_kit")
+    );
+    onlineRow.hidden = !(vault.offlinePicker && !vault.offlineMode);
+    row.hidden = !recoveryAvailable;
+    if (!recoveryAvailable) {
+      wrap.hidden = true;
+      btn.setAttribute("aria-expanded", "false");
+    }
+  }
 
   async function populateOfflinePicker(snaps) {
     const sel = n.querySelector("#offlineSnap");
@@ -3202,6 +3243,7 @@ function renderApp(app) {
     pick();
     sel.onchange = pick;
     paintSessionBar(n, { snapshot: vault.offlineSnapshot });
+    syncUnlockRecoveryUI();
   }
 
   async function showOfflineExpiredMessage() {
@@ -3245,6 +3287,16 @@ function renderApp(app) {
       vault.me = me;
       loadUserFavoritesFromStorage();
       paintSessionBar(n, { me });
+      syncUnlockRecoveryUI();
+      if (recoverUrlParam && !vault.offlineMode) {
+        if ((vault.me.recovery_mode || "user_kit") === "user_kit") {
+          openUnlockRecoveryUI();
+        } else {
+          showUnlockError("Recovery per Recovery-Kit ist in diesem Tenant nicht aktiviert");
+        }
+        history.replaceState(null, "", tvPath("/app"));
+        recoverUrlParam = false;
+      }
       syncAdminNavVisibility();
       try {
         vault.policy = await api("/api/policy/client");
@@ -4372,12 +4424,19 @@ ${escHtml(apiCmd)}</code>
       err.hidden = false; err.textContent = e.message;
     }
   };
+  n.querySelector("#unlockOnlineRecovery").onclick = () => {
+    tvGo("/login?recover=1");
+  };
   n.querySelector("#unlockRecoveryToggle").onclick = () => {
+    if (vault.offlineMode || !vault.me) {
+      showUnlockError("Recovery per Recovery-Kit ist nur nach Online-Anmeldung verfügbar");
+      return;
+    }
     const wrap = n.querySelector("#unlockRecoveryWrap");
     const btn = n.querySelector("#unlockRecoveryToggle");
-    if (!wrap) return;
+    if (!wrap || !btn) return;
     wrap.hidden = !wrap.hidden;
-    if (btn) btn.setAttribute("aria-expanded", wrap.hidden ? "false" : "true");
+    btn.setAttribute("aria-expanded", wrap.hidden ? "false" : "true");
     if (!wrap.hidden) n.querySelector("#recoverKit")?.focus();
   };
   n.querySelector("#unlockRecover").onclick = async () => {
