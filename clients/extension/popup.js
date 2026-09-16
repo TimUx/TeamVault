@@ -113,6 +113,27 @@ function absoluteUrl(base, path) {
   return base.replace(/\/$/, "") + "/" + String(path).replace(/^\//, "");
 }
 
+function recoveryWebUrl() {
+  const base = (state.base || "").trim();
+  if (!base) return "";
+  try {
+    const u = new URL(base);
+    if (u.protocol !== "http:" && u.protocol !== "https:") return "";
+    u.pathname = `${u.pathname.replace(/\/$/, "")}/app`;
+    u.search = "recover=1";
+    u.hash = "";
+    return u.toString();
+  } catch (_) {
+    return "";
+  }
+}
+
+function syncRecoveryWebAction() {
+  const btn = document.getElementById("openRecoveryWeb");
+  if (!btn) return;
+  btn.disabled = !recoveryWebUrl();
+}
+
 async function extensionDownloadUrl() {
   try {
     const meta = await apiFetch("/api/client-downloads");
@@ -192,6 +213,7 @@ async function boot() {
   applyAccent(cfg.accent || "blue");
   state.base = (cfg.base || "http://127.0.0.1:8080").replace(/\/$/, "");
   document.getElementById("base").value = state.base;
+  syncRecoveryWebAction();
   checkForUpdate();
   if (cfg.user) document.getElementById("user").value = cfg.user;
   try {
@@ -238,6 +260,7 @@ function isBuiltinLocalOrigin(base) {
 
 document.getElementById("saveBase").onclick = async () => {
   state.base = document.getElementById("base").value.trim().replace(/\/$/, "");
+  syncRecoveryWebAction();
   const accent = document.getElementById("accent").value;
   applyAccent(accent);
   await api.storage.local.set({ base: state.base, accent });
@@ -360,6 +383,17 @@ document.getElementById("doUnlock").onclick = async () => {
     await autoRefreshSecrets("unlock", { force: true });
   } catch (e) {
     showErr(e.message);
+  }
+};
+
+document.getElementById("openRecoveryWeb").onclick = async () => {
+  showErr("");
+  try {
+    const url = recoveryWebUrl();
+    if (!url) throw new Error("Server-URL fehlt oder ist ungültig");
+    await api.tabs.create({ url });
+  } catch (e) {
+    showErr(e.message || "Recovery-Link konnte nicht geöffnet werden");
   }
 };
 

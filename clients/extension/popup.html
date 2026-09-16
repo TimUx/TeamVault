@@ -22,6 +22,10 @@
     button { margin-top: 0.45rem; border: 0; border-radius: var(--radius); padding: 0.45rem 0.7rem; font-weight: 600; cursor: pointer; background: var(--a); color: #fff; }
     button:hover { filter: brightness(0.96); }
     button.ghost { background: transparent; border: 1px solid #ccc; color: var(--t); }
+    .btn-link { background: none; border: 0; color: var(--muted); text-align: left; padding: 0; margin-top: 0.35rem; font-weight: 600; }
+    .btn-link:hover { color: var(--a-dark); }
+    .btn-link:focus-visible { outline: 2px solid var(--a); outline-offset: 2px; border-radius: 4px; }
+    .btn-link:disabled { opacity: 0.55; cursor: not-allowed; }
     .btn-with-ico { display: inline-flex; align-items: center; justify-content: center; gap: 0.4rem; }
     .btn-with-ico .ico { width: 1rem; height: 1rem; flex-shrink: 0; }
     .btn-ico-only { display: inline-flex; align-items: center; justify-content: center; width: 1.9rem; height: 1.9rem; padding: 0; flex-shrink: 0; }
@@ -79,6 +83,8 @@
       <p class="hint" id="who"></p>
       <label>Master-Passwort</label><input id="mpw" type="password" />
       <button id="doUnlock" type="button">Vault entsperren</button>
+      <button class="btn-link" id="openRecoveryWeb" type="button" aria-describedby="openRecoveryWebHint" disabled>Recovery im Web öffnen</button>
+      <p class="hint" id="openRecoveryWebHint">Recovery mit Recovery-Kit läuft im Web-Client (Schritt-für-Schritt).</p>
       <button class="ghost btn-ico-only" id="logout" type="button" aria-label="Logout" title="Logout"></button>
     </section>
     <section id="vault" hidden>
