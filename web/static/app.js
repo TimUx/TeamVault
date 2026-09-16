@@ -2219,13 +2219,19 @@ function renderApp(app) {
           <label>Master-Passwort</label><input id="mpw" type="password" autocomplete="current-password" />
           <div class="error" id="uerr" hidden role="alert" aria-live="assertive"></div>
           <div class="row"><button class="btn-accent btn-with-ico" type="button" id="ulock">${btnLabel("unlock", "Entsperren")}</button></div>
-          <div class="row unlock-secondary-row" id="unlockOnlineRecoveryRow" hidden><button class="btn-ghost btn-sm" type="button" id="unlockOnlineRecovery">Online anmelden für Recovery</button></div>
-          <div class="row unlock-secondary-row" id="unlockRecoveryRow" hidden><button class="btn-ghost btn-sm" type="button" id="unlockRecoveryToggle" aria-controls="unlockRecoveryWrap" aria-expanded="false">Master-Passwort wiederherstellen</button></div>
-          <div id="unlockRecoveryWrap" hidden>
-            <label>Recovery-Kit (Base64)</label><input id="recoverKit" type="text" autocomplete="off" />
-            <label>Neues Master-Passwort (${MASTER_PASSWORD_POLICY})</label><input id="recoverMpw" type="password" autocomplete="new-password" />
-            <label>Neues Master-Passwort wiederholen</label><input id="recoverMpw2" type="password" autocomplete="new-password" />
-            <div class="row"><button class="btn-accent" type="button" id="unlockRecover">Mit Recovery-Kit wiederherstellen</button></div>
+          <div class="unlock-recovery-section" id="unlockRecoverySection" hidden>
+            <details id="unlockRecoveryDetails">
+              <summary>Recovery</summary>
+              <p class="hint unlock-recovery-hint" id="unlockRecoveryHint">Wiederherstellung mit Recovery-Kit oder nach Online-Anmeldung starten.</p>
+              <div class="row unlock-secondary-row" id="unlockOnlineRecoveryRow" hidden><button class="btn-ghost btn-sm" type="button" id="unlockOnlineRecovery">Online anmelden für Recovery</button></div>
+              <div class="row unlock-secondary-row" id="unlockRecoveryRow" hidden><button class="btn-ghost btn-sm" type="button" id="unlockRecoveryToggle" aria-controls="unlockRecoveryWrap" aria-expanded="false">Master-Passwort wiederherstellen</button></div>
+              <div id="unlockRecoveryWrap" hidden>
+                <label>Recovery-Kit (Base64)</label><input id="recoverKit" type="text" autocomplete="off" />
+                <label>Neues Master-Passwort (${MASTER_PASSWORD_POLICY})</label><input id="recoverMpw" type="password" autocomplete="new-password" />
+                <label>Neues Master-Passwort wiederholen</label><input id="recoverMpw2" type="password" autocomplete="new-password" />
+                <div class="row"><button class="btn-accent" type="button" id="unlockRecover">Mit Recovery-Kit wiederherstellen</button></div>
+              </div>
+            </details>
           </div>
         </div>
 
@@ -3190,9 +3196,13 @@ function renderApp(app) {
   let recoverUrlParam = queryParams.get("recover") === "1";
 
   function openUnlockRecoveryUI() {
+    const section = n.querySelector("#unlockRecoverySection");
+    const details = n.querySelector("#unlockRecoveryDetails");
     const wrap = n.querySelector("#unlockRecoveryWrap");
     const btn = n.querySelector("#unlockRecoveryToggle");
     if (!wrap || !btn) return;
+    if (section) section.hidden = false;
+    if (details) details.open = true;
     wrap.hidden = false;
     btn.setAttribute("aria-expanded", "true");
     n.querySelector("#recoverKit")?.focus();
@@ -3208,20 +3218,31 @@ function renderApp(app) {
   function syncUnlockRecoveryUI() {
     const onlineRow = n.querySelector("#unlockOnlineRecoveryRow");
     const row = n.querySelector("#unlockRecoveryRow");
+    const section = n.querySelector("#unlockRecoverySection");
+    const details = n.querySelector("#unlockRecoveryDetails");
+    const hint = n.querySelector("#unlockRecoveryHint");
     const wrap = n.querySelector("#unlockRecoveryWrap");
     const btn = n.querySelector("#unlockRecoveryToggle");
-    if (!onlineRow || !row || !wrap || !btn) return;
+    if (!onlineRow || !row || !wrap || !btn || !section) return;
     const recoveryAvailable = (
       !!vault.me &&
       !vault.offlineMode &&
       ((vault.me.recovery_mode || "user_kit") === "user_kit")
     );
-    onlineRow.hidden = !(vault.offlinePicker && !vault.offlineMode);
+    const offlineRecoveryAvailable = vault.offlinePicker && !vault.offlineMode;
+    onlineRow.hidden = !offlineRecoveryAvailable;
     row.hidden = !recoveryAvailable;
+    section.hidden = !(offlineRecoveryAvailable || recoveryAvailable);
+    if (hint) {
+      hint.textContent = offlineRecoveryAvailable
+        ? "Für Recovery zuerst online anmelden, danach werden Sie zum Recovery-Schritt geführt."
+        : "Recovery mit Recovery-Kit starten.";
+    }
     if (!recoveryAvailable) {
       wrap.hidden = true;
       btn.setAttribute("aria-expanded", "false");
     }
+    if (section.hidden && details) details.open = false;
   }
 
   async function populateOfflinePicker(snaps) {
