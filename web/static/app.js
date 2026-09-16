@@ -2208,7 +2208,7 @@ function renderApp(app) {
           <label id="offlineSnapLabel" hidden for="offlineSnap">Gespeicherte Offline-Kopie</label>
           <select id="offlineSnap" hidden></select>
           <label>Master-Passwort</label><input id="mpw" type="password" autocomplete="current-password" />
-          <div class="row"><button class="btn-ghost btn-with-ico" type="button" id="unlockRecoveryToggle" aria-controls="unlockRecoveryWrap" aria-expanded="false">${btnLabel("lock", "Master-Passwort wiederherstellen")}</button></div>
+          <div class="row" id="unlockRecoveryRow" hidden><button class="btn-ghost btn-with-ico" type="button" id="unlockRecoveryToggle" aria-controls="unlockRecoveryWrap" aria-expanded="false">${btnLabel("lock", "Master-Passwort wiederherstellen")}</button></div>
           <div id="unlockRecoveryWrap" hidden>
             <label>Recovery-Kit (Base64)</label><input id="recoverKit" type="text" autocomplete="off" />
             <label>Neues Master-Passwort (${MASTER_PASSWORD_POLICY})</label><input id="recoverMpw" type="password" autocomplete="new-password" />
@@ -3177,6 +3177,22 @@ function renderApp(app) {
 
   const offlineUrlParam = new URLSearchParams(location.search).get("offline") === "1";
 
+  function syncUnlockRecoveryUI() {
+    const row = n.querySelector("#unlockRecoveryRow");
+    const wrap = n.querySelector("#unlockRecoveryWrap");
+    const btn = n.querySelector("#unlockRecoveryToggle");
+    if (!row || !wrap || !btn) return;
+    const recoveryAvailable = !!vault.me &&
+      !vault.offlineMode &&
+      !vault.offlinePicker &&
+      ((vault.me.recovery_mode || "user_kit") === "user_kit");
+    row.hidden = !recoveryAvailable;
+    if (!recoveryAvailable) {
+      wrap.hidden = true;
+      btn.setAttribute("aria-expanded", "false");
+    }
+  }
+
   async function populateOfflinePicker(snaps) {
     const sel = n.querySelector("#offlineSnap");
     const label = n.querySelector("#offlineSnapLabel");
@@ -3202,6 +3218,7 @@ function renderApp(app) {
     pick();
     sel.onchange = pick;
     paintSessionBar(n, { snapshot: vault.offlineSnapshot });
+    syncUnlockRecoveryUI();
   }
 
   async function showOfflineExpiredMessage() {
@@ -3245,6 +3262,7 @@ function renderApp(app) {
       vault.me = me;
       loadUserFavoritesFromStorage();
       paintSessionBar(n, { me });
+      syncUnlockRecoveryUI();
       syncAdminNavVisibility();
       try {
         vault.policy = await api("/api/policy/client");
