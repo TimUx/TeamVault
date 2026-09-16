@@ -5400,7 +5400,9 @@ ${escHtml(apiCmd)}</code>
     });
   }
 
-  async function refreshSecrets(reset) {
+  async function refreshSecrets(reset, opts = {}) {
+    const preserveLoaded = reset && opts.preserveLoaded !== false;
+    const targetLoaded = preserveLoaded ? Math.max(vault.secretsCache.length, vault.pageLimit) : vault.pageLimit;
     if (vault.offlineMode) {
       if (reset) {
         vault.secretsCache = (vault.offlineSnapshot?.secrets || []).map((it) => ({ ...it }));
@@ -5415,14 +5417,17 @@ ${escHtml(apiCmd)}</code>
       vault.secretsCache = [];
       vault.secretsOffset = 0;
     }
-    const data = normalizeSecretsList(
-      await api(`/api/secrets?limit=${vault.pageLimit}&offset=${vault.secretsOffset}`)
-    );
-    vault.secretsTotal = data.total;
-    const page = data.items;
-    await decryptListTitles(page);
-    vault.secretsCache = vault.secretsCache.concat(page);
-    vault.secretsOffset = vault.secretsCache.length;
+    do {
+      const data = normalizeSecretsList(
+        await api(`/api/secrets?limit=${vault.pageLimit}&offset=${vault.secretsOffset}`)
+      );
+      vault.secretsTotal = data.total;
+      const page = data.items;
+      await decryptListTitles(page);
+      vault.secretsCache = vault.secretsCache.concat(page);
+      vault.secretsOffset = vault.secretsCache.length;
+      if (!reset || !preserveLoaded || vault.secretsCache.length >= vault.secretsTotal) break;
+    } while (vault.secretsCache.length < Math.min(targetLoaded, vault.secretsTotal));
     vault.secretsLastRefreshAt = Date.now();
     updateTagOptions();
     paintSecretList();
