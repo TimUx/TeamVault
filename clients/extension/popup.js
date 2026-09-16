@@ -1,6 +1,18 @@
 /* TeamVault extension popup — mature autofill + domain match (ZK: keys only here). */
 const api = typeof browser !== "undefined" ? browser : chrome;
-const state = { base: "", sk: null, me: null, cache: [], tabHost: "", tabOrigin: "" };
+const SECRET_AUTO_REFRESH_COOLDOWN_MS = 15000;
+const state = {
+  base: "",
+  sk: null,
+  me: null,
+  params: null,
+  cache: [],
+  tabHost: "",
+  tabOrigin: "",
+  secretsRefreshPromise: null,
+  secretsLastAutoRefreshAt: 0,
+  secretsLastAutoRefreshAttemptAt: 0,
+};
 const accentOptions = new Set(["blue", "indigo", "teal", "graphite", "rose", "amber", "emerald"]);
 const icons = {
   fill:
@@ -71,7 +83,12 @@ async function apiFetch(path, opts = {}) {
     ...opts,
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || res.statusText);
+  if (!res.ok) {
+    const err = new Error(data.error || res.statusText);
+    err.status = res.status;
+    err.code = data.code || "";
+    throw err;
+  }
   return data;
 }
 
@@ -132,6 +149,39 @@ async function checkForUpdate() {
     }
     el.hidden = false;
   } catch (_) {}
+}
+
+async function unlockParamCandidates(keys) {
+  const fallback = [];
+  let paramsErr = null;
+  if (keys?.argon2) fallback.push(keys.argon2);
+  if (state.params) fallback.push(state.params);
+  try {
+    fallback.push(await apiFetch("/api/vault/crypto-params"));
+  } catch (e) {
+    paramsErr = e;
+  }
+  if (!fallback.length && paramsErr) throw paramsErr;
+  return fallback;
+}
+
+async function unlockPrivateKeyWithCandidates(secret, salt, nonce, ciphertext, candidates) {
+  let lastErr = null;
+  const seen = new Set();
+  for (const p of candidates || []) {
+    const key = JSON.stringify(p || {});
+    if (seen.has(key)) continue;
+    seen.add(key);
+    try {
+      return {
+        sk: await TVCrypto.unlockPrivateKey(secret, salt, nonce, ciphertext, p),
+        params: p,
+      };
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  throw (lastErr || new Error("wrong master password"));
 }
 
 /** TOTP (RFC 6238, SHA-1, 6 digits) — see lib/tv-totp.js */
@@ -294,18 +344,20 @@ document.getElementById("doUnlock").onclick = async () => {
   showErr("");
   try {
     const keys = await apiFetch("/api/vault/keys");
-    const params = await apiFetch("/api/vault/crypto-params");
-    state.sk = await TVCrypto.unlockPrivateKey(
+    const fallback = await unlockParamCandidates(keys);
+    const opened = await unlockPrivateKeyWithCandidates(
       document.getElementById("mpw").value,
       TVCrypto.b64dec(keys.salt_b64),
       TVCrypto.b64dec(keys.encrypted_private_key_nonce_b64),
       TVCrypto.b64dec(keys.encrypted_private_key_b64),
-      params
+      fallback
     );
+    state.sk = opened.sk;
+    state.params = opened.params;
     document.getElementById("mpw").value = "";
     document.getElementById("unlock").hidden = true;
     document.getElementById("vault").hidden = false;
-    await refresh();
+    await autoRefreshSecrets("unlock", { force: true });
   } catch (e) {
     showErr(e.message);
   }
@@ -314,6 +366,7 @@ document.getElementById("doUnlock").onclick = async () => {
 document.getElementById("lock").onclick = () => {
   if (state.sk) state.sk.fill(0);
   state.sk = null;
+  state.params = null;
   state.cache = [];
   document.getElementById("vault").hidden = true;
   document.getElementById("unlock").hidden = false;
@@ -322,6 +375,7 @@ document.getElementById("lock").onclick = () => {
 document.getElementById("logout").onclick = async () => {
   if (state.sk) state.sk.fill(0);
   state.sk = null;
+  state.params = null;
   state.cache = [];
   try {
     await apiFetch("/api/auth/logout", { method: "POST", body: "{}" });
@@ -552,8 +606,37 @@ async function refresh() {
   paintList();
 }
 
+async function autoRefreshSecrets(reason, opts = {}) {
+  const force = !!opts.force;
+  if (!state.sk || document.getElementById("vault").hidden) return;
+  if (reason === "visibility" && document.visibilityState !== "visible") return;
+  if (state.secretsRefreshPromise) return state.secretsRefreshPromise;
+  if (!force && Date.now() - (state.secretsLastAutoRefreshAttemptAt || 0) < SECRET_AUTO_REFRESH_COOLDOWN_MS) return;
+  state.secretsLastAutoRefreshAttemptAt = Date.now();
+  state.secretsRefreshPromise = (async () => {
+    try {
+      await refresh();
+      state.secretsLastAutoRefreshAt = Date.now();
+    } catch (e) {
+      state.secretsLastAutoRefreshAttemptAt = 0;
+      console.warn("secret auto refresh", reason, e);
+    } finally {
+      state.secretsRefreshPromise = null;
+    }
+  })();
+  return state.secretsRefreshPromise;
+}
+
 document.getElementById("filter").oninput = () => paintList();
 document.getElementById("matchHost").onchange = () => paintList();
 document.getElementById("visFilter").onchange = () => paintList();
+window.addEventListener("focus", () => {
+  autoRefreshSecrets("focus").catch(() => {});
+});
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") {
+    autoRefreshSecrets("visibility").catch(() => {});
+  }
+});
 
 boot().catch((e) => showErr(e.message));

@@ -78,13 +78,37 @@ func Logout(c *Client) {
 	_, _ = c.PostJSON("/api/auth/logout", map[string]string{})
 }
 
+func parseArgon2Params(raw any) cryptocore.Argon2Params {
+	var p cryptocore.Argon2Params
+	if raw == nil {
+		return p
+	}
+	b, _ := json.Marshal(raw)
+	_ = json.Unmarshal(b, &p)
+	return p
+}
+
+func appendUniqueParams(dst []cryptocore.Argon2Params, p cryptocore.Argon2Params, seen map[string]struct{}) []cryptocore.Argon2Params {
+	if p.KeyLen == 0 {
+		return dst
+	}
+	b, _ := json.Marshal(p)
+	key := string(b)
+	if _, ok := seen[key]; ok {
+		return dst
+	}
+	seen[key] = struct{}{}
+	return append(dst, p)
+}
+
 // Unlock derives SK from the master password against the server-provided
 // (or offline-cached) sealed identity, never sending the password anywhere.
 func Unlock(c *Client, masterPassword []byte, cached *OfflineSnapshot) (*Session, error) {
 	sess := &Session{Client: c}
 
 	var keys map[string]any
-	var params cryptocore.Argon2Params
+	paramsCandidates := make([]cryptocore.Argon2Params, 0, 3)
+	seenParams := map[string]struct{}{}
 	if cached == nil {
 		var err error
 		keys, err = c.GetJSON("/api/vault/keys")
@@ -92,15 +116,11 @@ func Unlock(c *Client, masterPassword []byte, cached *OfflineSnapshot) (*Session
 			return nil, err
 		}
 		if raw, ok := keys["argon2"]; ok {
-			b, _ := json.Marshal(raw)
-			_ = json.Unmarshal(b, &params)
+			paramsCandidates = appendUniqueParams(paramsCandidates, parseArgon2Params(raw), seenParams)
 		}
-		if params.Time == 0 {
-			paramsRaw, err := c.GetJSON("/api/vault/crypto-params")
-			if err == nil {
-				b, _ := json.Marshal(paramsRaw)
-				_ = json.Unmarshal(b, &params)
-			}
+		paramsRaw, err := c.GetJSON("/api/vault/crypto-params")
+		if err == nil {
+			paramsCandidates = appendUniqueParams(paramsCandidates, parseArgon2Params(paramsRaw), seenParams)
 		}
 	} else {
 		keys = map[string]any{
@@ -109,22 +129,32 @@ func Unlock(c *Client, masterPassword []byte, cached *OfflineSnapshot) (*Session
 			"encrypted_private_key_b64":       cached.Keys.EncryptedPrivateKeyB64,
 			"public_key_b64":                  cached.Keys.PublicKeyB64,
 		}
-		b, _ := json.Marshal(cached.CryptoParams)
-		_ = json.Unmarshal(b, &params)
+		paramsCandidates = appendUniqueParams(paramsCandidates, parseArgon2Params(cached.CryptoParams), seenParams)
 		sess.Offline = true
 	}
-	if params.KeyLen == 0 {
-		params = cryptocore.DefaultArgon2
-	}
+	paramsCandidates = appendUniqueParams(paramsCandidates, cryptocore.DefaultArgon2, seenParams)
 
 	salt := mustB64(str(keys["salt_b64"]))
 	nonce := mustB64(str(keys["encrypted_private_key_nonce_b64"]))
 	ct := mustB64(str(keys["encrypted_private_key_b64"]))
-	sk, mk, err := cryptocore.UnlockIdentity(masterPassword, cryptocore.SealedPrivateKey{
-		Salt: salt, Nonce: nonce, Ciphertext: ct, Params: params,
-	})
-	if mk != nil {
-		zero(mk)
+
+	var (
+		sk     []byte
+		params cryptocore.Argon2Params
+		err    error
+	)
+	for _, candidate := range paramsCandidates {
+		var mk []byte
+		sk, mk, err = cryptocore.UnlockIdentity(masterPassword, cryptocore.SealedPrivateKey{
+			Salt: salt, Nonce: nonce, Ciphertext: ct, Params: candidate,
+		})
+		if mk != nil {
+			zero(mk)
+		}
+		if err == nil {
+			params = candidate
+			break
+		}
 	}
 	if err != nil {
 		return nil, ErrInvalidMasterPassword
