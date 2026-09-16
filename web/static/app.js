@@ -1474,6 +1474,9 @@ const vault = {
   totpTimer: null,
   selectedIds: new Set(),
   offlineSyncRunning: false,
+  secretsRefreshPromise: null,
+  secretsLastRefreshAt: 0,
+  secretAutoRefreshBound: false,
 };
 
 function userFavoritesStorageKey() {
@@ -3272,6 +3275,7 @@ function renderApp(app) {
   }
 
   initAppSession();
+  bindSecretAutoRefresh();
 
   n.querySelector("#out").onclick = async () => {
     clearVaultKey();
@@ -4431,6 +4435,7 @@ ${escHtml(apiCmd)}</code>
       }
       n.querySelector("#lockOverlay").hidden = true;
       touchIdle();
+      await autoRefreshSecrets("unlock", { force: true });
       n.querySelector("#lockMpw").value = "";
       const status = n.querySelector("#securityStatus");
       if (status) status.textContent = "Vault entsperrt";
@@ -5418,8 +5423,40 @@ ${escHtml(apiCmd)}</code>
     await decryptListTitles(page);
     vault.secretsCache = vault.secretsCache.concat(page);
     vault.secretsOffset = vault.secretsCache.length;
+    vault.secretsLastRefreshAt = Date.now();
     updateTagOptions();
     paintSecretList();
+  }
+
+  async function autoRefreshSecrets(reason, opts = {}) {
+    const force = !!opts.force;
+    if (!vault.sk || !vault.me || vault.offlineMode || vault.offlinePicker) return;
+    if (reason === "visibility" && document.visibilityState !== "visible") return;
+    if (vault.secretsRefreshPromise) return vault.secretsRefreshPromise;
+    if (!force && Date.now() - (vault.secretsLastRefreshAt || 0) < 15000) return;
+    vault.secretsRefreshPromise = (async () => {
+      try {
+        await refreshSecrets(true);
+      } catch (e) {
+        console.warn("secret auto refresh", reason, e);
+      } finally {
+        vault.secretsRefreshPromise = null;
+      }
+    })();
+    return vault.secretsRefreshPromise;
+  }
+
+  function bindSecretAutoRefresh() {
+    if (vault.secretAutoRefreshBound) return;
+    vault.secretAutoRefreshBound = true;
+    window.addEventListener("focus", () => {
+      autoRefreshSecrets("focus").catch(() => {});
+    });
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") {
+        autoRefreshSecrets("visibility").catch(() => {});
+      }
+    });
   }
 
   n.querySelector("#sMore").onclick = async () => {
