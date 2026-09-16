@@ -1800,10 +1800,16 @@ async function recoverVaultWithKit(recoveryKitB64, newMasterPassword) {
     });
     vault.sk = sk;
     vault.params = params;
-    keepRecoveredUnlocked = true;
-    await unlockVault(newMasterPassword);
-    if (sk && vault.sk !== sk) {
-      sk.fill(0);
+    try {
+      await unlockVault(newMasterPassword);
+      if (sk && vault.sk !== sk) {
+        sk.fill(0);
+      } else {
+        keepRecoveredUnlocked = true;
+      }
+    } catch (_) {
+      // Server-side change succeeded; keep recovered key in-memory to avoid lockout.
+      keepRecoveredUnlocked = true;
     }
   } finally {
     kit.fill(0);
