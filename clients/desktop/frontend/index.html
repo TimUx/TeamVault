@@ -74,8 +74,8 @@
         <input id="uPass" type="password" autocomplete="current-password" />
       </label>
       <button id="uUnlock" class="btn-primary">Entsperren</button>
-      <button id="uRecoveryWeb" class="btn-link">Recovery im Web öffnen</button>
-      <p class="hint unlock-recovery-note">Recovery mit Recovery-Kit läuft im Web-Client.</p>
+      <a id="uRecoveryWeb" class="btn-link" href="#" target="_blank" rel="noopener noreferrer" aria-describedby="uRecoveryHint" hidden>Recovery im Web öffnen</a>
+      <p class="hint unlock-recovery-note" id="uRecoveryHint" hidden>Recovery mit Recovery-Kit läuft im Web-Client.</p>
       <p id="uError" class="error" hidden></p>
     </div>
   </section>

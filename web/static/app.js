@@ -2221,7 +2221,7 @@ function renderApp(app) {
           <div class="row"><button class="btn-accent btn-with-ico" type="button" id="ulock">${btnLabel("unlock", "Entsperren")}</button></div>
           <div class="unlock-recovery-section" id="unlockRecoverySection" hidden>
             <details id="unlockRecoveryDetails">
-              <summary id="unlockRecoverySummary">Recovery-Optionen anzeigen</summary>
+              <summary>Recovery-Optionen</summary>
               <p class="hint unlock-recovery-hint" id="unlockRecoveryHint">Wiederherstellung mit Recovery-Kit oder nach Online-Anmeldung starten.</p>
               <div class="row unlock-secondary-row" id="unlockOnlineRecoveryRow" hidden><button class="btn-ghost btn-sm" type="button" id="unlockOnlineRecovery">Online anmelden für Recovery</button></div>
               <div class="row unlock-secondary-row" id="unlockRecoveryRow" hidden><button class="btn-ghost btn-sm" type="button" id="unlockRecoveryToggle" aria-controls="unlockRecoveryWrap" aria-expanded="false">Master-Passwort wiederherstellen</button></div>
@@ -3203,7 +3203,6 @@ function renderApp(app) {
     if (!wrap || !btn) return;
     if (section) section.hidden = false;
     if (details) details.open = true;
-    setUnlockRecoverySummary(true);
     wrap.hidden = false;
     btn.setAttribute("aria-expanded", "true");
     n.querySelector("#recoverKit")?.focus();
@@ -3234,7 +3233,8 @@ function renderApp(app) {
     onlineRow.hidden = !offlineRecoveryAvailable;
     row.hidden = !recoveryAvailable;
     section.hidden = !(offlineRecoveryAvailable || recoveryAvailable);
-    if (offlineRecoveryAvailable && !recoveryAvailable) details.open = true;
+    const offlineOnlyRecovery = offlineRecoveryAvailable && !recoveryAvailable;
+    if (offlineOnlyRecovery) details.open = true;
     if (hint) {
       if (offlineRecoveryAvailable && recoveryAvailable) {
         hint.textContent = "Recovery per Recovery-Kit starten oder zuerst online anmelden und dann durch den Recovery-Schritt gehen.";
@@ -3249,13 +3249,6 @@ function renderApp(app) {
       btn.setAttribute("aria-expanded", "false");
     }
     if (section.hidden && details) details.open = false;
-    setUnlockRecoverySummary(details.open);
-  }
-
-  function setUnlockRecoverySummary(isOpen) {
-    const summary = n.querySelector("#unlockRecoverySummary");
-    if (!summary) return;
-    summary.textContent = isOpen ? "Recovery-Optionen ausblenden" : "Recovery-Optionen anzeigen";
   }
 
   async function populateOfflinePicker(snaps) {
@@ -4520,9 +4513,6 @@ ${escHtml(apiCmd)}</code>
   });
   n.querySelector("#recoverMpw2").addEventListener("keydown", (ev) => {
     if (ev.key === "Enter") n.querySelector("#unlockRecover").click();
-  });
-  n.querySelector("#unlockRecoveryDetails")?.addEventListener("toggle", (ev) => {
-    setUnlockRecoverySummary(ev.currentTarget.open);
   });
 
   n.querySelector("#lockUnlock").onclick = async () => {

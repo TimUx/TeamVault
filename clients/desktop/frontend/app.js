@@ -15,6 +15,7 @@
   }
 
   const state = {
+    serverURL: "",
     tenant: "",
     username: "",
     offline: false,
@@ -159,9 +160,20 @@
   }
 
   function recoveryWebUrl() {
-    const base = $("cServer").value.trim();
+    const base = (state.serverURL || $("cServer").value || "").trim();
     if (!base) return "";
     return base.replace(/\/$/, "") + "/app?recover=1";
+  }
+
+  function syncRecoveryLink() {
+    const link = $("uRecoveryWeb");
+    const hint = $("uRecoveryHint");
+    if (!link || !hint) return;
+    const url = recoveryWebUrl();
+    const has = !!url;
+    link.hidden = !has;
+    hint.hidden = !has;
+    link.href = has ? url : "#";
   }
 
   function showUpdate(info) {
@@ -204,6 +216,7 @@
     applyAccent(settings.accent || "blue");
     applyTheme(settings.theme || "system");
     $("cServer").value = settings.server_url || "";
+    state.serverURL = settings.server_url || "";
     state.tenant = settings.tenant_slug || "";
     state.username = settings.username || "";
     if (settings.server_url) {
@@ -213,6 +226,7 @@
       } catch (_) {}
     }
     checkForUpdate(settings.server_url || "");
+    syncRecoveryLink();
     showScreen("screenConnect");
   }
 
@@ -226,6 +240,8 @@
       return;
     }
     state.tenant = "";
+    state.serverURL = url;
+    syncRecoveryLink();
     try {
       await App().Connect(url);
       await saveSettingsPartial({ server_url: url, tenant_slug: "" });
@@ -350,13 +366,15 @@
       setError("uError", errMsg(err));
     }
   });
-  $("uRecoveryWeb").addEventListener("click", () => {
+  $("uRecoveryWeb").addEventListener("click", (ev) => {
+    setError("uError", "");
     const url = recoveryWebUrl();
     if (!url) {
+      ev.preventDefault();
       setError("uError", "Server-URL ist erforderlich.");
       return;
     }
-    window.open(url, "_blank", "noopener");
+    ev.currentTarget.href = url;
   });
 
   async function saveSettingsPartial(patch) {

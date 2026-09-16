@@ -117,6 +117,12 @@ function recoveryWebUrl() {
   return absoluteUrl(state.base, "/app?recover=1");
 }
 
+function syncRecoveryWebAction() {
+  const btn = document.getElementById("openRecoveryWeb");
+  if (!btn) return;
+  btn.disabled = !state.base;
+}
+
 async function extensionDownloadUrl() {
   try {
     const meta = await apiFetch("/api/client-downloads");
@@ -196,6 +202,7 @@ async function boot() {
   applyAccent(cfg.accent || "blue");
   state.base = (cfg.base || "http://127.0.0.1:8080").replace(/\/$/, "");
   document.getElementById("base").value = state.base;
+  syncRecoveryWebAction();
   checkForUpdate();
   if (cfg.user) document.getElementById("user").value = cfg.user;
   try {
@@ -242,6 +249,7 @@ function isBuiltinLocalOrigin(base) {
 
 document.getElementById("saveBase").onclick = async () => {
   state.base = document.getElementById("base").value.trim().replace(/\/$/, "");
+  syncRecoveryWebAction();
   const accent = document.getElementById("accent").value;
   applyAccent(accent);
   await api.storage.local.set({ base: state.base, accent });
