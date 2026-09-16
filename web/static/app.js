@@ -3288,7 +3288,7 @@ function renderApp(app) {
       loadUserFavoritesFromStorage();
       paintSessionBar(n, { me });
       syncUnlockRecoveryUI();
-      if (recoverUrlParam && !vault.offlineMode && !vault.offlinePicker) {
+      if (recoverUrlParam && !vault.offlineMode) {
         history.replaceState(null, "", tvPath("/app"));
         recoverUrlParam = false;
         if ((vault.me.recovery_mode || "user_kit") === "user_kit") {
