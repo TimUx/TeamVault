@@ -184,7 +184,22 @@ paths:
       summary: Sealed private key material (ciphertext only)
       responses:
         '200':
-          description: public_key_b64, salt, nonce, sealed SK
+          description: public_key_b64, salt, nonce, sealed SK; for user_kit optionally recovery_salt_b64, recovery_nonce_b64, encrypted_private_key_recovery_b64
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [public_key_b64, salt_b64, encrypted_private_key_nonce_b64, encrypted_private_key_b64, kdf_params_stored]
+                properties:
+                  public_key_b64: { type: string }
+                  salt_b64: { type: string }
+                  encrypted_private_key_nonce_b64: { type: string }
+                  encrypted_private_key_b64: { type: string }
+                  argon2: { $ref: '#/components/schemas/Argon2Params' }
+                  kdf_params_stored: { type: boolean }
+                  recovery_salt_b64: { type: string }
+                  recovery_nonce_b64: { type: string }
+                  encrypted_private_key_recovery_b64: { type: string }
   /api/vault/onboard:
     post:
       tags: [vault]

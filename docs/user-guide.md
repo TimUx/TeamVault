@@ -141,7 +141,7 @@ Ein privates Secret wird durch Teilen zum **geteilten** Secret und wandert in di
 
 Die Tabelle **Geteilte Secrets** zeigt Anleger, User- und Gruppen-Freigaben. **Meine Secrets** bleibt ohne Freigabe-Spalten (nur Teilen-Aktion).
 
-Wird ein User **neu in eine Gruppe** aufgenommen, erscheinen fehlende Umschläge als Catch-up-Hinweis. Nachpflege passiert **nicht** still beim Unlock: jemand mit Zugriff bestätigt die Empfängerliste (TOFU-Fingerprint bei neuem oder geändertem Public Key). Der Server erzeugt keine Umschläge (Zero-Knowledge).
+Wird ein User **neu in eine Gruppe** aufgenommen oder später erst onboardet, pflegt TeamVault fehlende Umschläge nach dem Entsperren automatisch nach. Für neue oder geänderte Empfängerschlüssel ist weiter eine TOFU-Fingerprint-Bestätigung nötig. Der Server erzeugt keine Umschläge (Zero-Knowledge).
 
 **Import** legt Secrets immer als **privat** an.
 
@@ -250,6 +250,19 @@ Nur bei **lokalem** Auth-Backend: aktuelles + neues Login-Passwort (mindestens 1
 ### Master-Passwort ändern
 
 Aktuelles und neues Master-Passwort eingeben → **Master-Passwort speichern**. Das neue Passwort unterliegt derselben Regel wie beim Onboarding (mindestens 16 Zeichen, Groß-/Kleinbuchstaben, Ziffer, Sonderzeichen; Umlaute und Leerzeichen sind erlaubt). Der Private Key wird **nur im Browser** neu versiegelt; der Server speichert neue Ciphertexte. Bei Recovery-Modus `user_kit` erscheint ein neues Recovery-Kit (einmalig sichern).
+
+### Master-Passwort wiederherstellen (Recovery-Kit)
+
+Wenn das aktuelle Master-Passwort nicht mehr bekannt ist (Modus `user_kit`):
+
+1. Normal anmelden (Organisation, Username, Login-Passwort; ggf. TOTP)  
+2. Im Panel **Vault entsperren** auf **Master-Passwort wiederherstellen**  
+3. Recovery-Kit (Base64) einfügen und neues Master-Passwort setzen  
+4. **Mit Recovery-Kit wiederherstellen** ausführen
+
+Der private Schlüssel wird dabei nur im Browser entschlüsselt und direkt mit dem neuen Master-Passwort neu versiegelt. Ohne Master-Passwort und ohne Recovery-Kit ist im Modus `user_kit` keine Wiederherstellung möglich.
+
+![Vault entsperren](images/vault-unlock.png)
 
 ### Offline-Vault (optional)
 

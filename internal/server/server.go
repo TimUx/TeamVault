@@ -1032,14 +1032,27 @@ func (a *API) handleVaultKeys(w http.ResponseWriter, r *http.Request) {
 	}
 	salt, nonce, ct := u.EncryptedPrivateKey[:16], u.EncryptedPrivateKey[16:40], u.EncryptedPrivateKey[40:]
 	params, stored := userArgonParams(*u, a.bundle().Argon2)
-	writeJSON(w, http.StatusOK, map[string]any{
+	out := map[string]any{
 		"public_key_b64":                  base64.StdEncoding.EncodeToString(u.PublicKey),
 		"salt_b64":                        base64.StdEncoding.EncodeToString(salt),
 		"encrypted_private_key_nonce_b64": base64.StdEncoding.EncodeToString(nonce),
 		"encrypted_private_key_b64":       base64.StdEncoding.EncodeToString(ct),
 		"argon2":                          params,
 		"kdf_params_stored":               stored,
-	})
+	}
+	ten, terr := a.App.Vault.GetTenant(r.Context(), sess.TenantID)
+	if terr != nil {
+		writeErr(w, http.StatusInternalServerError, terr.Error())
+		return
+	}
+	if ten != nil && (ten.RecoveryMode == "" || ten.RecoveryMode == "user_kit") &&
+		len(u.EncryptedPrivateKeyRecovery) >= 16+24 {
+		rs, rn, rct := u.EncryptedPrivateKeyRecovery[:16], u.EncryptedPrivateKeyRecovery[16:40], u.EncryptedPrivateKeyRecovery[40:]
+		out["recovery_salt_b64"] = base64.StdEncoding.EncodeToString(rs)
+		out["recovery_nonce_b64"] = base64.StdEncoding.EncodeToString(rn)
+		out["encrypted_private_key_recovery_b64"] = base64.StdEncoding.EncodeToString(rct)
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 func (a *API) handlePersistKDFParams(w http.ResponseWriter, r *http.Request) {

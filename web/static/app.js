@@ -117,7 +117,12 @@ async function api(path, opts = {}) {
     headers: { "Content-Type": "application/json", ...(extraHeaders || {}) },
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || res.statusText);
+  if (!res.ok) {
+    const err = new Error(data.error || res.statusText);
+    err.status = res.status;
+    err.code = data.code || "";
+    throw err;
+  }
   return data;
 }
 
@@ -1707,18 +1712,113 @@ async function unlockVault(masterPassword, opts = {}) {
     return;
   }
   const keys = await api("/api/vault/keys");
-  const params = keys.argon2 || await api("/api/vault/crypto-params");
-  const sk = await TVCrypto.unlockPrivateKey(
+  const fallback = await unlockParamCandidates(keys);
+  const opened = await unlockPrivateKeyWithCandidates(
     masterPassword,
     TVCrypto.b64dec(keys.salt_b64),
     TVCrypto.b64dec(keys.encrypted_private_key_nonce_b64),
     TVCrypto.b64dec(keys.encrypted_private_key_b64),
-    params
+    fallback
   );
+  const sk = opened.sk;
+  const params = opened.params;
+  if (!sk || !params) {
+    throw new Error("wrong master password");
+  }
   vault.sk = sk;
   vault.params = params;
   if (keys.kdf_params_stored === false) {
     api("/api/vault/kdf-params", { method: "POST", body: JSON.stringify({ argon2: params }) }).catch(() => {});
+  }
+}
+
+async function unlockParamCandidates(keys) {
+  const fallback = [];
+  if (keys?.argon2) fallback.push(keys.argon2);
+  if (vault.params) fallback.push(vault.params);
+  if (window.TVOfflineStore?.getSnapshot && vault.me?.tenant_id && vault.me?.user_id) {
+    try {
+      const ownSnap = await TVOfflineStore.getSnapshot(vault.me.tenant_id, vault.me.user_id);
+      if (ownSnap?.crypto_params) fallback.push(ownSnap.crypto_params);
+    } catch (_) {}
+  }
+  if (!fallback.length) fallback.push(await api("/api/vault/crypto-params"));
+  return fallback;
+}
+
+async function unlockPrivateKeyWithCandidates(secret, salt, nonce, ciphertext, candidates) {
+  let lastErr = null;
+  const seen = new Set();
+  for (const p of (candidates || [])) {
+    const key = JSON.stringify(p || {});
+    if (seen.has(key)) continue;
+    seen.add(key);
+    try {
+      return {
+        sk: await TVCrypto.unlockPrivateKey(secret, salt, nonce, ciphertext, p),
+        params: p,
+      };
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  throw (lastErr || new Error("wrong master password"));
+}
+
+async function recoverVaultWithKit(recoveryKitB64, newMasterPassword) {
+  if (vault.offlineMode || vault.offlinePicker) throw new Error("Offline-Wiederherstellung nicht verfügbar");
+  if ((vault.me?.recovery_mode || "user_kit") !== "user_kit") {
+    throw new Error("Recovery-Kit ist in diesem Tenant nicht aktiviert");
+  }
+  const keys = await api("/api/vault/keys");
+  const paramsCandidates = await unlockParamCandidates(keys);
+  if (!keys.encrypted_private_key_recovery_b64 || !keys.recovery_nonce_b64 || !keys.recovery_salt_b64) {
+    throw new Error("Kein Recovery-Kit-Material vorhanden");
+  }
+  const kit = TVCrypto.b64dec((recoveryKitB64 || "").trim());
+  let sk = null;
+  let params = null;
+  let keepRecoveredUnlocked = false;
+  try {
+    const opened = await unlockPrivateKeyWithCandidates(
+      kit,
+      TVCrypto.b64dec(keys.recovery_salt_b64),
+      TVCrypto.b64dec(keys.recovery_nonce_b64),
+      TVCrypto.b64dec(keys.encrypted_private_key_recovery_b64),
+      paramsCandidates
+    );
+    sk = opened.sk;
+    params = opened.params;
+    const sealed = await TVCrypto.sealPrivateKey(sk, newMasterPassword, params);
+    const rec = await TVCrypto.sealWithRecoveryKit(sk, kit, params);
+    await api("/api/vault/change-master", {
+      method: "POST",
+      body: JSON.stringify({
+        encrypted_private_key_b64: TVCrypto.b64enc(sealed.sealedPrivateKey),
+        encrypted_private_key_nonce_b64: TVCrypto.b64enc(sealed.nonce),
+        salt_b64: TVCrypto.b64enc(sealed.salt),
+        encrypted_private_key_recovery_b64: TVCrypto.b64enc(rec.sealed),
+        recovery_nonce_b64: TVCrypto.b64enc(rec.nonce),
+        recovery_salt_b64: TVCrypto.b64enc(rec.salt),
+        argon2: params,
+      }),
+    });
+    vault.sk = sk;
+    vault.params = params;
+    try {
+      await unlockVault(newMasterPassword);
+      if (sk && vault.sk !== sk) {
+        sk.fill(0);
+      } else {
+        keepRecoveredUnlocked = true;
+      }
+    } catch (_) {
+      // Server-side change succeeded; keep recovered key in-memory to avoid lockout.
+      keepRecoveredUnlocked = true;
+    }
+  } finally {
+    kit.fill(0);
+    if (sk && !keepRecoveredUnlocked) sk.fill(0);
   }
 }
 
@@ -2108,6 +2208,13 @@ function renderApp(app) {
           <label id="offlineSnapLabel" hidden for="offlineSnap">Gespeicherte Offline-Kopie</label>
           <select id="offlineSnap" hidden></select>
           <label>Master-Passwort</label><input id="mpw" type="password" autocomplete="current-password" />
+          <div class="row"><button class="btn-ghost btn-with-ico" type="button" id="unlockRecoveryToggle" aria-controls="unlockRecoveryWrap" aria-expanded="false">${btnLabel("lock", "Master-Passwort wiederherstellen")}</button></div>
+          <div id="unlockRecoveryWrap" hidden>
+            <label>Recovery-Kit (Base64)</label><input id="recoverKit" type="text" autocomplete="off" />
+            <label>Neues Master-Passwort (${MASTER_PASSWORD_POLICY})</label><input id="recoverMpw" type="password" autocomplete="new-password" />
+            <label>Neues Master-Passwort wiederholen</label><input id="recoverMpw2" type="password" autocomplete="new-password" />
+            <div class="row"><button class="btn-accent" type="button" id="unlockRecover">Mit Recovery-Kit wiederherstellen</button></div>
+          </div>
           <div class="error" id="uerr" hidden role="alert" aria-live="assertive"></div>
           <div class="row"><button class="btn-accent btn-with-ico" type="button" id="ulock">${btnLabel("unlock", "Entsperren")}</button></div>
         </div>
@@ -3983,10 +4090,20 @@ ${escHtml(apiCmd)}</code>
     vault.secretsOffset = 0;
     await refreshSecrets(true);
     try {
+      const reseal = await sealGroupShareGaps();
+      if (reseal.sealed || reseal.failed || reseal.skipped) {
+        if (reseal.failed) {
+          announceA11y(`Gruppen-Freigaben nachgepflegt: ${reseal.sealed} erfolgreich, ${reseal.failed} fehlgeschlagen.`);
+        } else if (reseal.skipped) {
+          announceA11y(`Gruppen-Freigaben nachgepflegt: ${reseal.sealed} erfolgreich, ${reseal.skipped} übersprungen.`);
+        } else {
+          announceA11y(`Gruppen-Freigaben nachgepflegt: ${reseal.sealed} erfolgreich.`);
+        }
+      }
       const gaps = await api("/api/secrets/group-share-gaps");
-      const nGaps = (gaps.items || []).length;
-      if (nGaps) {
-        announceA11y(`${nGaps} Gruppen-Freigaben ohne Envelope. Nachpflege nur nach Bestätigung der Empfängerschlüssel.`);
+      const pending = (gaps.items || []).length;
+      if (pending) {
+        announceA11y(`${pending} Gruppen-Freigaben benötigen weiterhin Nachpflege.`);
       }
     } catch (_) {}
     navigateTo("vault:mine");
@@ -4255,6 +4372,35 @@ ${escHtml(apiCmd)}</code>
       err.hidden = false; err.textContent = e.message;
     }
   };
+  n.querySelector("#unlockRecoveryToggle").onclick = () => {
+    const wrap = n.querySelector("#unlockRecoveryWrap");
+    const btn = n.querySelector("#unlockRecoveryToggle");
+    if (!wrap) return;
+    wrap.hidden = !wrap.hidden;
+    if (btn) btn.setAttribute("aria-expanded", wrap.hidden ? "false" : "true");
+    if (!wrap.hidden) n.querySelector("#recoverKit")?.focus();
+  };
+  n.querySelector("#unlockRecover").onclick = async () => {
+    const err = n.querySelector("#uerr"); err.hidden = true;
+    try {
+      const kit = n.querySelector("#recoverKit").value.trim();
+      const mpw = n.querySelector("#recoverMpw").value;
+      const mpw2 = n.querySelector("#recoverMpw2").value;
+      if (!kit) throw new Error("Recovery-Kit erforderlich");
+      if (mpw !== mpw2) throw new Error("Neues Master-Passwort stimmt nicht überein");
+      const pwErr = masterPasswordError(mpw);
+      if (pwErr) throw new Error(pwErr);
+      await recoverVaultWithKit(kit, mpw);
+      n.querySelector("#recoverKit").value = "";
+      n.querySelector("#recoverMpw").value = "";
+      n.querySelector("#recoverMpw2").value = "";
+      n.querySelector("#mpw").value = "";
+      n.querySelector("#unlockRecoveryWrap").hidden = true;
+      await afterUnlock();
+    } catch (e) {
+      err.hidden = false; err.textContent = e.message;
+    }
+  };
   n.querySelector("#lockNow").onclick = () => {
     if (!vault.sk) return;
     clearVaultKey();
@@ -4269,6 +4415,9 @@ ${escHtml(apiCmd)}</code>
   };
   n.querySelector("#mpw").addEventListener("keydown", (ev) => {
     if (ev.key === "Enter") n.querySelector("#ulock").click();
+  });
+  n.querySelector("#recoverMpw2").addEventListener("keydown", (ev) => {
+    if (ev.key === "Enter") n.querySelector("#unlockRecover").click();
   });
 
   n.querySelector("#lockUnlock").onclick = async () => {
@@ -5844,7 +5993,16 @@ ${escHtml(apiCmd)}</code>
     if (accessDnDBusy || !currentSecret || !groupId) return;
     accessDnDBusy = true;
     try {
-      const pks = await api("/api/secrets/" + currentSecret.id + "/group-member-keys?group_id=" + encodeURIComponent(groupId));
+      let pks = null;
+      try {
+        pks = await api("/api/secrets/" + currentSecret.id + "/group-member-keys?group_id=" + encodeURIComponent(groupId));
+      } catch (e) {
+        if (e && e.status === 403) {
+          pks = await api("/api/groups/" + encodeURIComponent(groupId) + "/member-keys");
+        } else {
+          throw e;
+        }
+      }
       if (!pks.length) throw new Error("Keine onboardeten Gruppenmitglieder");
       const allowed = [];
       for (const p of pks) {

@@ -92,6 +92,9 @@ func TestOnboardAndTOTP(t *testing.T) {
 	if keys["public_key_b64"] == "" {
 		t.Fatal(keys)
 	}
+	if keys["encrypted_private_key_recovery_b64"] == "" || keys["recovery_nonce_b64"] == "" || keys["recovery_salt_b64"] == "" {
+		t.Fatalf("expected recovery material in keys response, got %#v", keys)
+	}
 	if keys["kdf_params_stored"] != true {
 		t.Fatalf("expected stored kdf params, got %#v", keys["kdf_params_stored"])
 	}
@@ -101,6 +104,63 @@ func TestOnboardAndTOTP(t *testing.T) {
 	}
 	ts.Close()
 	_ = app.Vault.Close()
+}
+
+func TestVaultKeysOmitsRecoveryMaterialForAdminEscrow(t *testing.T) {
+	dir := t.TempDir()
+	key := bytes.Repeat([]byte("s"), 32)
+	app, err := bootstrap.Run(bootstrap.Options{DataDir: dir, UnlockKey: key})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = app.Vault.Close() })
+	api := server.New(app)
+	ts := httptest.NewServer(api.Handler())
+	t.Cleanup(ts.Close)
+
+	postJSON(t, ts.URL+"/api/setup/commit", map[string]any{
+		"storage": map[string]string{"backend": "sqlite", "dsn": filepath.Join(dir, "v.db")},
+		"tenant":  map[string]any{"name": "T", "slug": "t1", "recovery_mode": "admin_escrow"},
+		"admin":   map[string]string{"username": "admin", "password": "Password1234!!!!"},
+		"argon2":  map[string]any{"Time": 1, "Memory": 8192, "Threads": 1, "KeyLen": 32},
+	}, nil)
+
+	jar := &cookieJar{m: map[string]string{}}
+	postJSON(t, ts.URL+"/api/auth/login", map[string]string{
+		"tenant_slug": "t1", "username": "admin", "password": "Password1234!!!!",
+	}, jar)
+
+	postJSONCookie(t, ts.URL+"/api/admin/tenant/escrow-pubkey", map[string]any{
+		"public_key_b64": base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{1}, 32)),
+	}, jar)
+
+	pw := []byte("vault-master-pw!")
+	kp, sealed, err := cryptocore.CreateIdentity(pw, cryptocore.Argon2Params{Time: 1, Memory: 8192, Threads: 1, KeyLen: 32})
+	if err != nil {
+		t.Fatal(err)
+	}
+	postJSONCookie(t, ts.URL+"/api/vault/onboard", map[string]any{
+		"public_key_b64":                  base64.StdEncoding.EncodeToString(kp.Public[:]),
+		"encrypted_private_key_b64":       base64.StdEncoding.EncodeToString(sealed.Ciphertext),
+		"encrypted_private_key_nonce_b64": base64.StdEncoding.EncodeToString(sealed.Nonce),
+		"salt_b64":                        base64.StdEncoding.EncodeToString(sealed.Salt),
+		"escrow_envelope_b64":             base64.StdEncoding.EncodeToString([]byte("escrow-envelope")),
+		"argon2":                          map[string]any{"Time": 1, "Memory": 8192, "Threads": 1, "KeyLen": 32},
+	}, jar)
+
+	keys := getJSONCookie(t, ts.URL+"/api/vault/keys", jar)
+	if keys["public_key_b64"] == "" {
+		t.Fatal(keys)
+	}
+	if _, ok := keys["encrypted_private_key_recovery_b64"]; ok {
+		t.Fatalf("recovery material must be omitted for admin_escrow mode, got %#v", keys)
+	}
+	if _, ok := keys["recovery_nonce_b64"]; ok {
+		t.Fatalf("recovery nonce must be omitted for admin_escrow mode, got %#v", keys)
+	}
+	if _, ok := keys["recovery_salt_b64"]; ok {
+		t.Fatalf("recovery salt must be omitted for admin_escrow mode, got %#v", keys)
+	}
 }
 
 func postJSONCookie(t *testing.T, url string, body any, jar *cookieJar) map[string]any {
