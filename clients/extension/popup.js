@@ -113,6 +113,10 @@ function absoluteUrl(base, path) {
   return base.replace(/\/$/, "") + "/" + String(path).replace(/^\//, "");
 }
 
+function recoveryWebUrl() {
+  return absoluteUrl(state.base, "/app?recover=1");
+}
+
 async function extensionDownloadUrl() {
   try {
     const meta = await apiFetch("/api/client-downloads");
@@ -360,6 +364,17 @@ document.getElementById("doUnlock").onclick = async () => {
     await autoRefreshSecrets("unlock", { force: true });
   } catch (e) {
     showErr(e.message);
+  }
+};
+
+document.getElementById("openRecoveryWeb").onclick = async () => {
+  showErr("");
+  try {
+    const url = recoveryWebUrl();
+    if (!url) throw new Error("Server-URL fehlt");
+    await api.tabs.create({ url });
+  } catch (e) {
+    showErr(e.message || "Recovery-Link konnte nicht geöffnet werden");
   }
 };
 

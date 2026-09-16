@@ -158,6 +158,12 @@
     return err.message || String(err);
   }
 
+  function recoveryWebUrl() {
+    const base = $("cServer").value.trim();
+    if (!base) return "";
+    return base.replace(/\/$/, "") + "/app?recover=1";
+  }
+
   function showUpdate(info) {
     const el = $("cUpdate");
     el.textContent = "";
@@ -343,6 +349,14 @@
     } catch (err) {
       setError("uError", errMsg(err));
     }
+  });
+  $("uRecoveryWeb").addEventListener("click", () => {
+    const url = recoveryWebUrl();
+    if (!url) {
+      setError("uError", "Server-URL ist erforderlich.");
+      return;
+    }
+    window.open(url, "_blank", "noopener");
   });
 
   async function saveSettingsPartial(patch) {

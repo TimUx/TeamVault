@@ -144,6 +144,7 @@ body {
 
 .card h1 { margin: 0 0 4px; font-size: 20px; }
 .hint { color: var(--text-dim); font-size: 13px; margin: 0 0 16px; }
+.unlock-recovery-note { margin-top: 6px; margin-bottom: 0; }
 
 label {
   display: block;
