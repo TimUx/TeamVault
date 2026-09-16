@@ -4436,12 +4436,22 @@ ${escHtml(apiCmd)}</code>
       } else {
         await unlockVault(mpw);
       }
-      touchIdle();
-      await autoRefreshSecrets("unlock", { force: true, propagateAuth: true });
       n.querySelector("#lockOverlay").hidden = true;
       n.querySelector("#lockMpw").value = "";
       const status = n.querySelector("#securityStatus");
       if (status) status.textContent = "Vault entsperrt";
+      touchIdle();
+      try {
+        await autoRefreshSecrets("unlock", { force: true, propagateAuth: true });
+      } catch (e) {
+        if (e?.status === 401 || e?.status === 403) {
+          clearVaultKey();
+          announceA11y("Sitzung abgelaufen. Bitte erneut anmelden.");
+          tvGo("/login");
+          return;
+        }
+        throw e;
+      }
     } catch (e) {
       err.hidden = false; err.textContent = e.message;
     }
