@@ -255,10 +255,12 @@ Aktuelles und neues Master-Passwort eingeben → **Master-Passwort speichern**. 
 
 Wenn das aktuelle Master-Passwort nicht mehr bekannt ist (Modus `user_kit`):
 
-1. Normal anmelden (Organisation, Username, Login-Passwort; ggf. TOTP)  
-2. Im Panel **Vault entsperren** auf **Master-Passwort wiederherstellen**  
-3. Recovery-Kit (Base64) einfügen und neues Master-Passwort setzen  
-4. **Mit Recovery-Kit wiederherstellen** ausführen
+1. Normal **online** anmelden (Organisation, Username, Login-Passwort; ggf. TOTP). Eine Recovery mit Recovery-Kit setzt eine aktive Online-Sitzung voraus.  
+2. Im Panel **Vault entsperren** unter **Entsperren** auf **Master-Passwort wiederherstellen** klicken.  
+3. Recovery-Kit (Base64) einfügen und neues Master-Passwort setzen.  
+4. **Mit Recovery-Kit wiederherstellen** ausführen.
+
+Falls Sie gerade **Offline entsperren** gewählt haben, führt derselbe Button direkt zurück zur Online-Anmeldung; nach erfolgreichem Login öffnet TeamVault den Recovery-Bereich automatisch. Ist der Vault bereits offline geöffnet, zuerst **Abmelden** und dann normal online anmelden.
 
 Der private Schlüssel wird dabei nur im Browser entschlüsselt und direkt mit dem neuen Master-Passwort neu versiegelt. Ohne Master-Passwort und ohne Recovery-Kit ist im Modus `user_kit` keine Wiederherstellung möglich.
 
@@ -274,7 +276,7 @@ Wenn der Administrator den Offline-Cache erlaubt, können Sie unter **Konto** ei
 2. **Offline-Kopie nach Entsperren aktualisieren** aktivieren → Sync läuft im Hintergrund (Fortschritt in der Sidebar)  
 3. Ohne Netz: Login-Seite **Offline entsperren** oder `/app?offline=1` — nur Master-Passwort, kein TOTP  
 
-Im Offline-Modus: **nur Lesen**; Admin-Bereich und Schreibaktionen sind ausgeblendet. **Logout** löscht die Offline-Kopie nicht — unter Konto **Offline-Kopie löschen** oder Opt-in deaktivieren.
+Im Offline-Modus: **nur Lesen**; Admin-Bereich und Schreibaktionen sind ausgeblendet. Recovery mit Recovery-Kit sowie Passwort-/Vault-Änderungen bleiben **nur online** möglich. **Logout** löscht die Offline-Kopie nicht — unter Konto **Offline-Kopie löschen** oder Opt-in deaktivieren.
 
 Voraussetzungen: HTTPS oder `localhost` (Service Worker / PWA). Details: [Installationsanleitung – Offline/PWA](install-guide.md#offline-vault--pwa-optional).
 
