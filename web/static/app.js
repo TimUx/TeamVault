@@ -1707,40 +1707,18 @@ async function unlockVault(masterPassword, opts = {}) {
     return;
   }
   const keys = await api("/api/vault/keys");
-  const fallback = [];
-  if (keys.argon2) fallback.push(keys.argon2);
-  if (vault.params) fallback.push(vault.params);
-  if (window.TVOfflineStore?.getSnapshot && vault.me?.tenant_id && vault.me?.user_id) {
-    try {
-      const ownSnap = await TVOfflineStore.getSnapshot(vault.me.tenant_id, vault.me.user_id);
-      if (ownSnap?.crypto_params) fallback.push(ownSnap.crypto_params);
-    } catch (_) {}
-  }
-  if (!fallback.length) fallback.push(await api("/api/vault/crypto-params"));
-  let sk = null;
-  let params = null;
-  let lastErr = null;
-  const seen = new Set();
-  for (const p of fallback) {
-    const key = JSON.stringify(p || {});
-    if (seen.has(key)) continue;
-    seen.add(key);
-    try {
-      sk = await TVCrypto.unlockPrivateKey(
-        masterPassword,
-        TVCrypto.b64dec(keys.salt_b64),
-        TVCrypto.b64dec(keys.encrypted_private_key_nonce_b64),
-        TVCrypto.b64dec(keys.encrypted_private_key_b64),
-        p
-      );
-      params = p;
-      break;
-    } catch (e) {
-      lastErr = e;
-    }
-  }
+  const fallback = await unlockParamCandidates(keys);
+  const opened = await unlockPrivateKeyWithCandidates(
+    masterPassword,
+    TVCrypto.b64dec(keys.salt_b64),
+    TVCrypto.b64dec(keys.encrypted_private_key_nonce_b64),
+    TVCrypto.b64dec(keys.encrypted_private_key_b64),
+    fallback
+  );
+  const sk = opened.sk;
+  const params = opened.params;
   if (!sk || !params) {
-    throw (lastErr || new Error("wrong master password"));
+    throw new Error("wrong master password");
   }
   vault.sk = sk;
   vault.params = params;
@@ -1749,41 +1727,88 @@ async function unlockVault(masterPassword, opts = {}) {
   }
 }
 
+async function unlockParamCandidates(keys) {
+  const fallback = [];
+  if (keys?.argon2) fallback.push(keys.argon2);
+  if (vault.params) fallback.push(vault.params);
+  if (window.TVOfflineStore?.getSnapshot && vault.me?.tenant_id && vault.me?.user_id) {
+    try {
+      const ownSnap = await TVOfflineStore.getSnapshot(vault.me.tenant_id, vault.me.user_id);
+      if (ownSnap?.crypto_params) fallback.push(ownSnap.crypto_params);
+    } catch (_) {}
+  }
+  if (!fallback.length) fallback.push(await api("/api/vault/crypto-params"));
+  return fallback;
+}
+
+async function unlockPrivateKeyWithCandidates(secret, salt, nonce, ciphertext, candidates) {
+  let lastErr = null;
+  const seen = new Set();
+  for (const p of (candidates || [])) {
+    const key = JSON.stringify(p || {});
+    if (seen.has(key)) continue;
+    seen.add(key);
+    try {
+      return {
+        sk: await TVCrypto.unlockPrivateKey(secret, salt, nonce, ciphertext, p),
+        params: p,
+      };
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  throw (lastErr || new Error("wrong master password"));
+}
+
 async function recoverVaultWithKit(recoveryKitB64, newMasterPassword) {
   if (vault.offlineMode || vault.offlinePicker) throw new Error("Offline-Wiederherstellung nicht verfügbar");
   if ((vault.me?.recovery_mode || "user_kit") !== "user_kit") {
     throw new Error("Recovery-Kit ist in diesem Tenant nicht aktiviert");
   }
   const keys = await api("/api/vault/keys");
-  const params = keys.argon2 || await api("/api/vault/crypto-params");
+  const paramsCandidates = await unlockParamCandidates(keys);
   if (!keys.encrypted_private_key_recovery_b64 || !keys.recovery_nonce_b64 || !keys.recovery_salt_b64) {
     throw new Error("Kein Recovery-Kit-Material vorhanden");
   }
   const kit = TVCrypto.b64dec((recoveryKitB64 || "").trim());
-  const sk = await TVCrypto.unlockPrivateKey(
-    kit,
-    TVCrypto.b64dec(keys.recovery_salt_b64),
-    TVCrypto.b64dec(keys.recovery_nonce_b64),
-    TVCrypto.b64dec(keys.encrypted_private_key_recovery_b64),
-    params
-  );
-  const sealed = await TVCrypto.sealPrivateKey(sk, newMasterPassword, params);
-  const rec = await TVCrypto.sealWithRecoveryKit(sk, kit, params);
-  kit.fill(0);
-  await api("/api/vault/change-master", {
-    method: "POST",
-    body: JSON.stringify({
-      encrypted_private_key_b64: TVCrypto.b64enc(sealed.sealedPrivateKey),
-      encrypted_private_key_nonce_b64: TVCrypto.b64enc(sealed.nonce),
-      salt_b64: TVCrypto.b64enc(sealed.salt),
-      encrypted_private_key_recovery_b64: TVCrypto.b64enc(rec.sealed),
-      recovery_nonce_b64: TVCrypto.b64enc(rec.nonce),
-      recovery_salt_b64: TVCrypto.b64enc(rec.salt),
-      argon2: params,
-    }),
-  });
-  sk.fill(0);
-  await unlockVault(newMasterPassword);
+  let sk = null;
+  let params = null;
+  let keepRecoveredUnlocked = false;
+  try {
+    const opened = await unlockPrivateKeyWithCandidates(
+      kit,
+      TVCrypto.b64dec(keys.recovery_salt_b64),
+      TVCrypto.b64dec(keys.recovery_nonce_b64),
+      TVCrypto.b64dec(keys.encrypted_private_key_recovery_b64),
+      paramsCandidates
+    );
+    sk = opened.sk;
+    params = opened.params;
+    const sealed = await TVCrypto.sealPrivateKey(sk, newMasterPassword, params);
+    const rec = await TVCrypto.sealWithRecoveryKit(sk, kit, params);
+    await api("/api/vault/change-master", {
+      method: "POST",
+      body: JSON.stringify({
+        encrypted_private_key_b64: TVCrypto.b64enc(sealed.sealedPrivateKey),
+        encrypted_private_key_nonce_b64: TVCrypto.b64enc(sealed.nonce),
+        salt_b64: TVCrypto.b64enc(sealed.salt),
+        encrypted_private_key_recovery_b64: TVCrypto.b64enc(rec.sealed),
+        recovery_nonce_b64: TVCrypto.b64enc(rec.nonce),
+        recovery_salt_b64: TVCrypto.b64enc(rec.salt),
+        argon2: params,
+      }),
+    });
+    vault.sk = sk;
+    vault.params = params;
+    keepRecoveredUnlocked = true;
+    await unlockVault(newMasterPassword);
+    if (sk && vault.sk !== sk) {
+      sk.fill(0);
+    }
+  } finally {
+    kit.fill(0);
+    if (sk && !keepRecoveredUnlocked) sk.fill(0);
+  }
 }
 
 function offlinePolicyAllowed() {
@@ -2172,7 +2197,7 @@ function renderApp(app) {
           <label id="offlineSnapLabel" hidden for="offlineSnap">Gespeicherte Offline-Kopie</label>
           <select id="offlineSnap" hidden></select>
           <label>Master-Passwort</label><input id="mpw" type="password" autocomplete="current-password" />
-          <div class="row"><button class="btn-ghost btn-with-ico" type="button" id="unlockRecoveryToggle">${btnLabel("lock", "Master-Passwort wiederherstellen")}</button></div>
+          <div class="row"><button class="btn-ghost btn-with-ico" type="button" id="unlockRecoveryToggle" aria-controls="unlockRecoveryWrap" aria-expanded="false">${btnLabel("lock", "Master-Passwort wiederherstellen")}</button></div>
           <div id="unlockRecoveryWrap" hidden>
             <label>Recovery-Kit (Base64)</label><input id="recoverKit" type="text" autocomplete="off" />
             <label>Neues Master-Passwort (${MASTER_PASSWORD_POLICY})</label><input id="recoverMpw" type="password" autocomplete="new-password" />
@@ -4338,8 +4363,10 @@ ${escHtml(apiCmd)}</code>
   };
   n.querySelector("#unlockRecoveryToggle").onclick = () => {
     const wrap = n.querySelector("#unlockRecoveryWrap");
+    const btn = n.querySelector("#unlockRecoveryToggle");
     if (!wrap) return;
     wrap.hidden = !wrap.hidden;
+    if (btn) btn.setAttribute("aria-expanded", wrap.hidden ? "false" : "true");
     if (!wrap.hidden) n.querySelector("#recoverKit")?.focus();
   };
   n.querySelector("#unlockRecover").onclick = async () => {
