@@ -1478,7 +1478,7 @@ const vault = {
   selectedIds: new Set(),
   offlineSyncRunning: false,
   secretsRefreshPromise: null,
-  secretsLastRefreshAt: 0,
+  secretsLastAutoRefreshAt: 0,
   secretAutoRefreshBound: false,
 };
 
@@ -5435,7 +5435,6 @@ ${escHtml(apiCmd)}</code>
       vault.secretsOffset = vault.secretsCache.length;
       if (!reset || !preserveLoaded || vault.secretsCache.length >= vault.secretsTotal) break;
     } while (vault.secretsCache.length < Math.min(targetLoaded, vault.secretsTotal));
-    vault.secretsLastRefreshAt = Date.now();
     updateTagOptions();
     paintSecretList();
   }
@@ -5446,7 +5445,8 @@ ${escHtml(apiCmd)}</code>
     if (!vault.sk || !vault.me || vault.offlineMode || vault.offlinePicker) return;
     if (reason === "visibility" && document.visibilityState !== "visible") return;
     if (vault.secretsRefreshPromise) return vault.secretsRefreshPromise;
-    if (!force && Date.now() - (vault.secretsLastRefreshAt || 0) < SECRET_AUTO_REFRESH_COOLDOWN_MS) return;
+    if (!force && Date.now() - (vault.secretsLastAutoRefreshAt || 0) < SECRET_AUTO_REFRESH_COOLDOWN_MS) return;
+    vault.secretsLastAutoRefreshAt = Date.now();
     vault.secretsRefreshPromise = (async () => {
       try {
         const maxTargetLoaded = reason === "focus" || reason === "visibility"

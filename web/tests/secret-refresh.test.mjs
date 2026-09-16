@@ -28,7 +28,7 @@ function buildHarness({ refreshImpl, now, visibilityState = "visible" } = {}) {
       offlinePicker: false,
       pageLimit: 50,
       secretsRefreshPromise: null,
-      secretsLastRefreshAt: 0,
+      secretsLastAutoRefreshAt: 0,
     },
     document: { visibilityState },
     SECRET_AUTO_REFRESH_COOLDOWN_MS: 15000,
@@ -53,7 +53,7 @@ function buildHarness({ refreshImpl, now, visibilityState = "visible" } = {}) {
 
 test("autoRefreshSecrets throttles focus refreshes within cooldown", async () => {
   const h = buildHarness({ now: 10_000 });
-  h.context.vault.secretsLastRefreshAt = 2_000;
+  h.context.vault.secretsLastAutoRefreshAt = 2_000;
   await h.autoRefreshSecrets("focus");
   assert.equal(h.getCallCount(), 0);
 });
@@ -77,8 +77,15 @@ test("autoRefreshSecrets reuses an in-flight refresh promise", async () => {
 
 test("autoRefreshSecrets bypasses cooldown when forced", async () => {
   const h = buildHarness({ now: 30_000 });
-  h.context.vault.secretsLastRefreshAt = 29_000;
+  h.context.vault.secretsLastAutoRefreshAt = 29_000;
   await h.autoRefreshSecrets("unlock", { force: true });
+  assert.equal(h.getCallCount(), 1);
+});
+
+test("autoRefreshSecrets does not throttle on recent non-auto refresh state", async () => {
+  const h = buildHarness({ now: 50_000 });
+  h.context.vault.secretsLastRefreshAt = 49_500;
+  await h.autoRefreshSecrets("focus");
   assert.equal(h.getCallCount(), 1);
 });
 
