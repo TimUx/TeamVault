@@ -2221,7 +2221,7 @@ function renderApp(app) {
           <div class="row"><button class="btn-accent btn-with-ico" type="button" id="ulock">${btnLabel("unlock", "Entsperren")}</button></div>
           <div class="unlock-recovery-section" id="unlockRecoverySection" hidden>
             <details id="unlockRecoveryDetails">
-              <summary>Recovery-Optionen</summary>
+              <summary>Recovery-Optionen anzeigen</summary>
               <p class="hint unlock-recovery-hint" id="unlockRecoveryHint">Wiederherstellung mit Recovery-Kit oder nach Online-Anmeldung starten.</p>
               <div class="row unlock-secondary-row" id="unlockOnlineRecoveryRow" hidden><button class="btn-ghost btn-sm" type="button" id="unlockOnlineRecovery">Online anmelden für Recovery</button></div>
               <div class="row unlock-secondary-row" id="unlockRecoveryRow" hidden><button class="btn-ghost btn-sm" type="button" id="unlockRecoveryToggle" aria-controls="unlockRecoveryWrap" aria-expanded="false">Master-Passwort wiederherstellen</button></div>
@@ -3194,6 +3194,7 @@ function renderApp(app) {
   const queryParams = new URLSearchParams(location.search);
   const offlineUrlParam = queryParams.get("offline") === "1";
   let recoverUrlParam = queryParams.get("recover") === "1";
+  let wasOfflineOnlyRecovery = false;
 
   function openUnlockRecoveryUI() {
     const section = n.querySelector("#unlockRecoverySection");
@@ -3229,7 +3230,7 @@ function renderApp(app) {
       !vault.offlineMode &&
       ((vault.me.recovery_mode || "user_kit") === "user_kit")
     );
-    const offlineRecoveryAvailable = vault.offlinePicker && !vault.offlineMode;
+    const offlineRecoveryAvailable = vault.offlinePicker && !vault.me;
     onlineRow.hidden = !offlineRecoveryAvailable;
     row.hidden = !recoveryAvailable;
     section.hidden = !(offlineRecoveryAvailable || recoveryAvailable);
@@ -3248,6 +3249,8 @@ function renderApp(app) {
       wrap.hidden = true;
       btn.setAttribute("aria-expanded", "false");
     }
+    if (wasOfflineOnlyRecovery && !offlineOnlyRecovery && wrap.hidden) details.open = false;
+    wasOfflineOnlyRecovery = offlineOnlyRecovery;
     if (section.hidden && details) details.open = false;
   }
 

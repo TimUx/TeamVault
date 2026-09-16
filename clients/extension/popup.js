@@ -114,13 +114,24 @@ function absoluteUrl(base, path) {
 }
 
 function recoveryWebUrl() {
-  return absoluteUrl(state.base, "/app?recover=1");
+  const base = (state.base || "").trim();
+  if (!base) return "";
+  try {
+    const u = new URL(base);
+    if (u.protocol !== "http:" && u.protocol !== "https:") return "";
+    u.pathname = `${u.pathname.replace(/\/$/, "")}/app`;
+    u.search = "recover=1";
+    u.hash = "";
+    return u.toString();
+  } catch (_) {
+    return "";
+  }
 }
 
 function syncRecoveryWebAction() {
   const btn = document.getElementById("openRecoveryWeb");
   if (!btn) return;
-  btn.disabled = !state.base;
+  btn.disabled = !recoveryWebUrl();
 }
 
 async function extensionDownloadUrl() {
@@ -379,7 +390,7 @@ document.getElementById("openRecoveryWeb").onclick = async () => {
   showErr("");
   try {
     const url = recoveryWebUrl();
-    if (!url) throw new Error("Server-URL fehlt");
+    if (!url) throw new Error("Server-URL fehlt oder ist ungültig");
     await api.tabs.create({ url });
   } catch (e) {
     showErr(e.message || "Recovery-Link konnte nicht geöffnet werden");

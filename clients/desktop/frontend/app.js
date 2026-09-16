@@ -162,7 +162,16 @@
   function recoveryWebUrl() {
     const base = (state.serverURL || $("cServer").value || "").trim();
     if (!base) return "";
-    return base.replace(/\/$/, "") + "/app?recover=1";
+    try {
+      const u = new URL(base);
+      if (u.protocol !== "http:" && u.protocol !== "https:") return "";
+      u.pathname = `${u.pathname.replace(/\/$/, "")}/app`;
+      u.search = "recover=1";
+      u.hash = "";
+      return u.toString();
+    } catch (_) {
+      return "";
+    }
   }
 
   function syncRecoveryLink() {
@@ -240,10 +249,10 @@
       return;
     }
     state.tenant = "";
-    state.serverURL = url;
-    syncRecoveryLink();
     try {
       await App().Connect(url);
+      state.serverURL = url;
+      syncRecoveryLink();
       await saveSettingsPartial({ server_url: url, tenant_slug: "" });
       checkForUpdate(url);
       try {
