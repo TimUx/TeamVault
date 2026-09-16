@@ -7,6 +7,7 @@
 
   const App = () => window.go.main.App;
   const $ = (id) => document.getElementById(id);
+  const SECRET_AUTO_REFRESH_COOLDOWN_MS = 15000;
 
   const screens = ["screenConnect", "screenLogin", "screenTenant", "screenTotp", "screenUnlock", "screenVault", "screenForm", "screenSettings", "screenShare"];
   function showScreen(id) {
@@ -30,6 +31,9 @@
     rememberLogin: false,
     sidebarW: 240,
     detailW: 360,
+    secretsRefreshPromise: null,
+    secretsLastAutoRefreshAt: 0,
+    secretAutoRefreshBound: false,
   };
 
   // --- Resizable panels -----------------------------------------------------
@@ -367,6 +371,38 @@
     pruneTagFilters();
     renderTagFilters();
     renderList();
+  }
+
+  async function autoRefreshSecrets(reason, opts = {}) {
+    const force = !!opts.force;
+    if ($("screenVault").hidden) return;
+    if (reason === "visibility" && document.visibilityState !== "visible") return;
+    if (state.secretsRefreshPromise) return state.secretsRefreshPromise;
+    if (!force && Date.now()-(state.secretsLastAutoRefreshAt || 0) < SECRET_AUTO_REFRESH_COOLDOWN_MS) return;
+    state.secretsLastAutoRefreshAt = Date.now();
+    state.secretsRefreshPromise = (async () => {
+      try {
+        await reloadList();
+      } catch (err) {
+        console.warn("secret auto refresh", reason, err);
+      } finally {
+        state.secretsRefreshPromise = null;
+      }
+    })();
+    return state.secretsRefreshPromise;
+  }
+
+  function bindSecretAutoRefresh() {
+    if (state.secretAutoRefreshBound) return;
+    state.secretAutoRefreshBound = true;
+    window.addEventListener("focus", () => {
+      autoRefreshSecrets("focus").catch(() => {});
+    });
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") {
+        autoRefreshSecrets("visibility").catch(() => {});
+      }
+    });
   }
 
   function allTags() {
@@ -1029,6 +1065,7 @@
 
   window.addEventListener("DOMContentLoaded", () => {
     initSplitters();
+    bindSecretAutoRefresh();
     init();
   });
 })();
