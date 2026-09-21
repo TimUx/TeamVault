@@ -50,6 +50,7 @@ WebKitGTK (`libwebkit2gtk-4.1`) muss auf dem System vorhanden sein (auf den meis
 5. **Master-Passwort** zum Entsperren des Vaults (verlässt nie das Gerät).
 6. Vault-Liste: Suche, Tag-Filter als Chips, Favoriten, Filter „Eigene“/„Geteilt“, Secret öffnen zum Ansehen/Kopieren/TOTP/Freigabe-Verwaltung; Detailaktionen nutzen dieselben flachen Inline-Icons wie Web-UI und Extension.
 7. Optional unter **Einstellungen** Theme und Farbdesign anpassen; die App übernimmt die Änderung sofort und speichert sie lokal.
+8. Master-Passwort-Recovery läuft über die Web-App: im Unlock-Schritt auf **Recovery im Web öffnen** klicken und dort den Recovery-Ablauf nutzen.
 
 ![Desktop-App – Vault-Ansicht](images/help-desktop.png)
 
