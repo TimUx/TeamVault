@@ -650,6 +650,8 @@ async function mapPool(items, concurrency, fn) {
   return results;
 }
 
+const BATCH_POOL_SIZE = 4;
+
 function normalizeSecretsList(data) {
   if (Array.isArray(data)) {
     return { items: data, total: data.length, limit: data.length, offset: 0 };
@@ -4278,6 +4280,16 @@ ${escHtml(apiCmd)}</code>
     return TVCrypto.b64dec(serverB64);
   }
 
+  function normalizeShareUsersFromPublicKeys(pks) {
+    return (pks || [])
+      .filter((p) => p.user_id !== vault.me?.user_id && p.onboarded !== false && p.public_key_b64)
+      .map((p) => ({
+        id: p.user_id,
+        username: p.username || p.user_id,
+        public_key_b64: p.public_key_b64,
+      }));
+  }
+
   /** Zero-knowledge: seal missing envelopes automatically in the background. */
   async function sealGroupShareGaps(opts = {}) {
     if (!vault.sk || vault.offlineMode) return { sealed: 0, failed: 0, skipped: 0 };
@@ -4353,13 +4365,7 @@ ${escHtml(apiCmd)}</code>
   async function refreshSharePickers() {
     try {
       const pks = await api("/api/users/public-keys");
-      vault.shareUsers = pks
-        .filter((p) => p.user_id !== vault.me?.user_id && p.onboarded !== false)
-        .map((p) => ({
-          id: p.user_id,
-          username: p.username || p.user_id,
-          public_key_b64: p.public_key_b64,
-        }));
+      vault.shareUsers = normalizeShareUsersFromPublicKeys(pks);
       const userSel = n.querySelector("#screateUsers");
       if (userSel) {
         userSel.innerHTML = vault.shareUsers
@@ -6218,7 +6224,7 @@ ${escHtml(apiCmd)}</code>
           throw e;
         }
       }
-      if (!pks.length) throw new Error("Keine onboardeten Gruppenmitglieder");
+      if (!pks.length) throw new Error("Keine registrierten Gruppenmitglieder");
       const allowed = [];
       for (const p of pks) {
         if (await confirmRecipientKey(p.user_id, p.username, p.public_key_b64, { allowRefresh: true })) allowed.push(p);
@@ -6367,7 +6373,7 @@ ${escHtml(apiCmd)}</code>
       if (!confirm(`Tags (${addTags.join(", ")}) bei ${targets.length} Secrets ergänzen?`)) return;
       btn.disabled = true;
       if (input) input.disabled = true;
-      const results = await mapPool(targets, 4, async (it) => {
+      const results = await mapPool(targets, BATCH_POOL_SIZE, async (it) => {
         try {
           const { changed } = await updateSecretPayloadById(it.id, (payload) => {
             payload.tags = mergeTags(payload.tags || [], addTags);
@@ -6405,24 +6411,8 @@ ${escHtml(apiCmd)}</code>
     const det = await fetchSecretDetailWithRetry(secretId);
     const kv = det.key_version || det.envelope?.key_version || 1;
     if (targetKind === "group") {
-      let pks = null;
-      try {
-        pks = await api("/api/secrets/" + secretId + "/group-member-keys?group_id=" + encodeURIComponent(targetId));
-      } catch (e) {
-        if (e && e.status === 403) {
-          pks = await api("/api/groups/" + encodeURIComponent(targetId) + "/member-keys");
-        } else {
-          throw e;
-        }
-      }
-      if (!pks.length) throw new Error("Keine onboardeten Gruppenmitglieder");
-      const allowed = [];
-      for (const p of pks) {
-        if (await confirmRecipientKey(p.user_id, p.username, p.public_key_b64, { allowRefresh: true })) {
-          allowed.push(p);
-        }
-      }
-      if (!allowed.length) return { changed: false };
+      const allowed = Array.isArray(userPkMap) ? userPkMap : [];
+      if (!allowed.length) return { changed: false, cancelled: true };
       const dk = openDKFromEnvelope(det.envelope);
       try {
         const envelopes = allowed.map((p) =>
@@ -6470,6 +6460,27 @@ ${escHtml(apiCmd)}</code>
     return { changed: true };
   }
 
+  async function resolveBatchGroupRecipients(groupId, probeSecretId) {
+    let pks = null;
+    try {
+      pks = await api("/api/secrets/" + probeSecretId + "/group-member-keys?group_id=" + encodeURIComponent(groupId));
+    } catch (e) {
+      if (e && e.status === 403) {
+        pks = await api("/api/groups/" + encodeURIComponent(groupId) + "/member-keys");
+      } else {
+        throw e;
+      }
+    }
+    if (!pks.length) throw new Error("Keine registrierten Gruppenmitglieder");
+    const allowed = [];
+    let declined = 0;
+    for (const p of pks) {
+      if (await confirmRecipientKey(p.user_id, p.username, p.public_key_b64, { allowRefresh: true })) allowed.push(p);
+      else declined++;
+    }
+    return { allowed, declined };
+  }
+
   n.querySelector("#sBatchApplyShare").onclick = async () => {
     const btn = n.querySelector("#sBatchApplyShare");
     const targetSel = n.querySelector("#sBatchShareTarget");
@@ -6490,8 +6501,21 @@ ${escHtml(apiCmd)}</code>
       if (kindSel) kindSel.disabled = true;
       if (targetSel) targetSel.disabled = true;
       if (capSel) capSel.disabled = true;
-      const userPkMap = new Map((vault.shareUsers || []).map((u) => [u.id, u]));
-      const results = await mapPool(targets, 4, async (it) => {
+      let userPkMap = new Map((vault.shareUsers || []).map((u) => [u.id, u]));
+      if (targetKind === "user") {
+        const pks = await api("/api/users/public-keys");
+        const freshUsers = normalizeShareUsersFromPublicKeys(pks);
+        vault.shareUsers = freshUsers;
+        userPkMap = new Map(freshUsers.map((u) => [u.id, u]));
+      } else {
+        const prep = await resolveBatchGroupRecipients(targetId, targets[0].id);
+        if (!prep.allowed.length) {
+          alert("Teilen abgebrochen: kein Empfängerschlüssel bestätigt.");
+          return;
+        }
+        userPkMap = prep.allowed;
+      }
+      const results = await mapPool(targets, BATCH_POOL_SIZE, async (it) => {
         try {
           const { changed } = await shareSecretByTarget(it.id, targetKind, targetId, cap, userPkMap);
           return { changed, error: "" };
@@ -6515,6 +6539,7 @@ ${escHtml(apiCmd)}</code>
       if (btn) btn.disabled = false;
       if (kindSel) kindSel.disabled = false;
       renderBatchShareTargets();
+      if (targetSel && targetSel.options.length && targetSel.options[0].value !== "") targetSel.disabled = false;
       if (capSel) capSel.disabled = false;
     }
   };
