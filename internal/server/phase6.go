@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"net"
 	"net/http"
 	"net/smtp"
@@ -569,9 +570,11 @@ func (a *API) handleListAudit(w http.ResponseWriter, r *http.Request) {
 	type row struct {
 		ID           string    `json:"id"`
 		ActorID      string    `json:"actor_id"`
+		ActorUsername string   `json:"actor_username,omitempty"`
 		Action       string    `json:"action"`
 		ResourceType string    `json:"resource_type"`
 		ResourceID   string    `json:"resource_id"`
+		Metadata     json.RawMessage `json:"metadata,omitempty"`
 		CreatedAt    time.Time `json:"created_at"`
 	}
 	total := len(events)
@@ -584,8 +587,34 @@ func (a *API) handleListAudit(w http.ResponseWriter, r *http.Request) {
 	}
 	page := events[offset:end]
 	out := make([]row, 0, len(page))
+	usernames := map[store.UserID]string{}
+	resolveUsername := func(id string) string {
+		uid := store.UserID(strings.TrimSpace(id))
+		if uid == "" {
+			return ""
+		}
+		if name, ok := usernames[uid]; ok {
+			return name
+		}
+		u, err := a.App.Vault.GetUser(r.Context(), sess.TenantID, uid)
+		if err != nil || u == nil || strings.TrimSpace(u.Username) == "" {
+			usernames[uid] = ""
+			return ""
+		}
+		usernames[uid] = u.Username
+		return u.Username
+	}
 	for _, e := range page {
-		out = append(out, row{e.ID, e.ActorID, e.Action, e.ResourceType, e.ResourceID, e.CreatedAt})
+		out = append(out, row{
+			ID:            e.ID,
+			ActorID:       e.ActorID,
+			ActorUsername: resolveUsername(e.ActorID),
+			Action:        e.Action,
+			ResourceType:  e.ResourceType,
+			ResourceID:    e.ResourceID,
+			Metadata:      e.Metadata,
+			CreatedAt:     e.CreatedAt,
+		})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": out, "total": total, "limit": limit, "offset": offset})
 }

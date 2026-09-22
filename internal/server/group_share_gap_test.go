@@ -127,6 +127,35 @@ func TestGroupShareGapsAfterNewMember(t *testing.T) {
 		"envelopes": []map[string]any{envAPI(bobID, bobEnv)},
 	}, adminJar)
 
+	audit := getJSONCookie(t, ts.URL+"/api/admin/audit", adminJar)
+	auditItems, _ := audit["items"].([]any)
+	foundCatchUp := false
+	for _, it := range auditItems {
+		row, _ := it.(map[string]any)
+		if row["action"] != "secret.share_group" {
+			continue
+		}
+		meta, _ := row["metadata"].(map[string]any)
+		if meta["share_mode"] != "catch_up" {
+			continue
+		}
+		names, _ := meta["recipient_usernames"].([]any)
+		if len(names) != 1 || names[0] != "bob" {
+			t.Fatalf("share_group recipient metadata: %#v", meta)
+		}
+		if meta["group_id"] != gid {
+			t.Fatalf("share_group group metadata: %#v", meta)
+		}
+		if row["actor_username"] != "admin" {
+			t.Fatalf("share_group actor username: %#v", row)
+		}
+		foundCatchUp = true
+		break
+	}
+	if !foundCatchUp {
+		t.Fatalf("expected catch-up share_group audit event, got %#v", auditItems)
+	}
+
 	gaps = getJSONCookie(t, ts.URL+"/api/secrets/group-share-gaps?group_id="+gid+"&user_id="+bobID, adminJar)
 	items, _ = gaps["items"].([]any)
 	if len(items) != 0 {

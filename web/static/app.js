@@ -4179,21 +4179,7 @@ ${escHtml(apiCmd)}</code>
     vault.secretsOffset = 0;
     await refreshSecrets(true);
     try {
-      const reseal = await sealGroupShareGaps();
-      if (reseal.sealed || reseal.failed || reseal.skipped) {
-        if (reseal.failed) {
-          announceA11y(`Gruppen-Freigaben nachgepflegt: ${reseal.sealed} erfolgreich, ${reseal.failed} fehlgeschlagen.`);
-        } else if (reseal.skipped) {
-          announceA11y(`Gruppen-Freigaben nachgepflegt: ${reseal.sealed} erfolgreich, ${reseal.skipped} übersprungen.`);
-        } else {
-          announceA11y(`Gruppen-Freigaben nachgepflegt: ${reseal.sealed} erfolgreich.`);
-        }
-      }
-      const gaps = await api("/api/secrets/group-share-gaps");
-      const pending = (gaps.items || []).length;
-      if (pending) {
-        announceA11y(`${pending} Gruppen-Freigaben benötigen weiterhin Nachpflege.`);
-      }
+      await sealGroupShareGaps();
     } catch (_) {}
     navigateTo("vault:mine");
     updateOfflineAccountUI(await TVOfflineStore.getSnapshot(vault.me?.tenant_id, vault.me?.user_id));
@@ -4231,11 +4217,7 @@ ${escHtml(apiCmd)}</code>
     const prev = dir[userId];
     if (prev && prev.fp === fp) return true;
     const who = username || userId;
-    const msg = prev
-      ? `Schlüssel von ${who} hat sich geändert.\nBisher: ${prev.fp}\nNeu: ${fp}\nTrotzdem für diesen Empfänger verschlüsseln?`
-      : `Neuer Empfängerschlüssel für ${who}:\n${fp}\nBestätigen?`;
-    if (!confirm(msg)) return false;
-    dir[userId] = { fp, username: who, at: Date.now() };
+    dir[userId] = { fp, username: who, at: Date.now(), previous_fp: prev?.fp || "" };
     saveKeyDir(dir);
     return true;
   }
@@ -4246,7 +4228,7 @@ ${escHtml(apiCmd)}</code>
     return TVCrypto.b64dec(serverB64);
   }
 
-  /** Zero-knowledge: seal missing envelopes after explicit recipient confirmation. */
+  /** Zero-knowledge: seal missing envelopes automatically in the background. */
   async function sealGroupShareGaps(opts = {}) {
     if (!vault.sk || vault.offlineMode) return { sealed: 0, failed: 0, skipped: 0 };
     const q = new URLSearchParams();
@@ -6784,9 +6766,7 @@ ${escHtml(apiCmd)}</code>
       try {
         const auditRaw = await api("/api/admin/audit");
         const audit = Array.isArray(auditRaw) ? auditRaw : (auditRaw.items || []);
-        n.querySelector("#alist").innerHTML = audit.slice(0, 50).map((e) =>
-          `<div>${escapeHtml(e.created_at)} · ${escapeHtml(e.action)} · ${escapeHtml(e.actor_id)} · ${escapeHtml(e.resource_type)}/${escapeHtml(e.resource_id)}</div>`
-        ).join("") || "<p>Keine Events</p>";
+        renderAuditList(audit.slice(0, 50));
       } catch (e) {
         n.querySelector("#alist").innerHTML = `<p class="hint">${escHtml(e.message)}</p>`;
       }
@@ -6933,10 +6913,48 @@ ${escHtml(apiCmd)}</code>
     } catch (_) {}
     const auditRaw = await api("/api/admin/audit");
     const audit = Array.isArray(auditRaw) ? auditRaw : (auditRaw.items || []);
-    n.querySelector("#alist").innerHTML = audit.slice(0, 30).map((e) =>
-      `<div>${escapeHtml(e.created_at)} · ${escapeHtml(e.action)} · ${escapeHtml(e.actor_id)} · ${escapeHtml(e.resource_type)}/${escapeHtml(e.resource_id)}</div>`
-    ).join("") || "<p>Keine Events</p>";
+    renderAuditList(audit.slice(0, 30));
     syncAdminNavVisibility();
+  }
+
+  function auditActorLabel(entry) {
+    return entry.actor_username || entry.actor_id || "—";
+  }
+
+  function auditUserList(meta) {
+    const names = Array.isArray(meta?.recipient_usernames) ? meta.recipient_usernames.filter(Boolean) : [];
+    if (names.length) return names.join(", ");
+    const ids = Array.isArray(meta?.recipient_user_ids) ? meta.recipient_user_ids.filter(Boolean) : [];
+    return ids.join(", ");
+  }
+
+  function auditSummary(entry) {
+    const actor = auditActorLabel(entry);
+    const meta = entry?.metadata && typeof entry.metadata === "object" ? entry.metadata : {};
+    if (entry.action === "vault.onboard") {
+      return `${actor} hat den eigenen Empfängerschlüssel registriert.`;
+    }
+    if (entry.action === "secret.share_group" && meta.share_mode === "catch_up") {
+      const users = auditUserList(meta);
+      const group = meta.group_name || meta.group_id || "—";
+      const detail = users ? ` für ${users}` : "";
+      return `${actor} hat Freigabe-Umschläge${detail} in Gruppe ${group} automatisch ergänzt (Secret ${entry.resource_id}).`;
+    }
+    if (entry.action === "secret.share_group") {
+      const users = auditUserList(meta);
+      const group = meta.group_name || meta.group_id || "—";
+      const detail = users ? ` für ${users}` : "";
+      return `${actor} hat eine Gruppenfreigabe${detail} für Gruppe ${group} geändert (Secret ${entry.resource_id}).`;
+    }
+    return `${entry.action} · ${actor} · ${entry.resource_type}/${entry.resource_id}`;
+  }
+
+  function renderAuditList(items) {
+    const box = n.querySelector("#alist");
+    if (!box) return;
+    box.innerHTML = items.map((e) =>
+      `<div>${escapeHtml(e.created_at)} · ${escapeHtml(auditSummary(e))}</div>`
+    ).join("") || "<p>Keine Events</p>";
   }
 
   let ldapSearchHits = [];
