@@ -1477,6 +1477,7 @@ const vault = {
   adminUsers: [],
   adminOverview: null,
   groups: [],
+  shareUsers: [],
   totpTimer: null,
   selectedIds: new Set(),
   offlineSyncRunning: false,
@@ -2266,6 +2267,25 @@ function renderApp(app) {
                     <input id="sBatchTags" type="text" placeholder="prod, storage (Komma)" autocomplete="off" />
                     <div class="secrets-batch-row">
                       <button type="button" class="btn-ghost btn-sm" id="sBatchApplyTags">Auf Auswahl anwenden</button>
+                    </div>
+                    <label class="secrets-batch-share-label">Teilen</label>
+                    <div class="secrets-batch-share-grid">
+                      <select id="sBatchShareKind" aria-label="Batch Teilen Typ">
+                        <option value="user" selected>User</option>
+                        <option value="group">Gruppe</option>
+                      </select>
+                      <select id="sBatchShareTarget" aria-label="Batch Teilen Ziel"></select>
+                    </div>
+                    <label class="inline access-cap-pick">Rechte
+                      <select id="sBatchShareCap" aria-label="Batch Teilen Rechte">
+                        <option value="read">Lesen</option>
+                        <option value="write" selected>Bearbeiten</option>
+                        <option value="share">Teilen</option>
+                        <option value="admin">Verwalten</option>
+                      </select>
+                    </label>
+                    <div class="secrets-batch-row">
+                      <button type="button" class="btn-ghost btn-sm" id="sBatchApplyShare">Teilen auf Auswahl</button>
                     </div>
                     <span class="hint secrets-actions-meta" id="sBatchStatus">Auswahl erforderlich</span>
                     ${hintBox("Ändert nur ausgewählte, sichtbare Secrets mit Zugriff.", { className: "hint-box-compact secrets-batch-note" })}
@@ -4327,19 +4347,47 @@ ${escHtml(apiCmd)}</code>
         gSel.innerHTML = groups.map((g) => `<option value="${escapeHtml(g.id)}">${escapeHtml(g.name)}</option>`).join("");
       }
     }
+    renderBatchShareTargets();
   }
 
   async function refreshSharePickers() {
     try {
       const pks = await api("/api/users/public-keys");
+      vault.shareUsers = pks
+        .filter((p) => p.user_id !== vault.me?.user_id && p.onboarded !== false)
+        .map((p) => ({
+          id: p.user_id,
+          username: p.username || p.user_id,
+          public_key_b64: p.public_key_b64,
+        }));
       const userSel = n.querySelector("#screateUsers");
       if (userSel) {
-        userSel.innerHTML = pks
-          .filter((p) => p.user_id !== vault.me?.user_id && p.onboarded !== false)
-          .map((p) => `<option value="${escapeHtml(p.user_id)}">${escapeHtml(p.username)}</option>`)
+        userSel.innerHTML = vault.shareUsers
+          .map((p) => `<option value="${escapeHtml(p.id)}">${escapeHtml(p.username)}</option>`)
           .join("");
       }
     } catch (_) {}
+    renderBatchShareTargets();
+  }
+
+  function renderBatchShareTargets() {
+    const kindSel = n.querySelector("#sBatchShareKind");
+    const targetSel = n.querySelector("#sBatchShareTarget");
+    if (!kindSel || !targetSel) return;
+    const kind = kindSel.value === "group" ? "group" : "user";
+    if (kind === "group") {
+      const groups = vault.groups || [];
+      targetSel.innerHTML = groups.length
+        ? groups.map((g) => `<option value="${escapeHtml(g.id)}">${escapeHtml(g.name)}</option>`).join("")
+        : `<option value="">Keine Gruppen</option>`;
+      targetSel.disabled = !groups.length;
+    } else {
+      const users = vault.shareUsers || [];
+      targetSel.innerHTML = users.length
+        ? users.map((u) => `<option value="${escapeHtml(u.id)}">${escapeHtml(u.username)}</option>`).join("")
+        : `<option value="">Keine User</option>`;
+      targetSel.disabled = !users.length;
+    }
   }
 
   function setCreateVisibility(vis) {
@@ -6346,6 +6394,128 @@ ${escHtml(apiCmd)}</code>
     } finally {
       if (btn) btn.disabled = false;
       if (input) input.disabled = false;
+    }
+  };
+
+  const sBatchShareKind = n.querySelector("#sBatchShareKind");
+  if (sBatchShareKind) sBatchShareKind.onchange = renderBatchShareTargets;
+  renderBatchShareTargets();
+
+  async function shareSecretByTarget(secretId, targetKind, targetId, capability, userPkMap) {
+    const det = await fetchSecretDetailWithRetry(secretId);
+    const kv = det.key_version || det.envelope?.key_version || 1;
+    if (targetKind === "group") {
+      let pks = null;
+      try {
+        pks = await api("/api/secrets/" + secretId + "/group-member-keys?group_id=" + encodeURIComponent(targetId));
+      } catch (e) {
+        if (e && e.status === 403) {
+          pks = await api("/api/groups/" + encodeURIComponent(targetId) + "/member-keys");
+        } else {
+          throw e;
+        }
+      }
+      if (!pks.length) throw new Error("Keine onboardeten Gruppenmitglieder");
+      const allowed = [];
+      for (const p of pks) {
+        if (await confirmRecipientKey(p.user_id, p.username, p.public_key_b64, { allowRefresh: true })) {
+          allowed.push(p);
+        }
+      }
+      if (!allowed.length) return { changed: false };
+      const dk = openDKFromEnvelope(det.envelope);
+      try {
+        const envelopes = allowed.map((p) =>
+          TVCrypto.envelopeToAPI(
+            p.user_id,
+            TVCrypto.sealDataKeyForRecipient(dk, recipientPubForUser(p.user_id, p.public_key_b64), kv)
+          )
+        );
+        await api("/api/secrets/" + secretId + "/share-group", {
+          method: "POST",
+          body: JSON.stringify({
+            group_id: targetId,
+            capability: normalizeShareCap(capability),
+            envelopes,
+          }),
+        });
+      } finally {
+        dk.fill(0);
+      }
+      return { changed: true };
+    }
+
+    const pk = userPkMap.get(targetId);
+    if (!pk?.public_key_b64) throw new Error("Pubkey fehlt");
+    if (!(await confirmRecipientKey(targetId, pk.username, pk.public_key_b64, { allowRefresh: true }))) {
+      return { changed: false };
+    }
+    const dk = openDKFromEnvelope(det.envelope);
+    try {
+      const env = TVCrypto.sealDataKeyForRecipient(
+        dk,
+        recipientPubForUser(targetId, pk.public_key_b64),
+        kv
+      );
+      await api("/api/secrets/" + secretId + "/share", {
+        method: "POST",
+        body: JSON.stringify({
+          capability: normalizeShareCap(capability),
+          envelopes: [TVCrypto.envelopeToAPI(targetId, env)],
+        }),
+      });
+    } finally {
+      dk.fill(0);
+    }
+    return { changed: true };
+  }
+
+  n.querySelector("#sBatchApplyShare").onclick = async () => {
+    const btn = n.querySelector("#sBatchApplyShare");
+    const targetSel = n.querySelector("#sBatchShareTarget");
+    const kindSel = n.querySelector("#sBatchShareKind");
+    const capSel = n.querySelector("#sBatchShareCap");
+    try {
+      if (vault.offlineMode) throw new Error("Batch-Verarbeitung im Offline-Modus nicht verfügbar");
+      const visible = filterVisibleSecrets();
+      const targets = visible.filter((it) => vault.selectedIds.has(it.id) && it.has_access);
+      if (!targets.length) throw new Error("Keine ausgewählten Secrets mit Zugriff");
+      const targetId = String(targetSel?.value || "").trim();
+      if (!targetId) throw new Error("Ziel für Teilen wählen");
+      const targetKind = kindSel?.value === "group" ? "group" : "user";
+      const cap = normalizeShareCap(capSel?.value || "write");
+      const targetLabel = targetSel?.selectedOptions?.[0]?.textContent?.trim() || targetId;
+      if (!confirm(`${targets.length} Secrets mit ${targetKind === "group" ? "Gruppe" : "User"} "${targetLabel}" teilen (${capLabel(cap)})?`)) return;
+      btn.disabled = true;
+      if (kindSel) kindSel.disabled = true;
+      if (targetSel) targetSel.disabled = true;
+      if (capSel) capSel.disabled = true;
+      const userPkMap = new Map((vault.shareUsers || []).map((u) => [u.id, u]));
+      const results = await mapPool(targets, 4, async (it) => {
+        try {
+          const { changed } = await shareSecretByTarget(it.id, targetKind, targetId, cap, userPkMap);
+          return { changed, error: "" };
+        } catch (e) {
+          return { changed: false, error: e?.message || String(e), id: it.id };
+        }
+      });
+      const changed = results.filter((r) => r.changed).length;
+      const failed = results.filter((r) => r.error);
+      await refreshSecrets(true);
+      if (failed.length) {
+        const details = failed.slice(0, 3).map((r) => `• ${r.id}: ${r.error}`).join("\n");
+        const more = failed.length > 3 ? `\n… und ${failed.length - 3} weitere` : "";
+        alert(`${changed} Secrets geteilt, ${failed.length} fehlgeschlagen.\n${details}${more}`);
+      } else {
+        alert(changed ? `${changed} Secrets geteilt.` : "Keine Änderungen notwendig.");
+      }
+    } catch (e) {
+      alert(e.message || String(e));
+    } finally {
+      if (btn) btn.disabled = false;
+      if (kindSel) kindSel.disabled = false;
+      renderBatchShareTargets();
+      if (capSel) capSel.disabled = false;
     }
   };
 

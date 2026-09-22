@@ -1074,6 +1074,14 @@ h1 .heading-ico,
   gap: 0.35rem;
   margin-top: 0.4rem;
 }
+.secrets-batch-share-label {
+  margin-top: 0.55rem;
+}
+.secrets-batch-share-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+  gap: 0.35rem;
+}
 .secrets-sidebar-section .hint-box-compact {
   margin-bottom: 0;
   padding: 0.45rem 0.55rem;
