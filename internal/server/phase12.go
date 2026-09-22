@@ -336,6 +336,14 @@ func (a *API) handleShareGroup(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusNotFound, "secret not found")
 		return
 	}
+	recipientUsernameByID := map[string]string{}
+	if len(body.Envelopes) != 0 {
+		if users, uerr := a.App.Vault.ListUsers(r.Context(), sess.TenantID, store.UserQuery{Limit: 1000}); uerr == nil {
+			for _, u := range users {
+				recipientUsernameByID[string(u.ID)] = u.Username
+			}
+		}
+	}
 	recipientIDs := make([]string, 0, len(body.Envelopes))
 	recipientUsernames := make([]string, 0, len(body.Envelopes))
 	var envs []store.KeyEnvelope
@@ -366,23 +374,13 @@ func (a *API) handleShareGroup(w http.ResponseWriter, r *http.Request) {
 			KeyVersion: kv, WrappedDK: packed,
 		})
 		recipientIDs = append(recipientIDs, e.UserID)
-		if u, uerr := a.App.Vault.GetUser(r.Context(), sess.TenantID, store.UserID(e.UserID)); uerr == nil && u != nil && strings.TrimSpace(u.Username) != "" {
-			recipientUsernames = append(recipientUsernames, u.Username)
+		if username := strings.TrimSpace(recipientUsernameByID[e.UserID]); username != "" {
+			recipientUsernames = append(recipientUsernames, username)
 		}
 	}
 	audit := a.mutationAudit(r, sess, "secret.share_group", "secret", string(id))
-	groupName := body.GroupID
-	if groups, gerr := a.App.Vault.ListGroups(r.Context(), sess.TenantID); gerr == nil {
-		for _, g := range groups {
-			if g.ID == gid {
-				groupName = g.Name
-				break
-			}
-		}
-	}
 	audit.Metadata, _ = json.Marshal(map[string]any{
 		"group_id":            body.GroupID,
-		"group_name":          groupName,
 		"share_mode":          map[bool]string{true: "catch_up", false: "initial_share"}[alreadyShared],
 		"recipient_user_ids":  recipientIDs,
 		"recipient_usernames": recipientUsernames,
