@@ -1071,6 +1071,7 @@ h1 .heading-ico,
 }
 .secrets-batch-row {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.35rem;
   margin-top: 0.4rem;
 }
@@ -1096,6 +1097,17 @@ h1 .heading-ico,
   height: 1.1rem;
 }
 .secrets-actions-tools + .secrets-sidebar-status .hint { margin: 0; }
+.detail-rec-head {
+  display: inline-block;
+  margin-bottom: 0.3rem;
+  font-weight: 600;
+}
+.detail-rec-body {
+  display: block;
+}
+.detail-rec-tags {
+  margin-top: 0.2rem;
+}
 .secrets-actions-tools .btn-icon.active {
   border-color: var(--color-accent);
   color: var(--color-accent);
