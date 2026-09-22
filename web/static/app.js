@@ -2263,7 +2263,7 @@ function renderApp(app) {
                       <button type="button" class="btn-ghost btn-sm" id="sMore">Weitere laden</button>
                     </div>
                   </div>
-                  <div class="secrets-sidebar-section secrets-sidebar-static">
+                  <div class="secrets-sidebar-section secrets-sidebar-static" id="sBatchWrap" hidden>
                     <p class="secrets-actions-heading">Batch</p>
                     <label>Tags ergänzen</label>
                     <input id="sBatchTags" type="text" placeholder="prod, storage (Komma)" autocomplete="off" />
@@ -2288,6 +2288,9 @@ function renderApp(app) {
                     </label>
                     <div class="secrets-batch-row">
                       <button type="button" class="btn-ghost btn-sm" id="sBatchApplyShare">Teilen auf Auswahl</button>
+                    </div>
+                    <div class="secrets-batch-row">
+                      <button type="button" class="btn-danger btn-sm" id="sBatchDelete">Auswahl löschen</button>
                     </div>
                     <span class="hint secrets-actions-meta" id="sBatchStatus">Auswahl erforderlich</span>
                     ${hintBox("Ändert nur ausgewählte, sichtbare Secrets mit Zugriff.", { className: "hint-box-compact secrets-batch-note" })}
@@ -3966,6 +3969,8 @@ ${escHtml(apiCmd)}</code>
   function updateSelectionBar() {
     const visible = filterVisibleSecrets();
     const nSel = visible.filter((it) => vault.selectedIds.has(it.id)).length;
+    const batchWrap = n.querySelector("#sBatchWrap");
+    if (batchWrap) batchWrap.hidden = !nSel;
     const countEl = n.querySelector("#selCount");
     if (countEl) countEl.textContent = nSel ? `${nSel} ausgewählt` : "Keine Auswahl";
     const batchStatus = n.querySelector("#sBatchStatus");
@@ -6541,6 +6546,47 @@ ${escHtml(apiCmd)}</code>
       renderBatchShareTargets();
       if (targetSel && targetSel.options.length && targetSel.options[0].value !== "") targetSel.disabled = false;
       if (capSel) capSel.disabled = false;
+    }
+  };
+
+  n.querySelector("#sBatchDelete").onclick = async () => {
+    const btn = n.querySelector("#sBatchDelete");
+    try {
+      if (vault.offlineMode) throw new Error("Batch-Verarbeitung im Offline-Modus nicht verfügbar");
+      const visible = filterVisibleSecrets();
+      const targets = visible.filter((it) => vault.selectedIds.has(it.id) && it.has_access);
+      if (!targets.length) throw new Error("Keine ausgewählten Secrets mit Zugriff");
+      if (!confirm(`${targets.length} ausgewählte Secrets unwiderruflich löschen?`)) return;
+      btn.disabled = true;
+      const results = await mapPool(targets, BATCH_POOL_SIZE, async (it) => {
+        try {
+          await api("/api/secrets/" + it.id, { method: "DELETE" });
+          removeUserFavorite(it.id);
+          vault.selectedIds.delete(it.id);
+          return { changed: true, error: "" };
+        } catch (e) {
+          return { changed: false, error: e?.message || String(e), id: it.id };
+        }
+      });
+      const changed = results.filter((r) => r.changed).length;
+      const failed = results.filter((r) => r.error);
+      const deletedIds = new Set(targets.map((it) => it.id).filter((id, idx) => results[idx]?.changed && id));
+      if (currentSecret?.id && deletedIds.has(currentSecret.id)) {
+        closeSecretModal();
+        document.body.classList.remove("secret-modal-open");
+      }
+      await refreshSecrets(true);
+      if (failed.length) {
+        const details = failed.slice(0, 3).map((r) => `• ${r.id}: ${r.error}`).join("\n");
+        const more = failed.length > 3 ? `\n… und ${failed.length - 3} weitere` : "";
+        alert(`${changed} Secrets gelöscht, ${failed.length} fehlgeschlagen.\n${details}${more}`);
+      } else {
+        alert(`${changed} Secrets gelöscht.`);
+      }
+    } catch (e) {
+      alert(e.message || String(e));
+    } finally {
+      if (btn) btn.disabled = false;
     }
   };
 
