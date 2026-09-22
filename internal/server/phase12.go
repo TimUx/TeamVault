@@ -382,6 +382,7 @@ func (a *API) handleShareGroup(w http.ResponseWriter, r *http.Request) {
 	}
 	audit := a.mutationAudit(r, sess, "secret.share_group", "secret", string(id))
 	audit.Metadata, _ = json.Marshal(map[string]any{
+		"actor_username":      sess.Username,
 		"group_id":            body.GroupID,
 		"share_mode":          map[bool]string{true: "catch_up", false: "initial_share"}[alreadyShared],
 		"recipient_user_ids":  recipientIDs,

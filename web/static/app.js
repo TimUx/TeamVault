@@ -4209,14 +4209,14 @@ ${escHtml(apiCmd)}</code>
     const hex = [...new Uint8Array(hash)].map((b) => b.toString(16).padStart(2, "0")).join("");
     return hex.replace(/(.{4})/g, "$1 ").trim().toUpperCase();
   }
-  async function confirmRecipientKey(userId, username, publicKeyB64) {
+  async function confirmRecipientKey(userId, username, publicKeyB64, opts = {}) {
     if (!userId || !publicKeyB64) return false;
     if (userId === vault.me?.user_id) return true;
     const fp = await fingerprintOfB64(publicKeyB64);
     const dir = loadKeyDir();
     const prev = dir[userId];
     if (prev && prev.fp === fp) return true;
-    if (prev && prev.fp && prev.fp !== fp) return false;
+    if (prev && prev.fp && prev.fp !== fp && !opts.allowRefresh) return false;
     const who = username || userId;
     dir[userId] = { fp, username: who, at: Date.now() };
     saveKeyDir(dir);
@@ -4247,7 +4247,7 @@ ${escHtml(apiCmd)}</code>
     }
     const allowed = new Set();
     for (const [uid, g] of byUser) {
-      const ok = await confirmRecipientKey(uid, g.username, g.public_key_b64);
+      const ok = await confirmRecipientKey(uid, g.username, g.public_key_b64, { allowRefresh: !!opts.allowKeyRefresh });
       if (ok) allowed.add(uid);
       else skipped += items.filter((x) => x.user_id === uid).length;
     }
@@ -6110,7 +6110,7 @@ ${escHtml(apiCmd)}</code>
       const pks = await api("/api/users/public-keys");
       const pk = pks.find((p) => p.user_id === userId);
       if (!pk) throw new Error("Pubkey fehlt");
-      if (!(await confirmRecipientKey(userId, pk.username, pk.public_key_b64))) return;
+      if (!(await confirmRecipientKey(userId, pk.username, pk.public_key_b64, { allowRefresh: true }))) return;
       const dk = openDKFromEnvelope(currentSecret.envelope);
       const env = TVCrypto.sealDataKeyForRecipient(dk, recipientPubForUser(userId, pk.public_key_b64), currentSecret.key_version);
       dk.fill(0);
@@ -6144,7 +6144,7 @@ ${escHtml(apiCmd)}</code>
       if (!pks.length) throw new Error("Keine onboardeten Gruppenmitglieder");
       const allowed = [];
       for (const p of pks) {
-        if (await confirmRecipientKey(p.user_id, p.username, p.public_key_b64)) allowed.push(p);
+        if (await confirmRecipientKey(p.user_id, p.username, p.public_key_b64, { allowRefresh: true })) allowed.push(p);
       }
       if (!allowed.length) return;
       const dk = openDKFromEnvelope(currentSecret.envelope);
@@ -6211,7 +6211,7 @@ ${escHtml(apiCmd)}</code>
       for (const uid of keepUsers) {
         const pk = byId[uid];
         if (!pk?.public_key_b64) throw new Error("Pubkey fehlt: " + uid);
-        if (!(await confirmRecipientKey(uid, pk.username, pk.public_key_b64))) {
+        if (!(await confirmRecipientKey(uid, pk.username, pk.public_key_b64, { allowRefresh: true }))) {
           throw new Error("Empfängerschlüssel nicht bestätigt: " + (pk.username || uid));
         }
         envelopes.push(TVCrypto.envelopeToAPI(uid, TVCrypto.sealDataKeyForRecipient(newDk, recipientPubForUser(uid, pk.public_key_b64), newKv)));
@@ -6366,7 +6366,7 @@ ${escHtml(apiCmd)}</code>
     });
     if (vault.sk && !vault.offlineMode) {
       try {
-        const r = await sealGroupShareGaps({ groupId: gid, userId: uid });
+        const r = await sealGroupShareGaps({ groupId: gid, userId: uid, allowKeyRefresh: true });
         if (r.sealed || r.failed) {
           announceA11y(
             r.failed
@@ -6919,7 +6919,8 @@ ${escHtml(apiCmd)}</code>
   }
 
   function auditActorLabel(entry) {
-    return entry.actor_username || entry.actor_id || "—";
+    const meta = entry?.metadata && typeof entry.metadata === "object" ? entry.metadata : {};
+    return meta.actor_username || entry.actor_username || entry.actor_id || "—";
   }
 
   function auditUserList(meta) {

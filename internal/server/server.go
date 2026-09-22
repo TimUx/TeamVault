@@ -1012,9 +1012,11 @@ func (a *API) handleVaultOnboard(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	meta, _ := json.Marshal(map[string]string{"actor_username": u.Username})
 	_ = a.App.Vault.AppendAudit(r.Context(), store.AuditEvent{
 		ID: "aud_onboard_" + string(u.ID), TenantID: u.TenantID, ActorID: string(u.ID),
 		Action: "vault.onboard", ResourceType: "user", ResourceID: string(u.ID), CreatedAt: now,
+		Metadata: meta,
 	})
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }

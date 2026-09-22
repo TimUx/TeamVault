@@ -146,8 +146,8 @@ func TestGroupShareGapsAfterNewMember(t *testing.T) {
 		if meta["group_id"] != gid {
 			t.Fatalf("share_group group metadata: %#v", meta)
 		}
-		if row["actor_username"] != "admin" {
-			t.Fatalf("share_group actor username: %#v", row)
+		if meta["actor_username"] != "admin" {
+			t.Fatalf("share_group actor username: %#v", meta)
 		}
 		foundCatchUp = true
 		break
