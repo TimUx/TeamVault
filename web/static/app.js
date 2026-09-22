@@ -4179,21 +4179,7 @@ ${escHtml(apiCmd)}</code>
     vault.secretsOffset = 0;
     await refreshSecrets(true);
     try {
-      const reseal = await sealGroupShareGaps();
-      if (reseal.sealed || reseal.failed || reseal.skipped) {
-        if (reseal.failed) {
-          announceA11y(`Gruppen-Freigaben nachgepflegt: ${reseal.sealed} erfolgreich, ${reseal.failed} fehlgeschlagen.`);
-        } else if (reseal.skipped) {
-          announceA11y(`Gruppen-Freigaben nachgepflegt: ${reseal.sealed} erfolgreich, ${reseal.skipped} übersprungen.`);
-        } else {
-          announceA11y(`Gruppen-Freigaben nachgepflegt: ${reseal.sealed} erfolgreich.`);
-        }
-      }
-      const gaps = await api("/api/secrets/group-share-gaps");
-      const pending = (gaps.items || []).length;
-      if (pending) {
-        announceA11y(`${pending} Gruppen-Freigaben benötigen weiterhin Nachpflege.`);
-      }
+      await sealGroupShareGaps();
     } catch (_) {}
     navigateTo("vault:mine");
     updateOfflineAccountUI(await TVOfflineStore.getSnapshot(vault.me?.tenant_id, vault.me?.user_id));
@@ -4223,18 +4209,15 @@ ${escHtml(apiCmd)}</code>
     const hex = [...new Uint8Array(hash)].map((b) => b.toString(16).padStart(2, "0")).join("");
     return hex.replace(/(.{4})/g, "$1 ").trim().toUpperCase();
   }
-  async function confirmRecipientKey(userId, username, publicKeyB64) {
+  async function confirmRecipientKey(userId, username, publicKeyB64, opts = {}) {
     if (!userId || !publicKeyB64) return false;
     if (userId === vault.me?.user_id) return true;
     const fp = await fingerprintOfB64(publicKeyB64);
     const dir = loadKeyDir();
     const prev = dir[userId];
     if (prev && prev.fp === fp) return true;
+    if (prev && prev.fp && prev.fp !== fp && !opts.allowRefresh) return false;
     const who = username || userId;
-    const msg = prev
-      ? `Schlüssel von ${who} hat sich geändert.\nBisher: ${prev.fp}\nNeu: ${fp}\nTrotzdem für diesen Empfänger verschlüsseln?`
-      : `Neuer Empfängerschlüssel für ${who}:\n${fp}\nBestätigen?`;
-    if (!confirm(msg)) return false;
     dir[userId] = { fp, username: who, at: Date.now() };
     saveKeyDir(dir);
     return true;
@@ -4246,7 +4229,7 @@ ${escHtml(apiCmd)}</code>
     return TVCrypto.b64dec(serverB64);
   }
 
-  /** Zero-knowledge: seal missing envelopes after explicit recipient confirmation. */
+  /** Zero-knowledge: seal missing envelopes automatically in the background. */
   async function sealGroupShareGaps(opts = {}) {
     if (!vault.sk || vault.offlineMode) return { sealed: 0, failed: 0, skipped: 0 };
     const q = new URLSearchParams();
@@ -4264,7 +4247,7 @@ ${escHtml(apiCmd)}</code>
     }
     const allowed = new Set();
     for (const [uid, g] of byUser) {
-      const ok = await confirmRecipientKey(uid, g.username, g.public_key_b64);
+      const ok = await confirmRecipientKey(uid, g.username, g.public_key_b64, { allowRefresh: !!opts.allowKeyRefresh });
       if (ok) allowed.add(uid);
       else skipped += items.filter((x) => x.user_id === uid).length;
     }
@@ -6127,7 +6110,7 @@ ${escHtml(apiCmd)}</code>
       const pks = await api("/api/users/public-keys");
       const pk = pks.find((p) => p.user_id === userId);
       if (!pk) throw new Error("Pubkey fehlt");
-      if (!(await confirmRecipientKey(userId, pk.username, pk.public_key_b64))) return;
+      if (!(await confirmRecipientKey(userId, pk.username, pk.public_key_b64, { allowRefresh: true }))) return;
       const dk = openDKFromEnvelope(currentSecret.envelope);
       const env = TVCrypto.sealDataKeyForRecipient(dk, recipientPubForUser(userId, pk.public_key_b64), currentSecret.key_version);
       dk.fill(0);
@@ -6161,7 +6144,7 @@ ${escHtml(apiCmd)}</code>
       if (!pks.length) throw new Error("Keine onboardeten Gruppenmitglieder");
       const allowed = [];
       for (const p of pks) {
-        if (await confirmRecipientKey(p.user_id, p.username, p.public_key_b64)) allowed.push(p);
+        if (await confirmRecipientKey(p.user_id, p.username, p.public_key_b64, { allowRefresh: true })) allowed.push(p);
       }
       if (!allowed.length) return;
       const dk = openDKFromEnvelope(currentSecret.envelope);
@@ -6228,7 +6211,7 @@ ${escHtml(apiCmd)}</code>
       for (const uid of keepUsers) {
         const pk = byId[uid];
         if (!pk?.public_key_b64) throw new Error("Pubkey fehlt: " + uid);
-        if (!(await confirmRecipientKey(uid, pk.username, pk.public_key_b64))) {
+        if (!(await confirmRecipientKey(uid, pk.username, pk.public_key_b64, { allowRefresh: true }))) {
           throw new Error("Empfängerschlüssel nicht bestätigt: " + (pk.username || uid));
         }
         envelopes.push(TVCrypto.envelopeToAPI(uid, TVCrypto.sealDataKeyForRecipient(newDk, recipientPubForUser(uid, pk.public_key_b64), newKv)));
@@ -6383,7 +6366,7 @@ ${escHtml(apiCmd)}</code>
     });
     if (vault.sk && !vault.offlineMode) {
       try {
-        const r = await sealGroupShareGaps({ groupId: gid, userId: uid });
+        const r = await sealGroupShareGaps({ groupId: gid, userId: uid, allowKeyRefresh: true });
         if (r.sealed || r.failed) {
           announceA11y(
             r.failed
@@ -6784,9 +6767,7 @@ ${escHtml(apiCmd)}</code>
       try {
         const auditRaw = await api("/api/admin/audit");
         const audit = Array.isArray(auditRaw) ? auditRaw : (auditRaw.items || []);
-        n.querySelector("#alist").innerHTML = audit.slice(0, 50).map((e) =>
-          `<div>${escapeHtml(e.created_at)} · ${escapeHtml(e.action)} · ${escapeHtml(e.actor_id)} · ${escapeHtml(e.resource_type)}/${escapeHtml(e.resource_id)}</div>`
-        ).join("") || "<p>Keine Events</p>";
+        renderAuditList(audit.slice(0, 50));
       } catch (e) {
         n.querySelector("#alist").innerHTML = `<p class="hint">${escHtml(e.message)}</p>`;
       }
@@ -6933,10 +6914,49 @@ ${escHtml(apiCmd)}</code>
     } catch (_) {}
     const auditRaw = await api("/api/admin/audit");
     const audit = Array.isArray(auditRaw) ? auditRaw : (auditRaw.items || []);
-    n.querySelector("#alist").innerHTML = audit.slice(0, 30).map((e) =>
-      `<div>${escapeHtml(e.created_at)} · ${escapeHtml(e.action)} · ${escapeHtml(e.actor_id)} · ${escapeHtml(e.resource_type)}/${escapeHtml(e.resource_id)}</div>`
-    ).join("") || "<p>Keine Events</p>";
+    renderAuditList(audit.slice(0, 30));
     syncAdminNavVisibility();
+  }
+
+  function auditActorLabel(entry) {
+    const meta = entry?.metadata && typeof entry.metadata === "object" ? entry.metadata : {};
+    return meta.actor_username || entry.actor_username || entry.actor_id || "—";
+  }
+
+  function auditUserList(meta) {
+    const names = Array.isArray(meta?.recipient_usernames) ? meta.recipient_usernames.filter(Boolean) : [];
+    if (names.length) return names.join(", ");
+    const ids = Array.isArray(meta?.recipient_user_ids) ? meta.recipient_user_ids.filter(Boolean) : [];
+    return ids.join(", ");
+  }
+
+  function auditSummary(entry) {
+    const actor = auditActorLabel(entry);
+    const meta = entry?.metadata && typeof entry.metadata === "object" ? entry.metadata : {};
+    if (entry.action === "vault.onboard") {
+      return `${actor} hat den eigenen Empfängerschlüssel registriert.`;
+    }
+    if (entry.action === "secret.share_group" && meta.share_mode === "catch_up") {
+      const users = auditUserList(meta);
+      const group = meta.group_name || meta.group_id || "—";
+      const detail = users ? ` für ${users}` : "";
+      return `${actor} hat Freigabe-Umschläge${detail} in Gruppe ${group} automatisch ergänzt (Secret ${entry.resource_id}).`;
+    }
+    if (entry.action === "secret.share_group") {
+      const users = auditUserList(meta);
+      const group = meta.group_name || meta.group_id || "—";
+      const detail = users ? ` für ${users}` : "";
+      return `${actor} hat eine Gruppenfreigabe${detail} für Gruppe ${group} geändert (Secret ${entry.resource_id}).`;
+    }
+    return `${entry.action} · ${actor} · ${entry.resource_type}/${entry.resource_id}`;
+  }
+
+  function renderAuditList(items) {
+    const box = n.querySelector("#alist");
+    if (!box) return;
+    box.innerHTML = items.map((e) =>
+      `<div>${escapeHtml(e.created_at)} · ${escapeHtml(auditSummary(e))}</div>`
+    ).join("") || "<p>Keine Events</p>";
   }
 
   let ldapSearchHits = [];

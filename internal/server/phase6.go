@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"net"
 	"net/http"
 	"net/smtp"
@@ -567,12 +568,13 @@ func (a *API) handleListAudit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	type row struct {
-		ID           string    `json:"id"`
-		ActorID      string    `json:"actor_id"`
-		Action       string    `json:"action"`
-		ResourceType string    `json:"resource_type"`
-		ResourceID   string    `json:"resource_id"`
-		CreatedAt    time.Time `json:"created_at"`
+		ID           string          `json:"id"`
+		ActorID      string          `json:"actor_id"`
+		Action       string          `json:"action"`
+		ResourceType string          `json:"resource_type"`
+		ResourceID   string          `json:"resource_id"`
+		Metadata     json.RawMessage `json:"metadata,omitempty"`
+		CreatedAt    time.Time       `json:"created_at"`
 	}
 	total := len(events)
 	if offset > total {
@@ -585,7 +587,15 @@ func (a *API) handleListAudit(w http.ResponseWriter, r *http.Request) {
 	page := events[offset:end]
 	out := make([]row, 0, len(page))
 	for _, e := range page {
-		out = append(out, row{e.ID, e.ActorID, e.Action, e.ResourceType, e.ResourceID, e.CreatedAt})
+		out = append(out, row{
+			ID:           e.ID,
+			ActorID:      e.ActorID,
+			Action:       e.Action,
+			ResourceType: e.ResourceType,
+			ResourceID:   e.ResourceID,
+			Metadata:     e.Metadata,
+			CreatedAt:    e.CreatedAt,
+		})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": out, "total": total, "limit": limit, "offset": offset})
 }
