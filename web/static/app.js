@@ -2285,6 +2285,16 @@ function renderApp(app) {
                     </div>
                   </div>
                   <div class="secrets-sidebar-section secrets-sidebar-static">
+                    <p class="secrets-actions-heading">Batch</p>
+                    <label>Tags ergänzen</label>
+                    <input id="sBatchTags" type="text" placeholder="prod, storage (Komma)" autocomplete="off" />
+                    <div class="secrets-batch-row">
+                      <button type="button" class="btn-ghost btn-sm" id="sBatchApplyTags">Auf Auswahl anwenden</button>
+                    </div>
+                    <span class="hint secrets-actions-meta" id="sBatchStatus">Auswahl erforderlich</span>
+                    ${hintBox("Ändert nur ausgewählte, sichtbare Secrets mit Zugriff.", { className: "hint-box-compact secrets-batch-note" })}
+                  </div>
+                  <div class="secrets-sidebar-section secrets-sidebar-static">
                     <p class="secrets-actions-heading">Suche</p>
                     <label><span class="label-with-ico">${icon("search", "label-ico")} Secrets</span></label>
                     <input id="ssearch" type="search" placeholder="Titel, Tags, Benutzer, Gruppen…" />
@@ -3960,6 +3970,12 @@ ${escHtml(apiCmd)}</code>
     const nSel = visible.filter((it) => vault.selectedIds.has(it.id)).length;
     const countEl = n.querySelector("#selCount");
     if (countEl) countEl.textContent = nSel ? `${nSel} ausgewählt` : "Keine Auswahl";
+    const batchStatus = n.querySelector("#sBatchStatus");
+    if (batchStatus) {
+      batchStatus.textContent = nSel
+        ? `${nSel} ausgewählt · Batch aktiv`
+        : "Auswahl erforderlich";
+    }
     const sCount = n.querySelector("#sCount");
     if (sCount) {
       const scopeLabel = vault.listScope === "favorites"
@@ -6275,6 +6291,64 @@ ${escHtml(apiCmd)}</code>
         downloadBlob("teamvault-secret.json", JSON.stringify(TVVaultIO.toTeamVaultJSON(items), null, 2), "application/json");
       }
     } catch (e) { alert(e.message); }
+  };
+
+  n.querySelector("#sBatchApplyTags").onclick = async () => {
+    const btn = n.querySelector("#sBatchApplyTags");
+    const input = n.querySelector("#sBatchTags");
+    try {
+      if (vault.offlineMode) throw new Error("Batch-Verarbeitung im Offline-Modus nicht verfügbar");
+      const visible = filterVisibleSecrets();
+      const targets = visible.filter((it) => vault.selectedIds.has(it.id) && it.has_access);
+      if (!targets.length) throw new Error("Keine ausgewählten Secrets mit Zugriff");
+      const addTags = parseTagsInput(input?.value);
+      if (!addTags.length) throw new Error("Mindestens ein Tag erforderlich");
+      if (!confirm(`Tags (${addTags.join(", ")}) bei ${targets.length} Secrets ergänzen?`)) return;
+      btn.disabled = true;
+      if (input) input.disabled = true;
+      let changed = 0;
+      for (const it of targets) {
+        const det = await fetchSecretDetailWithRetry(it.id);
+        const dk = openDKFromEnvelope(det.envelope);
+        try {
+          const kv = det.key_version || det.envelope?.key_version || 1;
+          const pt = await TVCrypto.decryptPayload(
+            TVCrypto.b64dec(det.ciphertext_b64),
+            TVCrypto.b64dec(det.nonce_b64),
+            dk, kv
+          );
+          const payload = normalizeSecretPayload(JSON.parse(new TextDecoder().decode(pt)));
+          const mergedTags = mergeTags(payload.tags || [], addTags);
+          if (mergedTags.length === (payload.tags || []).length) continue;
+          payload.tags = mergedTags;
+          const bodyEnc = await TVCrypto.encryptPayload(
+            new TextEncoder().encode(JSON.stringify(payload)),
+            dk, kv
+          );
+          await api("/api/secrets/" + it.id, {
+            method: "PUT",
+            body: JSON.stringify({
+              title_ciphertext_b64: det.title_ciphertext_b64,
+              title_nonce_b64: det.title_nonce_b64,
+              ciphertext_b64: TVCrypto.b64enc(bodyEnc.ciphertext),
+              nonce_b64: TVCrypto.b64enc(bodyEnc.nonce),
+              key_version: kv,
+            }),
+          });
+          changed++;
+        } finally {
+          dk.fill(0);
+        }
+      }
+      if (input) input.value = "";
+      await refreshSecrets(true);
+      alert(changed ? `${changed} Secrets aktualisiert.` : "Keine Änderungen notwendig.");
+    } catch (e) {
+      alert(e.message || String(e));
+    } finally {
+      if (btn) btn.disabled = false;
+      if (input) input.disabled = false;
+    }
   };
 
   n.querySelector("#sdel").onclick = async () => {

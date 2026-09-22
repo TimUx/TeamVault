@@ -1065,8 +1065,14 @@ h1 .heading-ico,
   gap: 0.35rem;
 }
 .secrets-export-note,
-.tag-filter-hint-box {
+.tag-filter-hint-box,
+.secrets-batch-note {
   margin: 0.35rem 0 0;
+}
+.secrets-batch-row {
+  display: flex;
+  gap: 0.35rem;
+  margin-top: 0.4rem;
 }
 .secrets-sidebar-section .hint-box-compact {
   margin-bottom: 0;
