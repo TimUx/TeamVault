@@ -650,6 +650,8 @@ async function mapPool(items, concurrency, fn) {
   return results;
 }
 
+const BATCH_POOL_SIZE = 4;
+
 function normalizeSecretsList(data) {
   if (Array.isArray(data)) {
     return { items: data, total: data.length, limit: data.length, offset: 0 };
@@ -1477,6 +1479,7 @@ const vault = {
   adminUsers: [],
   adminOverview: null,
   groups: [],
+  shareUsers: [],
   totpTimer: null,
   selectedIds: new Set(),
   offlineSyncRunning: false,
@@ -1527,35 +1530,11 @@ function favoriteStateForItem(it) {
 async function persistFavoriteToSecret(it, on) {
   if (!it || vault.offlineMode || !vault.sk) return;
   if (!it.has_access) throw new Error("Kein Zugriff");
-  const det = await api("/api/secrets/" + it.id);
-  const dk = openDKFromEnvelope(det.envelope);
-  try {
-    const kv = det.key_version || det.envelope?.key_version || 1;
-    const pt = await TVCrypto.decryptPayload(
-      TVCrypto.b64dec(det.ciphertext_b64),
-      TVCrypto.b64dec(det.nonce_b64),
-      dk, kv
-    );
-    const payload = normalizeSecretPayload(JSON.parse(new TextDecoder().decode(pt)));
+  const { payload } = await updateSecretPayloadById(it.id, (payload) => {
     payload.favorite = !!on;
-    const bodyEnc = await TVCrypto.encryptPayload(
-      new TextEncoder().encode(JSON.stringify(payload)),
-      dk, kv
-    );
-    await api("/api/secrets/" + it.id, {
-      method: "PUT",
-      body: JSON.stringify({
-        title_ciphertext_b64: det.title_ciphertext_b64,
-        title_nonce_b64: det.title_nonce_b64,
-        ciphertext_b64: TVCrypto.b64enc(bodyEnc.ciphertext),
-        nonce_b64: TVCrypto.b64enc(bodyEnc.nonce),
-        key_version: kv,
-      }),
-    });
-    it._payload = payload;
-  } finally {
-    dk.fill(0);
-  }
+    return payload;
+  });
+  if (payload) it._payload = payload;
 }
 
 async function setUserFavorite(secretId, on) {
@@ -1931,6 +1910,8 @@ function parseTagsInput(raw) {
     .filter(Boolean);
 }
 
+const NO_TAGS_FILTER = "__NO_TAGS__";
+
 function mergeTags(...lists) {
   const seen = new Set();
   const out = [];
@@ -2283,6 +2264,53 @@ function renderApp(app) {
                       <p class="hint" id="sLoadMoreHint"></p>
                       <button type="button" class="btn-ghost btn-sm" id="sMore">Weitere laden</button>
                     </div>
+                  </div>
+                  <div class="secrets-sidebar-section secrets-sidebar-static" id="sBatchWrap" hidden>
+                    <p class="secrets-actions-heading">Batch</p>
+                    <label>Tags ergänzen</label>
+                    <input id="sBatchTags" type="text" placeholder="prod, storage (Komma)" autocomplete="off" />
+                    <div class="secrets-batch-row">
+                      <button type="button" class="btn-ghost btn-sm" id="sBatchApplyTags">Auf Auswahl anwenden</button>
+                    </div>
+                    <label class="secrets-batch-share-label">Tags entfernen</label>
+                    <input id="sBatchTagsRemove" type="text" placeholder="legacy, alt (Komma)" autocomplete="off" />
+                    <div class="secrets-batch-row">
+                      <button type="button" class="btn-ghost btn-sm" id="sBatchRemoveTags">Von Auswahl entfernen</button>
+                    </div>
+                    <label class="secrets-batch-share-label">Favorit</label>
+                    <div class="secrets-batch-share-grid">
+                      <select id="sBatchFavMode" aria-label="Batch Favorit">
+                        <option value="on">Als Favorit markieren</option>
+                        <option value="off">Favorit entfernen</option>
+                      </select>
+                      <button type="button" class="btn-ghost btn-sm" id="sBatchApplyFavorite">Auf Auswahl anwenden</button>
+                    </div>
+                    <label class="secrets-batch-share-label">Teilen</label>
+                    <div class="secrets-batch-share-grid">
+                      <select id="sBatchShareKind" aria-label="Batch Teilen Typ">
+                        <option value="user" selected>User</option>
+                        <option value="group">Gruppe</option>
+                      </select>
+                      <select id="sBatchShareTarget" aria-label="Batch Teilen Ziel"></select>
+                    </div>
+                    <label class="inline access-cap-pick">Rechte
+                      <select id="sBatchShareCap" aria-label="Batch Teilen Rechte">
+                        <option value="read">Lesen</option>
+                        <option value="write" selected>Bearbeiten</option>
+                        <option value="share">Teilen</option>
+                        <option value="admin">Verwalten</option>
+                      </select>
+                    </label>
+                    <div class="secrets-batch-row">
+                      <button type="button" class="btn-ghost btn-sm" id="sBatchApplyShare">Teilen auf Auswahl</button>
+                      <button type="button" class="btn-ghost btn-sm" id="sBatchSetShareCap">Rechte ändern</button>
+                      <button type="button" class="btn-ghost btn-sm" id="sBatchUnshare">Freigabe entfernen</button>
+                    </div>
+                    <div class="secrets-batch-row">
+                      <button type="button" class="btn-danger btn-sm" id="sBatchDelete">Auswahl löschen</button>
+                    </div>
+                    <span class="hint secrets-actions-meta" id="sBatchStatus">Auswahl erforderlich</span>
+                    ${hintBox("Ändert nur ausgewählte, sichtbare Secrets mit Zugriff.", { className: "hint-box-compact secrets-batch-note" })}
                   </div>
                   <div class="secrets-sidebar-section secrets-sidebar-static">
                     <p class="secrets-actions-heading">Suche</p>
@@ -3958,8 +3986,16 @@ ${escHtml(apiCmd)}</code>
   function updateSelectionBar() {
     const visible = filterVisibleSecrets();
     const nSel = visible.filter((it) => vault.selectedIds.has(it.id)).length;
+    const batchWrap = n.querySelector("#sBatchWrap");
+    if (batchWrap) batchWrap.hidden = !nSel;
     const countEl = n.querySelector("#selCount");
     if (countEl) countEl.textContent = nSel ? `${nSel} ausgewählt` : "Keine Auswahl";
+    const batchStatus = n.querySelector("#sBatchStatus");
+    if (batchStatus) {
+      batchStatus.textContent = nSel
+        ? `${nSel} ausgewählt · Batch aktiv`
+        : "Auswahl erforderlich";
+    }
     const sCount = n.querySelector("#sCount");
     if (sCount) {
       const scopeLabel = vault.listScope === "favorites"
@@ -4015,6 +4051,43 @@ ${escHtml(apiCmd)}</code>
       }
     }
     throw lastErr || new Error("Secret-Detail nicht ladbar");
+  }
+
+  async function updateSecretPayloadById(id, mutatePayload) {
+    const det = await fetchSecretDetailWithRetry(id);
+    const dk = openDKFromEnvelope(det.envelope);
+    try {
+      const kv = det.key_version || det.envelope?.key_version || 1;
+      const pt = await TVCrypto.decryptPayload(
+        TVCrypto.b64dec(det.ciphertext_b64),
+        TVCrypto.b64dec(det.nonce_b64),
+        dk, kv
+      );
+      const payload = normalizeSecretPayload(JSON.parse(new TextDecoder().decode(pt)));
+      const before = JSON.stringify(payload);
+      const draft = normalizeSecretPayload(JSON.parse(JSON.stringify(payload)));
+      const nextPayload = normalizeSecretPayload(mutatePayload(draft) || draft);
+      if (before === JSON.stringify(nextPayload)) {
+        return { changed: false, payload: nextPayload };
+      }
+      const bodyEnc = await TVCrypto.encryptPayload(
+        new TextEncoder().encode(JSON.stringify(nextPayload)),
+        dk, kv
+      );
+      await api("/api/secrets/" + id, {
+        method: "PUT",
+        body: JSON.stringify({
+          title_ciphertext_b64: det.title_ciphertext_b64,
+          title_nonce_b64: det.title_nonce_b64,
+          ciphertext_b64: TVCrypto.b64enc(bodyEnc.ciphertext),
+          nonce_b64: TVCrypto.b64enc(bodyEnc.nonce),
+          key_version: kv,
+        }),
+      });
+      return { changed: true, payload: nextPayload };
+    } finally {
+      dk.fill(0);
+    }
   }
 
   function setOfflineSyncProgress(text, show) {
@@ -4229,6 +4302,16 @@ ${escHtml(apiCmd)}</code>
     return TVCrypto.b64dec(serverB64);
   }
 
+  function normalizeShareUsersFromPublicKeys(pks) {
+    return (pks || [])
+      .filter((p) => p.user_id !== vault.me?.user_id && p.onboarded !== false && p.public_key_b64)
+      .map((p) => ({
+        id: p.user_id,
+        username: p.username || p.user_id,
+        public_key_b64: p.public_key_b64,
+      }));
+  }
+
   /** Zero-knowledge: seal missing envelopes automatically in the background. */
   async function sealGroupShareGaps(opts = {}) {
     if (!vault.sk || vault.offlineMode) return { sealed: 0, failed: 0, skipped: 0 };
@@ -4298,19 +4381,41 @@ ${escHtml(apiCmd)}</code>
         gSel.innerHTML = groups.map((g) => `<option value="${escapeHtml(g.id)}">${escapeHtml(g.name)}</option>`).join("");
       }
     }
+    renderBatchShareTargets();
   }
 
   async function refreshSharePickers() {
     try {
       const pks = await api("/api/users/public-keys");
+      vault.shareUsers = normalizeShareUsersFromPublicKeys(pks);
       const userSel = n.querySelector("#screateUsers");
       if (userSel) {
-        userSel.innerHTML = pks
-          .filter((p) => p.user_id !== vault.me?.user_id && p.onboarded !== false)
-          .map((p) => `<option value="${escapeHtml(p.user_id)}">${escapeHtml(p.username)}</option>`)
+        userSel.innerHTML = vault.shareUsers
+          .map((p) => `<option value="${escapeHtml(p.id)}">${escapeHtml(p.username)}</option>`)
           .join("");
       }
     } catch (_) {}
+    renderBatchShareTargets();
+  }
+
+  function renderBatchShareTargets() {
+    const kindSel = n.querySelector("#sBatchShareKind");
+    const targetSel = n.querySelector("#sBatchShareTarget");
+    if (!kindSel || !targetSel) return;
+    const kind = kindSel.value === "group" ? "group" : "user";
+    if (kind === "group") {
+      const groups = vault.groups || [];
+      targetSel.innerHTML = groups.length
+        ? groups.map((g) => `<option value="${escapeHtml(g.id)}">${escapeHtml(g.name)}</option>`).join("")
+        : `<option value="">Keine Gruppen</option>`;
+      targetSel.disabled = !groups.length;
+    } else {
+      const users = vault.shareUsers || [];
+      targetSel.innerHTML = users.length
+        ? users.map((u) => `<option value="${escapeHtml(u.id)}">${escapeHtml(u.username)}</option>`).join("")
+        : `<option value="">Keine User</option>`;
+      targetSel.disabled = !users.length;
+    }
   }
 
   function setCreateVisibility(vis) {
@@ -4625,20 +4730,29 @@ ${escHtml(apiCmd)}</code>
     if (!box) return;
     const tags = [...new Set(vault.secretsCache.flatMap((s) => s._tags || []).filter(Boolean))].sort();
     const cur = new Set(vault.tagFilters || []);
-    const kept = (vault.tagFilters || []).filter((t) => tags.includes(t));
+    const kept = (vault.tagFilters || []).filter((t) => t === NO_TAGS_FILTER || tags.includes(t));
     const pruned = kept.length !== (vault.tagFilters || []).length;
     vault.tagFilters = kept;
-    box.innerHTML = tags.length
-      ? `<button type="button" class="tag tag-filter-option${kept.length ? "" : " active"}" data-tag-clear="1" aria-pressed="${kept.length ? "false" : "true"}">Alle</button>${
-        tags.map((t) => `<button type="button" class="tag tag-filter-option${cur.has(t) && tags.includes(t) ? " active" : ""}" data-tag-filter="${escHtml(t)}" aria-pressed="${cur.has(t) && tags.includes(t) ? "true" : "false"}">${escHtml(t)}</button>`).join("")
-      }`
-      : `<p class="hint">Keine Tags in geladenen Secrets</p>`;
+    const noTagsActive = cur.has(NO_TAGS_FILTER);
+    box.innerHTML =
+      `<button type="button" class="tag tag-filter-option${kept.length ? "" : " active"}" data-tag-clear="1" aria-pressed="${kept.length ? "false" : "true"}">Alle</button>` +
+      `<button type="button" class="tag tag-filter-option${noTagsActive ? " active" : ""}" data-tag-filter="${NO_TAGS_FILTER}" aria-pressed="${noTagsActive ? "true" : "false"}">Keine</button>` +
+      tags.map((t) => `<button type="button" class="tag tag-filter-option${cur.has(t) && tags.includes(t) ? " active" : ""}" data-tag-filter="${escHtml(t)}" aria-pressed="${cur.has(t) && tags.includes(t) ? "true" : "false"}">${escHtml(t)}</button>`).join("");
     box.querySelectorAll("[data-tag-filter]").forEach((btn) => {
       btn.onclick = () => {
         const tag = btn.dataset.tagFilter;
         const next = new Set(vault.tagFilters || []);
-        if (next.has(tag)) next.delete(tag);
-        else next.add(tag);
+        if (tag === NO_TAGS_FILTER) {
+          if (next.has(NO_TAGS_FILTER)) next.delete(NO_TAGS_FILTER);
+          else {
+            next.clear();
+            next.add(NO_TAGS_FILTER);
+          }
+        } else {
+          next.delete(NO_TAGS_FILTER);
+          if (next.has(tag)) next.delete(tag);
+          else next.add(tag);
+        }
         setTagFilters([...next]);
       };
     });
@@ -5073,7 +5187,10 @@ ${escHtml(apiCmd)}</code>
       if (!matchesOwnership(it)) return false;
       if (wantTags.length) {
         const have = it._tags || [];
-        if (!wantTags.every((t) => have.includes(t))) return false;
+        const wantNoTags = wantTags.includes(NO_TAGS_FILTER);
+        const explicit = wantTags.filter((t) => t !== NO_TAGS_FILTER);
+        if (wantNoTags && have.length) return false;
+        if (explicit.length && !explicit.every((t) => have.includes(t))) return false;
       }
       if (!q) return true;
       const title = (it._title || "").toLowerCase();
@@ -5727,13 +5844,7 @@ ${escHtml(apiCmd)}</code>
           };
         }
       }
-      const groupHint = (det.shared_groups || []).join(", ");
-      const userHint = (det.shared_users || []).join(", ");
-      n.querySelector("#drec").textContent =
-        "Empfänger: " + (det.recipients || []).join(", ") +
-        " · v" + kv +
-        (userHint ? " · User: " + userHint : "") +
-        (groupHint ? " · Gruppen: " + groupHint : "");
+      renderDetailRecipients(det, kv);
       const editBtn = n.querySelector("#dedit");
       const delBtn = n.querySelector("#sdel");
       const exportOne = n.querySelector("#sExportOne");
@@ -6038,17 +6149,7 @@ ${escHtml(apiCmd)}</code>
     currentSecret = await api("/api/secrets/" + sid);
     const detailOpen = n.querySelector("#sdetail") && !n.querySelector("#sdetail").hidden;
     if (detailOpen) {
-      const groupHint = (currentSecret.shared_groups || []).join(", ");
-      const userHint = (currentSecret.shared_users || []).join(", ");
-      const drec = n.querySelector("#drec");
-      if (drec) {
-        drec.textContent =
-          "Empfänger: " + (currentSecret.recipients || []).join(", ") +
-          " · v" + currentSecret.key_version +
-          (userHint ? " · User: " + userHint : "") +
-          (groupHint ? " · Gruppen: " + groupHint : "") +
-          (currentSecret.visibility === "shared" ? " · Geteilt" : " · Privat");
-      }
+      renderDetailRecipients(currentSecret, currentSecret.key_version);
       await renderAccessPanel("detail");
     }
     if (shareEditorOpen) await renderAccessPanel("modal");
@@ -6141,7 +6242,7 @@ ${escHtml(apiCmd)}</code>
           throw e;
         }
       }
-      if (!pks.length) throw new Error("Keine onboardeten Gruppenmitglieder");
+      if (!pks.length) throw new Error("Keine registrierten Gruppenmitglieder");
       const allowed = [];
       for (const p of pks) {
         if (await confirmRecipientKey(p.user_id, p.username, p.public_key_b64, { allowRefresh: true })) allowed.push(p);
@@ -6275,6 +6376,519 @@ ${escHtml(apiCmd)}</code>
         downloadBlob("teamvault-secret.json", JSON.stringify(TVVaultIO.toTeamVaultJSON(items), null, 2), "application/json");
       }
     } catch (e) { alert(e.message); }
+  };
+
+  function renderDetailRecipients(det, kv) {
+    const drec = n.querySelector("#drec");
+    if (!drec) return;
+    const users = (det.shared_users || []).map((u) => u.display_name || u.username || u.id).filter(Boolean);
+    const groups = (det.shared_groups || []).map((g) => g.display_name || g.name || g.id).filter(Boolean);
+    const known = new Set([...users, ...groups].map((v) => String(v).toLowerCase()));
+    const direct = (det.recipients || []).map((r) => String(r || "").trim()).filter((r) => r && !known.has(r.toLowerCase()));
+    const mode = det.visibility === "shared" ? "Geteilt" : "Privat";
+    const chips = [
+      ...users.map((u) => `<span class="tag">User: ${escHtml(u)}</span>`),
+      ...groups.map((g) => `<span class="tag">Gruppe: ${escHtml(g)}</span>`),
+      ...direct.map((r) => `<span class="tag">Empfänger: ${escHtml(r)}</span>`),
+    ].join("");
+    drec.innerHTML =
+      `<span class="detail-rec-head">Freigaben · ${mode} · v${kv || det.key_version || 1}</span>` +
+      `<div class="detail-rec-body">${chips ? `<div class="tags detail-rec-tags">${chips}</div>` : `<span class="hint detail-rec-empty">Keine Freigaben</span>`}</div>`;
+  }
+
+  function selectedBatchTargets() {
+    const visible = filterVisibleSecrets();
+    return visible.filter((it) => vault.selectedIds.has(it.id) && it.has_access);
+  }
+
+  function selectedSharedCount(targets) {
+    return (targets || []).filter((it) => it.visibility === "shared" || (it.shared_groups || []).length || (it.shared_users || []).length).length;
+  }
+
+  function showBatchResult(action, changed, failed) {
+    if (failed.length) {
+      const details = failed.slice(0, 3).map((r) => `• ${r.id}: ${r.error}`).join("\n");
+      const more = failed.length > 3 ? `\n… und ${failed.length - 3} weitere` : "";
+      alert(`${changed} Secrets ${action}, ${failed.length} fehlgeschlagen.\n${details}${more}`);
+    } else {
+      alert(changed ? `${changed} Secrets ${action}.` : "Keine Änderungen notwendig.");
+    }
+  }
+
+  function requireSafeBatchConfirm(kind, targets, label) {
+    const count = targets.length;
+    if (!confirm(`${count} ausgewählte Secrets ${label}?`)) return false;
+    const shared = selectedSharedCount(targets);
+    if (shared > 0 && !confirm(`Hinweis: ${shared} geteilte Secrets sind betroffen. Fortfahren?`)) return false;
+    const token = kind === "delete" ? "LÖSCHEN" : "TEILEN";
+    const typed = (prompt(`Sicherheitsbestätigung: Bitte ${token} eingeben.`) || "").trim().toUpperCase();
+    if (typed !== token) return false;
+    return true;
+  }
+
+  async function runPayloadBatch(targets, mutatePayload) {
+    return mapPool(targets, BATCH_POOL_SIZE, async (it) => {
+      try {
+        const { changed } = await updateSecretPayloadById(it.id, mutatePayload);
+        return { changed, error: "", id: it.id };
+      } catch (e) {
+        return { changed: false, error: e?.message || String(e), id: it.id };
+      }
+    });
+  }
+
+  n.querySelector("#sBatchApplyTags").onclick = async () => {
+    const btn = n.querySelector("#sBatchApplyTags");
+    const input = n.querySelector("#sBatchTags");
+    try {
+      if (vault.offlineMode) throw new Error("Batch-Verarbeitung im Offline-Modus nicht verfügbar");
+      const targets = selectedBatchTargets();
+      if (!targets.length) throw new Error("Keine ausgewählten Secrets mit Zugriff");
+      const addTags = parseTagsInput(input?.value);
+      if (!addTags.length) throw new Error("Mindestens ein Tag erforderlich");
+      if (!confirm(`Tags (${addTags.join(", ")}) bei ${targets.length} Secrets ergänzen?`)) return;
+      btn.disabled = true;
+      if (input) input.disabled = true;
+      const results = await runPayloadBatch(targets, (payload) => {
+        payload.tags = mergeTags(payload.tags || [], addTags);
+        return payload;
+      });
+      const changed = results.filter((r) => r.changed).length;
+      const failed = results.filter((r) => r.error);
+      await refreshSecrets(true);
+      if (input) input.value = "";
+      showBatchResult("aktualisiert", changed, failed);
+    } catch (e) {
+      alert(e.message || String(e));
+    } finally {
+      if (btn) btn.disabled = false;
+      if (input) input.disabled = false;
+    }
+  };
+
+  n.querySelector("#sBatchRemoveTags").onclick = async () => {
+    const btn = n.querySelector("#sBatchRemoveTags");
+    const input = n.querySelector("#sBatchTagsRemove");
+    try {
+      if (vault.offlineMode) throw new Error("Batch-Verarbeitung im Offline-Modus nicht verfügbar");
+      const targets = selectedBatchTargets();
+      if (!targets.length) throw new Error("Keine ausgewählten Secrets mit Zugriff");
+      const dropTags = parseTagsInput(input?.value);
+      if (!dropTags.length) throw new Error("Mindestens ein Tag erforderlich");
+      if (!confirm(`Tags (${dropTags.join(", ")}) bei ${targets.length} Secrets entfernen?`)) return;
+      btn.disabled = true;
+      if (input) input.disabled = true;
+      const drop = new Set(dropTags);
+      const results = await runPayloadBatch(targets, (payload) => {
+        payload.tags = (payload.tags || []).filter((t) => !drop.has(t));
+        return payload;
+      });
+      const changed = results.filter((r) => r.changed).length;
+      const failed = results.filter((r) => r.error);
+      await refreshSecrets(true);
+      if (input) input.value = "";
+      showBatchResult("aktualisiert", changed, failed);
+    } catch (e) {
+      alert(e.message || String(e));
+    } finally {
+      if (btn) btn.disabled = false;
+      if (input) input.disabled = false;
+    }
+  };
+
+  n.querySelector("#sBatchApplyFavorite").onclick = async () => {
+    const btn = n.querySelector("#sBatchApplyFavorite");
+    const modeSel = n.querySelector("#sBatchFavMode");
+    try {
+      if (vault.offlineMode) throw new Error("Batch-Verarbeitung im Offline-Modus nicht verfügbar");
+      const targets = selectedBatchTargets();
+      if (!targets.length) throw new Error("Keine ausgewählten Secrets mit Zugriff");
+      const on = (modeSel?.value || "on") === "on";
+      if (!confirm(`${targets.length} Secrets ${on ? "als Favorit markieren" : "Favorit entfernen"}?`)) return;
+      btn.disabled = true;
+      if (modeSel) modeSel.disabled = true;
+      const results = await runPayloadBatch(targets, (payload) => {
+        payload.favorite = !!on;
+        return payload;
+      });
+      for (const [idx, it] of targets.entries()) {
+        if (!results[idx]?.changed) continue;
+        if (on) vault.userFavoriteIds.add(it.id);
+        else vault.userFavoriteIds.delete(it.id);
+      }
+      persistUserFavorites();
+      const changed = results.filter((r) => r.changed).length;
+      const failed = results.filter((r) => r.error);
+      await refreshSecrets(true);
+      showBatchResult("aktualisiert", changed, failed);
+    } catch (e) {
+      alert(e.message || String(e));
+    } finally {
+      if (btn) btn.disabled = false;
+      if (modeSel) modeSel.disabled = false;
+    }
+  };
+
+  const sBatchShareKind = n.querySelector("#sBatchShareKind");
+  if (sBatchShareKind) sBatchShareKind.onchange = renderBatchShareTargets;
+  renderBatchShareTargets();
+
+  async function shareSecretByTarget(secretItem, targetKind, targetId, capability, userPkMap) {
+    const secretId = secretItem?.id || secretItem;
+    if (!secretId) throw new Error("Secret fehlt");
+    const det = secretItem?.envelope ? secretItem : await fetchSecretDetailWithRetry(secretId);
+    const kv = det.key_version || det.envelope?.key_version || 1;
+    if (targetKind === "group") {
+      try {
+        const access = await api("/api/secrets/" + secretId + "/access");
+        const alreadyShared = (access.shared_groups || []).find((g) => g.id === targetId);
+        if (alreadyShared && normalizeShareCap(alreadyShared.capability || "write") === normalizeShareCap(capability)) {
+          return { changed: false };
+        }
+      } catch (_) {}
+      const allowed = Array.isArray(userPkMap) ? userPkMap : [];
+      if (!allowed.length) return { changed: false, cancelled: true };
+      const dk = openDKFromEnvelope(det.envelope);
+      try {
+        const envelopes = allowed.map((p) =>
+          TVCrypto.envelopeToAPI(
+            p.user_id,
+            TVCrypto.sealDataKeyForRecipient(dk, recipientPubForUser(p.user_id, p.public_key_b64), kv)
+          )
+        );
+        await api("/api/secrets/" + secretId + "/share-group", {
+          method: "POST",
+          body: JSON.stringify({
+            group_id: targetId,
+            capability: normalizeShareCap(capability),
+            envelopes,
+          }),
+        });
+      } finally {
+        dk.fill(0);
+      }
+      return { changed: true };
+    }
+
+    const pk = userPkMap.get(targetId);
+    if (!pk?.public_key_b64) throw new Error("Pubkey fehlt");
+    if (!(await confirmRecipientKey(targetId, pk.username, pk.public_key_b64, { allowRefresh: true }))) {
+      return { changed: false };
+    }
+    try {
+      const access = await api("/api/secrets/" + secretId + "/access");
+      const alreadyShared = (access.shared_users || []).find((u) => u.id === targetId);
+      if (alreadyShared && normalizeShareCap(alreadyShared.capability || "write") === normalizeShareCap(capability)) {
+        return { changed: false };
+      }
+    } catch (_) {}
+    const dk = openDKFromEnvelope(det.envelope);
+    try {
+      const env = TVCrypto.sealDataKeyForRecipient(
+        dk,
+        recipientPubForUser(targetId, pk.public_key_b64),
+        kv
+      );
+      await api("/api/secrets/" + secretId + "/share", {
+        method: "POST",
+        body: JSON.stringify({
+          capability: normalizeShareCap(capability),
+          envelopes: [TVCrypto.envelopeToAPI(targetId, env)],
+        }),
+      });
+    } finally {
+      dk.fill(0);
+    }
+    return { changed: true };
+  }
+
+  async function resolveBatchGroupRecipients(groupId, probeSecretId) {
+    let pks = null;
+    try {
+      pks = await api("/api/secrets/" + probeSecretId + "/group-member-keys?group_id=" + encodeURIComponent(groupId));
+    } catch (e) {
+      if (e && e.status === 403) {
+        pks = await api("/api/groups/" + encodeURIComponent(groupId) + "/member-keys");
+      } else {
+        throw e;
+      }
+    }
+    if (!pks.length) throw new Error("Keine registrierten Gruppenmitglieder");
+    const allowed = [];
+    let declined = 0;
+    for (const p of pks) {
+      if (await confirmRecipientKey(p.user_id, p.username, p.public_key_b64, { allowRefresh: true })) allowed.push(p);
+      else declined++;
+    }
+    return { allowed, declined };
+  }
+
+  n.querySelector("#sBatchApplyShare").onclick = async () => {
+    const btn = n.querySelector("#sBatchApplyShare");
+    const targetSel = n.querySelector("#sBatchShareTarget");
+    const kindSel = n.querySelector("#sBatchShareKind");
+    const capSel = n.querySelector("#sBatchShareCap");
+    try {
+      if (vault.offlineMode) throw new Error("Batch-Verarbeitung im Offline-Modus nicht verfügbar");
+      const targets = selectedBatchTargets();
+      if (!targets.length) throw new Error("Keine ausgewählten Secrets mit Zugriff");
+      const targetId = String(targetSel?.value || "").trim();
+      if (!targetId) throw new Error("Ziel für Teilen wählen");
+      const targetKind = kindSel?.value === "group" ? "group" : "user";
+      const cap = normalizeShareCap(capSel?.value || "write");
+      const targetLabel = targetSel?.selectedOptions?.[0]?.textContent?.trim() || targetId;
+      if (!requireSafeBatchConfirm("share", targets, `mit ${targetKind === "group" ? "Gruppe" : "User"} "${targetLabel}" teilen (${capLabel(cap)})`)) return;
+      btn.disabled = true;
+      if (kindSel) kindSel.disabled = true;
+      if (targetSel) targetSel.disabled = true;
+      if (capSel) capSel.disabled = true;
+      let userPkMap = new Map((vault.shareUsers || []).map((u) => [u.id, u]));
+      if (targetKind === "user") {
+        if (!userPkMap.size || !userPkMap.has(targetId)) {
+          const pks = await api("/api/users/public-keys");
+          const freshUsers = normalizeShareUsersFromPublicKeys(pks);
+          vault.shareUsers = freshUsers;
+          userPkMap = new Map(freshUsers.map((u) => [u.id, u]));
+        }
+      } else {
+        const prep = await resolveBatchGroupRecipients(targetId, targets[0].id);
+        if (!prep.allowed.length) {
+          alert("Teilen abgebrochen: kein Empfängerschlüssel bestätigt.");
+          return;
+        }
+        userPkMap = prep.allowed;
+      }
+      const results = await mapPool(targets, BATCH_POOL_SIZE, async (it) => {
+        try {
+          const { changed } = await shareSecretByTarget(it, targetKind, targetId, cap, userPkMap);
+          return { changed, error: "" };
+        } catch (e) {
+          return { changed: false, error: e?.message || String(e), id: it.id };
+        }
+      });
+      const changed = results.filter((r) => r.changed).length;
+      const failed = results.filter((r) => r.error);
+      await refreshSecrets(true);
+      if (failed.length) {
+        const details = failed.slice(0, 3).map((r) => `• ${r.id}: ${r.error}`).join("\n");
+        const more = failed.length > 3 ? `\n… und ${failed.length - 3} weitere` : "";
+        alert(`${changed} Secrets geteilt, ${failed.length} fehlgeschlagen.\n${details}${more}`);
+      } else {
+        alert(changed ? `${changed} Secrets geteilt.` : "Keine Änderungen notwendig.");
+      }
+    } catch (e) {
+      alert(e.message || String(e));
+    } finally {
+      if (btn) btn.disabled = false;
+      if (kindSel) kindSel.disabled = false;
+      renderBatchShareTargets();
+      if (targetSel && targetSel.options.length && targetSel.options[0].value !== "") targetSel.disabled = false;
+      if (capSel) capSel.disabled = false;
+    }
+  };
+
+  async function unshareSecretByTarget(secretId, targetKind, targetId) {
+    const det = await fetchSecretDetailWithRetry(secretId);
+    const access = await api("/api/secrets/" + secretId + "/access");
+    const pks = await api("/api/users/public-keys");
+    const byId = Object.fromEntries(pks.map((p) => [p.user_id, p]));
+    const byName = Object.fromEntries(pks.map((p) => [String(p.username || "").toLowerCase(), p.user_id]));
+    const userIds = targetKind === "user" ? [targetId] : [];
+    const groupIds = targetKind === "group" ? [targetId] : [];
+    if (targetKind === "user" && !(access.shared_users || []).some((u) => u.id === targetId)) return { changed: false };
+    if (targetKind === "group" && !(access.shared_groups || []).some((g) => g.id === targetId)) return { changed: false };
+    const keepUsers = new Set();
+    const ownerId = access.owner?.id || det.created_by || vault.me.user_id;
+    keepUsers.add(ownerId);
+    keepUsers.add(vault.me.user_id);
+    [...(access.recipients || []), ...(det.recipients || [])].forEach((r) => {
+      const raw = String(r || "").trim();
+      if (!raw) return;
+      if (byId[raw]) keepUsers.add(raw);
+      else if (byName[raw.toLowerCase()]) keepUsers.add(byName[raw.toLowerCase()]);
+    });
+    (access.shared_users || []).forEach((u) => {
+      if (userIds.includes(u.id)) return;
+      keepUsers.add(u.id);
+    });
+    const remainingGroups = (access.shared_groups || []).filter((g) => !groupIds.includes(g.id));
+    for (const g of remainingGroups) {
+      const members = await api("/api/secrets/" + secretId + "/group-member-keys?group_id=" + encodeURIComponent(g.id));
+      members.forEach((m) => keepUsers.add(m.user_id));
+    }
+    const oldDk = openDKFromEnvelope(det.envelope);
+    const kv = det.key_version || det.envelope?.key_version || 1;
+    let title;
+    let pt;
+    try {
+      title = await TVCrypto.decryptTitle(
+        TVCrypto.b64dec(det.title_ciphertext_b64),
+        TVCrypto.b64dec(det.title_nonce_b64),
+        oldDk, kv
+      );
+      pt = await TVCrypto.decryptPayload(
+        TVCrypto.b64dec(det.ciphertext_b64),
+        TVCrypto.b64dec(det.nonce_b64),
+        oldDk, kv
+      );
+    } finally {
+      oldDk.fill(0);
+    }
+    const newKv = kv + 1;
+    const newDk = TVCrypto.generateDataKey();
+    let titleEnc;
+    let bodyEnc;
+    const envelopes = [];
+    try {
+      titleEnc = await TVCrypto.encryptTitle(title, newDk, newKv);
+      bodyEnc = await TVCrypto.encryptPayload(pt, newDk, newKv);
+      for (const uid of keepUsers) {
+        const pk = byId[uid];
+        if (!pk?.public_key_b64) throw new Error("Pubkey fehlt: " + uid);
+        await confirmRecipientKey(uid, pk.username, pk.public_key_b64, { allowRefresh: true });
+        envelopes.push(TVCrypto.envelopeToAPI(uid, TVCrypto.sealDataKeyForRecipient(newDk, recipientPubForUser(uid, pk.public_key_b64), newKv)));
+      }
+    } finally {
+      newDk.fill(0);
+    }
+    await api("/api/secrets/" + secretId + "/rotate", {
+      method: "POST",
+      body: JSON.stringify({
+        title_ciphertext_b64: TVCrypto.b64enc(titleEnc.ciphertext),
+        title_nonce_b64: TVCrypto.b64enc(titleEnc.nonce),
+        ciphertext_b64: TVCrypto.b64enc(bodyEnc.ciphertext),
+        nonce_b64: TVCrypto.b64enc(bodyEnc.nonce),
+        key_version: newKv,
+        envelopes,
+        drop_user_ids: userIds,
+        drop_group_ids: groupIds,
+      }),
+    });
+    return { changed: true };
+  }
+
+  n.querySelector("#sBatchSetShareCap").onclick = async () => {
+    const btn = n.querySelector("#sBatchSetShareCap");
+    const targetSel = n.querySelector("#sBatchShareTarget");
+    const kindSel = n.querySelector("#sBatchShareKind");
+    const capSel = n.querySelector("#sBatchShareCap");
+    try {
+      if (vault.offlineMode) throw new Error("Batch-Verarbeitung im Offline-Modus nicht verfügbar");
+      const targets = selectedBatchTargets();
+      if (!targets.length) throw new Error("Keine ausgewählten Secrets mit Zugriff");
+      const targetId = String(targetSel?.value || "").trim();
+      if (!targetId) throw new Error("Ziel wählen");
+      const targetKind = kindSel?.value === "group" ? "group" : "user";
+      const cap = normalizeShareCap(capSel?.value || "write");
+      const targetLabel = targetSel?.selectedOptions?.[0]?.textContent?.trim() || targetId;
+      if (!confirm(`Rechte für ${targets.length} Secrets auf ${capLabel(cap)} setzen (${targetKind === "group" ? "Gruppe" : "User"} "${targetLabel}")?`)) return;
+      btn.disabled = true;
+      let userPkMap = new Map((vault.shareUsers || []).map((u) => [u.id, u]));
+      if (targetKind === "user" && (!userPkMap.size || !userPkMap.has(targetId))) {
+        const pks = await api("/api/users/public-keys");
+        const freshUsers = normalizeShareUsersFromPublicKeys(pks);
+        vault.shareUsers = freshUsers;
+        userPkMap = new Map(freshUsers.map((u) => [u.id, u]));
+      }
+      const groupRecipients = targetKind === "group"
+        ? (await resolveBatchGroupRecipients(targetId, targets[0].id)).allowed
+        : null;
+      const results = await mapPool(targets, BATCH_POOL_SIZE, async (it) => {
+        try {
+          const access = await api("/api/secrets/" + it.id + "/access");
+          const existing = targetKind === "user"
+            ? (access.shared_users || []).find((u) => u.id === targetId)
+            : (access.shared_groups || []).find((g) => g.id === targetId);
+          if (!existing) return { changed: false, error: "", id: it.id };
+          if (normalizeShareCap(existing.capability || "write") === cap) return { changed: false, error: "", id: it.id };
+          const { changed } = await shareSecretByTarget(it, targetKind, targetId, cap, targetKind === "group" ? groupRecipients : userPkMap);
+          return { changed, error: "", id: it.id };
+        } catch (e) {
+          return { changed: false, error: e?.message || String(e), id: it.id };
+        }
+      });
+      const changed = results.filter((r) => r.changed).length;
+      const failed = results.filter((r) => r.error);
+      await refreshSecrets(true);
+      showBatchResult("aktualisiert", changed, failed);
+    } catch (e) {
+      alert(e.message || String(e));
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  };
+
+  n.querySelector("#sBatchUnshare").onclick = async () => {
+    const btn = n.querySelector("#sBatchUnshare");
+    const targetSel = n.querySelector("#sBatchShareTarget");
+    const kindSel = n.querySelector("#sBatchShareKind");
+    try {
+      if (vault.offlineMode) throw new Error("Batch-Verarbeitung im Offline-Modus nicht verfügbar");
+      const targets = selectedBatchTargets();
+      if (!targets.length) throw new Error("Keine ausgewählten Secrets mit Zugriff");
+      const targetId = String(targetSel?.value || "").trim();
+      if (!targetId) throw new Error("Ziel wählen");
+      const targetKind = kindSel?.value === "group" ? "group" : "user";
+      const targetLabel = targetSel?.selectedOptions?.[0]?.textContent?.trim() || targetId;
+      if (!confirm(`Freigabe für ${targets.length} Secrets entfernen (${targetKind === "group" ? "Gruppe" : "User"} "${targetLabel}")?`)) return;
+      btn.disabled = true;
+      const results = await mapPool(targets, BATCH_POOL_SIZE, async (it) => {
+        try {
+          const { changed } = await unshareSecretByTarget(it.id, targetKind, targetId);
+          return { changed, error: "", id: it.id };
+        } catch (e) {
+          return { changed: false, error: e?.message || String(e), id: it.id };
+        }
+      });
+      const changed = results.filter((r) => r.changed).length;
+      const failed = results.filter((r) => r.error);
+      await refreshSecrets(true);
+      showBatchResult("aktualisiert", changed, failed);
+    } catch (e) {
+      alert(e.message || String(e));
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  };
+
+  n.querySelector("#sBatchDelete").onclick = async () => {
+    const btn = n.querySelector("#sBatchDelete");
+    try {
+      if (vault.offlineMode) throw new Error("Batch-Verarbeitung im Offline-Modus nicht verfügbar");
+      const targets = selectedBatchTargets();
+      if (!targets.length) throw new Error("Keine ausgewählten Secrets mit Zugriff");
+      if (!requireSafeBatchConfirm("delete", targets, "unwiderruflich löschen")) return;
+      btn.disabled = true;
+      const results = await mapPool(targets, BATCH_POOL_SIZE, async (it) => {
+        try {
+          await api("/api/secrets/" + it.id, { method: "DELETE" });
+          removeUserFavorite(it.id);
+          vault.selectedIds.delete(it.id);
+          return { changed: true, error: "" };
+        } catch (e) {
+          return { changed: false, error: e?.message || String(e), id: it.id };
+        }
+      });
+      const changed = results.filter((r) => r.changed).length;
+      const failed = results.filter((r) => r.error);
+      const deletedIds = new Set(targets.map((it) => it.id).filter((id, idx) => results[idx]?.changed && id));
+      if (currentSecret?.id && deletedIds.has(currentSecret.id)) {
+        closeSecretModal();
+        document.body.classList.remove("secret-modal-open");
+      }
+      await refreshSecrets(true);
+      if (failed.length) {
+        const details = failed.slice(0, 3).map((r) => `• ${r.id}: ${r.error}`).join("\n");
+        const more = failed.length > 3 ? `\n… und ${failed.length - 3} weitere` : "";
+        alert(`${changed} Secrets gelöscht, ${failed.length} fehlgeschlagen.\n${details}${more}`);
+      } else {
+        alert(changed ? `${changed} Secrets gelöscht.` : "Keine Änderungen notwendig.");
+      }
+    } catch (e) {
+      alert(e.message || String(e));
+    } finally {
+      if (btn) btn.disabled = false;
+    }
   };
 
   n.querySelector("#sdel").onclick = async () => {

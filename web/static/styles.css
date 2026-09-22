@@ -1065,8 +1065,23 @@ h1 .heading-ico,
   gap: 0.35rem;
 }
 .secrets-export-note,
-.tag-filter-hint-box {
+.tag-filter-hint-box,
+.secrets-batch-note {
   margin: 0.35rem 0 0;
+}
+.secrets-batch-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.4rem;
+}
+.secrets-batch-share-label {
+  margin-top: 0.55rem;
+}
+.secrets-batch-share-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+  gap: 0.35rem;
 }
 .secrets-sidebar-section .hint-box-compact {
   margin-bottom: 0;
@@ -1082,6 +1097,17 @@ h1 .heading-ico,
   height: 1.1rem;
 }
 .secrets-actions-tools + .secrets-sidebar-status .hint { margin: 0; }
+.detail-rec-head {
+  display: inline-block;
+  margin-bottom: 0.3rem;
+  font-weight: 600;
+}
+.detail-rec-body {
+  display: block;
+}
+.detail-rec-tags {
+  margin-top: 0.2rem;
+}
 .secrets-actions-tools .btn-icon.active {
   border-color: var(--color-accent);
   color: var(--color-accent);
