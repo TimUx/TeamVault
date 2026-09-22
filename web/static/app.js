@@ -4216,8 +4216,9 @@ ${escHtml(apiCmd)}</code>
     const dir = loadKeyDir();
     const prev = dir[userId];
     if (prev && prev.fp === fp) return true;
+    if (prev && prev.fp && prev.fp !== fp) return false;
     const who = username || userId;
-    dir[userId] = { fp, username: who, at: Date.now(), previous_fp: prev?.fp || "" };
+    dir[userId] = { fp, username: who, at: Date.now() };
     saveKeyDir(dir);
     return true;
   }
