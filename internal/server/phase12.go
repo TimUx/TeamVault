@@ -337,11 +337,13 @@ func (a *API) handleShareGroup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	recipientUsernameByID := map[string]string{}
-	if len(body.Envelopes) != 0 {
-		if users, uerr := a.App.Vault.ListUsers(r.Context(), sess.TenantID, store.UserQuery{Limit: 1000}); uerr == nil {
-			for _, u := range users {
-				recipientUsernameByID[string(u.ID)] = u.Username
-			}
+	for _, e := range body.Envelopes {
+		if _, ok := recipientUsernameByID[e.UserID]; ok {
+			continue
+		}
+		u, uerr := a.App.Vault.GetUser(r.Context(), sess.TenantID, store.UserID(e.UserID))
+		if uerr == nil && u != nil {
+			recipientUsernameByID[e.UserID] = u.Username
 		}
 	}
 	recipientIDs := make([]string, 0, len(body.Envelopes))
