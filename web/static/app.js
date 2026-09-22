@@ -6412,8 +6412,10 @@ ${escHtml(apiCmd)}</code>
   if (sBatchShareKind) sBatchShareKind.onchange = renderBatchShareTargets;
   renderBatchShareTargets();
 
-  async function shareSecretByTarget(secretId, targetKind, targetId, capability, userPkMap) {
-    const det = await fetchSecretDetailWithRetry(secretId);
+  async function shareSecretByTarget(secretItem, targetKind, targetId, capability, userPkMap) {
+    const secretId = secretItem?.id || secretItem;
+    if (!secretId) throw new Error("Secret fehlt");
+    const det = secretItem?.envelope ? secretItem : await fetchSecretDetailWithRetry(secretId);
     const kv = det.key_version || det.envelope?.key_version || 1;
     if (targetKind === "group") {
       const allowed = Array.isArray(userPkMap) ? userPkMap : [];
@@ -6445,6 +6447,13 @@ ${escHtml(apiCmd)}</code>
     if (!(await confirmRecipientKey(targetId, pk.username, pk.public_key_b64, { allowRefresh: true }))) {
       return { changed: false };
     }
+    try {
+      const access = await api("/api/secrets/" + secretId + "/access");
+      const alreadyShared = (access.shared_users || []).find((u) => u.id === targetId);
+      if (alreadyShared && normalizeShareCap(alreadyShared.capability || "write") === normalizeShareCap(capability)) {
+        return { changed: false };
+      }
+    } catch (_) {}
     const dk = openDKFromEnvelope(det.envelope);
     try {
       const env = TVCrypto.sealDataKeyForRecipient(
@@ -6508,10 +6517,12 @@ ${escHtml(apiCmd)}</code>
       if (capSel) capSel.disabled = true;
       let userPkMap = new Map((vault.shareUsers || []).map((u) => [u.id, u]));
       if (targetKind === "user") {
-        const pks = await api("/api/users/public-keys");
-        const freshUsers = normalizeShareUsersFromPublicKeys(pks);
-        vault.shareUsers = freshUsers;
-        userPkMap = new Map(freshUsers.map((u) => [u.id, u]));
+        if (!userPkMap.size || !userPkMap.has(targetId)) {
+          const pks = await api("/api/users/public-keys");
+          const freshUsers = normalizeShareUsersFromPublicKeys(pks);
+          vault.shareUsers = freshUsers;
+          userPkMap = new Map(freshUsers.map((u) => [u.id, u]));
+        }
       } else {
         const prep = await resolveBatchGroupRecipients(targetId, targets[0].id);
         if (!prep.allowed.length) {
@@ -6522,7 +6533,7 @@ ${escHtml(apiCmd)}</code>
       }
       const results = await mapPool(targets, BATCH_POOL_SIZE, async (it) => {
         try {
-          const { changed } = await shareSecretByTarget(it.id, targetKind, targetId, cap, userPkMap);
+          const { changed } = await shareSecretByTarget(it, targetKind, targetId, cap, userPkMap);
           return { changed, error: "" };
         } catch (e) {
           return { changed: false, error: e?.message || String(e), id: it.id };
@@ -6581,7 +6592,7 @@ ${escHtml(apiCmd)}</code>
         const more = failed.length > 3 ? `\n… und ${failed.length - 3} weitere` : "";
         alert(`${changed} Secrets gelöscht, ${failed.length} fehlgeschlagen.\n${details}${more}`);
       } else {
-        alert(`${changed} Secrets gelöscht.`);
+        alert(changed ? `${changed} Secrets gelöscht.` : "Keine Änderungen notwendig.");
       }
     } catch (e) {
       alert(e.message || String(e));
