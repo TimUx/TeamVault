@@ -1527,35 +1527,11 @@ function favoriteStateForItem(it) {
 async function persistFavoriteToSecret(it, on) {
   if (!it || vault.offlineMode || !vault.sk) return;
   if (!it.has_access) throw new Error("Kein Zugriff");
-  const det = await api("/api/secrets/" + it.id);
-  const dk = openDKFromEnvelope(det.envelope);
-  try {
-    const kv = det.key_version || det.envelope?.key_version || 1;
-    const pt = await TVCrypto.decryptPayload(
-      TVCrypto.b64dec(det.ciphertext_b64),
-      TVCrypto.b64dec(det.nonce_b64),
-      dk, kv
-    );
-    const payload = normalizeSecretPayload(JSON.parse(new TextDecoder().decode(pt)));
+  const { payload } = await updateSecretPayloadById(it.id, (payload) => {
     payload.favorite = !!on;
-    const bodyEnc = await TVCrypto.encryptPayload(
-      new TextEncoder().encode(JSON.stringify(payload)),
-      dk, kv
-    );
-    await api("/api/secrets/" + it.id, {
-      method: "PUT",
-      body: JSON.stringify({
-        title_ciphertext_b64: det.title_ciphertext_b64,
-        title_nonce_b64: det.title_nonce_b64,
-        ciphertext_b64: TVCrypto.b64enc(bodyEnc.ciphertext),
-        nonce_b64: TVCrypto.b64enc(bodyEnc.nonce),
-        key_version: kv,
-      }),
-    });
-    it._payload = payload;
-  } finally {
-    dk.fill(0);
-  }
+    return payload;
+  });
+  if (payload) it._payload = payload;
 }
 
 async function setUserFavorite(secretId, on) {
@@ -4033,6 +4009,43 @@ ${escHtml(apiCmd)}</code>
     throw lastErr || new Error("Secret-Detail nicht ladbar");
   }
 
+  async function updateSecretPayloadById(id, mutatePayload) {
+    const det = await fetchSecretDetailWithRetry(id);
+    const dk = openDKFromEnvelope(det.envelope);
+    try {
+      const kv = det.key_version || det.envelope?.key_version || 1;
+      const pt = await TVCrypto.decryptPayload(
+        TVCrypto.b64dec(det.ciphertext_b64),
+        TVCrypto.b64dec(det.nonce_b64),
+        dk, kv
+      );
+      const payload = normalizeSecretPayload(JSON.parse(new TextDecoder().decode(pt)));
+      const before = JSON.stringify(payload);
+      const draft = normalizeSecretPayload(JSON.parse(JSON.stringify(payload)));
+      const nextPayload = normalizeSecretPayload(mutatePayload(draft) || draft);
+      if (before === JSON.stringify(nextPayload)) {
+        return { changed: false, payload: nextPayload };
+      }
+      const bodyEnc = await TVCrypto.encryptPayload(
+        new TextEncoder().encode(JSON.stringify(nextPayload)),
+        dk, kv
+      );
+      await api("/api/secrets/" + id, {
+        method: "PUT",
+        body: JSON.stringify({
+          title_ciphertext_b64: det.title_ciphertext_b64,
+          title_nonce_b64: det.title_nonce_b64,
+          ciphertext_b64: TVCrypto.b64enc(bodyEnc.ciphertext),
+          nonce_b64: TVCrypto.b64enc(bodyEnc.nonce),
+          key_version: kv,
+        }),
+      });
+      return { changed: true, payload: nextPayload };
+    } finally {
+      dk.fill(0);
+    }
+  }
+
   function setOfflineSyncProgress(text, show) {
     const bar = n.querySelector("#offlineSyncBar");
     if (!bar) return;
@@ -6306,43 +6319,28 @@ ${escHtml(apiCmd)}</code>
       if (!confirm(`Tags (${addTags.join(", ")}) bei ${targets.length} Secrets ergänzen?`)) return;
       btn.disabled = true;
       if (input) input.disabled = true;
-      let changed = 0;
-      for (const it of targets) {
-        const det = await fetchSecretDetailWithRetry(it.id);
-        const dk = openDKFromEnvelope(det.envelope);
+      const results = await mapPool(targets, 4, async (it) => {
         try {
-          const kv = det.key_version || det.envelope?.key_version || 1;
-          const pt = await TVCrypto.decryptPayload(
-            TVCrypto.b64dec(det.ciphertext_b64),
-            TVCrypto.b64dec(det.nonce_b64),
-            dk, kv
-          );
-          const payload = normalizeSecretPayload(JSON.parse(new TextDecoder().decode(pt)));
-          const mergedTags = mergeTags(payload.tags || [], addTags);
-          if (mergedTags.length === (payload.tags || []).length) continue;
-          payload.tags = mergedTags;
-          const bodyEnc = await TVCrypto.encryptPayload(
-            new TextEncoder().encode(JSON.stringify(payload)),
-            dk, kv
-          );
-          await api("/api/secrets/" + it.id, {
-            method: "PUT",
-            body: JSON.stringify({
-              title_ciphertext_b64: det.title_ciphertext_b64,
-              title_nonce_b64: det.title_nonce_b64,
-              ciphertext_b64: TVCrypto.b64enc(bodyEnc.ciphertext),
-              nonce_b64: TVCrypto.b64enc(bodyEnc.nonce),
-              key_version: kv,
-            }),
+          const { changed } = await updateSecretPayloadById(it.id, (payload) => {
+            payload.tags = mergeTags(payload.tags || [], addTags);
+            return payload;
           });
-          changed++;
-        } finally {
-          dk.fill(0);
+          return { changed, error: "" };
+        } catch (e) {
+          return { changed: false, error: e?.message || String(e), id: it.id };
         }
-      }
-      if (input) input.value = "";
+      });
+      const changed = results.filter((r) => r.changed).length;
+      const failed = results.filter((r) => r.error);
       await refreshSecrets(true);
-      alert(changed ? `${changed} Secrets aktualisiert.` : "Keine Änderungen notwendig.");
+      if (input) input.value = "";
+      if (failed.length) {
+        const details = failed.slice(0, 3).map((r) => `• ${r.id}: ${r.error}`).join("\n");
+        const more = failed.length > 3 ? `\n… und ${failed.length - 3} weitere` : "";
+        alert(`${changed} Secrets aktualisiert, ${failed.length} fehlgeschlagen.\n${details}${more}`);
+      } else {
+        alert(changed ? `${changed} Secrets aktualisiert.` : "Keine Änderungen notwendig.");
+      }
     } catch (e) {
       alert(e.message || String(e));
     } finally {
