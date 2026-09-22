@@ -568,14 +568,14 @@ func (a *API) handleListAudit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	type row struct {
-		ID           string    `json:"id"`
-		ActorID      string    `json:"actor_id"`
-		ActorUsername string   `json:"actor_username,omitempty"`
-		Action       string    `json:"action"`
-		ResourceType string    `json:"resource_type"`
-		ResourceID   string    `json:"resource_id"`
-		Metadata     json.RawMessage `json:"metadata,omitempty"`
-		CreatedAt    time.Time `json:"created_at"`
+		ID            string          `json:"id"`
+		ActorID       string          `json:"actor_id"`
+		ActorUsername string          `json:"actor_username,omitempty"`
+		Action        string          `json:"action"`
+		ResourceType  string          `json:"resource_type"`
+		ResourceID    string          `json:"resource_id"`
+		Metadata      json.RawMessage `json:"metadata,omitempty"`
+		CreatedAt     time.Time       `json:"created_at"`
 	}
 	total := len(events)
 	if offset > total {
