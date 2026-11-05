@@ -91,6 +91,16 @@ func TestQRCodeJSServed(t *testing.T) {
 	}
 }
 
+func TestOfflineHardwareScriptHasIntegrity(t *testing.T) {
+	h := Handler("/vault")
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/app", nil))
+	if rr.Code != http.StatusOK ||
+		!strings.Contains(rr.Body.String(), `src="/vault/offline-hardware.js" integrity="sha384-`) {
+		t.Fatal("offline hardware script must be included with integrity protection")
+	}
+}
+
 func TestManifestScope(t *testing.T) {
 	body := ManifestJSONForTest("/vault")
 	if !strings.Contains(string(body), `"/vault/app"`) || !strings.Contains(string(body), `"/vault/"`) {

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	goruntime "runtime"
 
@@ -16,10 +17,11 @@ import (
 // exposes decrypted data to the local UI process — the network calls and
 // crypto happen here, never in remote JS.
 type App struct {
-	ctx     context.Context
-	client  *backend.Client
-	session *backend.Session
-	tray    *backend.Tray
+	ctx             context.Context
+	client          *backend.Client
+	session         *backend.Session
+	offlineSnapshot *backend.OfflineSnapshot
+	tray            *backend.Tray
 }
 
 // Set by build scripts via -ldflags "-X main.version=…".
@@ -172,10 +174,11 @@ type UnlockResult struct {
 	Warning string `json:"warning,omitempty"`
 }
 
-func (a *App) Unlock(masterPassword string, tenant, username string) (UnlockResult, error) {
+func (a *App) Unlock(masterPassword string, tenant, username, softwareKeyB64 string) (UnlockResult, error) {
 	pw := []byte(masterPassword)
 	defer zero(pw)
 
+	a.offlineSnapshot = nil
 	if a.client != nil {
 		sess, err := backend.Unlock(a.client, pw, nil)
 		if err == nil {
@@ -190,25 +193,47 @@ func (a *App) Unlock(masterPassword string, tenant, username string) (UnlockResu
 		// Any other error (network unreachable, server down, etc.) falls
 		// through to the offline cache below.
 	}
-	snap, ok, loadErr := backend.LoadOfflineSnapshot(tenant, username)
-	if loadErr != nil || !ok {
+	cache, ok, loadErr := backend.LoadOfflineCache(tenant, username)
+	if loadErr != nil {
+		return UnlockResult{}, fmt.Errorf("Offline-Kopie kann nicht gelesen werden: %w", loadErr)
+	}
+	if !ok {
 		return UnlockResult{}, errors.New("kein Netzwerk und kein Offline-Cache für dieses Konto vorhanden")
 	}
-	if snap.Expired() {
-		return UnlockResult{}, errors.New("Offline-Kopie abgelaufen (max. 30 Tage) — bitte online anmelden")
-	}
-	if a.client == nil {
-		var err error
-		a.client, err = backend.NewClient("", "")
-		if err != nil {
+	if cache.Format != "teamvault-offline" || cache.Version != 2 {
+		if err := backend.DeleteOfflineSnapshot(tenant, username); err != nil {
 			return UnlockResult{}, err
 		}
+		return UnlockResult{}, errors.New("altes Offline-Format gelöscht; bitte online eine neue Offline-Kopie einrichten")
+	}
+	if cache.Expired() {
+		return UnlockResult{}, errors.New("Offline-Kopie abgelaufen oder muss sicher neu synchronisiert werden")
+	}
+	if cache.TenantSlug != tenant || cache.Username != username {
+		return UnlockResult{}, errors.New("Offline-Kopie gehört nicht zu diesem Konto")
+	}
+	if a.client == nil {
+		return UnlockResult{}, errors.New("Server-Adresse für Offline-Entsperrung fehlt")
+	}
+	softwareKey, err := backend.DecodeOfflineSoftwareKey(softwareKeyB64)
+	if err != nil {
+		return UnlockResult{}, err
+	}
+	defer zero(softwareKey)
+	origin, err := backend.OfflineOrigin(a.client.BaseURL())
+	if err != nil {
+		return UnlockResult{}, err
+	}
+	snap, err := backend.OpenOfflineSnapshot(cache, softwareKey, origin, cache.TenantID, cache.UserID)
+	if err != nil {
+		return UnlockResult{}, err
 	}
 	sess, err := backend.Unlock(a.client, pw, &snap)
 	if err != nil {
 		return UnlockResult{}, err
 	}
 	a.session = sess
+	a.offlineSnapshot = &snap
 	return UnlockResult{Offline: true, Warning: "Offline-Modus: Anlegen/Ändern ist erst nach erneutem Online-Login möglich."}, nil
 }
 
@@ -217,6 +242,7 @@ func (a *App) Lock() {
 		a.session.Lock()
 	}
 	a.session = nil
+	a.offlineSnapshot = nil
 }
 
 func (a *App) Logout() {
@@ -242,18 +268,12 @@ func (a *App) ListSecrets() ([]backend.SecretListItem, error) {
 		return nil, errors.New("gesperrt")
 	}
 	if a.session.Offline {
-		snap, ok, err := backend.LoadOfflineSnapshot(a.session.TenantSlug, a.session.Username)
-		if err != nil || !ok {
-			return nil, errors.New("Offline-Cache nicht lesbar")
+		if a.offlineSnapshot == nil {
+			return nil, errors.New("Offline-Cache nicht entsperrt")
 		}
-		return a.session.ListSecretsOffline(snap)
+		return a.session.ListSecretsOffline(*a.offlineSnapshot)
 	}
-	items, err := a.session.ListSecrets()
-	if err != nil {
-		return nil, err
-	}
-	go func() { _ = a.session.SyncOfflineSnapshot() }()
-	return items, nil
+	return a.session.ListSecrets()
 }
 
 func (a *App) GetSecret(id string) (*backend.SecretDetail, error) {
@@ -261,11 +281,10 @@ func (a *App) GetSecret(id string) (*backend.SecretDetail, error) {
 		return nil, errors.New("gesperrt")
 	}
 	if a.session.Offline {
-		snap, ok, err := backend.LoadOfflineSnapshot(a.session.TenantSlug, a.session.Username)
-		if err != nil || !ok {
-			return nil, errors.New("Offline-Cache nicht lesbar")
+		if a.offlineSnapshot == nil {
+			return nil, errors.New("Offline-Cache nicht entsperrt")
 		}
-		return a.session.GetSecretOffline(snap, id)
+		return a.session.GetSecretOffline(*a.offlineSnapshot, id)
 	}
 	return a.session.GetSecret(id)
 }
@@ -300,11 +319,19 @@ func (a *App) DeleteSecret(id string) error {
 	return a.session.DeleteSecret(id)
 }
 
-func (a *App) SyncOfflineCache() error {
+func (a *App) SyncOfflineCache(softwareKeyB64 string) error {
 	if a.session == nil {
 		return errors.New("gesperrt")
 	}
-	return a.session.SyncOfflineSnapshot()
+	if a.session.Offline {
+		return errors.New("Offline-Sync nur nach Online-Anmeldung möglich")
+	}
+	softwareKey, err := backend.DecodeOfflineSoftwareKey(softwareKeyB64)
+	if err != nil {
+		return err
+	}
+	defer zero(softwareKey)
+	return a.session.SyncOfflineSnapshot(softwareKey)
 }
 
 // --- Sharing --------------------------------------------------------------
@@ -389,12 +416,18 @@ func (a *App) FixGroupShareGap(gap backend.GroupShareGap) error {
 	return a.session.FixGroupShareGap(gap)
 }
 
-func (a *App) HasOfflineCache(tenant, username string) bool {
-	snap, ok, err := backend.LoadOfflineSnapshot(tenant, username)
+func (a *App) HasOfflineCache(tenant, username string) (bool, error) {
+	cache, ok, err := backend.LoadOfflineCache(tenant, username)
 	if err != nil || !ok {
-		return false
+		return false, err
 	}
-	return !snap.Expired()
+	if cache.Format != "teamvault-offline" || cache.Version != 2 {
+		if err := backend.DeleteOfflineSnapshot(tenant, username); err != nil {
+			return false, err
+		}
+		return false, nil
+	}
+	return !cache.Expired(), nil
 }
 
 func (a *App) ForgetOfflineCache(tenant, username string) error {

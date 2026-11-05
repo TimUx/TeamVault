@@ -17,6 +17,7 @@ import (
 	"github.com/teamvault/teamvault/internal/configstore"
 	"github.com/teamvault/teamvault/internal/cryptocore"
 	"github.com/teamvault/teamvault/internal/instcfg"
+	"github.com/teamvault/teamvault/internal/offlinepolicy"
 	"github.com/teamvault/teamvault/internal/store"
 	"github.com/teamvault/teamvault/internal/tlsutil"
 )
@@ -65,11 +66,33 @@ func (a *API) requirePlatformAdmin(next http.HandlerFunc) http.HandlerFunc {
 }
 
 func (a *API) bundle() instcfg.Bundle {
+	a.configMu.RLock()
+	defer a.configMu.RUnlock()
 	return instcfg.Load(a.App.Config)
 }
 
 func (a *API) saveBundle(b instcfg.Bundle) error {
+	a.configMu.Lock()
+	defer a.configMu.Unlock()
+	b.Policy = instcfg.Load(a.App.Config).Policy
 	return instcfg.Save(a.App.Config, a.App.ConfigStore, b)
+}
+
+func (a *API) savePolicy(p instcfg.Policy) (instcfg.Policy, error) {
+	a.configMu.Lock()
+	defer a.configMu.Unlock()
+	b := instcfg.Load(a.App.Config)
+	if p.OfflineCacheAllowed == nil {
+		p.OfflineCacheAllowed = b.Policy.OfflineCacheAllowed
+	}
+	if p.OfflineKeyRequirement == nil {
+		p.OfflineKeyRequirement = b.Policy.OfflineKeyRequirement
+	}
+	if err := offlinepolicy.Validate(p.OfflineKeyRequirementValue()); err != nil {
+		return p, err
+	}
+	b.Policy = p
+	return p, instcfg.Save(a.App.Config, a.App.ConfigStore, b)
 }
 
 func (a *API) handleAdminOverview(w http.ResponseWriter, r *http.Request) {
@@ -380,7 +403,14 @@ func (a *API) handlePutCrypto(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) handleGetPolicy(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, a.bundle().Policy)
+	p := a.bundle().Policy
+	requirement := p.OfflineKeyRequirementValue()
+	if err := offlinepolicy.Validate(requirement); err != nil {
+		writeErr(w, http.StatusInternalServerError, "invalid offline key policy")
+		return
+	}
+	p.OfflineKeyRequirement = &requirement
+	writeJSON(w, http.StatusOK, p)
 }
 
 func (a *API) handlePutPolicy(w http.ResponseWriter, r *http.Request) {
@@ -389,6 +419,12 @@ func (a *API) handlePutPolicy(w http.ResponseWriter, r *http.Request) {
 	if err := readJSON(r, &p); err != nil {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
+	}
+	if p.OfflineKeyRequirement != nil {
+		if err := offlinepolicy.Validate(*p.OfflineKeyRequirement); err != nil {
+			writeErr(w, http.StatusBadRequest, err.Error())
+			return
+		}
 	}
 	if p.SessionHours <= 0 {
 		p.SessionHours = 8
@@ -402,9 +438,9 @@ func (a *API) handlePutPolicy(w http.ResponseWriter, r *http.Request) {
 	if p.EscrowShamirN < p.EscrowShamirK {
 		p.EscrowShamirN = 5
 	}
-	b := a.bundle()
-	b.Policy = p
-	if err := a.saveBundle(b); err != nil {
+	var err error
+	p, err = a.savePolicy(p)
+	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -500,43 +536,68 @@ func (a *API) handleGetTenantSettings(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusNotFound, "tenant not found")
 		return
 	}
-	platformTOTP := a.bundle().Policy.TOTPRequired
+	policy := a.bundle().Policy
+	platformTOTP := policy.TOTPRequired
 	effectiveTOTP := platformTOTP || t.TOTPRequired
+	platformOffline := policy.OfflineKeyRequirementValue()
+	effectiveOffline, err := offlinepolicy.Combine(platformOffline, t.OfflineKeyRequirement)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "invalid offline key policy")
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"id": t.ID, "name": t.Name, "slug": t.Slug, "status": t.Status,
 		"recovery_mode": t.RecoveryMode, "escrow_allowed": t.EscrowAllowed,
-		"has_escrow_pubkey":       len(t.EscrowPublicKey) > 0,
-		"platform_totp_required":  platformTOTP,
-		"tenant_totp_required":    t.TOTPRequired,
-		"totp_required":           effectiveTOTP,
-		"totp_locked_by_platform": platformTOTP,
+		"has_escrow_pubkey":                len(t.EscrowPublicKey) > 0,
+		"platform_totp_required":           platformTOTP,
+		"tenant_totp_required":             t.TOTPRequired,
+		"totp_required":                    effectiveTOTP,
+		"totp_locked_by_platform":          platformTOTP,
+		"platform_offline_key_requirement": platformOffline,
+		"tenant_offline_key_requirement":   offlinepolicy.Stored(t.OfflineKeyRequirement),
+		"offline_key_requirement":          effectiveOffline,
 	})
 }
 
 func (a *API) handlePutTenantSettings(w http.ResponseWriter, r *http.Request) {
 	sess, _ := a.sessionFrom(r)
 	var body struct {
-		TOTPRequired bool `json:"totp_required"`
+		TOTPRequired          bool    `json:"totp_required"`
+		OfflineKeyRequirement *string `json:"offline_key_requirement"`
 	}
 	if err := readJSON(r, &body); err != nil {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
+	}
+	if body.OfflineKeyRequirement != nil {
+		if err := offlinepolicy.Validate(*body.OfflineKeyRequirement); err != nil {
+			writeErr(w, http.StatusBadRequest, err.Error())
+			return
+		}
 	}
 	t, err := a.App.Vault.GetTenant(r.Context(), sess.TenantID)
 	if err != nil {
 		writeErr(w, http.StatusNotFound, "tenant not found")
 		return
 	}
-	platformTOTP := a.bundle().Policy.TOTPRequired
+	policy := a.bundle().Policy
+	platformTOTP := policy.TOTPRequired
+	platformOffline := policy.OfflineKeyRequirementValue()
+	tenantOffline := t.OfflineKeyRequirement
+	if body.OfflineKeyRequirement != nil {
+		tenantOffline = *body.OfflineKeyRequirement
+	}
+	effectiveOffline, err := offlinepolicy.Combine(platformOffline, tenantOffline)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "invalid offline key policy")
+		return
+	}
 	if platformTOTP && !body.TOTPRequired {
 		writeErr(w, http.StatusConflict, "platform policy requires totp")
 		return
 	}
-	t.TOTPRequired = body.TOTPRequired
-	if platformTOTP {
-		t.TOTPRequired = true
-	}
-	if err := a.App.Vault.PutTenant(r.Context(), *t); err != nil {
+	tenantTOTP := body.TOTPRequired || platformTOTP
+	if err := a.App.Vault.SetTenantSecurityPolicy(r.Context(), t.ID, tenantTOTP, body.OfflineKeyRequirement); err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -546,11 +607,20 @@ func (a *API) handlePutTenantSettings(w http.ResponseWriter, r *http.Request) {
 	}) {
 		return
 	}
+	if body.OfflineKeyRequirement != nil && !a.appendAuditStrict(w, r, store.AuditEvent{
+		TenantID: sess.TenantID, ActorID: string(sess.UserID),
+		Action: "tenant.policy.offline_key_requirement", ResourceType: "tenant", ResourceID: string(t.ID),
+	}) {
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"platform_totp_required":  platformTOTP,
-		"tenant_totp_required":    t.TOTPRequired,
-		"totp_required":           platformTOTP || t.TOTPRequired,
-		"totp_locked_by_platform": platformTOTP,
+		"platform_totp_required":           platformTOTP,
+		"tenant_totp_required":             tenantTOTP,
+		"totp_required":                    platformTOTP || tenantTOTP,
+		"totp_locked_by_platform":          platformTOTP,
+		"platform_offline_key_requirement": platformOffline,
+		"tenant_offline_key_requirement":   offlinepolicy.Stored(tenantOffline),
+		"offline_key_requirement":          effectiveOffline,
 	})
 }
 

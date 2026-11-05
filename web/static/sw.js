@@ -6,8 +6,8 @@ const TV_SW_BASE = (() => {
   return i >= 0 ? p.slice(0, i) : "";
 })();
 
-const CACHE = "teamvault-shell-v35";
-const NETWORK_FIRST = ["/styles.css", "/app.js"].map((path) => TV_SW_BASE + path);
+const CACHE = "teamvault-shell-v40";
+const NETWORK_FIRST = ["/styles.css", "/app.js", "/offline-store.js", "/offline-hardware.js"].map((path) => TV_SW_BASE + path);
 const PRECACHE = [
   "/",
   "/index.html",
@@ -17,6 +17,7 @@ const PRECACHE = [
   "/import-parse.js",
   "/vault-io.js",
   "/offline-store.js",
+  "/offline-hardware.js",
   "/qrcode.js",
   "/sw-register.js",
   "/manifest.webmanifest",
@@ -28,6 +29,17 @@ const PRECACHE = [
 
 function isPrecachePath(pathname) {
   return PRECACHE.includes(pathname);
+}
+
+// Browsers reject redirected responses for navigations (e.g. cached
+// /index.html → 301 /), so serve a fresh, non-redirected copy.
+function navigationSafe(res) {
+  if (!res || !res.redirected) return res;
+  return res.blob().then((body) => new Response(body, {
+    status: res.status,
+    statusText: res.statusText,
+    headers: res.headers,
+  }));
 }
 
 self.addEventListener("install", (event) => {
@@ -63,7 +75,10 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(
       fetch(req, { cache: "no-store" }).catch(() => {
         const index = TV_SW_BASE + "/index.html";
-        return caches.match(index).then((cached) => cached || caches.match(TV_SW_BASE + "/"));
+        return caches
+          .match(TV_SW_BASE + "/")
+          .then((cached) => cached || caches.match(index))
+          .then(navigationSafe);
       })
     );
     return;
@@ -74,9 +89,9 @@ self.addEventListener("fetch", (event) => {
   event.respondWith(
     caches.match(req).then((cached) => {
       if (NETWORK_FIRST.includes(url.pathname)) {
-        return fetch(req)
+        return fetch(req, { cache: "no-store" })
           .then((res) => {
-            if (res && res.status === 200) {
+            if (res && res.status === 200 && url.pathname === TV_SW_BASE + "/styles.css") {
               const copy = res.clone();
               caches.open(CACHE).then((cache) => cache.put(req, copy));
             }

@@ -11,6 +11,7 @@ import (
 	"github.com/teamvault/teamvault/internal/auth/ldapauth"
 	"github.com/teamvault/teamvault/internal/configstore"
 	"github.com/teamvault/teamvault/internal/cryptocore"
+	"github.com/teamvault/teamvault/internal/offlinepolicy"
 )
 
 type MailConfig struct {
@@ -31,26 +32,27 @@ type MailTemplates struct {
 }
 
 type Policy struct {
-	TOTPRequired             bool  `json:"totp_required"`
-	SessionHours             int   `json:"session_hours"`               // default 8 (OQ-17)
-	UnlockIdleMinutes        int   `json:"unlock_idle_minutes"`         // default 15 (OQ-17)
-	EscrowShamirK            int   `json:"escrow_shamir_k"`             // default 3
-	EscrowShamirN            int   `json:"escrow_shamir_n"`             // default 5
-	LDAPSyncHours            int   `json:"ldap_sync_hours"`             // default 24; 0 = manual only
-	AdminSecretsEnvelopeOnly bool  `json:"admin_secrets_envelope_only"` // false = admins see all secret metadata in list (default)
-	OfflineCacheAllowed      *bool `json:"offline_cache_allowed,omitempty"` // nil = enabled (default)
-	CLIIntegrationEnabled    *bool `json:"cli_integration_enabled,omitempty"`       // nil/false = hide CLI in Konto/Hilfe
-	BrowserIntegrationEnabled *bool `json:"browser_integration_enabled,omitempty"` // nil/false = hide Extension in Konto/Hilfe
-	DesktopIntegrationEnabled *bool `json:"desktop_integration_enabled,omitempty"` // nil/false = hide Desktop-App in Konto/Hilfe
+	TOTPRequired              bool    `json:"totp_required"`
+	SessionHours              int     `json:"session_hours"`                         // default 8 (OQ-17)
+	UnlockIdleMinutes         int     `json:"unlock_idle_minutes"`                   // default 15 (OQ-17)
+	EscrowShamirK             int     `json:"escrow_shamir_k"`                       // default 3
+	EscrowShamirN             int     `json:"escrow_shamir_n"`                       // default 5
+	LDAPSyncHours             int     `json:"ldap_sync_hours"`                       // default 24; 0 = manual only
+	AdminSecretsEnvelopeOnly  bool    `json:"admin_secrets_envelope_only"`           // false = admins see all secret metadata in list (default)
+	OfflineCacheAllowed       *bool   `json:"offline_cache_allowed,omitempty"`       // nil = enabled (default)
+	OfflineKeyRequirement     *string `json:"offline_key_requirement,omitempty"`     // nil = user may choose
+	CLIIntegrationEnabled     *bool   `json:"cli_integration_enabled,omitempty"`     // nil/false = hide CLI in Konto/Hilfe
+	BrowserIntegrationEnabled *bool   `json:"browser_integration_enabled,omitempty"` // nil/false = hide Extension in Konto/Hilfe
+	DesktopIntegrationEnabled *bool   `json:"desktop_integration_enabled,omitempty"` // nil/false = hide Desktop-App in Konto/Hilfe
 }
 
 // PublicAccess configures how clients reach this instance (reverse proxy, subpath, canonical URL).
 // Env vars TEAMVAULT_BASE_PATH / TEAMVAULT_TRUST_FORWARDED override these when set (container bootstrap).
 type PublicAccess struct {
-	BasePath             string `json:"base_path,omitempty"`              // e.g. "/vault" when mounted under a directory
-	PublicURL            string `json:"public_url,omitempty"`             // optional canonical URL (scheme+host+path)
-	TrustForwarded       *bool  `json:"trust_forwarded,omitempty"`        // trust X-Forwarded-* from reverse proxy
-	UseForwardedPrefix   bool   `json:"use_forwarded_prefix,omitempty"`   // derive base_path from X-Forwarded-Prefix when BasePath empty
+	BasePath           string `json:"base_path,omitempty"`            // e.g. "/vault" when mounted under a directory
+	PublicURL          string `json:"public_url,omitempty"`           // optional canonical URL (scheme+host+path)
+	TrustForwarded     *bool  `json:"trust_forwarded,omitempty"`      // trust X-Forwarded-* from reverse proxy
+	UseForwardedPrefix bool   `json:"use_forwarded_prefix,omitempty"` // derive base_path from X-Forwarded-Prefix when BasePath empty
 }
 
 // OfflineCacheEnabled reports whether tenant policy allows client-side offline ciphertext cache.
@@ -59,6 +61,15 @@ func (p Policy) OfflineCacheEnabled() bool {
 		return true
 	}
 	return *p.OfflineCacheAllowed
+}
+
+// OfflineKeyRequirementValue returns the platform requirement, including the
+// default for a policy stored before offline key requirements existed.
+func (p Policy) OfflineKeyRequirementValue() string {
+	if p.OfflineKeyRequirement == nil {
+		return offlinepolicy.Any
+	}
+	return *p.OfflineKeyRequirement
 }
 
 // ShowCLIIntegration reports whether CLI downloads/guides are shown in Konto and Hilfe.

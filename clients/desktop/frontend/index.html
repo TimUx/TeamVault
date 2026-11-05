@@ -73,6 +73,14 @@
       <label>Master-Passwort
         <input id="uPass" type="password" autocomplete="current-password" />
       </label>
+      <p class="hint">Offline-Profil STANDARD erfordert zusätzlich den unabhängigen Software-Key. Beim Online-Login ist er optional, aber zum Erstellen oder Öffnen einer Offline-Kopie nötig.</p>
+      <label>Software-Key-Datei
+        <input id="uKeyFile" type="file" accept=".json,application/json" />
+      </label>
+      <label>Oder Software-Key (Base64)
+        <input id="uKeyText" type="password" autocomplete="off" />
+      </label>
+      <button id="uKeyGenerate" class="btn-secondary" type="button">Software-Key erzeugen und herunterladen</button>
       <button id="uUnlock" class="btn-primary">Entsperren</button>
       <a id="uRecoveryWeb" class="btn-link" href="#" target="_blank" rel="noopener noreferrer" aria-describedby="uRecoveryHint" hidden>Recovery im Web öffnen</a>
       <p class="hint unlock-recovery-note" id="uRecoveryHint" hidden>Recovery mit Recovery-Kit läuft im Web-Client.</p>

@@ -30,6 +30,15 @@ func TestSetupCommitAndLoginHTTP(t *testing.T) {
 	if status["initialized"] != false {
 		t.Fatal(status)
 	}
+	hardwareScript, err := http.Get(ts.URL + "/offline-hardware.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hardwareScript.StatusCode != http.StatusOK {
+		hardwareScript.Body.Close()
+		t.Fatalf("offline hardware script: status %d", hardwareScript.StatusCode)
+	}
+	hardwareScript.Body.Close()
 
 	body := map[string]any{
 		"storage": map[string]string{"backend": "sqlite", "dsn": filepath.Join(dir, "v.db")},

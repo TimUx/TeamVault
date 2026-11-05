@@ -20,6 +20,55 @@ func TestTenantIsolationRequiresTenantID(t *testing.T) {
 	}
 }
 
+func TestOfflineKeyPolicySurvivesStaleTenantUpdate(t *testing.T) {
+	s := openTestStore(t)
+	defer s.Close()
+	ctx := context.Background()
+	if err := s.PutTenant(ctx, store.Tenant{
+		ID: "t1", Name: "Tenant", Slug: "tenant", RecoveryMode: "user_kit", Status: "active",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	stale, err := s.GetTenant(ctx, "t1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	requirement := "HARDWARE"
+	if err := s.SetTenantSecurityPolicy(ctx, "t1", false, &requirement); err != nil {
+		t.Fatal(err)
+	}
+	stale.Name = "Renamed"
+	if err := s.PutTenant(ctx, *stale); err != nil {
+		t.Fatal(err)
+	}
+	current, err := s.GetTenant(ctx, "t1")
+	if err != nil || current.OfflineKeyRequirement != "HARDWARE" || current.Name != "Renamed" {
+		t.Fatalf("tenant = %+v, %v", current, err)
+	}
+	if err := s.SetTenantSecurityPolicy(ctx, "t1", true, nil); err != nil {
+		t.Fatal(err)
+	}
+	current, err = s.GetTenant(ctx, "t1")
+	if err != nil || current.OfflineKeyRequirement != "HARDWARE" || !current.TOTPRequired {
+		t.Fatalf("legacy update = %+v, %v", current, err)
+	}
+	snapshot, err := s.ExportSnapshot(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	weaker := "ANY"
+	if err := s.SetTenantSecurityPolicy(ctx, "t1", false, &weaker); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ImportSnapshot(ctx, *snapshot, store.ImportMerge); err != nil {
+		t.Fatal(err)
+	}
+	current, err = s.GetTenant(ctx, "t1")
+	if err != nil || current.OfflineKeyRequirement != "HARDWARE" || !current.TOTPRequired {
+		t.Fatalf("restored tenant = %+v, %v", current, err)
+	}
+}
+
 func TestOpaqueSecretRoundTripAndSnapshot(t *testing.T) {
 	s := openTestStore(t)
 	defer s.Close()

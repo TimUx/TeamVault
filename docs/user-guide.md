@@ -274,13 +274,23 @@ Wenn der Administrator den Offline-Cache erlaubt, können Sie unter **Konto** ei
 
 ![Konto – Offline-Kopie](images/account-offline.png)
 
-1. Online anmelden, Vault entsperren  
-2. **Offline-Kopie nach Entsperren aktualisieren** aktivieren → Sync läuft im Hintergrund (Fortschritt in der Sidebar)  
-3. Ohne Netz: Login-Seite **Offline entsperren** oder `/app?offline=1` — nur Master-Passwort, kein TOTP  
+1. Online anmelden und Vault entsperren.
+2. Unter **Konto → Offline-Vault** ein Profil wählen: **STANDARD** benötigt einen Software-Key; **HARDWARE** einen FIDO2-Key; **COMBINED** beide. Das Master-Passwort bleibt immer erforderlich.
+3. Für STANDARD oder COMBINED einen Software-Key erzeugen und herunterladen oder eine vorhandene Key-Datei laden. Den Key unabhängig und möglichst nicht auf demselben Gerät wie den Cache aufbewahren.
+4. Für HARDWARE oder COMBINED einen externen FIDO2-Security-Key mit WebAuthn-PRF und Benutzerverifikation (PIN oder Biometrie) registrieren. Weitere Keys können als unabhängig nutzbare Backups hinzugefügt und getestet werden.
+5. **Offline-Kopie auf diesem Gerät erlauben (Opt-in)** aktivieren und **Jetzt synchronisieren** wählen. Ohne Netz die gespeicherte Kopie, das Master-Passwort und die zum Profil gehörenden Keys bereitstellen.
 
-Im Offline-Modus: **nur Lesen**; Admin-Bereich und Schreibaktionen sind ausgeblendet. Recovery mit Recovery-Kit sowie Passwort-/Vault-Änderungen bleiben **nur online** möglich. **Logout** löscht die Offline-Kopie nicht — unter Konto **Offline-Kopie löschen** oder Opt-in deaktivieren.
+Beim Entfernen eines FIDO2-Keys müssen alle verbleibenden Keys nacheinander bestätigt werden; der Cache-Schlüssel wird dabei neu erzeugt. Sind nicht alle verfügbar, bleibt die bisherige Kopie unverändert. Bereits kopierte ältere Caches lassen sich nicht nachträglich sperren.
 
-Voraussetzungen: HTTPS oder `localhost` (Service Worker / PWA). Details: [Installationsanleitung – Offline/PWA](install-guide.md#offline-vault--pwa-optional).
+TeamVault speichert den Software-Key nicht in IndexedDB, localStorage oder Anwendungseinstellungen; Sperren löscht ihn aus dem Arbeitsspeicher. Liegen Key-Datei und Cache auf demselben Gerät, kann Dateisystemzugriff beide offenlegen. Der Browser prüft keine Hardware-Attestation: Ein manipulierter Browser oder emulierter Authentikator kann physische Hardware vortäuschen. Die 30-Tage-Frist wird vom Client anhand der lokalen Uhr durchgesetzt und ist kein manipulationssicherer Fernentzug.
+
+Administratoren können Software-Key, FIDO2 oder beide vorgeben. Die Profilwahl lässt nur zulässige Kombinationen zu. Entspricht eine ältere Kopie nicht mehr der aktuellen Vorgabe, richten Sie online eine neue Kopie ein; bereits kopierte alte Caches bleiben verwendbar. Die Vorgabe setzt aktuelle Clients voraus und kann von manipulierten oder alten Clients ignoriert werden.
+
+FIDO2-Offlineprofile sind bislang nur in der WebUI/PWA verfügbar, nicht im Desktop-Client. Bei einer FIDO2-Pflicht verweigert der aktuelle Desktop den Offline-Sync. TPM/Windows Hello und Offline-TOTP sind noch nicht implementiert; Login-TOTP schützt nur den Online-Login.
+
+Im Offline-Modus gilt **nur Lesen**; Admin-Bereich und Schreibaktionen sind ausgeblendet. Recovery mit Recovery-Kit sowie Passwort-/Vault-Änderungen bleiben **nur online** möglich. **Logout** und das Deaktivieren des Opt-ins löschen eine vorhandene Kopie nicht; dafür unter Konto **Offline-Kopie löschen** wählen.
+
+Voraussetzungen: HTTPS oder `localhost` (Service Worker / PWA). FIDO2 benötigt außerdem Browser- und Key-Unterstützung für WebAuthn-PRF und einen DNS-Namen bzw. `localhost`; eine IP-Adresse als Servername wird nicht unterstützt. Details: [Installationsanleitung – Offline/PWA](install-guide.md#offline-vault--pwa-optional).
 
 ## 7. Browser-Extension
 

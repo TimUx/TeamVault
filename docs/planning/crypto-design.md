@@ -3,6 +3,8 @@
 **Status:** Planungsdokument (Teil B)  
 **Bezug:** Sicherheitsprinzipien 1–5, 7, 9, 10
 
+> Historisches Planungsdokument, keine vollständige Beschreibung des aktuellen Ist-Zustands. Für implementierte Algorithmen, Login-/Offline-FIDO2, automatische Gruppen-Nachschlüsselung und tatsächliche Schutzgrenzen gilt die [Technische Sicherheitsdokumentation](../security-architecture.md).
+
 ---
 
 ## 1. Primitive (nur etablierte Bibliotheken)

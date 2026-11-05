@@ -11,6 +11,7 @@ import (
 	"github.com/teamvault/teamvault/internal/auth/password"
 	"github.com/teamvault/teamvault/internal/instcfg"
 	"github.com/teamvault/teamvault/internal/mailer"
+	"github.com/teamvault/teamvault/internal/offlinepolicy"
 	"github.com/teamvault/teamvault/internal/store"
 )
 
@@ -29,7 +30,16 @@ func (a *API) registerMVPGaps(mux *http.ServeMux) {
 func (a *API) handleClientPolicy(w http.ResponseWriter, r *http.Request) {
 	sess, _ := a.sessionFrom(r)
 	p := a.bundle().Policy
-	tenant, _ := a.App.Vault.GetTenant(r.Context(), sess.TenantID)
+	tenant, err := a.App.Vault.GetTenant(r.Context(), sess.TenantID)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "tenant policy unavailable")
+		return
+	}
+	requirement, err := offlinepolicy.Combine(p.OfflineKeyRequirementValue(), tenant.OfflineKeyRequirement)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "invalid offline key policy")
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"session_hours":               p.SessionHours,
 		"unlock_idle_minutes":         p.UnlockIdleMinutes,
@@ -37,6 +47,7 @@ func (a *API) handleClientPolicy(w http.ResponseWriter, r *http.Request) {
 		"escrow_shamir_k":             p.EscrowShamirK,
 		"escrow_shamir_n":             p.EscrowShamirN,
 		"offline_cache_allowed":       p.OfflineCacheEnabled(),
+		"offline_key_requirement":     requirement,
 		"cli_integration_enabled":     p.ShowCLIIntegration(),
 		"browser_integration_enabled": p.ShowBrowserIntegration(),
 		"desktop_integration_enabled": p.ShowDesktopIntegration(),
