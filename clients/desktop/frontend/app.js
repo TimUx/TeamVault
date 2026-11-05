@@ -495,6 +495,7 @@
     list.innerHTML = "";
     const q = state.search.toLowerCase();
     const rows = state.secrets.filter((s) => {
+      if (s.has_access !== true) return false;
       if (state.filter === "favorites" && !s.favorite) return false;
       // Visibility is authoritative here: a secret owned by the current user
       // can still be shared and belongs in the shared view in that case.

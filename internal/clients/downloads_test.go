@@ -55,6 +55,7 @@ func TestBuildManifestDesktop(t *testing.T) {
 		"teamvault-desktop-windows-amd64.exe",
 		"teamvault-desktop-windows-amd64-setup.exe",
 	}
+
 	for _, n := range names {
 		if err := os.WriteFile(filepath.Join(dir, n), []byte("x"), 0o755); err != nil {
 			t.Fatal(err)
@@ -87,6 +88,72 @@ func TestBuildManifestDesktop(t *testing.T) {
 		}
 		if got.URL != "/downloads/"+name {
 			t.Fatalf("%s: url=%s", name, got.URL)
+		}
+	}
+}
+
+func TestDesktopDownloadName(t *testing.T) {
+	dir := t.TempDir()
+	for _, tc := range []struct {
+		name, version, want string
+	}{
+		{"teamvault-desktop-windows-amd64.exe", "v1.5.34\n", "teamvault-desktop-windows-amd64-v1.5.34.exe"},
+		{"teamvault-desktop-windows-amd64-setup.exe", "v1.5.34\r\n", "teamvault-desktop-windows-amd64-v1.5.34-setup.exe"},
+		{"teamvault-desktop-linux-amd64", "v1.5.34", "teamvault-desktop-linux-amd64-v1.5.34"},
+		{"teamvault-desktop-linux-amd64.AppImage", "v1.5.34", "teamvault-desktop-linux-amd64-v1.5.34.AppImage"},
+		{"teamvault-desktop-windows-amd64.exe", "v1.5.35-rc.1", "teamvault-desktop-windows-amd64-v1.5.35-rc.1.exe"},
+		{"teamvault-desktop-windows-amd64.exe", "v1.5.34-2-gabcdef-dirty", "teamvault-desktop-windows-amd64-v1.5.34-2-gabcdef-dirty.exe"},
+		{"teamvault-desktop-windows-amd64.exe", "dev", "teamvault-desktop-windows-amd64-dev.exe"},
+		{"teamvault-desktop-windows-amd64.exe", "", "teamvault-desktop-windows-amd64.exe"},
+		{"teamvault-desktop-windows-amd64.exe", "../bad", "teamvault-desktop-windows-amd64.exe"},
+		{"teamvault-desktop-windows-amd64.exe", "v1\r\nInjected: header", "teamvault-desktop-windows-amd64.exe"},
+		{"tvcli-windows-amd64.exe", "v1.5.34", "tvcli-windows-amd64.exe"},
+	} {
+		t.Run(tc.name+"/"+tc.version, func(t *testing.T) {
+			if err := os.WriteFile(filepath.Join(dir, tc.name+".version"), []byte(tc.version), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			if got := DesktopDownloadName(dir, tc.name); got != tc.want {
+				t.Fatalf("got %q, want %q", got, tc.want)
+			}
+		})
+	}
+	if got := DesktopDownloadName(t.TempDir(), "teamvault-desktop-windows-amd64.exe"); got != "teamvault-desktop-windows-amd64.exe" {
+		t.Fatalf("missing metadata changed legacy name: %s", got)
+	}
+}
+
+func TestSeedDownloadsAndManifestDesktopVersions(t *testing.T) {
+	bundled, target := t.TempDir(), t.TempDir()
+	versions := map[string]string{
+		"teamvault-desktop-linux-amd64":             "v1.5.33",
+		"teamvault-desktop-linux-amd64.AppImage":    "v1.5.33",
+		"teamvault-desktop-windows-amd64.exe":       "v1.5.34",
+		"teamvault-desktop-windows-amd64-setup.exe": "v1.5.34",
+	}
+	for name, version := range versions {
+		if err := os.WriteFile(filepath.Join(bundled, name), []byte("binary"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(bundled, name+".version"), []byte(version+"\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := SeedDownloads(bundled, target); err != nil {
+		t.Fatal(err)
+	}
+	m := BuildManifest(target, "https://vault.example")
+	if len(m.Desktop) != 4 || len(m.CLI) != 0 {
+		t.Fatalf("metadata exposed as downloadable artifact: %+v", m)
+	}
+	for _, artifact := range m.Desktop {
+		storageName := filepath.Base(artifact.URL)
+		version := versions[storageName]
+		if version == "" || artifact.Name != DesktopDownloadName(target, storageName) || artifact.Name == storageName {
+			t.Fatalf("incorrect versioned artifact: %+v", artifact)
+		}
+		if artifact.Arch != "amd64" || artifact.Size != 6 {
+			t.Fatalf("version metadata changed platform/size: %+v", artifact)
 		}
 	}
 }
