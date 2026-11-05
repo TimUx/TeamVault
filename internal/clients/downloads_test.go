@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestSeedDownloadsCopiesMissing(t *testing.T) {
@@ -21,6 +22,69 @@ func TestSeedDownloadsCopiesMissing(t *testing.T) {
 	}
 	if string(b) != "bin" {
 		t.Fatalf("got %q", b)
+	}
+}
+
+func TestSeedDownloadsKeepsDesktopMetadataPaired(t *testing.T) {
+	const name = "teamvault-desktop-windows-amd64.exe"
+	for _, tc := range []struct {
+		label, bundleVersion, targetVersion, wantVersion string
+		preserveTarget                                   bool
+	}{
+		{"custom-with-version", "bundled", "custom", "custom", true},
+		{"custom-without-version", "bundled", "", "", true},
+		{"replacement", "bundled", "custom", "bundled", false},
+		{"legacy-replacement", "", "custom", "", false},
+	} {
+		t.Run(tc.label, func(t *testing.T) {
+			bundled, target := t.TempDir(), t.TempDir()
+			write := func(dir, file, content string) {
+				t.Helper()
+				if err := os.WriteFile(filepath.Join(dir, file), []byte(content), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			write(bundled, name, "bundled")
+			write(target, name, "custom")
+			if tc.bundleVersion != "" {
+				write(bundled, name+".version", tc.bundleVersion)
+			}
+			if tc.targetVersion != "" {
+				write(target, name+".version", tc.targetVersion)
+			}
+			bundleTime := time.Now().Add(-time.Hour)
+			targetTime := bundleTime.Add(-time.Hour)
+			if tc.preserveTarget {
+				targetTime = bundleTime.Add(time.Hour)
+			}
+			for file, stamp := range map[string]time.Time{
+				filepath.Join(bundled, name): bundleTime,
+				filepath.Join(target, name):  targetTime,
+			} {
+				if err := os.Chtimes(file, stamp, stamp); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := SeedDownloads(bundled, target); err != nil {
+				t.Fatal(err)
+			}
+			content, err := os.ReadFile(filepath.Join(target, name))
+			wantContent := "bundled"
+			if tc.preserveTarget {
+				wantContent = "custom"
+			}
+			if err != nil || string(content) != wantContent {
+				t.Fatalf("binary = %q, err = %v", content, err)
+			}
+			version, err := os.ReadFile(filepath.Join(target, name+".version"))
+			if tc.wantVersion == "" {
+				if !os.IsNotExist(err) {
+					t.Fatalf("expected no sidecar, got %q, err = %v", version, err)
+				}
+			} else if err != nil || string(version) != tc.wantVersion {
+				t.Fatalf("version = %q, want %q, err = %v", version, tc.wantVersion, err)
+			}
+		})
 	}
 }
 

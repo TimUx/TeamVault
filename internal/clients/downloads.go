@@ -98,33 +98,60 @@ func SeedDownloads(bundledDir, targetDir string) error {
 		return err
 	}
 	for _, name := range BundledArtifactNames {
+		if strings.HasSuffix(name, ".version") {
+			continue
+		}
 		src := filepath.Join(bundledDir, filepath.FromSlash(name))
 		dst := filepath.Join(targetDir, filepath.FromSlash(name))
-		if err := copyIfNewer(src, dst); err != nil {
+		copied, err := copyIfNewer(src, dst)
+		if err != nil {
 			return err
+		}
+		if copied && strings.HasPrefix(name, "teamvault-desktop-") {
+			// Metadata must follow the binary, never its own modification time.
+			if err := os.Remove(dst + ".version"); err != nil && !os.IsNotExist(err) {
+				return err
+			}
+			info, err := os.Stat(src + ".version")
+			if os.IsNotExist(err) {
+				continue
+			}
+			if err != nil {
+				return err
+			}
+			if err := copyFile(src+".version", dst+".version", info.Mode().Perm()); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
 }
 
-func copyIfNewer(src, dst string) error {
+func copyIfNewer(src, dst string) (bool, error) {
 	si, err := os.Stat(src)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil
+			return false, nil
 		}
-		return err
+		return false, err
 	}
 	if !si.Mode().IsRegular() {
-		return nil
+		return false, nil
 	}
 	di, err := os.Stat(dst)
 	if err == nil && !di.ModTime().Before(si.ModTime()) {
-		return nil
+		return false, nil
 	}
 	if err != nil && !os.IsNotExist(err) {
-		return err
+		return false, err
 	}
+	if err := copyFile(src, dst, si.Mode().Perm()); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func copyFile(src, dst string, mode os.FileMode) error {
 	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
 		return err
 	}
@@ -133,7 +160,7 @@ func copyIfNewer(src, dst string) error {
 		return err
 	}
 	defer in.Close()
-	out, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, si.Mode().Perm())
+	out, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, mode)
 	if err != nil {
 		return err
 	}
@@ -141,7 +168,7 @@ func copyIfNewer(src, dst string) error {
 	if _, err := io.Copy(out, in); err != nil {
 		return err
 	}
-	return out.Chmod(si.Mode().Perm())
+	return out.Chmod(mode)
 }
 
 func artifactIfExists(dir, name string) *Artifact {
