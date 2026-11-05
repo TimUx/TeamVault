@@ -18,6 +18,9 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT/clients/desktop"
 
 VERSION="$(git -C "$ROOT" describe --tags --always --dirty 2>/dev/null || echo dev)"
+if [ "${GITHUB_REF_TYPE:-}" = "tag" ]; then
+  VERSION="$GITHUB_REF_NAME"
+fi
 PRODUCT_VERSION="0.0.0"
 if [[ "$VERSION" =~ ^v?([0-9]+)\.([0-9]+)\.([0-9]+) ]]; then
   PRODUCT_VERSION="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.${BASH_REMATCH[3]}"
@@ -54,6 +57,7 @@ if [ ! -f "$BIN" ]; then
 fi
 cp "$BIN" "${OUTDIR}/teamvault-desktop-linux-amd64"
 chmod +x "${OUTDIR}/teamvault-desktop-linux-amd64"
+printf '%s\n' "$VERSION" > "${OUTDIR}/teamvault-desktop-linux-amd64.version"
 
 # --- AppImage (portable, no install/root needed) ---------------------------
 if command -v linuxdeploy >/dev/null 2>&1 || [ -x "${ROOT}/.tmp/linuxdeploy.AppImage" ]; then
@@ -101,6 +105,7 @@ APPIMAGE="$(find "${ROOT}/.tmp" -maxdepth 1 -name '*.AppImage' ! -name 'linuxdep
 if [ -n "$APPIMAGE" ]; then
   cp "$APPIMAGE" "${OUTDIR}/teamvault-desktop-linux-amd64.AppImage"
   chmod +x "${OUTDIR}/teamvault-desktop-linux-amd64.AppImage"
+  printf '%s\n' "$VERSION" > "${OUTDIR}/teamvault-desktop-linux-amd64.AppImage.version"
 fi
 
 echo

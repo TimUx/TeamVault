@@ -4,6 +4,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 )
 
@@ -17,6 +18,10 @@ var BundledArtifactNames = []string{
 	"teamvault-desktop-linux-amd64.AppImage",
 	"teamvault-desktop-windows-amd64.exe",
 	"teamvault-desktop-windows-amd64-setup.exe",
+	"teamvault-desktop-linux-amd64.version",
+	"teamvault-desktop-linux-amd64.AppImage.version",
+	"teamvault-desktop-windows-amd64.exe.version",
+	"teamvault-desktop-windows-amd64-setup.exe.version",
 	"teamvault-extension.zip",
 	"teamvault-extension.crx",
 	"teamvault-extension.xpi",
@@ -40,13 +45,13 @@ type Artifact struct {
 
 // ExtensionInfo describes browser extension install artifacts.
 type ExtensionInfo struct {
-	ID              string    `json:"id,omitempty"`
-	Zip             *Artifact `json:"zip,omitempty"`
-	Crx             *Artifact `json:"crx,omitempty"`
-	Xpi             *Artifact `json:"xpi,omitempty"`
-	UpdateURL       string    `json:"update_url,omitempty"`
-	PolicyURL       string    `json:"policy_url,omitempty"`
-	InstallSourcesURL string  `json:"install_sources_url,omitempty"`
+	ID                string    `json:"id,omitempty"`
+	Zip               *Artifact `json:"zip,omitempty"`
+	Crx               *Artifact `json:"crx,omitempty"`
+	Xpi               *Artifact `json:"xpi,omitempty"`
+	UpdateURL         string    `json:"update_url,omitempty"`
+	PolicyURL         string    `json:"policy_url,omitempty"`
+	InstallSourcesURL string    `json:"install_sources_url,omitempty"`
 }
 
 // IntegrationFeatures controls whether CLI/Extension UI is exposed to end users.
@@ -93,33 +98,60 @@ func SeedDownloads(bundledDir, targetDir string) error {
 		return err
 	}
 	for _, name := range BundledArtifactNames {
+		if strings.HasSuffix(name, ".version") {
+			continue
+		}
 		src := filepath.Join(bundledDir, filepath.FromSlash(name))
 		dst := filepath.Join(targetDir, filepath.FromSlash(name))
-		if err := copyIfNewer(src, dst); err != nil {
+		copied, err := copyIfNewer(src, dst)
+		if err != nil {
 			return err
+		}
+		if copied && strings.HasPrefix(name, "teamvault-desktop-") {
+			// Metadata must follow the binary, never its own modification time.
+			if err := os.Remove(dst + ".version"); err != nil && !os.IsNotExist(err) {
+				return err
+			}
+			info, err := os.Stat(src + ".version")
+			if os.IsNotExist(err) {
+				continue
+			}
+			if err != nil {
+				return err
+			}
+			if err := copyFile(src+".version", dst+".version", info.Mode().Perm()); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
 }
 
-func copyIfNewer(src, dst string) error {
+func copyIfNewer(src, dst string) (bool, error) {
 	si, err := os.Stat(src)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil
+			return false, nil
 		}
-		return err
+		return false, err
 	}
 	if !si.Mode().IsRegular() {
-		return nil
+		return false, nil
 	}
 	di, err := os.Stat(dst)
 	if err == nil && !di.ModTime().Before(si.ModTime()) {
-		return nil
+		return false, nil
 	}
 	if err != nil && !os.IsNotExist(err) {
-		return err
+		return false, err
 	}
+	if err := copyFile(src, dst, si.Mode().Perm()); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func copyFile(src, dst string, mode os.FileMode) error {
 	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
 		return err
 	}
@@ -128,7 +160,7 @@ func copyIfNewer(src, dst string) error {
 		return err
 	}
 	defer in.Close()
-	out, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, si.Mode().Perm())
+	out, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, mode)
 	if err != nil {
 		return err
 	}
@@ -136,7 +168,7 @@ func copyIfNewer(src, dst string) error {
 	if _, err := io.Copy(out, in); err != nil {
 		return err
 	}
-	return out.Chmod(si.Mode().Perm())
+	return out.Chmod(mode)
 }
 
 func artifactIfExists(dir, name string) *Artifact {
@@ -179,7 +211,7 @@ func BuildManifest(dir, publicBase string) Manifest {
 		})
 	}
 	for _, name := range BundledArtifactNames {
-		if !strings.HasPrefix(name, "teamvault-desktop-") {
+		if !strings.HasPrefix(name, "teamvault-desktop-") || strings.HasSuffix(name, ".version") {
 			continue
 		}
 		path := filepath.Join(dir, filepath.FromSlash(name))
@@ -189,7 +221,7 @@ func BuildManifest(dir, publicBase string) Manifest {
 		}
 		plat, arch, kind := parseDesktopPlatform(name)
 		m.Desktop = append(m.Desktop, Artifact{
-			Name: name, Platform: plat, Arch: arch, Kind: kind, Size: fi.Size(),
+			Name: DesktopDownloadName(dir, name), Platform: plat, Arch: arch, Kind: kind, Size: fi.Size(),
 			URL: "/downloads/" + name,
 		})
 	}
@@ -210,6 +242,33 @@ func BuildManifest(dir, publicBase string) Manifest {
 	m.Install.ExtensionPolicyPS = `$env:TEAMVAULT_URL='` + publicBase + `'; irm "$env:TEAMVAULT_URL/help/install/extension-policy.ps1" | iex`
 	m.Install.ExtensionUserPS = m.Install.ExtensionWindows
 	return m
+}
+
+var desktopVersionPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
+
+// DesktopDownloadName uses the artifact's build version, not the server version.
+// The storage filename and public URL stay stable for existing download links.
+func DesktopDownloadName(dir, name string) string {
+	if !strings.HasPrefix(name, "teamvault-desktop-") {
+		return name
+	}
+	if platform, _, _ := parseDesktopPlatform(name); platform == "" {
+		return name
+	}
+	version, err := os.ReadFile(filepath.Join(dir, name+".version"))
+	if err != nil {
+		return name
+	}
+	v := strings.TrimSpace(string(version))
+	if !desktopVersionPattern.MatchString(v) {
+		return name
+	}
+	for _, suffix := range []string{"-setup.exe", ".exe", ".AppImage"} {
+		if strings.HasSuffix(name, suffix) {
+			return strings.TrimSuffix(name, suffix) + "-" + v + suffix
+		}
+	}
+	return name + "-" + v
 }
 
 func parseCLIPlatform(name string) (platform, arch string) {

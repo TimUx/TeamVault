@@ -1,6 +1,7 @@
 package server
 
 import (
+	"mime"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -25,6 +26,9 @@ func (a *API) handleDownloads(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	full := filepath.Join(a.App.DataDir, "downloads", rel)
+	if name := clients.DesktopDownloadName(filepath.Dir(full), filepath.Base(full)); name != filepath.Base(full) {
+		w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": name}))
+	}
 	if ct := clients.DownloadContentType(rel); ct != "" {
 		w.Header().Set("Content-Type", ct)
 	}

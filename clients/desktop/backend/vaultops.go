@@ -314,8 +314,12 @@ func (s *Session) ListSecrets() ([]SecretListItem, error) {
 	if err != nil {
 		return nil, err
 	}
-	out := make([]SecretListItem, len(items))
-	for i, it := range items {
+	out := make([]SecretListItem, 0, len(items))
+	for _, it := range items {
+		// Admin inventory rows without a user envelope are not vault entries.
+		if it["has_access"] != true {
+			continue
+		}
 		li := SecretListItem{
 			ID:           str(it["id"]),
 			HasAccess:    it["has_access"] == true,
@@ -328,16 +332,12 @@ func (s *Session) ListSecrets() ([]SecretListItem, error) {
 		if li.Visibility == "" {
 			li.Visibility = "private"
 		}
-		if li.HasAccess {
-			if t, err := s.decryptTitle(it); err == nil {
-				li.Title = t
-			} else {
-				li.Title = li.ID
-			}
+		if t, err := s.decryptTitle(it); err == nil {
+			li.Title = t
 		} else {
-			li.Title = "(kein Zugriff)"
+			li.Title = li.ID
 		}
-		out[i] = li
+		out = append(out, li)
 	}
 	// Enrich tags/favorite from each accessible secret's encrypted body, with
 	// bounded concurrency (mirrors the web app's enrichSecretMeta pool).
@@ -689,6 +689,9 @@ func (s *Session) ListSecretsOffline(snap OfflineSnapshot) ([]SecretListItem, er
 	}
 	out := make([]SecretListItem, 0, len(snap.Secrets))
 	for _, it := range snap.Secrets {
+		if !it.HasAccess {
+			continue
+		}
 		item := map[string]any{
 			"envelope":             it.Envelope,
 			"key_version":          float64(it.KeyVersion),

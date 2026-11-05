@@ -8,6 +8,8 @@ Interaktive Fassung auf der laufenden Instanz: **`/help/desktop`**.
 
 Download: In der Web-App unter **Konto & Sicherheit → Clients** oder Hilfe **`/help/desktop`** — im oberen Download-Bereich das empfohlene Artefakt für die erkannte Plattform, darunter alternative Artefakte (AppImage/Installer) sowie alle Downloads (sichtbar nur, wenn der Plattform-Administrator die Desktop-Integration unter **Administration → Client-Integrationen** aktiviert hat; `/downloads/` bleibt immer verfügbar).
 
+Desktop-Downloads enthalten die jeweilige Build-/Release-Version im angebotenen und gespeicherten Dateinamen, z. B. `teamvault-desktop-windows-amd64-v1.5.34.exe` oder `teamvault-desktop-windows-amd64-v1.5.34-setup.exe`. Die Download-URLs bleiben unverändert. Ältere Builds ohne Versionsmetadaten behalten ihren bisherigen Dateinamen.
+
 ![Hilfe → Desktop-App](images/help-desktop-download.png)
 
 ## Was die App kann
@@ -66,7 +68,7 @@ Nach jedem erfolgreichen Online-Entsperren wird automatisch ein Ciphertext-Snaps
 ## Tags & Sharing
 
 - **Tags** ersetzen die frühere Ordner-Ablage: In der Seitenleiste listet die App alle im Vault verwendeten Tags auf; ein Klick aktiviert/deaktiviert den jeweiligen Filter (UND-Verknüpfung bei mehreren aktiven Tags), „Filter leeren“ setzt die Auswahl zurück. Tags werden beim Anlegen/Bearbeiten eines Secrets kommagetrennt eingegeben.
-- **Eigene vs. geteilte Secrets**: Die Filterleiste unterscheidet „Eigene“ und „Geteilt“; geteilte Einträge zeigen zusätzlich den Ersteller in der Liste an.
+- **Eigene vs. geteilte Secrets**: Wie in der Web-UI zeigt „Eigene“ private und „Geteilt“ freigegebene Secrets; „Alle“ kombiniert beide. In allen Ansichten erscheinen nur Einträge mit eigenem Entschlüsselungszugriff. Administrative Inventar-Einträge ohne Zugriff werden nicht als Secrets angezeigt. Geteilte Einträge anderer Nutzer zeigen zusätzlich den Ersteller in der Liste an.
 - **Freigabe verwalten**: In der Secret-Detailansicht öffnet der Icon+Text-Button „Freigabe verwalten“ eine eigene Ansicht mit den aktuellen Nutzer-/Gruppen-Freigaben (inkl. Rechtestufe: Lesen/Bearbeiten/Freigeben/Admin), einem Formular zum Hinzufügen weiterer Freigaben sowie der Möglichkeit, bestehende Freigaben zu entziehen. Neu beigetretene Gruppenmitglieder ohne eigenen Schlüssel werden unter „Fehlende Gruppen-Schlüssel“ angezeigt und können dort direkt nachgeschlüsselt werden.
 - Diese Funktionen benötigen eine Online-Verbindung (Server-API-Aufrufe wie in der Web-App) und sind im Offline-Modus deaktiviert.
 
@@ -91,3 +93,5 @@ Nach jedem erfolgreichen Online-Entsperren wird automatisch ein Ciphertext-Snaps
 ```
 
 Quellcode: [`clients/desktop`](../clients/desktop) (eigenes Go-Modul, referenziert `internal/cryptocore` des Hauptmoduls). CI (Tag `v*`): `.github/workflows/release.yml`, Jobs `desktop-linux` / `desktop-windows`.
+
+Die Build-Skripte erzeugen pro Desktop-Artefakt eine gleichnamige `.version`-Begleitdatei in `dist/`. Bei manueller Bereitstellung unter `downloads/` diese mitkopieren; sie bestimmt den Download-Dateinamen unabhängig von der Server-Version.

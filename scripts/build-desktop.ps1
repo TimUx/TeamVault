@@ -23,6 +23,9 @@ try {
   $Version = (git -C $Root describe --tags --always --dirty 2>$null)
   if (-not $Version) { $Version = "dev" }
 } catch { }
+if ($env:GITHUB_REF_TYPE -eq "tag") {
+  $Version = $env:GITHUB_REF_NAME
+}
 $ProductVersion = "0.0.0"
 if ($Version -match 'v?(\d+)\.(\d+)\.(\d+)') {
   $ProductVersion = "$($Matches[1]).$($Matches[2]).$($Matches[3])"
@@ -59,6 +62,7 @@ try {
     throw "Build output not found at $Bin"
   }
   Copy-Item $Bin (Join-Path $OutDir "teamvault-desktop-windows-amd64.exe") -Force
+  Set-Content (Join-Path $OutDir "teamvault-desktop-windows-amd64.exe.version") -Value $Version -Encoding utf8NoBOM
 
   if ($Installer) {
     Write-Host "Building per-user NSIS installer (no admin rights required)..."
@@ -66,6 +70,7 @@ try {
     $SetupBin = Get-ChildItem "build\bin\*-amd64-installer.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
     if ($SetupBin) {
       Copy-Item $SetupBin.FullName (Join-Path $OutDir "teamvault-desktop-windows-amd64-setup.exe") -Force
+      Set-Content (Join-Path $OutDir "teamvault-desktop-windows-amd64-setup.exe.version") -Value $Version -Encoding utf8NoBOM
     }
   }
 }
