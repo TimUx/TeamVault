@@ -1,6 +1,5 @@
 /* TeamVault Desktop — standalone, lean, vault-only frontend.
- * All network + crypto happens in the Go backend (window.go.main.App.*);
- * this file only renders already-decrypted data returned by those calls.
+ * Vault networking and encryption run in Go; software keys can be generated here.
  */
 (function () {
   "use strict";
@@ -19,6 +18,7 @@
     tenant: "",
     username: "",
     offline: false,
+    offlineSoftwareKeyB64: "",
     secrets: [],
     filter: "all",
     tagFilters: [],
@@ -37,6 +37,69 @@
     secretsLastAutoRefreshAttemptAt: 0,
     secretAutoRefreshBound: false,
   };
+
+  function validateOfflineKey(value) {
+    const text = String(value || "").trim();
+    let binary;
+    try {
+      binary = atob(text);
+    } catch (_) {
+      throw new Error("Software-Key ist kein gültiges Base64.");
+    }
+    if (binary.length !== 32 || btoa(binary) !== text) {
+      throw new Error("Software-Key muss ein kanonischer 256-Bit-Key sein.");
+    }
+    return text;
+  }
+
+  async function readOfflineKey() {
+    const file = $("uKeyFile").files?.[0];
+    if (file) {
+      let data;
+      try {
+        data = JSON.parse(await file.text());
+      } catch (_) {
+        throw new Error("Software-Key-Datei ist kein gültiges JSON.");
+      }
+      if (data?.format !== "teamvault-offline-key" || data.version !== 1 || typeof data.key_b64 !== "string") {
+        throw new Error("Unbekanntes Software-Key-Dateiformat.");
+      }
+      return validateOfflineKey(data.key_b64);
+    }
+    if ($("uKeyText").value.trim()) return validateOfflineKey($("uKeyText").value);
+    return state.offlineSoftwareKeyB64;
+  }
+
+  function downloadOfflineKey(keyB64) {
+    const contents = JSON.stringify({
+      format: "teamvault-offline-key",
+      version: 1,
+      key_b64: keyB64,
+    }, null, 2) + "\n";
+    const url = URL.createObjectURL(new Blob([contents], { type: "application/json" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "teamvault-offline-key.json";
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  $("uKeyGenerate").addEventListener("click", () => {
+    try {
+      if (!window.crypto?.getRandomValues) throw new Error("Sichere Zufallsquelle nicht verfügbar.");
+      const bytes = window.crypto.getRandomValues(new Uint8Array(32));
+      let binary = "";
+      for (const byte of bytes) binary += String.fromCharCode(byte);
+      bytes.fill(0);
+      state.offlineSoftwareKeyB64 = btoa(binary);
+      downloadOfflineKey(state.offlineSoftwareKeyB64);
+      $("uKeyFile").value = "";
+      $("uKeyText").value = "";
+      alert("Software-Key heruntergeladen. Bewahre ihn getrennt vom Offline-Cache auf. Er wird nicht in TeamVault gespeichert.");
+    } catch (err) {
+      setError("uError", errMsg(err));
+    }
+  });
 
   // --- Resizable panels -----------------------------------------------------
   // The three vault areas (sidebar / list / detail) are freely resizable via
@@ -232,7 +295,9 @@
       try {
         const has = await App().HasOfflineCache(settings.tenant_slug || "", settings.username || "");
         $("cOfflineOpen").hidden = !has;
-      } catch (_) {}
+      } catch (err) {
+        setError("cError", errMsg(err));
+      }
     }
     checkForUpdate(settings.server_url || "");
     syncRecoveryLink();
@@ -365,13 +430,20 @@
       return;
     }
     try {
-      const res = await App().Unlock(pass, state.tenant, state.username);
+      const softwareKeyB64 = await readOfflineKey();
+      const res = await App().Unlock(pass, state.tenant, state.username, softwareKeyB64);
       $("uPass").value = "";
+      $("uKeyFile").value = "";
+      $("uKeyText").value = "";
+      state.offlineSoftwareKeyB64 = softwareKeyB64;
       state.offline = !!(res && res.offline);
       $("offlineBadge").hidden = !state.offline;
       await syncRemoteAppearance();
       await enterVault();
     } catch (err) {
+      state.offlineSoftwareKeyB64 = "";
+      $("uKeyFile").value = "";
+      $("uKeyText").value = "";
       setError("uError", errMsg(err));
     }
   });
@@ -543,18 +615,23 @@
 
   $("vLock").addEventListener("click", async () => {
     stopTotpTimer();
+    state.offlineSoftwareKeyB64 = "";
     await App().Lock();
     showScreen("screenUnlock");
   });
   $("vLogout").addEventListener("click", async () => {
     stopTotpTimer();
+    state.offlineSoftwareKeyB64 = "";
     await App().Logout();
     showScreen("screenConnect");
   });
   $("vNew").addEventListener("click", () => openForm(null));
   $("vSync").addEventListener("click", async () => {
     try {
-      await App().SyncOfflineCache();
+      if (!state.offlineSoftwareKeyB64) {
+        throw new Error("Zum Offline-Sync erneut entsperren und Software-Key-Datei laden.");
+      }
+      await App().SyncOfflineCache(state.offlineSoftwareKeyB64);
     } catch (err) {
       alert(errMsg(err));
     }

@@ -12,6 +12,7 @@ import (
 
 	"github.com/pquerna/otp/totp"
 	"github.com/teamvault/teamvault/internal/cryptocore"
+	"github.com/teamvault/teamvault/internal/offlinepolicy"
 )
 
 // Session holds everything needed to talk to a TeamVault server and
@@ -85,6 +86,14 @@ func parseArgon2Params(raw any) cryptocore.Argon2Params {
 	}
 	b, _ := json.Marshal(raw)
 	_ = json.Unmarshal(b, &p)
+	if p.KeyLen == 0 {
+		// Offline caches store snake_case "key_len", which does not match KeyLen.
+		var alt struct {
+			KeyLen uint32 `json:"key_len"`
+		}
+		_ = json.Unmarshal(b, &alt)
+		p.KeyLen = alt.KeyLen
+	}
 	return p
 }
 
@@ -614,12 +623,44 @@ func (s *Session) DeleteSecret(id string) error {
 	return s.Client.Delete("/api/secrets/" + pathEscape(id))
 }
 
-// SyncOfflineSnapshot re-downloads and decrypts nothing (ciphertext only)
-// but fetches every accessible secret's detail so the local cache is
-// complete, then persists it. Best-effort; caller may ignore errors.
-func (s *Session) SyncOfflineSnapshot() error {
+func (s *Session) checkOfflinePolicy(profile string) (string, error) {
+	policy, err := s.Client.GetJSON("/api/policy/client")
+	if err != nil {
+		return "", fmt.Errorf("offline security policy unavailable: %w", err)
+	}
+	offlineAllowed, ok := policy["offline_cache_allowed"].(bool)
+	if !ok {
+		return "", errors.New("server did not provide the offline cache policy")
+	}
+	if !offlineAllowed {
+		return "", errors.New("offline cache is disabled by the administrator")
+	}
+	requirement, ok := policy["offline_key_requirement"].(string)
+	if !ok {
+		return "", errors.New("server did not provide the offline key requirement")
+	}
+	allowed, err := offlinepolicy.Allows(requirement, profile)
+	if err != nil {
+		return "", fmt.Errorf("invalid offline security policy: %w", err)
+	}
+	if !allowed {
+		return "", fmt.Errorf("offline policy requires %s; the desktop client currently supports only STANDARD", requirement)
+	}
+	return requirement, nil
+}
+
+// SyncOfflineSnapshot fetches every accessible ciphertext and persists a
+// software-key-protected snapshot. Plaintext key material is never written.
+func (s *Session) SyncOfflineSnapshot(softwareKey []byte) error {
 	if s.Offline {
 		return errors.New("bereits offline: kein Sync möglich")
+	}
+	if len(softwareKey) != 32 {
+		return errors.New("software key must contain exactly 32 bytes")
+	}
+	requirement, err := s.checkOfflinePolicy(offlineCacheProfile)
+	if err != nil {
+		return err
 	}
 	keys, err := s.Client.GetJSON("/api/vault/keys")
 	if err != nil {
@@ -637,7 +678,7 @@ func (s *Session) SyncOfflineSnapshot() error {
 		id := str(it["id"])
 		det, err := s.Client.GetJSON("/api/secrets/" + pathEscape(id))
 		if err != nil {
-			continue
+			return fmt.Errorf("offline snapshot could not fetch secret %s: %w", id, err)
 		}
 		env, _ := det["envelope"].(map[string]any)
 		secrets = append(secrets, OfflineSecret{
@@ -656,16 +697,16 @@ func (s *Session) SyncOfflineSnapshot() error {
 			SharedGroups:       stringSlice(det["shared_groups"]),
 		})
 	}
-	var params cryptocore.Argon2Params
-	if raw, ok := keys["argon2"]; ok {
-		b, _ := json.Marshal(raw)
-		_ = json.Unmarshal(b, &params)
+	params := s.params
+	if params.KeyLen == 0 {
+		params = parseArgon2Params(keys["argon2"])
 	}
 	paramsMap := map[string]any{"time": params.Time, "memory": params.Memory, "threads": params.Threads, "key_len": params.KeyLen}
 	snap := OfflineSnapshot{
-		Version:    1,
+		Version:    offlineCacheVersion,
 		TenantID:   str(s.Me["tenant_id"]),
 		TenantSlug: s.TenantSlug,
+		TenantName: str(s.Me["tenant_name"]),
 		UserID:     str(s.Me["user_id"]),
 		Username:   s.Username,
 		SyncedAt:   time.Now().UTC(),
@@ -678,7 +719,22 @@ func (s *Session) SyncOfflineSnapshot() error {
 		CryptoParams: paramsMap,
 		Secrets:      secrets,
 	}
-	return SaveOfflineSnapshot(snap)
+	origin, err := OfflineOrigin(s.Client.BaseURL())
+	if err != nil {
+		return err
+	}
+	cache, err := SealOfflineSnapshot(snap, softwareKey, origin, requirement)
+	if err != nil {
+		return err
+	}
+	currentRequirement, err := s.checkOfflinePolicy(offlineCacheProfile)
+	if err != nil {
+		return err
+	}
+	if currentRequirement != requirement {
+		return errors.New("offline security policy changed during synchronization; retry")
+	}
+	return SaveOfflineCache(cache)
 }
 
 // ListSecretsOffline decrypts titles and tags/favorite straight from the

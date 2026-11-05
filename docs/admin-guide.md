@@ -2,6 +2,8 @@
 
 Betrieb und Verwaltung der Instanz. Für den Alltag der Endanwender: [User Guide](user-guide.md).
 
+Für Sicherheitsbewertung und Freigabe: [Technische Sicherheitsdokumentation](security-architecture.md) mit implementierten Verfahren, Speicherorten, Zertifikaten und bekannten Grenzen.
+
 **Entwickler:** Timo Braun · Version der laufenden Instanz: `GET /api/version` oder `teamvault -version` (auch in der Web-UI Sidebar/Footer).
 
 ## Inhaltsverzeichnis
@@ -186,7 +188,7 @@ Sidebar **Administration → Benutzer & Gruppen → Gruppen**:
 - Gruppe anlegen; **Name** und **Beschreibung** in der Karte bearbeiten (Speichern beim Verlassen des Feldes); **Löschen** mit Bestätigung
 - Rechte/Sharing bleiben über lokale Zuordnung — **keine** LDAP-Gruppen-Autorisierung
 - Secrets können an Gruppen geteilt werden (pro Mitglied eigener Envelope) — siehe User Guide
-- **Neue Gruppenmitglieder:** Fehlende Gruppen-Freigaben werden **nicht** still beim Unlock nachgezogen. Ein berechtigter User bestätigt Catch-up inkl. Empfängerliste und TOFU-Fingerprint (`GET /api/secrets/group-share-gaps`). Ohne Bestätigung kein Wrap.
+- **Neue Gruppenmitglieder:** Die aktuelle WebUI kann fehlende Envelopes bestehender Gruppenfreigaben beim Unlock und bei Gruppenänderungen automatisch nachpflegen (`GET /api/secrets/group-share-gaps`). Das lokale Fingerprint-Verzeichnis ist keine unabhängig bestätigte Empfänger-PKI; Details und Grenzen in der [Sicherheitsdokumentation](security-architecture.md#63-vertrauen-in-öffentliche-empfängerschlüssel).
 
 ### 3.4 Zugriff & Proxy
 
@@ -252,7 +254,9 @@ Sidebar **Administration → Krypto & Policy**:
 - TOTP-Pflicht auf **Plattform-Ebene** (erzwingt 2FA für alle Tenants)
 - Wenn Plattform-TOTP aus ist: Tenant-Admins können die 2FA-Pflicht je Tenant unter **Recovery & Escrow** individuell aktivieren/deaktivieren.
 - Wird 2FA-Pflicht (Plattform oder Tenant) aktiviert, müssen User ohne 2FA die Einrichtung beim nächsten Login in einem Mini-Onboarding abschließen.
-- **Offline-Vault-Cache erlauben:** Mandantenweit Opt-in für clientseitige Ciphertext-Kopie (IndexedDB, 30 Tage TTL). Aus = Nutzer können keine Offline-Kopie anlegen; bestehende Kopien auf Geräten werden beim nächsten Online-Besuch nicht mehr aktualisiert.
+- **Offline-Vault-Cache erlauben:** Opt-in für clientseitige Offline-Kopien (30 Tage Client-TTL). STANDARD verlangt Master-Passwort und Software-Key; im Web sind außerdem HARDWARE (FIDO2-PRF) und COMBINED (Software-Key und FIDO2) wählbar. Ältere master-only Kopien müssen neu synchronisiert werden. Aus verhindert neue Kopien oder Updates; bereits kopierte Caches können nicht aus der Ferne gesperrt werden.
+- **Offline-Mindestanforderung:** Auf Plattform-Ebene sind Benutzerwahl, Software-Key, FIDO2-Key oder beide gemeinsam einstellbar. Tenant-Admins können unter **Recovery & Escrow** zusätzliche Faktoren verlangen; Plattform- und Tenant-Vorgaben werden vereinigt. Beispiel: Plattform verlangt Software, Tenant verlangt FIDO2 → nur COMBINED ist zulässig. Die WebUI lässt nur zulässige Profile zu und prüft die aktuelle Vorgabe vor dem Speichern erneut.
+- Der aktuelle Desktop-Client unterstützt nur STANDARD und verweigert Offline-Sync, wenn FIDO2 vorgeschrieben ist. Aktualisierte Clients verweigern den Sync auch bei fehlender oder unbekannter Schlüsselrichtlinie; Server und Clients müssen daher gemeinsam aktualisiert werden. Ältere oder manipulierte Clients können Vorgaben ignorieren; der Server kann ein lokales Speichern bereits autorisierter Ciphertexts nicht verhindern. FIDO2 wird nicht hardware-attestiert. Bereits kopierte Caches und die clientseitige TTL sind kein manipulationssicherer Fernentzug. Desktop-FIDO2, TPM, Offline-TOTP sowie weitere Richtlinien wie variable TTL oder zugelassene Clienttypen sind noch nicht implementiert.
 - Idle-Lock der Vault-Session (Default 15 min) — nur Client-Unlock
 - **Admins: Secret-Liste nur mit Envelope** (`admin_secrets_envelope_only`): Wenn aktiv, sehen Tenant-Admins in der Secret-Liste nur Einträge, für die sie selbst ein Envelope haben (Inventar-Metadaten anderer Secrets ausgeblendet). Default: aus — Admins sehen alle Secret-Metadaten (IDs, Title-Ciphertext), Klartext bleibt Zero-Knowledge-geschützt.
 
@@ -389,8 +393,8 @@ Die selbst gehostete Verteilung (`scripts/pack-extension.mjs` /
 
 | Was | Hinweis |
 |-----|---------|
-| **Instanz-Snapshot** (Admin-UI) | Platform-Admin: *Tenants & Migration* → Snapshot herunterladen. Nur Ciphertext + Metadaten. Restore mit Bestätigung `RESTORE` ersetzt den Vault-Store. |
-| Datenverzeichnis / Volume | Alternative: Datei-Kopie von SQLite/JSON + Config; enthält nur Ciphertext + Metadaten |
+| **Instanz-Snapshot** (Admin-UI) | Platform-Admin: *Tenants & Migration* → Snapshot herunterladen. Vault-Ciphertexte, Metadaten und Kontodatensätze einschließlich Login-Hashes; kein zusätzlich verschlüsselter Gesamtcontainer. Restore mit Bestätigung `RESTORE` ersetzt den Vault-Store. |
+| Datenverzeichnis / Volume | Konsistente Sicherung von SQLite/JSON + Config; kann zusätzlich unverschlüsselte Sitzungstoken enthalten. Zugriffsschutz und Backup-Verschlüsselung erforderlich. |
 | Unlock-Keyfile | Separat, streng schützen — ohne Key keine Config |
 | User-`.tvbak` | Clientseitige verschlüsselte Secrets-Sicherung (User-Guide); kein Ersatz für Instanz-Backup |
 | Escrow-Shares / User-Recovery-Kits | Offline, nie zusammen mit Unlock-Key lagern |
@@ -404,7 +408,7 @@ Die selbst gehostete Verteilung (`scripts/pack-extension.mjs` /
 
 ### 5.2 Backup-/Restore-Drill (kurz)
 
-1. Instanz stoppen; Volume/`TEAMVAULT_DATA_DIR` und Unlock-Keyfile sichern — **oder** Snapshot aus der Admin-UI plus Unlock-Keyfile.
+1. Instanz stoppen; Volume/`TEAMVAULT_DATA_DIR` und separat das Unlock-Keyfile sichern — **oder** Snapshot aus der Admin-UI plus separat gesicherte `config/config.sealed` und passendes Unlock-Keyfile. Der Admin-Snapshot enthält nicht die Instanzkonfiguration oder vollständige Audit-Historie.
 2. Auf Testsystem wiederherstellen; gleichen Unlock-Key mounten; starten (bei UI-Restore: laufende Instanz, Confirm `RESTORE`).
 3. Login + Vault-Unlock prüfen — Klartext nur clientseitig.
 4. Erfolg dokumentieren; Prod-Backup-Rhythmus festlegen.
@@ -491,6 +495,7 @@ Sessions, Login-Rate-Limits und Passkey-Challenges liegen **im Prozessspeicher**
 ## 8. Weiterführend
 
 - Installation: [install-guide.md](install-guide.md)
+- Technische Sicherheitsdokumentation: [security-architecture.md](security-architecture.md)
 - Sicherheitsregeln: [`.cursor/rules/security-principles.mdc`](../.cursor/rules/security-principles.mdc)
 - Admin-UI Scope (Planung): [planning/admin-ui-scope.md](planning/admin-ui-scope.md)
 - OpenAPI: [openapi.yaml](openapi.yaml)

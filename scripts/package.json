@@ -1,7 +1,7 @@
 {
   "private": true,
   "type": "module",
-  "description": "Dev tooling for documentation screenshots only",
+  "description": "Development tooling for documentation screenshots and browser integration tests",
   "dependencies": {
     "playwright": "^1.64.1"
   }

@@ -913,7 +913,7 @@ function renderLogin(app) {
       </div>
       <div id="offlineLogin" class="offline-login" hidden>
         <hr />
-        ${hintBox("Ohne Netzwerk: gespeicherte verschlüsselte Kopie mit Master-Passwort entsperren (kein Login, kein TOTP).")}
+        ${hintBox("Ohne Netzwerk: gespeicherte Offline-Kopie mit Master-Passwort und dem eingerichteten Software- und/oder FIDO2-Key entsperren (kein Login, kein TOTP).")}
         <p class="error" id="offlineExpired" hidden role="alert"></p>
         <button class="btn-ghost btn-with-ico" type="button" id="doOffline">${btnLabel("unlock", "Offline entsperren")}</button>
       </div>
@@ -1089,6 +1089,17 @@ function renderLogin(app) {
   (async () => {
     if (!window.TVOfflineStore?.isAvailable()) return;
     try {
+      if (!offlineStoreReady()) {
+        const all = await TVOfflineStore.listSnapshots({ validOnly: false });
+        if (all.length) {
+          n.querySelector("#offlineLogin").hidden = false;
+          const error = n.querySelector("#offlineExpired");
+          error.hidden = false;
+          error.textContent = "Offline-Komponenten sind veraltet. TeamVault einmal online neu laden.";
+          n.querySelector("#doOffline").disabled = true;
+        }
+        return;
+      }
       const valid = await TVOfflineStore.listSnapshots({ validOnly: true });
       const all = await TVOfflineStore.listSnapshots({ validOnly: false });
       const expired = all.filter((s) => s.expired);
@@ -1429,11 +1440,15 @@ function renderTotpOnboard(app) {
 
 const vault = {
   sk: null,
+  offlineKey: null,
+  offlineHardwareRoot: null,
+  offlineHardwareKeyset: null,
   me: null,
   params: null,
   policy: null,
   offlineMode: false,
   offlineSnapshot: null,
+  offlineCacheEnvelope: null,
   offlinePicker: false,
   idleMin: 15,
   idleTimer: null,
@@ -1487,6 +1502,31 @@ const vault = {
   secretsLastAutoRefreshAt: 0,
   secretAutoRefreshBound: false,
 };
+
+const OFFLINE_HARDWARE_VERSION = 3;
+
+function offlineStoreReady() {
+  return typeof window.TVOfflineStore?.sameSnapshot === "function";
+}
+
+function requireOfflineStore() {
+  if (!offlineStoreReady()) {
+    throw new Error("Offline-Komponenten sind veraltet. TeamVault einmal online neu laden.");
+  }
+}
+
+function offlineHardwareReady() {
+  const hardware = window.TVOfflineHardware;
+  return hardware?.VERSION === OFFLINE_HARDWARE_VERSION &&
+    typeof hardware.rotateKeyset === "function";
+}
+
+function requireOfflineHardware() {
+  if (!offlineHardwareReady()) {
+    throw new Error("FIDO2-Offline-Modul fehlt oder ist veraltet. TeamVault einmal online neu laden.");
+  }
+  return window.TVOfflineHardware;
+}
 
 function userFavoritesStorageKey() {
   const me = vault.me;
@@ -1629,10 +1669,58 @@ function isAuditorOnly() {
 function clearVaultKey() {
   if (vault.sk) vault.sk.fill(0);
   vault.sk = null;
+  if (vault.offlineKey) vault.offlineKey.fill(0);
+  vault.offlineKey = null;
+  clearOfflineHardwareRoot();
+  if (vault.offlineMode) vault.offlineSnapshot = null;
+  for (const id of ["offlineKeySetupFile", "offlineKeyFile", "offlineKeyText", "lockOfflineKeyFile", "lockOfflineKeyText"]) {
+    const input = document.getElementById(id);
+    if (input) input.value = "";
+  }
+  const keyStatus = document.getElementById("offlineKeyStatus");
+  if (keyStatus) keyStatus.textContent = "Kein Software-Key im Arbeitsspeicher.";
   if (vault.totpTimer) {
     clearInterval(vault.totpTimer);
     vault.totpTimer = null;
   }
+}
+
+function clearOfflineHardwareRoot() {
+  if (vault.offlineHardwareRoot) vault.offlineHardwareRoot.fill(0);
+  vault.offlineHardwareRoot = null;
+  vault.offlineHardwareKeyset = null;
+}
+
+function setOfflineSoftwareKey(key) {
+  if (!(key instanceof Uint8Array) || key.length !== 32) {
+    throw new Error("Software-Key muss genau 256 Bit enthalten");
+  }
+  if (vault.offlineKey === key) return;
+  if (vault.offlineKey) vault.offlineKey.fill(0);
+  clearOfflineHardwareRoot();
+  vault.offlineKey = key;
+  const status = document.getElementById("offlineKeyStatus");
+  if (status) status.textContent = "Software-Key nur im Arbeitsspeicher geladen; er wird beim Sperren gelöscht.";
+}
+
+async function readOfflineSoftwareKey(fileInput, textInput) {
+  if (fileInput?.files?.[0]) {
+    const text = await fileInput.files[0].text();
+    return TVOfflineStore.parseSoftwareKeyFile(text);
+  }
+  if (textInput?.value.trim()) return TVOfflineStore.parseSoftwareKey(textInput.value);
+  if (vault.offlineKey) return vault.offlineKey;
+  throw new Error("Software-Key-Datei laden oder 256-Bit-Key manuell eingeben");
+}
+
+function downloadOfflineSoftwareKey(key) {
+  const blob = new Blob([TVOfflineStore.softwareKeyFile(key)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "teamvault-offline-key.json";
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 function touchIdle() {
@@ -1810,8 +1898,43 @@ async function recoverVaultWithKit(recoveryKitB64, newMasterPassword) {
   }
 }
 
+function isOfflineKeyRequirement(requirement) {
+  return ["ANY", "SOFTWARE", "HARDWARE", "COMBINED"].includes(requirement);
+}
+
+function offlinePolicyError() {
+  if (!vault.policy || typeof vault.policy.offline_cache_allowed !== "boolean") {
+    return "Offline-Richtlinie vom Server nicht verfügbar.";
+  }
+  if (!vault.policy.offline_cache_allowed) return "Offline-Cache vom Administrator deaktiviert.";
+  if (!isOfflineKeyRequirement(vault.policy.offline_key_requirement)) {
+    return "Offline-Schlüsselrichtlinie fehlt oder wird nicht unterstützt. Server und Client aktualisieren.";
+  }
+  return "";
+}
+
 function offlinePolicyAllowed() {
-  return vault.policy?.offline_cache_allowed !== false;
+  return !offlinePolicyError();
+}
+
+function offlineProfileAllowed(profile) {
+  if (!offlinePolicyAllowed()) return false;
+  const allowed = {
+    ANY: ["STANDARD", "HARDWARE", "COMBINED"],
+    SOFTWARE: ["STANDARD", "COMBINED"],
+    HARDWARE: ["HARDWARE", "COMBINED"],
+    COMBINED: ["COMBINED"],
+  };
+  return allowed[vault.policy.offline_key_requirement].includes(profile);
+}
+
+function offlineRequirementLabel(requirement) {
+  return {
+    ANY: "Benutzerwahl",
+    SOFTWARE: "Software-Key verpflichtend",
+    HARDWARE: "FIDO2-Key verpflichtend",
+    COMBINED: "Software-Key und FIDO2-Key verpflichtend",
+  }[requirement] || "unbekannt";
 }
 
 function cliIntegrationEnabled() {
@@ -1833,7 +1956,8 @@ function anyClientIntegrationEnabled() {
 function formatOfflineSessionInfo(snapshot) {
   if (!snapshot) return "Offline";
   const tenant = snapshot.tenant_name || snapshot.tenant_slug || snapshot.tenant_id || "";
-  const synced = snapshot.synced_at ? new Date(snapshot.synced_at).toLocaleString("de-DE") : "—";
+  const syncedAt = snapshot.created_at || snapshot.synced_at;
+  const synced = syncedAt ? new Date(syncedAt).toLocaleString("de-DE") : "—";
   let line = `Offline · ${snapshot.username}`;
   if (tenant) line += ` · ${tenant}`;
   line += ` · Sync ${synced}`;
@@ -2186,6 +2310,15 @@ function renderApp(app) {
             ${hintBox("Idle-Timeout. Master-Passwort erneut eingeben (bleibt nur im Speicher).")}
             <label for="lockMpw">Master-Passwort</label>
             <input id="lockMpw" type="password" autocomplete="current-password" />
+            <label id="lockOfflineKeyFileWrap" hidden>Software-Key-Datei
+              <input id="lockOfflineKeyFile" type="file" accept=".json,application/json" />
+            </label>
+            <label id="lockOfflineKeyTextWrap" hidden>Software-Key (Base64)
+              <input id="lockOfflineKeyText" type="password" autocomplete="off" />
+            </label>
+            <label id="lockOfflineHardwareWrap" hidden>FIDO2-Security-Key
+              <select id="lockOfflineHardwareKey"></select>
+            </label>
             <div class="error" id="lockErr" hidden role="alert"></div>
             <div class="row"><button class="btn-accent btn-with-ico" type="button" id="lockUnlock">${btnLabel("unlock", "Entsperren")}</button></div>
           </div>
@@ -2194,9 +2327,18 @@ function renderApp(app) {
         <div class="panel app-unlock-panel" id="unlock">
           <h1>${icon("unlock", "heading-ico")} Vault entsperren</h1>
           ${hintBox("Master-Passwort bleibt im Browser (Zero-Knowledge).", { id: "unlockLead" })}
-          ${hintBox("Offline: nur Master-Passwort — kein Login und kein TOTP.", { id: "offlineUnlockHint", hidden: true })}
+          ${hintBox("Offline: Master-Passwort und Software-Key sind erforderlich. Der Key wird nicht im Cache gespeichert.", { id: "offlineUnlockHint", hidden: true })}
           <label id="offlineSnapLabel" hidden for="offlineSnap">Gespeicherte Offline-Kopie</label>
           <select id="offlineSnap" hidden></select>
+          <label id="offlineKeyFileWrap" hidden>Software-Key-Datei
+            <input id="offlineKeyFile" type="file" accept=".json,application/json" />
+          </label>
+          <label id="offlineKeyTextWrap" hidden>oder Software-Key (Base64)
+            <input id="offlineKeyText" type="password" autocomplete="off" />
+          </label>
+          <label id="offlineHardwareUnlockWrap" hidden>FIDO2-Security-Key
+            <select id="offlineHardwareUnlockKey"></select>
+          </label>
           <label>Master-Passwort</label><input id="mpw" type="password" autocomplete="current-password" />
           <div class="error" id="uerr" hidden role="alert" aria-live="assertive"></div>
           <div class="row"><button class="btn-accent btn-with-ico" type="button" id="ulock">${btnLabel("unlock", "Entsperren")}</button></div>
@@ -2609,9 +2751,35 @@ function renderApp(app) {
               </div>
 
               <div class="panel-tab-pane account-page" role="tabpanel" data-panel-pane="offline" hidden>
-                ${hintBox("Verschlüsselte Kopie für Offline-Lesen (30 Tage, nur Ciphertext). Schreiben bleibt online.", { id: "offlineAccHint" })}
+                ${hintBox("Das Master-Passwort bleibt immer erforderlich. STANDARD nutzt einen Software-Key; HARDWARE einen FIDO2-Key mit PRF; COMBINED benötigt beide. Software-Keys werden nur im Arbeitsspeicher gehalten und dürfen nicht neben dem Cache liegen. TOTP ist kein Offline-Faktor.", { id: "offlineAccHint" })}
+                <label for="offlineProfile">Sicherheitsprofil</label>
+                <select id="offlineProfile">
+                  <option value="STANDARD">STANDARD — Master-Passwort + Software-Key</option>
+                  <option value="HARDWARE">HARDWARE — Master-Passwort + FIDO2-Key</option>
+                  <option value="COMBINED">COMBINED — Master-Passwort + Software-Key + FIDO2-Key</option>
+                </select>
+                <p class="hint" id="offlinePolicyStatus"></p>
+                <p class="hint">Software-Key einrichten oder laden (keine automatische Speicherung):</p>
+                <label>Software-Key-Datei
+                  <input id="offlineKeySetupFile" type="file" accept=".json,application/json" />
+                </label>
+                <div class="row"><button class="btn-ghost btn-sm" type="button" id="offlineKeyGenerate">Neuen Software-Key erzeugen und herunterladen</button></div>
+                <p class="hint" id="offlineKeyStatus">Kein Software-Key im Arbeitsspeicher.</p>
+                <div id="offlineHardwareSetup" hidden>
+                  <p class="hint">FIDO2-Key mit PRF-Unterstützung und Benutzerverifikation (PIN oder Biometrie). Hardware-Echtheit wird nicht attestiert. Beim Entfernen müssen alle verbleibenden Keys bestätigt werden; ältere Kopien können nicht nachträglich gesperrt werden.</p>
+                  <label for="offlineHardwareName">Name des neuen Hardware-Keys</label>
+                  <input id="offlineHardwareName" value="Mein Security-Key" maxlength="80" />
+                  <div class="row"><button class="btn-ghost btn-sm" type="button" id="offlineHardwareRegister">FIDO2-Key hinzufügen</button></div>
+                  <label for="offlineHardwareKeys">Registrierte Hardware-Keys</label>
+                  <select id="offlineHardwareKeys"></select>
+                  <div class="row">
+                    <button class="btn-ghost btn-sm" type="button" id="offlineHardwareTest">Key testen</button>
+                    <button class="btn-ghost btn-sm" type="button" id="offlineHardwareRemove">Key entfernen</button>
+                  </div>
+                  <p class="hint" id="offlineHardwareStatus">Noch kein FIDO2-Key eingerichtet.</p>
+                </div>
                 <p class="hint" id="offlineAccStatus">—</p>
-                <label class="inline"><input id="offline_optin" type="checkbox" /> Offline-Kopie nach Entsperren aktualisieren</label>
+                <label class="inline"><input id="offline_optin" type="checkbox" /> Offline-Kopie auf diesem Gerät erlauben (Opt-in)</label>
                 <div class="row">
                   <button class="btn-ghost btn-sm" type="button" id="offline_sync">Jetzt synchronisieren</button>
                   <button class="btn-ghost btn-sm" type="button" id="offline_wipe">Offline-Kopie löschen</button>
@@ -2840,8 +3008,17 @@ function renderApp(app) {
                     <label class="inline"><input id="totp_req" type="checkbox" /> TOTP Pflicht (Hinweis nach Login)</label>
                     <label class="inline"><input id="admin_env_only" type="checkbox" /> Admins: Secret-Liste nur mit Envelope</label>
                     <label class="inline"><input id="offline_cache" type="checkbox" checked /> Offline-Vault-Cache erlauben (Ciphertext auf Geräten)</label>
+                    <label for="platform_offline_requirement">Offline-Mindestanforderung der Plattform</label>
+                    <select id="platform_offline_requirement" disabled>
+                      <option value="ANY">Benutzerwahl</option>
+                      <option value="SOFTWARE">Software-Key verpflichtend</option>
+                      <option value="HARDWARE">FIDO2-Key verpflichtend</option>
+                      <option value="COMBINED">Software-Key und FIDO2-Key verpflichtend</option>
+                    </select>
+                    <p class="hint">Nur aktuelle Clients berücksichtigen diese Vorgabe. Bereits kopierte Offline-Caches bleiben verwendbar; FIDO2-Hardware wird nicht attestiert. Desktop-FIDO2 und TPM sind noch nicht verfügbar.</p>
+                    <p class="error" id="platform_offline_error" hidden></p>
                     <div class="row">
-                      <button class="btn-accent" type="button" id="policy_save">Policy speichern</button>
+                      <button class="btn-accent" type="button" id="policy_save" disabled>Policy speichern</button>
                     </div>
                   </div>
                 </div>
@@ -2853,7 +3030,15 @@ function renderApp(app) {
                   <div class="panel-tab-pane active" role="tabpanel" data-panel-pane="mode">
                     ${hintBox("2FA-Pflicht für diesen Tenant. Ist sie auf Plattform-Ebene aktiviert, ist diese Option hier gesperrt.", { id: "tenant_totp_hint" })}
                     <label class="inline"><input id="tenant_totp_req" type="checkbox" /> 2FA für diesen Tenant verpflichtend</label>
-                    <div class="row"><button class="btn-accent" type="button" id="tenant_policy_save">Tenant-Policy speichern</button></div>
+                    <label for="tenant_offline_requirement">Offline-Mindestanforderung dieses Tenants</label>
+                    <select id="tenant_offline_requirement" disabled>
+                      <option value="ANY">Plattformvorgabe übernehmen</option>
+                      <option value="SOFTWARE">Software-Key zusätzlich verlangen</option>
+                      <option value="HARDWARE">FIDO2-Key zusätzlich verlangen</option>
+                      <option value="COMBINED">Software-Key und FIDO2-Key verlangen</option>
+                    </select>
+                    <p class="hint" id="tenant_offline_hint"></p>
+                    <div class="row"><button class="btn-accent" type="button" id="tenant_policy_save" disabled>Tenant-Policy speichern</button></div>
                     <hr />
                     ${hintBox("Wechsel erzwingt Re-Onboarding aller User. Bestätigung: <code>REONBOARD</code>")}
                     <label>Modus</label>
@@ -3081,33 +3266,216 @@ function renderApp(app) {
     if (optIn) optIn.disabled = true;
     if (syncBtn) syncBtn.disabled = true;
     if (wipeBtn) wipeBtn.disabled = false;
+    configureOfflineUnlockInputs(vault.offlineCacheEnvelope);
+  }
+
+  function fillHardwareSelect(select, slots) {
+    const previous = select.value;
+    select.replaceChildren();
+    for (const slot of slots || []) {
+      const option = document.createElement("option");
+      option.value = slot.id;
+      option.textContent = slot.label;
+      select.appendChild(option);
+    }
+    if ([...select.options].some((option) => option.value === previous)) select.value = previous;
+  }
+
+  function configureOfflineUnlockInputs(cache) {
+    const hardware = cache?.version === OFFLINE_HARDWARE_VERSION;
+    const software = !hardware || cache.profile === "COMBINED";
+    n.querySelector("#offlineKeyFileWrap").hidden = !software;
+    n.querySelector("#offlineKeyTextWrap").hidden = !software;
+    n.querySelector("#lockOfflineKeyFileWrap").hidden = !software;
+    n.querySelector("#lockOfflineKeyTextWrap").hidden = !software;
+    n.querySelector("#offlineHardwareUnlockWrap").hidden = !hardware;
+    n.querySelector("#lockOfflineHardwareWrap").hidden = !hardware;
+    if (hardware) {
+      fillHardwareSelect(n.querySelector("#offlineHardwareUnlockKey"), cache.keyslots);
+      fillHardwareSelect(n.querySelector("#lockOfflineHardwareKey"), cache.keyslots);
+    }
+    const hint = n.querySelector("#offlineUnlockHint");
+    if (hint) {
+      setHintBox(hint, hardware && !offlineHardwareReady()
+        ? "FIDO2-Offline-Modul fehlt oder ist veraltet. TeamVault einmal online neu laden."
+        : hardware
+        ? (software
+          ? "Offline: Master-Passwort, Software-Key und ein registrierter FIDO2-Key sind erforderlich."
+          : "Offline: Master-Passwort und ein registrierter FIDO2-Key sind erforderlich.")
+        : "Offline: Master-Passwort und Software-Key sind erforderlich. Der Key wird nicht im Cache gespeichert.");
+    }
+  }
+
+  function currentHardwareKeyset() {
+    const profile = n.querySelector("#offlineProfile").value;
+    if (vault.offlineHardwareKeyset?.profile === profile) return vault.offlineHardwareKeyset;
+    const cache = vault.offlineCacheEnvelope;
+    return cache?.version === OFFLINE_HARDWARE_VERSION && cache.profile === profile ? cache : null;
+  }
+
+  let offlineOperationRunning = false;
+
+  function setOfflineOperationRunning(running) {
+    offlineOperationRunning = running;
+    updateOfflineAccountUI(vault.offlineCacheEnvelope);
+  }
+
+  function beginOfflineOperation() {
+    if (offlineOperationRunning) throw new Error("Ein Offline-Vorgang läuft bereits");
+    setOfflineOperationRunning(true);
+  }
+
+  function assertOfflineSession(session, softwareKey, profile) {
+    if (!session || vault.sk !== session || vault.offlineMode || !offlinePolicyAllowed()) {
+      throw new Error("Vault wurde gesperrt oder Offline ist nicht mehr erlaubt");
+    }
+    if (!offlineProfileAllowed(profile)) {
+      throw new Error("Das Offline-Profil entspricht nicht der aktuellen Administratorrichtlinie.");
+    }
+    if (vault.offlineKey !== softwareKey || n.querySelector("#offlineProfile").value !== profile) {
+      throw new Error("Offline-Einstellungen wurden geändert. Vorgang erneut starten.");
+    }
+  }
+
+  async function refreshOfflinePolicy(session) {
+    let policy;
+    try {
+      policy = await api("/api/policy/client");
+    } catch (e) {
+      if (vault.sk === session) vault.policy = null;
+      throw new Error(`Offline-Richtlinie konnte nicht geprüft werden: ${e.message}`);
+    }
+    if (!session || vault.sk !== session || vault.offlineMode) {
+      throw new Error("Vault wurde während der Richtlinienprüfung gesperrt.");
+    }
+    vault.policy = policy;
+    if (!offlinePolicyAllowed()) throw new Error(offlinePolicyError());
+  }
+
+  function renderHardwareSetup() {
+    const profile = n.querySelector("#offlineProfile").value;
+    const panel = n.querySelector("#offlineHardwareSetup");
+    const hardware = profile === "HARDWARE" || profile === "COMBINED";
+    panel.hidden = !hardware;
+    if (!hardware) return;
+    const keyset = currentHardwareKeyset();
+    const slots = keyset?.keyslots || [];
+    const select = n.querySelector("#offlineHardwareKeys");
+    fillHardwareSelect(select, slots);
+    const unavailable = !offlineStoreReady() || !offlineHardwareReady();
+    const disabled = offlineOperationRunning || vault.offlineMode || !offlineProfileAllowed(profile) || unavailable;
+    n.querySelector("#offlineHardwareName").disabled = disabled;
+    select.disabled = disabled || !slots.length;
+    n.querySelector("#offlineHardwareRegister").disabled = disabled;
+    n.querySelector("#offlineHardwareTest").disabled = disabled || !slots.length;
+    n.querySelector("#offlineHardwareRemove").disabled = disabled || slots.length < 2;
+    n.querySelector("#offlineHardwareStatus").textContent = unavailable
+      ? "FIDO2-Offline-Komponenten fehlen oder sind veraltet. TeamVault einmal online neu laden."
+      : slots.length
+      ? `${slots.length} FIDO2-Key(s) ${keyset?.ciphertext_b64 ? "gespeichert" : "vorbereitet; zum Speichern synchronisieren"}.`
+      : "Noch kein FIDO2-Key eingerichtet.";
+  }
+
+  async function ensureHardwareRoot(keyset) {
+    if (!keyset) throw new Error("Zuerst einen FIDO2-Key hinzufügen");
+    if (keyset.profile === "COMBINED" && !vault.offlineKey) {
+      throw new Error("Für COMBINED zuerst den Software-Key laden");
+    }
+    if (vault.offlineHardwareRoot && vault.offlineHardwareKeyset?.keyset_id === keyset.keyset_id) {
+      return vault.offlineHardwareRoot;
+    }
+    const session = vault.sk;
+    const softwareKey = vault.offlineKey;
+    const profile = n.querySelector("#offlineProfile").value;
+    const selected = n.querySelector("#offlineHardwareKeys").value;
+    const root = await requireOfflineHardware().unlockRoot(keyset, selected, softwareKey, location.origin);
+    try {
+      if (keyset.ciphertext_b64) await requireOfflineHardware().verifyRoot(keyset, root, location.origin);
+      assertOfflineSession(session, softwareKey, profile);
+    } catch (e) {
+      root.fill(0);
+      throw e;
+    }
+    clearOfflineHardwareRoot();
+    vault.offlineHardwareRoot = root;
+    vault.offlineHardwareKeyset = keyset;
+    return root;
   }
 
   function updateOfflineAccountUI(snapshot) {
     const status = n.querySelector("#offlineAccStatus");
     const optIn = n.querySelector("#offline_optin");
     const hint = n.querySelector("#offlineAccHint");
+    const keyStatus = n.querySelector("#offlineKeyStatus");
+    const keyFile = n.querySelector("#offlineKeySetupFile");
+    const keyGenerate = n.querySelector("#offlineKeyGenerate");
+    const profile = n.querySelector("#offlineProfile");
+    const policyStatus = n.querySelector("#offlinePolicyStatus");
+    if (keyStatus && !vault.offlineKey) keyStatus.textContent = "Kein Software-Key im Arbeitsspeicher.";
     if (!status || !optIn) return;
-    if (!TVOfflineStore?.isAvailable()) {
-      status.textContent = "IndexedDB nicht verfügbar.";
+    const available = !!window.TVOfflineStore?.isAvailable();
+    n.querySelector("#offline_sync").disabled = offlineOperationRunning || vault.offlineMode ||
+      !available || !offlinePolicyAllowed() || !offlineStoreReady();
+    n.querySelector("#offline_wipe").disabled = offlineOperationRunning || !available;
+    if (!available) {
+      status.textContent = window.TVOfflineStore
+        ? "IndexedDB nicht verfügbar."
+        : "Offline-Komponente fehlt. TeamVault einmal online neu laden.";
       optIn.disabled = true;
+      if (keyFile) keyFile.disabled = true;
+      if (keyGenerate) keyGenerate.disabled = true;
+      profile.disabled = true;
+      return;
+    }
+    if (vault.offlineMode) {
+      status.textContent = `Offline-Kopie: ${snapshot?.profile || "unbekannt"}. Einstellungen sind nur online verfügbar.`;
+      if (policyStatus) policyStatus.textContent = "Die aktuelle Administratorrichtlinie kann offline nicht abgerufen werden.";
+      optIn.disabled = true;
+      if (keyFile) keyFile.disabled = true;
+      if (keyGenerate) keyGenerate.disabled = true;
+      profile.disabled = true;
+      renderHardwareSetup();
       return;
     }
     if (!offlinePolicyAllowed()) {
-      status.textContent = "Vom Administrator deaktiviert.";
+      status.textContent = offlinePolicyError();
+      if (policyStatus) policyStatus.textContent = "";
       optIn.checked = false;
       optIn.disabled = true;
-      if (hint) setHintBox(hint, "Offline-Cache ist für diesen Mandanten nicht erlaubt.");
+      if (keyFile) keyFile.disabled = true;
+      if (keyGenerate) keyGenerate.disabled = true;
+      profile.disabled = true;
+      if (hint) setHintBox(hint, offlinePolicyError());
+      renderHardwareSetup();
       return;
     }
-    optIn.disabled = vault.offlineMode;
+    optIn.disabled = vault.offlineMode || offlineOperationRunning;
+    if (keyFile) keyFile.disabled = vault.offlineMode || offlineOperationRunning || !offlineStoreReady();
+    if (keyGenerate) keyGenerate.disabled = vault.offlineMode || offlineOperationRunning || !offlineStoreReady();
+    const previousProfile = profile.value;
+    for (const option of profile.options) option.disabled = !offlineProfileAllowed(option.value);
+    if (!profile.dataset.changed && snapshot?.profile && offlineProfileAllowed(snapshot.profile)) {
+      profile.value = snapshot.profile;
+    }
+    if (!offlineProfileAllowed(profile.value)) {
+      profile.value = [...profile.options].find((option) => !option.disabled)?.value || "";
+    }
+    if (profile.value !== previousProfile) clearOfflineHardwareRoot();
+    profile.disabled = offlineOperationRunning || [...profile.options].filter((option) => !option.disabled).length < 2;
+    if (policyStatus) {
+      policyStatus.textContent = `Administratorvorgabe: ${offlineRequirementLabel(vault.policy.offline_key_requirement)}.`;
+    }
     optIn.checked = TVOfflineStore.getOptIn();
     if (snapshot && !TVOfflineStore.isExpired(snapshot)) {
       const exp = snapshot.expires_at ? new Date(snapshot.expires_at).toLocaleString("de-DE") : "—";
-      status.textContent = `Zuletzt synchronisiert: ${new Date(snapshot.synced_at).toLocaleString("de-DE")} · gültig bis ${exp} · ${snapshot.secrets?.length || 0} Secrets`;
+      status.textContent = `Zuletzt synchronisiert: ${new Date(snapshot.created_at).toLocaleString("de-DE")} · gültig bis ${exp} · ${snapshot.secret_count || 0} Secrets · ${snapshot.profile}`;
+      if (!offlineProfileAllowed(snapshot.profile)) {
+        status.textContent += " · Entspricht nicht der aktuellen Richtlinie. Bitte mit einem zulässigen Profil neu einrichten; ältere Kopien bleiben verwendbar.";
+      }
     } else {
-      status.textContent = "Keine gültige Offline-Kopie auf diesem Gerät.";
+      status.textContent = "Keine gültige geschützte Offline-Kopie. Frühere master-only Kopien müssen neu synchronisiert werden.";
     }
+    renderHardwareSetup();
   }
 
   function syncAdminNavVisibility() {
@@ -3208,7 +3576,7 @@ function renderApp(app) {
         syncAccountAuthUI();
         n.querySelector('[data-panel-group="account"] .panel-tab.active')?.click();
       }
-      if (accountPage === "offline") updateOfflineAccountUI(vault.offlineSnapshot);
+      if (accountPage === "offline") updateOfflineAccountUI(vault.offlineCacheEnvelope);
       if (accountPage === "clients") refreshClientDownloadsUI().catch(() => {});
       if (accountPage === "profile") {
         n.querySelector("#profile_username").value = vault.me?.username || "";
@@ -3296,17 +3664,19 @@ function renderApp(app) {
     sel.innerHTML = snaps
       .map((s) => {
         const tenant = s.tenant_name || s.tenant_slug || s.tenant_id;
-        const synced = s.synced_at ? new Date(s.synced_at).toLocaleString("de-DE") : "—";
+        const synced = s.created_at ? new Date(s.created_at).toLocaleString("de-DE") : "—";
         return `<option value="${escapeHtml(s.key)}">${escapeHtml(s.username)} · ${escapeHtml(tenant)} · ${escapeHtml(synced)}</option>`;
       })
       .join("");
     const pick = () => {
       const key = sel.value || snaps[0].key;
-      vault.offlineSnapshot = snaps.find((s) => s.key === key) || snaps[0];
+      vault.offlineCacheEnvelope = snaps.find((s) => s.key === key) || snaps[0];
+      vault.offlineSnapshot = null;
+      configureOfflineUnlockInputs(vault.offlineCacheEnvelope);
     };
     pick();
     sel.onchange = pick;
-    paintSessionBar(n, { snapshot: vault.offlineSnapshot });
+    paintSessionBar(n, { snapshot: vault.offlineCacheEnvelope });
     syncUnlockRecoveryUI();
   }
 
@@ -3317,7 +3687,7 @@ function renderApp(app) {
     if (err) {
       err.hidden = false;
       err.textContent =
-        "Offline-Kopie abgelaufen (max. 30 Tage). Bitte online anmelden und unter Konto → Offline-Vault neu synchronisieren.";
+        "Offline-Kopie ist abgelaufen oder stammt aus dem alten master-only Format. Bitte online anmelden und unter Konto → Offline-Vault neu synchronisieren.";
     }
     paintSessionBar(n, { expired: true });
   }
@@ -3325,6 +3695,7 @@ function renderApp(app) {
   async function initAppSession() {
     if (offlineUrlParam) {
       try {
+        requireOfflineStore();
         const snaps = await TVOfflineStore.listSnapshots({ validOnly: true });
         if (!snaps.length) {
           const all = await TVOfflineStore.listSnapshots({ validOnly: false });
@@ -3362,6 +3733,7 @@ function renderApp(app) {
         recoverUrlParam = false;
       }
       syncAdminNavVisibility();
+      vault.policy = null;
       try {
         vault.policy = await api("/api/policy/client");
         vault.idleMin = vault.policy.unlock_idle_minutes || 15;
@@ -3370,6 +3742,7 @@ function renderApp(app) {
       } catch (_) {}
     } catch (_) {
       try {
+        requireOfflineStore();
         const snaps = await TVOfflineStore.listSnapshots({ validOnly: true });
         if (!snaps.length) {
           const all = await TVOfflineStore.listSnapshots({ validOnly: false });
@@ -3428,18 +3801,249 @@ function renderApp(app) {
   });
 
   n.querySelector("#offline_optin").onchange = () => {
-    if (!TVOfflineStore?.isAvailable()) return;
+    if (!window.TVOfflineStore?.isAvailable()) return;
     TVOfflineStore.setOptIn(n.querySelector("#offline_optin").checked);
+  };
+  n.querySelector("#offlineProfile").onchange = () => {
+    clearOfflineHardwareRoot();
+    n.querySelector("#offlineProfile").dataset.changed = "1";
+    renderHardwareSetup();
+  };
+  n.querySelector("#offlineKeySetupFile").onchange = async () => {
+    const input = n.querySelector("#offlineKeySetupFile");
+    let started = false;
+    let key;
+    try {
+      if (!input.files?.[0]) return;
+      requireOfflineStore();
+      const session = vault.sk;
+      const softwareKey = vault.offlineKey;
+      const profile = n.querySelector("#offlineProfile").value;
+      beginOfflineOperation();
+      started = true;
+      key = TVOfflineStore.parseSoftwareKeyFile(await input.files[0].text());
+      assertOfflineSession(session, softwareKey, profile);
+      setOfflineSoftwareKey(key);
+      key = null;
+      renderHardwareSetup();
+      input.value = "";
+    } catch (e) {
+      n.querySelector("#acc_err").hidden = false;
+      n.querySelector("#acc_err").textContent = e.message;
+    } finally {
+      if (key) key.fill(0);
+      if (started) setOfflineOperationRunning(false);
+    }
+  };
+  n.querySelector("#offlineKeyGenerate").onclick = () => {
+    const err = n.querySelector("#acc_err");
+    err.hidden = true;
+    try {
+      requireOfflineStore();
+      if (!offlinePolicyAllowed()) throw new Error(offlinePolicyError());
+      const key = TVOfflineStore.generateSoftwareKey();
+      setOfflineSoftwareKey(key);
+      renderHardwareSetup();
+      downloadOfflineSoftwareKey(key);
+      n.querySelector("#offlineKeyStatus").textContent =
+        "Key heruntergeladen und nur im Arbeitsspeicher geladen. Sicher außerhalb dieses Geräts aufbewahren; Sperren löscht den Arbeitsspeicher-Key.";
+    } catch (e) {
+      err.hidden = false;
+      err.textContent = e.message;
+    }
+  };
+  n.querySelector("#offlineHardwareRegister").onclick = async () => {
+    const err = n.querySelector("#acc_err");
+    const ok = n.querySelector("#acc_ok");
+    err.hidden = true;
+    ok.hidden = true;
+    let newRoot = null;
+    let started = false;
+    try {
+      requireOfflineStore();
+      const hardware = requireOfflineHardware();
+      if (vault.offlineMode || !vault.sk || !offlinePolicyAllowed()) throw new Error("Nur nach erlaubtem Online-Unlock verfügbar");
+      const profile = n.querySelector("#offlineProfile").value;
+      const session = vault.sk;
+      const softwareKey = vault.offlineKey;
+      if (profile === "COMBINED" && !vault.offlineKey) throw new Error("Für COMBINED zuerst den Software-Key laden");
+      beginOfflineOperation();
+      started = true;
+      await refreshOfflinePolicy(session);
+      assertOfflineSession(session, softwareKey, profile);
+      const requirement = vault.policy.offline_key_requirement;
+      let keyset = currentHardwareKeyset();
+      let root;
+      if (keyset) {
+        root = await ensureHardwareRoot(keyset);
+      } else {
+        const created = hardware.createKeyset(vault.me, location.origin, profile);
+        keyset = created.keyset;
+        root = created.root;
+        newRoot = root;
+      }
+      const slot = await hardware.registerKey(
+        keyset, root, n.querySelector("#offlineHardwareName").value, softwareKey
+      );
+      assertOfflineSession(session, softwareKey, profile);
+      let updated = { ...keyset, keyslots: [...keyset.keyslots, slot] };
+      if (vault.offlineCacheEnvelope?.keyset_id === updated.keyset_id) {
+        const snapshot = await hardware.openSnapshot(keyset, root, location.origin);
+        updated = await hardware.sealSnapshot(updated, root, snapshot, requirement);
+        await refreshOfflinePolicy(session);
+        assertOfflineSession(session, softwareKey, profile);
+        if (vault.policy.offline_key_requirement !== requirement) {
+          throw new Error("Die Administratorrichtlinie wurde geändert. Bitte erneut versuchen.");
+        }
+        updated = await TVOfflineStore.putSnapshot(updated, keyset);
+        vault.offlineCacheEnvelope = updated;
+      }
+      assertOfflineSession(session, softwareKey, profile);
+      vault.offlineHardwareRoot = root;
+      vault.offlineHardwareKeyset = updated;
+      newRoot = null;
+      renderHardwareSetup();
+      n.querySelector("#offlineHardwareKeys").value = slot.id;
+      ok.hidden = false;
+      ok.textContent = updated.ciphertext_b64
+        ? "FIDO2-Key zur Offline-Kopie hinzugefügt."
+        : "FIDO2-Key vorbereitet. Jetzt synchronisieren, um die Offline-Kopie zu erstellen.";
+    } catch (e) {
+      err.hidden = false;
+      err.textContent = e.message;
+    } finally {
+      if (newRoot) newRoot.fill(0);
+      if (started) setOfflineOperationRunning(false);
+    }
+  };
+  n.querySelector("#offlineHardwareTest").onclick = async () => {
+    const err = n.querySelector("#acc_err");
+    const ok = n.querySelector("#acc_ok");
+    err.hidden = true;
+    ok.hidden = true;
+    let root;
+    let started = false;
+    try {
+      requireOfflineStore();
+      const hardware = requireOfflineHardware();
+      const session = vault.sk;
+      const softwareKey = vault.offlineKey;
+      const profile = n.querySelector("#offlineProfile").value;
+      assertOfflineSession(session, softwareKey, profile);
+      beginOfflineOperation();
+      started = true;
+      const keyset = currentHardwareKeyset();
+      if (!keyset) throw new Error("Kein FIDO2-Key eingerichtet");
+      root = await hardware.unlockRoot(
+        keyset, n.querySelector("#offlineHardwareKeys").value, softwareKey, location.origin
+      );
+      if (keyset.ciphertext_b64) {
+        await hardware.verifyRoot(keyset, root, location.origin);
+      } else if (!vault.offlineHardwareRoot ||
+          !root.every((byte, i) => byte === vault.offlineHardwareRoot[i])) {
+        throw new Error("Hardware-Key passt nicht zum vorbereiteten Offline-Schutz");
+      }
+      assertOfflineSession(session, softwareKey, profile);
+      clearOfflineHardwareRoot();
+      vault.offlineHardwareRoot = root;
+      vault.offlineHardwareKeyset = keyset;
+      root = null;
+      ok.hidden = false;
+      ok.textContent = "FIDO2-Key erfolgreich geprüft.";
+    } catch (e) {
+      err.hidden = false;
+      err.textContent = e.message;
+    } finally {
+      if (root) root.fill(0);
+      if (started) setOfflineOperationRunning(false);
+    }
+  };
+  n.querySelector("#offlineHardwareRemove").onclick = async () => {
+    const err = n.querySelector("#acc_err");
+    const ok = n.querySelector("#acc_ok");
+    err.hidden = true;
+    ok.hidden = true;
+    let rotatedRoot;
+    let previousRoot;
+    let started = false;
+    try {
+      requireOfflineStore();
+      const hardware = requireOfflineHardware();
+      const session = vault.sk;
+      const softwareKey = vault.offlineKey;
+      const profile = n.querySelector("#offlineProfile").value;
+      assertOfflineSession(session, softwareKey, profile);
+      const keyset = currentHardwareKeyset();
+      const selected = n.querySelector("#offlineHardwareKeys").value;
+      if (!keyset || keyset.keyslots.length < 2) throw new Error("Der letzte Hardware-Key kann nicht entfernt werden");
+      if (!confirm("Diesen Hardware-Key entfernen? Dafür müssen alle verbleibenden Keys nacheinander bestätigt werden. Ältere Kopien bleiben bis zu ihrem Ablauf nutzbar.")) return;
+      beginOfflineOperation();
+      started = true;
+      await refreshOfflinePolicy(session);
+      assertOfflineSession(session, softwareKey, profile);
+      const requirement = vault.policy.offline_key_requirement;
+      const rotated = await hardware.rotateKeyset(
+        keyset, keyset.keyslots.filter((slot) => slot.id !== selected).map((slot) => slot.id),
+        softwareKey,
+        (label) => { n.querySelector("#offlineHardwareStatus").textContent = `Bitte FIDO2-Key „${label}“ bestätigen.`; }
+      );
+      rotatedRoot = rotated.root;
+      previousRoot = rotated.previousRoot;
+      assertOfflineSession(session, softwareKey, profile);
+      const snapshot = keyset.ciphertext_b64
+        ? await hardware.openSnapshot(keyset, previousRoot, location.origin)
+        : null;
+      previousRoot.fill(0);
+      previousRoot = null;
+      let updated = snapshot
+        ? await hardware.sealSnapshot(rotated.keyset, rotatedRoot, snapshot, requirement)
+        : rotated.keyset;
+      assertOfflineSession(session, softwareKey, profile);
+      if (snapshot) {
+        await refreshOfflinePolicy(session);
+        assertOfflineSession(session, softwareKey, profile);
+        if (vault.policy.offline_key_requirement !== requirement) {
+          throw new Error("Die Administratorrichtlinie wurde geändert. Bitte erneut versuchen.");
+        }
+        updated = await TVOfflineStore.putSnapshot(updated, keyset);
+        vault.offlineCacheEnvelope = updated;
+      }
+      assertOfflineSession(session, softwareKey, profile);
+      clearOfflineHardwareRoot();
+      vault.offlineHardwareRoot = rotatedRoot;
+      vault.offlineHardwareKeyset = updated;
+      rotatedRoot = null;
+      renderHardwareSetup();
+      ok.hidden = false;
+      ok.textContent = "FIDO2-Key aus der aktuellen Offline-Kopie entfernt.";
+    } catch (e) {
+      err.hidden = false;
+      err.textContent = e.message;
+      renderHardwareSetup();
+    } finally {
+      if (rotatedRoot) rotatedRoot.fill(0);
+      if (previousRoot) previousRoot.fill(0);
+      if (started) setOfflineOperationRunning(false);
+    }
   };
   n.querySelector("#offline_sync").onclick = async () => {
     const err = n.querySelector("#acc_err");
     const ok = n.querySelector("#acc_ok");
     err.hidden = true;
     ok.hidden = true;
+    let started = false;
     try {
+      requireOfflineStore();
       if (vault.offlineMode) throw new Error("Nur online verfügbar");
       if (!vault.sk) throw new Error("Vault zuerst entsperren");
-      if (!offlinePolicyAllowed()) throw new Error("Offline-Cache vom Administrator deaktiviert");
+      if (!offlinePolicyAllowed()) throw new Error(offlinePolicyError());
+      const existing = vault.offlineCacheEnvelope;
+      const profile = n.querySelector("#offlineProfile").value;
+      if (existing?.profile && existing.profile !== profile && !confirm(
+        `Das Profil ${existing.profile} durch ${profile} ersetzen? Ältere Offline-Kopien behalten ihren bisherigen Schutz bis zum Ablauf.`
+      )) return;
+      beginOfflineOperation();
+      started = true;
       TVOfflineStore.setOptIn(true);
       n.querySelector("#offline_optin").checked = true;
       await syncOfflineSnapshot();
@@ -3449,6 +4053,8 @@ function renderApp(app) {
     } catch (e) {
       err.hidden = false;
       err.textContent = e.message;
+    } finally {
+      if (started) setOfflineOperationRunning(false);
     }
   };
   n.querySelector("#offline_wipe").onclick = async () => {
@@ -3456,12 +4062,19 @@ function renderApp(app) {
     const ok = n.querySelector("#acc_ok");
     err.hidden = true;
     ok.hidden = true;
+    let started = false;
     try {
-      if (!TVOfflineStore?.isAvailable()) throw new Error("IndexedDB nicht verfügbar");
+      if (!window.TVOfflineStore?.isAvailable()) throw new Error("IndexedDB nicht verfügbar");
+      beginOfflineOperation();
+      started = true;
       const tid = vault.me?.tenant_id || vault.offlineSnapshot?.tenant_id;
       const uid = vault.me?.user_id || vault.offlineSnapshot?.user_id;
       if (tid && uid) await TVOfflineStore.deleteSnapshot(tid, uid);
+      clearOfflineHardwareRoot();
       vault.offlineSnapshot = null;
+      vault.offlineCacheEnvelope = null;
+      n.querySelector("#offlineProfile").value = "STANDARD";
+      delete n.querySelector("#offlineProfile").dataset.changed;
       updateOfflineAccountUI(null);
       ok.hidden = false;
       ok.textContent = "Offline-Kopie gelöscht.";
@@ -3472,6 +4085,8 @@ function renderApp(app) {
     } catch (e) {
       err.hidden = false;
       err.textContent = e.message;
+    } finally {
+      if (started) setOfflineOperationRunning(false);
     }
   };
 
@@ -4099,20 +4714,48 @@ ${escHtml(apiCmd)}</code>
 
   async function syncOfflineSnapshot(opts = {}) {
     const silent = !!opts.silent;
-    if (!window.TVOfflineStore?.isAvailable()) return;
-    if (vault.offlineMode || !vault.sk || !vault.me) return;
-    if (!offlinePolicyAllowed()) return;
-    if (!TVOfflineStore.getOptIn()) return;
-    if (vault.offlineSyncRunning) return;
-
+    requireOfflineStore();
+    if (!window.TVOfflineStore?.isAvailable()) throw new Error("IndexedDB nicht verfügbar");
+    if (vault.offlineMode || !vault.sk || !vault.me) throw new Error("Vault online entsperren");
+    if (!offlinePolicyAllowed()) throw new Error(offlinePolicyError());
+    if (!TVOfflineStore.getOptIn()) throw new Error("Offline-Opt-in ist nicht aktiviert");
+    if (vault.offlineSyncRunning) throw new Error("Offline-Synchronisierung läuft bereits");
+    const profile = n.querySelector("#offlineProfile").value;
+    const session = vault.sk;
+    const softwareKey = vault.offlineKey;
     vault.offlineSyncRunning = true;
     try {
+      await refreshOfflinePolicy(session);
+      assertOfflineSession(session, softwareKey, profile);
+      const requirement = vault.policy.offline_key_requirement;
+      if (profile !== "HARDWARE" && !softwareKey) {
+        throw new Error("Vor dem Offline-Sync muss ein Software-Key geladen oder erzeugt werden");
+      }
+      const hardware = profile === "STANDARD" ? null : requireOfflineHardware();
       if (!silent) setOfflineSyncProgress("Offline-Kopie: vorbereiten…", true);
       const keys = await api("/api/vault/keys");
       const params = vault.params || (await api("/api/vault/crypto-params"));
       await ensureAllSecretsLoaded();
 
-      const prev = await TVOfflineStore.getSnapshotRaw(vault.me.tenant_id, vault.me.user_id);
+      const prevEnvelope = await TVOfflineStore.getSnapshotRaw(vault.me.tenant_id, vault.me.user_id);
+      assertOfflineSession(session, softwareKey, profile);
+      let prev = null;
+      let hardwareKeyset = null;
+      let hardwareRoot = null;
+      if (profile !== "STANDARD") {
+        hardwareKeyset = currentHardwareKeyset();
+        if (hardwareKeyset?.ciphertext_b64 && !TVOfflineStore.sameSnapshot(prevEnvelope, hardwareKeyset)) {
+          throw new Error("Offline-Kopie wurde in einem anderen Tab geändert. Seite neu laden und erneut versuchen.");
+        }
+        hardwareRoot = await ensureHardwareRoot(hardwareKeyset);
+        if (prevEnvelope?.version === OFFLINE_HARDWARE_VERSION &&
+            prevEnvelope.keyset_id === hardwareKeyset.keyset_id && !TVOfflineStore.isExpired(prevEnvelope)) {
+          prev = await hardware.openSnapshot(prevEnvelope, hardwareRoot, location.origin);
+        }
+      } else if (prevEnvelope?.format === "teamvault-offline" && prevEnvelope.version === 2 &&
+          !TVOfflineStore.isExpired(prevEnvelope)) {
+        prev = await TVOfflineStore.openSnapshot(prevEnvelope, softwareKey, location.origin);
+      }
       const plan = TVOfflineStore.planSync(vault.secretsCache, prev?.secrets || []);
       const total = plan.expectedCount;
       let done = plan.reuse.length;
@@ -4132,9 +4775,22 @@ ${escHtml(apiCmd)}</code>
       }
 
       const snap = TVOfflineStore.buildSnapshot({ me: vault.me, keys, params, secrets });
-      await TVOfflineStore.putSnapshot(snap);
-      vault.offlineSnapshot = snap;
-      updateOfflineAccountUI(snap);
+      assertOfflineSession(session, softwareKey, profile);
+      const protectedSnap = profile === "STANDARD"
+        ? await TVOfflineStore.sealSnapshot(snap, softwareKey, location.origin, requirement)
+        : await hardware.sealSnapshot(hardwareKeyset, hardwareRoot, snap, requirement);
+      await refreshOfflinePolicy(session);
+      assertOfflineSession(session, softwareKey, profile);
+      if (vault.policy.offline_key_requirement !== requirement) {
+        throw new Error("Die Administratorrichtlinie wurde geändert. Bitte erneut versuchen.");
+      }
+      const stored = await TVOfflineStore.putSnapshot(protectedSnap, prevEnvelope);
+      vault.offlineCacheEnvelope = stored;
+      assertOfflineSession(session, softwareKey, profile);
+      if (profile !== "STANDARD") vault.offlineHardwareKeyset = stored;
+      vault.offlineSnapshot = null;
+      delete n.querySelector("#offlineProfile").dataset.changed;
+      updateOfflineAccountUI(stored);
       if (!silent) {
         const skipped = plan.reuse.length;
         const msg = skipped
@@ -4155,21 +4811,15 @@ ${escHtml(apiCmd)}</code>
   }
 
   async function maybePromptOfflineOptIn() {
-    if (!TVOfflineStore?.isAvailable() || !offlinePolicyAllowed()) return;
+    if (!offlineStoreReady() || !window.TVOfflineStore?.isAvailable() || !offlinePolicyAllowed()) return;
     if (TVOfflineStore.hasOptInChoice()) return;
     const ok = confirm(
       "Vault auf diesem Gerät auch ohne Netzwerk vorhalten?\n\n" +
-        "Es werden nur verschlüsselte Daten lokal gespeichert (30 Tage). " +
+        "Eine verschlüsselte Kopie kann mit Software-Key und/oder FIDO2-Key geschützt werden (30 Tage). " +
         "Schreiben und Teilen bleiben nur online möglich."
     );
     TVOfflineStore.setOptIn(ok);
-    if (ok) {
-      try {
-        await syncOfflineSnapshot();
-      } catch (e) {
-        console.warn("offline snapshot", e);
-      }
-    }
+    if (ok) updateOfflineAccountUI(vault.offlineCacheEnvelope);
   }
 
   async function afterOfflineUnlock() {
@@ -4199,7 +4849,7 @@ ${escHtml(apiCmd)}</code>
     vault.secretsOffset = vault.secretsCache.length;
     await decryptListTitles(vault.secretsCache);
     applyOfflineReadOnlyUI();
-    updateOfflineAccountUI(snap);
+    updateOfflineAccountUI(vault.offlineCacheEnvelope);
     navigateTo("vault:mine");
     announceA11y("Offline-Modus — nur Lesen");
   }
@@ -4211,6 +4861,7 @@ ${escHtml(apiCmd)}</code>
       loadUserFavoritesFromStorage();
       paintSessionBar(n, { me: vault.me });
     } catch (_) {}
+    vault.policy = null;
     try {
       const pol = await api("/api/policy/client");
       vault.policy = pol;
@@ -4244,7 +4895,14 @@ ${escHtml(apiCmd)}</code>
         n.querySelector("#adminFull").hidden = false;
         syncAdminNavVisibility();
       }
-      try { await refreshAdmin(); } catch (e) { console.warn('refreshAdmin', e); }
+      try {
+        await refreshAdmin();
+      } catch (e) {
+        console.warn("refreshAdmin", e);
+        const err = n.querySelector("#aerr");
+        err.textContent = `Administration konnte nicht geladen werden: ${e.message}`;
+        err.hidden = false;
+      }
     }
     await refreshGroupShareUI();
     await refreshSharePickers();
@@ -4255,12 +4913,18 @@ ${escHtml(apiCmd)}</code>
       await sealGroupShareGaps();
     } catch (_) {}
     navigateTo("vault:mine");
-    updateOfflineAccountUI(await TVOfflineStore.getSnapshot(vault.me?.tenant_id, vault.me?.user_id));
-    maybePromptOfflineOptIn().then(() => {
-      if (TVOfflineStore.getOptIn()) {
-        syncOfflineSnapshot().catch((e) => console.warn("offline snapshot", e));
+    if (offlineStoreReady()) {
+      try {
+        vault.offlineCacheEnvelope = await TVOfflineStore.getSnapshotRaw(vault.me?.tenant_id, vault.me?.user_id);
+      } catch (e) {
+        console.error("Offline-Kopie konnte nicht gelesen werden", e);
+        vault.offlineCacheEnvelope = null;
       }
-    });
+    } else {
+      vault.offlineCacheEnvelope = null;
+    }
+    updateOfflineAccountUI(vault.offlineCacheEnvelope);
+    maybePromptOfflineOptIn();
   }
 
   function keyDirStorageKey() {
@@ -4536,9 +5200,31 @@ ${escHtml(apiCmd)}</code>
 
   n.querySelector("#ulock").onclick = async () => {
     const err = n.querySelector("#uerr"); err.hidden = true;
+    let softwareKey = null;
     try {
       const mpw = n.querySelector("#mpw").value;
       if (vault.offlinePicker) {
+        const cache = vault.offlineCacheEnvelope;
+        if (cache.version !== OFFLINE_HARDWARE_VERSION || cache.profile === "COMBINED") {
+          softwareKey = await readOfflineSoftwareKey(n.querySelector("#offlineKeyFile"), n.querySelector("#offlineKeyText"));
+        }
+        if (cache.version === OFFLINE_HARDWARE_VERSION) {
+          const hardware = requireOfflineHardware();
+          const root = await hardware.unlockRoot(
+            cache, n.querySelector("#offlineHardwareUnlockKey").value, softwareKey, location.origin
+          );
+          try {
+            vault.offlineSnapshot = await hardware.openSnapshot(cache, root, location.origin);
+          } finally {
+            root.fill(0);
+          }
+        } else {
+          vault.offlineSnapshot = await TVOfflineStore.openSnapshot(cache, softwareKey, location.origin);
+        }
+        if (softwareKey) {
+          setOfflineSoftwareKey(softwareKey);
+          softwareKey = null;
+        }
         await unlockVault(mpw, { snapshot: vault.offlineSnapshot });
         await afterOfflineUnlock();
         return;
@@ -4547,6 +5233,14 @@ ${escHtml(apiCmd)}</code>
       await afterUnlock();
     } catch (e) {
       err.hidden = false; err.textContent = e.message;
+      if (vault.offlinePicker) {
+        clearVaultKey();
+        vault.offlineSnapshot = null;
+      }
+    } finally {
+      if (softwareKey) softwareKey.fill(0);
+      n.querySelector("#offlineKeyFile").value = "";
+      n.querySelector("#offlineKeyText").value = "";
     }
   };
   n.querySelector("#unlockOnlineRecovery").onclick = () => {
@@ -4608,9 +5302,31 @@ ${escHtml(apiCmd)}</code>
 
   n.querySelector("#lockUnlock").onclick = async () => {
     const err = n.querySelector("#lockErr"); err.hidden = true;
+    let softwareKey = null;
     try {
       const mpw = n.querySelector("#lockMpw").value;
-      if (vault.offlineMode && vault.offlineSnapshot) {
+      if (vault.offlineMode && vault.offlineCacheEnvelope) {
+        const cache = vault.offlineCacheEnvelope;
+        if (cache.version !== OFFLINE_HARDWARE_VERSION || cache.profile === "COMBINED") {
+          softwareKey = await readOfflineSoftwareKey(n.querySelector("#lockOfflineKeyFile"), n.querySelector("#lockOfflineKeyText"));
+        }
+        if (cache.version === OFFLINE_HARDWARE_VERSION) {
+          const hardware = requireOfflineHardware();
+          const root = await hardware.unlockRoot(
+            cache, n.querySelector("#lockOfflineHardwareKey").value, softwareKey, location.origin
+          );
+          try {
+            vault.offlineSnapshot = await hardware.openSnapshot(cache, root, location.origin);
+          } finally {
+            root.fill(0);
+          }
+        } else {
+          vault.offlineSnapshot = await TVOfflineStore.openSnapshot(cache, softwareKey, location.origin);
+        }
+        if (softwareKey) {
+          setOfflineSoftwareKey(softwareKey);
+          softwareKey = null;
+        }
         await unlockVault(mpw, { snapshot: vault.offlineSnapshot });
       } else {
         await unlockVault(mpw);
@@ -4633,6 +5349,11 @@ ${escHtml(apiCmd)}</code>
       }
     } catch (e) {
       err.hidden = false; err.textContent = e.message;
+      if (vault.offlineMode) clearVaultKey();
+    } finally {
+      if (softwareKey) softwareKey.fill(0);
+      n.querySelector("#lockOfflineKeyFile").value = "";
+      n.querySelector("#lockOfflineKeyText").value = "";
     }
   };
   n.querySelector("#lockMpw").addEventListener("keydown", (ev) => {
@@ -7388,6 +8109,14 @@ ${escHtml(apiCmd)}</code>
       await paintAdminSystem(null);
       return;
     }
+    const platformRequirement = n.querySelector("#platform_offline_requirement");
+    const tenantRequirement = n.querySelector("#tenant_offline_requirement");
+    const platformPolicySave = n.querySelector("#policy_save");
+    const tenantPolicySave = n.querySelector("#tenant_policy_save");
+    platformRequirement.disabled = true;
+    tenantRequirement.disabled = true;
+    platformPolicySave.disabled = true;
+    tenantPolicySave.disabled = true;
     const users = await api("/api/admin/users");
     paintUsersList(users);
     const groups = await api("/api/admin/groups");
@@ -7448,6 +8177,16 @@ ${escHtml(apiCmd)}</code>
       n.querySelector("#admin_env_only").checked = !!pol.admin_secrets_envelope_only;
       const offlineCache = n.querySelector("#offline_cache");
       if (offlineCache) offlineCache.checked = pol.offline_cache_allowed !== false;
+      const platformError = n.querySelector("#platform_offline_error");
+      if (isOfflineKeyRequirement(pol.offline_key_requirement)) {
+        platformRequirement.value = pol.offline_key_requirement;
+        platformRequirement.disabled = false;
+        platformPolicySave.disabled = false;
+        platformError.hidden = true;
+      } else {
+        platformError.textContent = "Offline-Schlüsselrichtlinie fehlt oder wird nicht unterstützt. Server und Client aktualisieren.";
+        platformError.hidden = false;
+      }
       const cliInt = n.querySelector("#admin_cli_integration");
       if (cliInt) cliInt.checked = !!pol.cli_integration_enabled;
       const browserInt = n.querySelector("#admin_browser_integration");
@@ -7497,7 +8236,20 @@ ${escHtml(apiCmd)}</code>
           ? "2FA ist auf Plattform-Ebene verpflichtend und für alle Tenants aktiv."
           : "2FA kann für diesen Tenant individuell aktiviert oder deaktiviert werden.";
       }
-    } catch (_) {}
+      if (![tenantSettings.tenant_offline_key_requirement, tenantSettings.platform_offline_key_requirement,
+        tenantSettings.offline_key_requirement].every(isOfflineKeyRequirement)) {
+        throw new Error("Offline-Schlüsselrichtlinie fehlt oder wird nicht unterstützt. Server und Client aktualisieren.");
+      }
+      tenantRequirement.value = tenantSettings.tenant_offline_key_requirement;
+      tenantRequirement.disabled = false;
+      tenantPolicySave.disabled = false;
+      n.querySelector("#tenant_offline_hint").textContent =
+        `Plattform: ${offlineRequirementLabel(tenantSettings.platform_offline_key_requirement)}. ` +
+        `Aktuell wirksam: ${offlineRequirementLabel(tenantSettings.offline_key_requirement)}. ` +
+        "Die Plattformvorgabe bleibt immer verpflichtend.";
+    } catch (e) {
+      n.querySelector("#tenant_offline_hint").textContent = `Tenant-Policy konnte nicht geladen werden: ${e.message}`;
+    }
 
     const ldap = await api("/api/admin/ldap");
     n.querySelector("#ldap_en").checked = !!ldap.enabled;
@@ -7827,6 +8579,7 @@ ${escHtml(apiCmd)}</code>
           totp_required: n.querySelector("#totp_req").checked,
           admin_secrets_envelope_only: n.querySelector("#admin_env_only").checked,
           offline_cache_allowed: n.querySelector("#offline_cache").checked,
+          offline_key_requirement: n.querySelector("#platform_offline_requirement").value,
           cli_integration_enabled: n.querySelector("#admin_cli_integration").checked,
           browser_integration_enabled: n.querySelector("#admin_browser_integration").checked,
           desktop_integration_enabled: n.querySelector("#admin_desktop_integration").checked,
@@ -7837,6 +8590,8 @@ ${escHtml(apiCmd)}</code>
           ldap_sync_hours: 24,
         }),
       });
+      vault.policy = await api("/api/policy/client");
+      updateOfflineAccountUI(vault.offlineCacheEnvelope);
     } catch (e) { err.hidden = false; err.textContent = e.message; }
   };
   n.querySelector("#client_policy_save").onclick = async () => {
@@ -7863,9 +8618,11 @@ ${escHtml(apiCmd)}</code>
         method: "PUT",
         body: JSON.stringify({
           totp_required: n.querySelector("#tenant_totp_req").checked,
+          offline_key_requirement: n.querySelector("#tenant_offline_requirement").value,
         }),
       });
       vault.policy = await api("/api/policy/client");
+      updateOfflineAccountUI(vault.offlineCacheEnvelope);
       await refreshAdmin();
     } catch (e) { err.hidden = false; err.textContent = e.message; }
   };
@@ -8078,10 +8835,17 @@ async function boot() {
   initTheme();
   ensureHeaderControls();
   paintAbout();
-  const status = await api("/api/setup/status");
+  const path = tvRelPath();
+  let status;
+  try {
+    status = await api("/api/setup/status");
+  } catch (e) {
+    // Server unreachable: keep login/app usable so a stored offline copy can be unlocked.
+    if (e.status || !["/", "/login", "/app"].includes(path)) throw e;
+    status = { initialized: true };
+  }
   const app = document.getElementById("app");
   app.innerHTML = "";
-  const path = tvRelPath();
   if (!status.initialized) {
     if (path !== "/setup" && path !== "/") tvGo("/setup");
     renderWizard(app);

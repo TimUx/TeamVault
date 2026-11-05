@@ -51,6 +51,33 @@ jobs:
       - name: Package unit tests (auth, crypto, unlock, session)
         run: go test ./internal/auth/... ./internal/cryptocore/... ./internal/unlock/... ./internal/configstore/... -count=1 -timeout 5m
 
+      - name: Offline policy regression tests
+        run: go test ./internal/offlinepolicy ./internal/server ./internal/store/... -run 'TestCombineAndAllowedProfiles|Test.*Offline.*' -count=1 -timeout 5m
+
+  web-offline-security-tests:
+    name: Web offline security tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: scripts/package-lock.json
+
+      - name: Install browser test dependencies
+        run: |
+          npm ci --prefix scripts
+          npx --prefix scripts playwright install --with-deps chromium
+
+      - name: Run offline security tests
+        run: |
+          node --test web/tests/*.mjs
+          node --test scripts/test-offline-hardware.mjs
+
   desktop-go-tests-linux:
     name: Desktop module tests (linux)
     runs-on: ubuntu-latest

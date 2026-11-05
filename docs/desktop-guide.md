@@ -56,13 +56,16 @@ WebKitGTK (`libwebkit2gtk-4.1`) muss auf dem System vorhanden sein (auf den meis
 
 ![Desktop-App – Vault-Ansicht](images/help-desktop.png)
 
-Nach jedem erfolgreichen Online-Entsperren wird automatisch ein Ciphertext-Snapshot lokal aktualisiert (Einstellungen → „Offline-Sync“ auch manuell möglich).
+Offline-Snapshots werden nur nach explizitem Klick auf **Offline-Sync** aktualisiert. Dafür muss im Entsperrbildschirm ein vorhandener Software-Key geladen oder ein neuer erzeugt und heruntergeladen werden.
 
 ## Offline nutzen
 
-- Ohne Netzwerkverbindung: „Offline öffnen“ auf dem Verbinden-Bildschirm, dann Master-Passwort eingeben.
+- Ohne Netzwerkverbindung: „Offline öffnen“ auf dem Verbinden-Bildschirm, Software-Key-Datei oder Base64-Key bereitstellen und Master-Passwort eingeben. Beide Faktoren sind erforderlich.
 - Es wird ein gelber **Offline-Modus**-Hinweis angezeigt; Anlegen/Ändern/Löschen/Freigabe-Verwaltung ist deaktiviert, bis wieder online entsperrt wurde.
 - Cache-Gültigkeit: 30 Tage seit letztem Online-Sync (wie die Offline-PWA des Web-UI, siehe [`offline-vault.md`](planning/offline-vault.md)).
+- Der Software-Key wird nur clientseitig erzeugt und nicht in TeamVault-Einstellungen gespeichert. Eine Key-Datei auf demselben Gerät wie der Cache ist nicht unabhängig geschützt: vollständiger Dateisystemzugriff kann beide Dateien offenlegen.
+- Die FIDO2-Profile HARDWARE und COMBINED sind bislang nur in der WebUI/PWA verfügbar; der Desktop-Client unterstützt noch keine FIDO2- oder TPM-Offline-Keys.
+- Schreibt die Plattform oder der Tenant FIDO2 vor, wird ein neuer Desktop-Offline-Sync verweigert. Auch eine fehlende oder unbekannte Schlüsselrichtlinie blockiert den Sync; aktualisieren Sie in diesem Fall Server und Client. Bereits vorhandene oder kopierte Caches werden nicht aus der Ferne widerrufen.
 - In den Einstellungen kann die lokale Offline-Kopie jederzeit gelöscht werden.
 
 ## Tags & Sharing

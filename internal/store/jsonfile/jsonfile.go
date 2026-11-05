@@ -199,8 +199,30 @@ func (s *Store) PutTenant(_ context.Context, t store.Tenant) error {
 			t.CreatedAt = now
 		}
 	}
+	if old, ok := s.data.Tenants[string(t.ID)]; ok {
+		t.OfflineKeyRequirement = old.OfflineKeyRequirement
+	}
 	t.UpdatedAt = now
 	s.data.Tenants[string(t.ID)] = t
+	return s.flush()
+}
+
+func (s *Store) SetTenantSecurityPolicy(_ context.Context, id store.TenantID, totp bool, offlineRequirement *string) error {
+	if err := requireTenant(id); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	t, ok := s.data.Tenants[string(id)]
+	if !ok {
+		return store.ErrNotFound
+	}
+	t.TOTPRequired = totp
+	if offlineRequirement != nil {
+		t.OfflineKeyRequirement = *offlineRequirement
+	}
+	t.UpdatedAt = time.Now().UTC()
+	s.data.Tenants[string(id)] = t
 	return s.flush()
 }
 

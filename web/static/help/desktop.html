@@ -83,7 +83,7 @@
 
         <h2 id="offline">Offline-Modus</h2>
         <div class="help-step">
-          <p>Nach jedem erfolgreichen Online-Entsperren wird automatisch ein verschlüsselter Ciphertext-Snapshot lokal aktualisiert (max. 30 Tage gültig, wie das <a href="/help/account#offline">Offline-Vault</a> der Web-App). Ohne Netzwerk: „Offline öffnen“ auf dem Verbinden-Bildschirm, dann Master-Passwort eingeben — ein Hinweis zeigt den Offline-Modus an. Anlegen/Ändern/Löschen/Freigabe-Verwaltung ist offline deaktiviert, bis wieder online entsperrt wurde.</p>
+          <p>Offline-Snapshots werden nur nach explizitem Klick auf <strong>Offline-Sync</strong> aktualisiert. Dafür muss ein unabhängiger Software-Key geladen sein. Ohne Netzwerk: „Offline öffnen“ auf dem Verbinden-Bildschirm, Software-Key-Datei oder Base64-Key bereitstellen und Master-Passwort eingeben. Beide Faktoren sind erforderlich; der Key wird nicht in den Desktop-Einstellungen gespeichert. FIDO2- und TPM-Offline-Keys sind im Desktop-Client noch nicht verfügbar; bei FIDO2-Pflicht oder fehlender Server-Richtlinie wird der Sync verweigert. Bereits vorhandene Kopien bleiben nutzbar. Anlegen/Ändern/Löschen/Freigabe-Verwaltung ist offline deaktiviert, bis wieder online entsperrt wurde.</p>
         </div>
 
         <h2 id="tray">Tray-Icon, Autostart &amp; Design</h2>

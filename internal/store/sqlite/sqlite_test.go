@@ -3,6 +3,7 @@ package sqlite_test
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"path/filepath"
 	"testing"
 	"time"
@@ -10,6 +11,79 @@ import (
 	"github.com/teamvault/teamvault/internal/store"
 	"github.com/teamvault/teamvault/internal/store/sqlite"
 )
+
+func TestOfflineKeyPolicyMigrationAndPersistence(t *testing.T) {
+	dsn := filepath.Join(t.TempDir(), "legacy.db")
+	db, err := sql.Open("sqlite", dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = db.Exec(`
+CREATE TABLE tenants (
+  id TEXT PRIMARY KEY, name TEXT NOT NULL, slug TEXT NOT NULL UNIQUE,
+  recovery_mode TEXT NOT NULL, escrow_allowed INTEGER NOT NULL DEFAULT 1,
+  totp_required INTEGER NOT NULL DEFAULT 0, escrow_public_key BLOB,
+  status TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+);
+INSERT INTO tenants VALUES ('t1', 'Tenant', 'tenant', 'user_kit', 1, 0, NULL,
+  'active', '2025-01-01T00:00:00Z', '2025-01-01T00:00:00Z');
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	s, err := sqlite.Open(dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	tenant, err := s.GetTenant(ctx, "t1")
+	if err != nil || tenant.OfflineKeyRequirement != "" {
+		t.Fatalf("legacy tenant: %+v, %v", tenant, err)
+	}
+	stale := *tenant
+	requirement := "HARDWARE"
+	if err := s.SetTenantSecurityPolicy(ctx, tenant.ID, false, &requirement); err != nil {
+		t.Fatal(err)
+	}
+	stale.Name = "Tenant renamed"
+	if err := s.PutTenant(ctx, stale); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	s, err = sqlite.Open(dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	tenant, err = s.GetTenantBySlug(ctx, "tenant")
+	if err != nil || tenant.OfflineKeyRequirement != "HARDWARE" {
+		t.Fatalf("persisted tenant: %+v, %v", tenant, err)
+	}
+	tenants, err := s.ListTenants(ctx)
+	if err != nil || len(tenants) != 1 || tenants[0].OfflineKeyRequirement != "HARDWARE" {
+		t.Fatalf("listed tenants: %+v, %v", tenants, err)
+	}
+	snapshot, err := s.ExportSnapshot(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	weaker := "ANY"
+	if err := s.SetTenantSecurityPolicy(ctx, "t1", false, &weaker); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ImportSnapshot(ctx, *snapshot, store.ImportMerge); err != nil {
+		t.Fatal(err)
+	}
+	tenant, err = s.GetTenant(ctx, "t1")
+	if err != nil || tenant.OfflineKeyRequirement != "HARDWARE" {
+		t.Fatalf("restored tenant: %+v, %v", tenant, err)
+	}
+}
 
 func TestTenantIsolationAndOpaqueRoundTrip(t *testing.T) {
 	s := open(t)

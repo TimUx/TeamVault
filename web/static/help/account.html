@@ -96,11 +96,14 @@
             <figcaption>Tab <strong>Offline-Vault</strong> unter Konto &amp; Sicherheit</figcaption>
           </figure>
           <ol>
-            <li>Online anmelden, Vault entsperren.</li>
-            <li><strong>Offline-Kopie nach Entsperren aktualisieren</strong> aktivieren — Sync läuft im Hintergrund (Fortschritt in der Sidebar).</li>
-            <li>Ohne Netz: Login-Seite <strong>Offline entsperren</strong> oder <code>/app?offline=1</code> — nur Master-Passwort, kein TOTP.</li>
+            <li>Online anmelden und Vault entsperren.</li>
+            <li>Unter <strong>Konto → Offline-Vault</strong> STANDARD (Software-Key), HARDWARE (FIDO2-Key) oder COMBINED (beide) wählen. Das Master-Passwort bleibt immer erforderlich.</li>
+            <li>Für STANDARD und COMBINED den Software-Key erzeugen oder laden und getrennt vom Cache aufbewahren. Für HARDWARE und COMBINED einen externen FIDO2-Key mit WebAuthn-PRF und Benutzerverifikation hinzufügen; weitere Keys können als Backup registriert und getestet werden.</li>
+            <li><strong>Offline-Kopie auf diesem Gerät erlauben (Opt-in)</strong> aktivieren und <strong>Jetzt synchronisieren</strong> wählen. Ohne Netz die gespeicherte Kopie mit Master-Passwort und den zum Profil gehörenden Keys öffnen.</li>
           </ol>
-          <p class="help-note">Im Offline-Modus nur <strong>Lesen</strong>; Schreiben, Recovery mit Recovery-Kit und Admin sind nur nach Online-Anmeldung verfügbar. Logout löscht die Kopie nicht — unter Konto &amp; Sicherheit <strong>Offline-Kopie löschen</strong> oder Opt-in deaktivieren.</p>
+          <p class="help-note">Beim Entfernen eines FIDO2-Keys müssen alle verbleibenden Keys bestätigt werden. Ältere Kopien können nicht nachträglich gesperrt werden; die 30-Tage-Frist ist nur eine lokale Client-Prüfung. FIDO2 benötigt HTTPS mit DNS-Namen oder <code>localhost</code>, nicht eine IP-Adresse. Ohne Hardware-Attestation kann ein manipulierter Browser oder emulierter Authentikator physische Hardware vortäuschen.</p>
+          <p class="help-note">Die Administration kann Software-Key, FIDO2 oder beide vorschreiben. Eine nicht mehr richtlinienkonforme Kopie muss online neu eingerichtet werden; bereits kopierte alte Caches bleiben nutzbar und ältere oder manipulierte Clients können die Vorgabe ignorieren. Der Desktop verweigert bei FIDO2-Pflicht einen neuen Offline-Sync, da Desktop-FIDO2 und TPM noch nicht verfügbar sind. Offline-TOTP ist ebenfalls noch nicht verfügbar.</p>
+          <p class="help-note">TeamVault speichert den Software-Key nicht in IndexedDB, localStorage oder Einstellungen; Sperren löscht ihn aus dem Arbeitsspeicher. Liegen Key-Datei und Cache auf demselben Gerät, kann vollständiger Dateisystemzugriff beide offenlegen. Im Offline-Modus nur <strong>Lesen</strong>; Schreiben, Recovery und Admin sind nur online verfügbar. Logout und Opt-in deaktivieren löschen eine bestehende Kopie nicht; dafür unter Konto &amp; Sicherheit <strong>Offline-Kopie löschen</strong> wählen.</p>
           <h2 id="settings">Einstellungen</h2>
           <p>Unter <strong>Einstellungen</strong> ändern Sie Anzeigename und E-Mail-Adresse. Der Username bleibt unveränderlich. Im Abschnitt <strong>Darstellung</strong> wählen Sie das Theme: <strong>Systemeinstellung</strong> (folgt automatisch der Betriebssystem-Präferenz, auch live bei Umschaltung), <strong>Hell</strong> oder <strong>Dunkel</strong>. Zusätzlich wählen Sie das Farbdesign: <strong>Blau</strong> (Standard), <strong>Indigo</strong>, <strong>Teal</strong> oder <strong>Graphit</strong>. Das Sonne/Mond-Icon oben rechts bleibt als schneller manueller Umschalter erhalten.</p>
           <figure class="help-figure">

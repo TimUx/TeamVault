@@ -188,7 +188,9 @@ go build -o bin/teamvault ./cmd/teamvault
 Für **Offline-Lesen** im Browser (verschlüsselte lokale Kopie, 30 Tage) und **App-Shell ohne Netz** nach einmaligem Besuch:
 
 - **HTTPS** oder `localhost` (Secure Context) — reines HTTP ohne TLS lädt keinen Service Worker
-- Nach Online-Login: Vault entsperren → Opt-in „Offline vorhalten“ → Sync unter **Konto & Sicherheit** oder automatisch im Hintergrund
+- Nach Online-Login: Vault entsperren → unter **Konto & Sicherheit → Offline-Vault** STANDARD (Software-Key), HARDWARE (FIDO2-Key) oder COMBINED (beide) einrichten → Opt-in „Offline vorhalten“ → **Jetzt synchronisieren**. Software-Keys werden nicht mit dem Cache gespeichert und müssen separat aufbewahrt werden.
+- FIDO2 erfordert einen externen Security-Key und einen Browser mit WebAuthn-PRF und Benutzerverifikation. Verwenden Sie für die Serveradresse einen DNS-Namen oder `localhost`, nicht `127.0.0.1` oder eine andere IP-Adresse.
+- Hardwareprofile sind derzeit nur im Web verfügbar. Die Plattform oder ein Tenant kann FIDO2 vorschreiben; der aktuelle Desktop verweigert dann einen neuen Offline-Sync, da er nur STANDARD unterstützt. TPM ist noch nicht verfügbar. Verwenden Sie aktuelle Server- und Client-Versionen: Ältere Clients können die Profilvorgabe ignorieren und bereits kopierte Caches lassen sich nicht aus der Ferne widerrufen.
 - Ohne Netz: Login-Seite **Offline entsperren** oder `/app` mit gespeicherter Kopie
 - Details: [`docs/planning/offline-vault.md`](planning/offline-vault.md)
 

@@ -39,6 +39,7 @@ Details: [`.cursor/rules/security-principles.mdc`](.cursor/rules/security-princi
 | [**Extension Guide**](docs/extension-guide.md) | Browser-Extension (auch: `/help/extension`) |
 | [Extension Store-Vorbereitung](docs/extension-store/) | Chrome Web Store / Firefox AMO: Listing, Privacy Policy, Permissions, Store-Readiness |
 | [**Admin Guide**](docs/admin-guide.md) | Betrieb: Setup, LDAP/SMTP, Escrow, Proxy/TLS, Instanz-Backup, CI |
+| [**Technische Sicherheitsdokumentation**](docs/security-architecture.md) | IT-Security: Kryptografie, Schlüssel, Anmeldung, Zertifikate, Online-/Offline-Speicherung, Betriebsanforderungen und Grenzen |
 | [**Roadmap**](docs/planning/roadmap-phase9plus.md) | Weitere Ausbaupfade (Hardening, UX, Perf, Features) |
 | [**Vergleich Password Manager**](docs/planning/competitive-comparison.md) | TeamVault vs. Bitwarden, Vaultwarden, Passbolt, … |
 | [Clients](clients/README.md) | CLI-Binaries & Extension |

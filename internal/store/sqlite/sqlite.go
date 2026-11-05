@@ -16,7 +16,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const schemaVersion = 9
+const schemaVersion = 10
 
 type Store struct {
 	db *sql.DB
@@ -63,6 +63,7 @@ CREATE TABLE IF NOT EXISTS tenants (
   recovery_mode TEXT NOT NULL,
   escrow_allowed INTEGER NOT NULL DEFAULT 1,
   totp_required INTEGER NOT NULL DEFAULT 0,
+  offline_key_requirement TEXT NOT NULL DEFAULT '',
   escrow_public_key BLOB,
   status TEXT NOT NULL,
   created_at TEXT NOT NULL,
@@ -217,6 +218,9 @@ CREATE TABLE IF NOT EXISTS secret_group_shares (
 	} {
 		_, _ = s.db.Exec(q)
 	}
+	if err := s.ensureOfflinePolicyColumn(); err != nil {
+		return err
+	}
 	// v6: mark existing shared secrets (explicit shares or extra envelopes).
 	_, _ = s.db.Exec(`
 UPDATE secrets SET visibility = 'shared'
@@ -246,6 +250,37 @@ WHERE visibility = 'private' AND (
 	return err
 }
 
+func (s *Store) ensureOfflinePolicyColumn() error {
+	rows, err := s.db.Query(`PRAGMA table_info(tenants)`)
+	if err != nil {
+		return fmt.Errorf("inspect tenant offline policy schema: %w", err)
+	}
+	found := false
+	for rows.Next() {
+		var id, notNull, primaryKey int
+		var name, columnType string
+		var defaultValue sql.NullString
+		if err := rows.Scan(&id, &name, &columnType, &notNull, &defaultValue, &primaryKey); err != nil {
+			_ = rows.Close()
+			return fmt.Errorf("inspect tenant offline policy schema: %w", err)
+		}
+		found = found || name == "offline_key_requirement"
+	}
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		return fmt.Errorf("inspect tenant offline policy schema: %w", err)
+	}
+	if err := rows.Close(); err != nil {
+		return fmt.Errorf("inspect tenant offline policy schema: %w", err)
+	}
+	if !found {
+		if _, err := s.db.Exec(`ALTER TABLE tenants ADD COLUMN offline_key_requirement TEXT NOT NULL DEFAULT ''`); err != nil {
+			return fmt.Errorf("migrate tenant offline policy: %w", err)
+		}
+	}
+	return nil
+}
+
 func requireTenant(id store.TenantID) error {
 	if id == "" {
 		return store.ErrTenantRequired
@@ -270,15 +305,35 @@ func (s *Store) PutTenant(ctx context.Context, t store.Tenant) error {
 	}
 	t.UpdatedAt = now
 	_, err := s.db.ExecContext(ctx, `
-INSERT INTO tenants(id, name, slug, recovery_mode, escrow_allowed, totp_required, escrow_public_key, status, created_at, updated_at)
-VALUES(?,?,?,?,?,?,?,?,?,?)
+INSERT INTO tenants(id, name, slug, recovery_mode, escrow_allowed, totp_required, offline_key_requirement, escrow_public_key, status, created_at, updated_at)
+VALUES(?,?,?,?,?,?,?,?,?,?,?)
 ON CONFLICT(id) DO UPDATE SET
   name=excluded.name, slug=excluded.slug, recovery_mode=excluded.recovery_mode,
   escrow_allowed=excluded.escrow_allowed, totp_required=excluded.totp_required, escrow_public_key=excluded.escrow_public_key,
   status=excluded.status, updated_at=excluded.updated_at
-`, t.ID, t.Name, t.Slug, t.RecoveryMode, boolToInt(t.EscrowAllowed), boolToInt(t.TOTPRequired), t.EscrowPublicKey, t.Status,
+`, t.ID, t.Name, t.Slug, t.RecoveryMode, boolToInt(t.EscrowAllowed), boolToInt(t.TOTPRequired), t.OfflineKeyRequirement, t.EscrowPublicKey, t.Status,
 		t.CreatedAt.Format(time.RFC3339Nano), t.UpdatedAt.Format(time.RFC3339Nano))
 	return err
+}
+
+func (s *Store) SetTenantSecurityPolicy(ctx context.Context, id store.TenantID, totp bool, offlineRequirement *string) error {
+	if err := requireTenant(id); err != nil {
+		return err
+	}
+	res, err := s.db.ExecContext(ctx, `
+UPDATE tenants SET totp_required = ?, offline_key_requirement = COALESCE(?, offline_key_requirement), updated_at = ?
+WHERE id = ?`, boolToInt(totp), offlineRequirement, time.Now().UTC().Format(time.RFC3339Nano), id)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return store.ErrNotFound
+	}
+	return nil
 }
 
 func (s *Store) GetTenant(ctx context.Context, id store.TenantID) (*store.Tenant, error) {
@@ -286,19 +341,19 @@ func (s *Store) GetTenant(ctx context.Context, id store.TenantID) (*store.Tenant
 		return nil, err
 	}
 	return s.scanTenant(s.db.QueryRowContext(ctx, `
-SELECT id, name, slug, recovery_mode, escrow_allowed, totp_required, escrow_public_key, status, created_at, updated_at
+SELECT id, name, slug, recovery_mode, escrow_allowed, totp_required, offline_key_requirement, escrow_public_key, status, created_at, updated_at
 FROM tenants WHERE id = ?`, id))
 }
 
 func (s *Store) GetTenantBySlug(ctx context.Context, slug string) (*store.Tenant, error) {
 	return s.scanTenant(s.db.QueryRowContext(ctx, `
-SELECT id, name, slug, recovery_mode, escrow_allowed, totp_required, escrow_public_key, status, created_at, updated_at
+SELECT id, name, slug, recovery_mode, escrow_allowed, totp_required, offline_key_requirement, escrow_public_key, status, created_at, updated_at
 FROM tenants WHERE slug = ?`, slug))
 }
 
 func (s *Store) ListTenants(ctx context.Context) ([]store.Tenant, error) {
 	rows, err := s.db.QueryContext(ctx, `
-SELECT id, name, slug, recovery_mode, escrow_allowed, totp_required, escrow_public_key, status, created_at, updated_at
+SELECT id, name, slug, recovery_mode, escrow_allowed, totp_required, offline_key_requirement, escrow_public_key, status, created_at, updated_at
 FROM tenants ORDER BY name`)
 	if err != nil {
 		return nil, err
@@ -319,7 +374,7 @@ func (s *Store) scanTenant(row scanner) (*store.Tenant, error) {
 	var t store.Tenant
 	var escrow, totpRequired int
 	var cAt, uAt string
-	if err := row.Scan(&t.ID, &t.Name, &t.Slug, &t.RecoveryMode, &escrow, &totpRequired, &t.EscrowPublicKey, &t.Status, &cAt, &uAt); err != nil {
+	if err := row.Scan(&t.ID, &t.Name, &t.Slug, &t.RecoveryMode, &escrow, &totpRequired, &t.OfflineKeyRequirement, &t.EscrowPublicKey, &t.Status, &cAt, &uAt); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, store.ErrNotFound
 		}
@@ -1449,6 +1504,9 @@ func (s *Store) ImportSnapshot(ctx context.Context, snap store.StoreSnapshot, mo
 	}
 	for _, t := range rec.Tenants {
 		if err := s.PutTenant(ctx, t); err != nil {
+			return err
+		}
+		if err := s.SetTenantSecurityPolicy(ctx, t.ID, t.TOTPRequired, &t.OfflineKeyRequirement); err != nil {
 			return err
 		}
 	}

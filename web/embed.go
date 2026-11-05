@@ -79,7 +79,7 @@ func serveIndex(w http.ResponseWriter, indexHTML []byte, base string, sri map[st
 // buildScriptSRI computes sha384 Subresource Integrity hashes for critical same-origin scripts (OQ-22).
 func buildScriptSRI(sub fs.FS) map[string]string {
 	out := map[string]string{}
-	for _, name := range []string{"cryptocore.js", "app.js", "vault-io.js", "offline-store.js"} {
+	for _, name := range []string{"cryptocore.js", "app.js", "vault-io.js", "offline-store.js", "offline-hardware.js"} {
 		raw, err := fs.ReadFile(sub, name)
 		if err != nil {
 			continue

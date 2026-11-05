@@ -37,6 +37,7 @@ type API struct {
 	Passkeys      *passkey.Manager
 	loginRL       *rateLimiter
 	pendingLogins *pendingLoginStore
+	configMu      sync.RWMutex
 	escrowMu      sync.Mutex
 	escrowReplace map[store.TenantID]escrowReplacePending
 	totpMu        sync.Mutex
@@ -215,6 +216,7 @@ func (a *API) Handler() http.Handler {
 	mux.Handle("GET /vault-io.js", webUI)
 	mux.Handle("GET /cryptocore.js", webUI)
 	mux.Handle("GET /offline-store.js", webUI)
+	mux.Handle("GET /offline-hardware.js", webUI)
 	mux.Handle("GET /qrcode.js", webUI)
 	mux.Handle("GET /sw.js", webUI)
 	mux.Handle("GET /sw-register.js", webUI)

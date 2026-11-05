@@ -18,16 +18,17 @@ type UserID string
 type SecretID string
 
 type Tenant struct {
-	ID              TenantID
-	Name            string
-	Slug            string
-	RecoveryMode    string // user_kit | admin_escrow
-	EscrowAllowed   bool
-	TOTPRequired    bool
-	EscrowPublicKey []byte // X25519 pub for admin escrow envelopes
-	Status          string
-	CreatedAt       time.Time
-	UpdatedAt       time.Time
+	ID                    TenantID
+	Name                  string
+	Slug                  string
+	RecoveryMode          string // user_kit | admin_escrow
+	EscrowAllowed         bool
+	TOTPRequired          bool
+	OfflineKeyRequirement string
+	EscrowPublicKey       []byte // X25519 pub for admin escrow envelopes
+	Status                string
+	CreatedAt             time.Time
+	UpdatedAt             time.Time
 }
 
 type UserRecord struct {
@@ -262,7 +263,12 @@ func ValidateAudit(e *AuditEvent) error {
 type VaultStore interface {
 	Close() error
 
+	// PutTenant preserves an existing offline key requirement. Change that
+	// requirement through SetTenantSecurityPolicy instead.
 	PutTenant(ctx context.Context, t Tenant) error
+	// SetTenantSecurityPolicy changes the TOTP setting and, when non-nil,
+	// the offline requirement without overwriting other tenant fields.
+	SetTenantSecurityPolicy(ctx context.Context, id TenantID, totp bool, offlineRequirement *string) error
 	GetTenant(ctx context.Context, id TenantID) (*Tenant, error)
 	GetTenantBySlug(ctx context.Context, slug string) (*Tenant, error)
 	ListTenants(ctx context.Context) ([]Tenant, error)
