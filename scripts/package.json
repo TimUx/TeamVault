@@ -3,6 +3,6 @@
   "type": "module",
   "description": "Development tooling for documentation screenshots and browser integration tests",
   "dependencies": {
-    "playwright": "^1.64.1"
+    "playwright": "^1.65.0"
   }
 }
